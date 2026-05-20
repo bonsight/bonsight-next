@@ -1,22 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 export default function NavigationBehavior() {
   const router = useRouter();
-  const pathname = usePathname();
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => entries.forEach(e => {
-        if (e.isIntersecting) e.target.classList.add('in-view');
-      }),
-      { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
-    );
-    document.querySelectorAll('[data-animate]').forEach(el => observer.observe(el));
-    return () => observer.disconnect();
-  }, [pathname]);
 
   useEffect(() => {
     const handleClick = (event) => {

@@ -14,52 +14,7 @@ const html = `
 </div>
 </div>
 <div class="hero-right">
-<svg class="hero-illustration" fill="none" viewbox="0 0 420 380" xmlns="http://www.w3.org/2000/svg">
-<rect fill="white" height="340" rx="4" stroke="#E8E6DE" stroke-width="1" width="380" x="20" y="20"></rect>
-<rect fill="#F4F2EC" height="40" rx="4" width="380" x="20" y="20"></rect>
-<rect fill="#D3D1C7" height="14" rx="2" width="60" x="36" y="33"></rect>
-<circle cx="362" cy="40" fill="#0F6E56" opacity="0.15" r="8"></circle>
-<circle cx="362" cy="40" fill="#0F6E56" r="4"></circle>
-<rect fill="#F4F2EC" height="130" rx="2" width="220" x="36" y="76"></rect>
-<polyline fill="none" points="50,185 80,155 110,165 140,130 170,140 200,110 230,120" stroke="#0F6E56" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></polyline>
-<polyline fill="none" points="50,185 80,170 110,178 140,160 170,165 200,150 230,155" stroke="#9FE1CB" stroke-dasharray="4 3" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></polyline>
-<line stroke="#E8E6DE" stroke-width="0.5" x1="36" x2="256" y1="186" y2="186"></line>
-<line stroke="#E8E6DE" stroke-width="0.5" x1="36" x2="256" y1="165" y2="165"></line>
-<line stroke="#E8E6DE" stroke-width="0.5" x1="36" x2="256" y1="144" y2="144"></line>
-<line stroke="#E8E6DE" stroke-width="0.5" x1="36" x2="256" y1="123" y2="123"></line>
-<rect fill="#0F6E56" height="50" rx="2" width="112" x="272" y="76"></rect>
-<text fill="rgba(255,255,255,0.6)" font-family="Courier New" font-size="9" letter-spacing="1" x="284" y="96">CONVERSIÓN</text>
-<text fill="white" font-family="Courier New" font-size="18" font-weight="bold" x="284" y="114">4.7%</text>
-<rect fill="#F4F2EC" height="50" rx="2" width="112" x="272" y="134"></rect>
-<text fill="#9A9890" font-family="Courier New" font-size="9" letter-spacing="1" x="284" y="154">SESIONES</text>
-<text fill="#1C1C1A" font-family="Courier New" font-size="18" font-weight="bold" x="284" y="172">24.1K</text>
-<rect fill="#F4F2EC" height="50" rx="2" width="112" x="272" y="192"></rect>
-<text fill="#9A9890" font-family="Courier New" font-size="9" letter-spacing="1" x="284" y="212">ROAS</text>
-<text fill="#1C1C1A" font-family="Courier New" font-size="18" font-weight="bold" x="284" y="230">3.2×</text>
-<rect fill="#F4F2EC" height="100" rx="2" width="220" x="36" y="230"></rect>
-<rect fill="#9FE1CB" height="34" rx="1" width="22" x="52" y="290"></rect>
-<rect fill="#1D9E75" height="49" rx="1" width="22" x="82" y="275"></rect>
-<rect fill="#0F6E56" height="59" rx="1" width="22" x="112" y="265"></rect>
-<rect fill="#1D9E75" height="44" rx="1" width="22" x="142" y="280"></rect>
-<rect fill="#0F6E56" height="66" rx="1" width="22" x="172" y="258"></rect>
-<rect fill="#1D9E75" height="54" rx="1" width="22" x="202" y="270"></rect>
-<text fill="#9A9890" font-family="Courier New" font-size="7" x="36" y="348">ENE</text>
-<text fill="#9A9890" font-family="Courier New" font-size="7" x="78" y="348">FEB</text>
-<text fill="#9A9890" font-family="Courier New" font-size="7" x="108" y="348">MAR</text>
-<text fill="#9A9890" font-family="Courier New" font-size="7" x="138" y="348">ABR</text>
-<text fill="#9A9890" font-family="Courier New" font-size="7" x="168" y="348">MAY</text>
-<text fill="#9A9890" font-family="Courier New" font-size="7" x="198" y="348">JUN</text>
-<rect fill="#F4F2EC" height="86" rx="2" width="112" x="272" y="250"></rect>
-<text fill="#9A9890" font-family="Courier New" font-size="7" letter-spacing="0.5" x="284" y="266">FUNNEL</text>
-<rect fill="#0F6E56" height="8" rx="1" width="88" x="284" y="273"></rect>
-<text fill="#5A5855" font-family="Courier New" font-size="6" x="282" y="283">100%</text>
-<rect fill="#1D9E75" height="8" rx="1" width="66" x="284" y="286"></rect>
-<text fill="#5A5855" font-family="Courier New" font-size="6" x="282" y="296">75%</text>
-<rect fill="#5DCAA5" height="8" rx="1" width="44" x="284" y="299"></rect>
-<text fill="#5A5855" font-family="Courier New" font-size="6" x="282" y="309">50%</text>
-<rect fill="#9FE1CB" height="8" rx="1" width="24" x="284" y="312"></rect>
-<text fill="#5A5855" font-family="Courier New" font-size="6" x="282" y="322">27%</text>
-</svg>
+<img class="hero-photo" src="/team.svg" alt="Equipo Bonsight" />
 </div>
 </div>
 
@@ -183,8 +138,8 @@ const html = `
 <div class="clients-wrap">
 <div class="clients-inner">
 <div class="clients-label">Empresas que confían en Bonsight</div>
-<div class="clients-row" data-animate>
-<div class="client-logo">
+<div class="clients-row">
+<div class="client-logo client-logo--link" data-animate data-route="/cases/sesuveca">
 <svg fill="none" height="36" viewbox="0 0 160 36" width="160" xmlns="http://www.w3.org/2000/svg">
 <polygon fill="#1B3A6B" points="18,2 32,10 32,26 18,34 4,26 4,10"></polygon>
 <polygon fill="none" points="18,7 27,12 27,24 18,29 9,24 9,12" stroke="white" stroke-width="1.5"></polygon>
@@ -192,12 +147,14 @@ const html = `
 <text fill="#1B3A6B" font-family="Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1" x="40" y="20">SESUVECA</text>
 <text fill="#5577AA" font-family="Arial,sans-serif" font-size="8" letter-spacing="2" x="40" y="32">DEL PERÚ</text>
 </svg>
+<span class="client-logo-hint">Ver caso →</span>
 </div>
-<div class="client-logo">
+<div class="client-logo client-logo--link" data-animate data-animate-delay="2" data-route="/cases/olaclick">
 <svg fill="none" height="36" viewbox="0 0 120 36" width="120" xmlns="http://www.w3.org/2000/svg">
 <text fill="#0066FF" font-family="Arial,sans-serif" font-size="24" font-weight="700" x="0" y="27">OlaClick</text>
 <circle cx="113" cy="8" fill="none" r="4" stroke="#00E5C3" stroke-dasharray="6 3" stroke-width="2"></circle>
 </svg>
+<span class="client-logo-hint">Ver caso →</span>
 </div>
 </div>
 </div>
