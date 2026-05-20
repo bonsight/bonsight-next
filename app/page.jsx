@@ -319,11 +319,69 @@ const html = `
 </div>
 <!-- CTA -->
 <div class="cta-band">
-<div style="font-family:var(--mono);font-size:0.65rem;letter-spacing:0.2em;text-transform:uppercase;color:rgba(255,255,255,0.6);margin-bottom:1.5rem;display:flex;align-items:center;justify-content:center;gap:0.75rem"><span style="display:inline-block;width:16px;height:1px;background:rgba(255,255,255,0.4)"></span>Siguiente paso<span style="display:inline-block;width:16px;height:1px;background:rgba(255,255,255,0.4)"></span></div>
-<h2>¿Listo para crecer con datos?</h2>
-<p>Estamos a un clic de ayudarte a alcanzar tus objetivos de negocio con estrategia y precisión.</p>
-<button class="btn-white">Conversemos →</button>
+
+  ...
+
+  <button class="btn-white">
+    Conversemos →
+  </button>
+
 </div>
+
+<section class="contact-panel">
+
+  <form
+    action="https://formspree.io/f/xkoejwqn"
+    method="POST"
+    class="contact-form"
+  >
+
+    <input
+      type="text"
+      name="name"
+      placeholder="Nombre"
+      required
+    />
+
+    <input
+      type="email"
+      name="email"
+      placeholder="Correo"
+      required
+    />
+
+    <input
+      type="text"
+      name="company"
+      placeholder="Empresa"
+    />
+
+    <textarea
+      name="message"
+      placeholder="Cuéntanos qué necesitas"
+      rows="5"
+      required
+    ></textarea>
+
+    <div class="contact-actions">
+
+      <button type="submit" class="btn-dark">
+        Enviar mensaje
+      </button>
+
+      <a
+        href="https://wa.me/569XXXXXXXX"
+        target="_blank"
+        class="btn-outline"
+      >
+        WhatsApp
+      </a>
+
+    </div>
+
+  </form>
+
+</section>
 <footer>
 <div class="footer-logo">BON<span>sight</span> LLC</div>
 <div class="footer-links">
