@@ -212,14 +212,19 @@ a.svc-card { text-decoration: none; color: inherit; }
 
 .contact-panel{
   background:#f7f6f2;
-  padding:6rem 2rem;
+  padding:0 2rem 6rem;
   display:flex;
   justify-content:center;
 }
 
 .contact-form{
+  margin-top:-80px;
+  background:#fff;
   width:100%;
-  max-width:720px;
+  max-width:760px;
+  padding:3rem;
+  box-shadow:0 24px 80px rgba(0,0,0,.12);
+  border:1px solid rgba(0,0,0,.06);
   display:flex;
   flex-direction:column;
   gap:1rem;
@@ -227,15 +232,19 @@ a.svc-card { text-decoration: none; color: inherit; }
 
 .contact-form input,
 .contact-form textarea{
-  border:1px solid rgba(0,0,0,0.08);
-  background:white;
-  padding:1rem 1.25rem;
-  font-size:0.95rem;
+  border:1px solid rgba(0,0,0,.08);
+  background:#fafaf8;
+  padding:1rem 1.2rem;
+  font-size:.95rem;
   font-family:var(--sans);
+  resize:none;
 }
 
-.contact-form textarea{
-  resize:none;
+.contact-form input:focus,
+.contact-form textarea:focus{
+  outline:none;
+  border-color:var(--accent);
+  box-shadow:0 0 0 4px rgba(15,110,86,.08);
 }
 
 .contact-actions{
@@ -245,16 +254,40 @@ a.svc-card { text-decoration: none; color: inherit; }
 }
 
 .btn-dark{
-  background:#0c0c0c;
+  background:#111;
   color:white;
   border:none;
-  padding:1rem 1.75rem;
+  padding:1rem 1.8rem;
   cursor:pointer;
+  font-weight:600;
 }
 
-.btn-outline{
-  border:1px solid rgba(0,0,0,0.15);
-  padding:1rem 1.75rem;
+.contact-actions .btn-outline{
+  color:#111;
+  border:1px solid rgba(0,0,0,.16);
+  padding:1rem 1.8rem;
   text-decoration:none;
-  color:#0c0c0c;
+}
+
+.contact-form-head{
+  margin-bottom:1rem;
+}
+
+.contact-form-head span{
+  font-family:var(--mono);
+  font-size:.65rem;
+  letter-spacing:.18em;
+  color:var(--accent);
+}
+
+.contact-form-head h3{
+  font-family:var(--serif);
+  font-size:1.8rem;
+  font-weight:400;
+  margin:.5rem 0;
+}
+
+.contact-form-head p{
+  color:var(--text2);
+  font-size:.9rem;
 }

@@ -329,7 +329,11 @@ const html = `
 </div>
 
 <section class="contact-panel">
-
+<div class="contact-form-head">
+  <span>CONTACTO</span>
+  <h3>Cuéntanos qué necesitas</h3>
+  <p>Te responderemos para entender el contexto y definir el mejor siguiente paso.</p>
+</div>
   <form
     action="https://formspree.io/f/xkoejwqn"
     method="POST"
