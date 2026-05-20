@@ -4,7 +4,7 @@ import Image from 'next/image';
 export default function Navbar() {
   return (
     <nav>
-      <Link className="nav-logo" href="/"><Image src="/logo.svg" alt="Bonsight" width={120} height={55} /></Link>
+      <Link className="nav-logo" href="/"><Image src="/logo.svg" alt="Bonsight" width={140} height={65} /></Link>
       <div className="nav-links">
         <Link href="/">Inicio</Link>
 
