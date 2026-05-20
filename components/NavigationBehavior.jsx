@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
 export default function NavigationBehavior() {
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -15,7 +16,7 @@ export default function NavigationBehavior() {
     );
     document.querySelectorAll('[data-animate]').forEach(el => observer.observe(el));
     return () => observer.disconnect();
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     const handleClick = (event) => {
