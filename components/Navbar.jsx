@@ -1,9 +1,10 @@
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Navbar() {
   return (
     <nav>
-      <Link className="nav-logo" href="/">BON<span>SIGHT</span></Link>
+      <Link className="nav-logo" href="/"><Image src="/logo.svg" alt="Bonsight" width={120} height={55} /></Link>
       <div className="nav-links">
         <Link href="/">Inicio</Link>
 
