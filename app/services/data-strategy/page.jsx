@@ -11,7 +11,7 @@ const html = `
 <span>Bonsight Growth</span>
 </div>
 <h1>Data Strategy</h1>
-<button class="btn-primary" data-route="/">Conversemos</button>
+<button class="btn-primary" data-route="/#contacto">Conversemos</button>
 </div>
 <p class="svc-hero-desc">Creamos estrategias de datos que impulsan decisiones inteligentes. Garantizamos calidad y consistencia para optimizar procesos, reducir riesgos y habilitar un crecimiento sostenible.</p>
 </div>
@@ -49,7 +49,7 @@ const html = `
 </div>
 </div>
 </div>
-<div class="cta-band"><h2>¿Quieres ordenar tus datos?</h2><p>Conversemos sobre cómo una estrategia de datos puede transformar tu negocio.</p><button class="btn-white" data-route="/">Agendar conversación →</button></div>
+<div class="cta-band"><h2>¿Quieres ordenar tus datos?</h2><p>Conversemos sobre cómo una estrategia de datos puede transformar tu negocio.</p><button class="btn-white" data-route="/#contacto">Agendar conversación →</button></div>
 <footer><div class="footer-logo">BON<span>sight</span> LLC</div><p>© 2025 Bonsight LLC</p></footer>
 
 `;
