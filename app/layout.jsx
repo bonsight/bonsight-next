@@ -1,6 +1,6 @@
 import './globals.css';
-import Navbar from '../components/Navbar';
-import NavigationBehavior from '../components/NavigationBehavior';
+import Navbar from '@/components/Navbar';
+import NavigationBehavior from '@/components/NavigationBehavior';
 
 export const metadata = {
   title: 'Bonsight LLC — Estrategia de datos',
