@@ -73,13 +73,25 @@ export default function Navbar() {
             <a>Growth ▾</a>
             <div className="nav-dropdown-menu">
               <Link href="/services/data-strategy">
-                <span className="menu-icon-svg"><IconData /></span> Data Strategy
+                <span className="menu-icon-svg"><IconData /></span>
+                <span className="menu-item-text">
+                  <span className="menu-item-name">Data Strategy</span>
+                  <span className="menu-item-desc">Arquitectura de datos y KPIs</span>
+                </span>
               </Link>
               <Link href="/services/growth">
-                <span className="menu-icon-svg"><IconGrowth /></span> Growth Digital
+                <span className="menu-icon-svg"><IconGrowth /></span>
+                <span className="menu-item-text">
+                  <span className="menu-item-name">Growth Digital</span>
+                  <span className="menu-item-desc">Adquisición, SEO y performance</span>
+                </span>
               </Link>
               <Link href="/services/cro">
-                <span className="menu-icon-svg"><IconCRO /></span> CRO
+                <span className="menu-icon-svg"><IconCRO /></span>
+                <span className="menu-item-text">
+                  <span className="menu-item-name">CRO</span>
+                  <span className="menu-item-desc">Experimentación y conversión</span>
+                </span>
               </Link>
             </div>
           </div>
@@ -88,13 +100,25 @@ export default function Navbar() {
             <a>Boost ▾</a>
             <div className="nav-dropdown-menu">
               <Link href="/services/mentoring">
-                <span className="menu-icon-svg"><IconMentoring /></span> Mentoring
+                <span className="menu-icon-svg"><IconMentoring /></span>
+                <span className="menu-item-text">
+                  <span className="menu-item-name">Mentoring de Equipos</span>
+                  <span className="menu-item-desc">Desarrollo de equipos y feedback</span>
+                </span>
               </Link>
               <Link href="/services/procesos">
-                <span className="menu-icon-svg"><IconProcess /></span> Mejora de Procesos
+                <span className="menu-icon-svg"><IconProcess /></span>
+                <span className="menu-item-text">
+                  <span className="menu-item-name">Mejora de Procesos</span>
+                  <span className="menu-item-desc">Flujos ágiles y metodologías</span>
+                </span>
               </Link>
               <Link href="/services/liderazgo">
-                <span className="menu-icon-svg"><IconLeadership /></span> Soporte a Líderes
+                <span className="menu-icon-svg"><IconLeadership /></span>
+                <span className="menu-item-text">
+                  <span className="menu-item-name">Soporte a Líderes</span>
+                  <span className="menu-item-desc">Coaching y alineación ejecutiva</span>
+                </span>
               </Link>
             </div>
           </div>

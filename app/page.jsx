@@ -18,12 +18,28 @@ const html = `
 </div>
 </div>
 
-<!-- STATS -->
+<!-- DIFFERENTIATORS -->
 <div class="stats-strip">
-<div class="stat-cell" data-animate><div class="stat-num">02</div><div class="stat-label">Líneas de servicio especializadas</div></div>
-<div class="stat-cell" data-animate data-animate-delay="1"><div class="stat-num">06</div><div class="stat-label">Servicios concretos y medibles</div></div>
-<div class="stat-cell" data-animate data-animate-delay="2"><div class="stat-num">100%</div><div class="stat-label">Foco en resultados sostenibles</div></div>
-<div class="stat-cell" data-animate data-animate-delay="3"><div class="stat-num">04</div><div class="stat-label">Etapas de proceso estructurado</div></div>
+<div class="stat-cell" data-animate>
+  <div class="diff-icon"><svg viewbox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg></div>
+  <div class="diff-title">Estrategia + Ejecución</div>
+  <div class="diff-desc">Nos sumamos al equipo, no solo asesoramos desde afuera.</div>
+</div>
+<div class="stat-cell" data-animate data-animate-delay="1">
+  <div class="diff-icon"><svg viewbox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div>
+  <div class="diff-title">Sin intermediarios</div>
+  <div class="diff-desc">Trato directo con los especialistas que hacen el trabajo.</div>
+</div>
+<div class="stat-cell" data-animate data-animate-delay="2">
+  <div class="diff-icon"><svg viewbox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg></div>
+  <div class="diff-title">Resultados medibles</div>
+  <div class="diff-desc">KPIs y métricas claras desde el primer día.</div>
+</div>
+<div class="stat-cell" data-animate data-animate-delay="3">
+  <div class="diff-icon"><svg viewbox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg></div>
+  <div class="diff-title">Datos como base</div>
+  <div class="diff-desc">Cada decisión respaldada por analítica real.</div>
+</div>
 </div>
 
 <!-- SERVICES -->
