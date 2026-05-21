@@ -1,21 +1,21 @@
+import { headers } from 'next/headers';
 import Script from 'next/script';
 import './globals.css';
-import Navbar from '@/components/Navbar';
-import NavigationBehavior from '@/components/NavigationBehavior';
-import Analytics from '@/components/Analytics';
 
 export const metadata = {
-  title: 'Bonsight LLC — Estrategia de datos',
+  title: 'Bonsight',
   description: 'Estrategia de datos, crecimiento digital, CRO y acompañamiento a equipos.',
   icons: {
-    icon: '/logo.svg',
+    icon: '/favicon.svg',
     apple: '/logo.svg',
   },
 };
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  const headersList = await headers();
+  const locale = headersList.get('x-locale') || 'es';
   return (
-    <html lang="es">
+    <html lang={locale}>
       <head>
         <Script id="gtm" strategy="afterInteractive">{`
           window.dataLayer = window.dataLayer || [];
@@ -36,9 +36,6 @@ export default function RootLayout({ children }) {
             style={{ display: 'none', visibility: 'hidden' }}
           />
         </noscript>
-        <Navbar />
-        <NavigationBehavior />
-        <Analytics />
         {children}
       </body>
     </html>

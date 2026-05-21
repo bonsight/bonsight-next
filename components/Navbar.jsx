@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 
 import { normalize } from '@/utils/analytics';
 
@@ -63,8 +64,14 @@ const IconClose = () => (
   </svg>
 );
 
-export default function Navbar() {
+export default function Navbar({ locale = 'es' }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const en = locale === 'en';
+
+  const restPath = pathname.startsWith(`/${locale}`) ? pathname.slice(`/${locale}`.length) : '';
+  const esHref = `/es${restPath}` || '/es';
+  const enHref = `/en${restPath}` || '/en';
 
   const close = () => setOpen(false);
 
@@ -76,13 +83,13 @@ export default function Navbar() {
   return (
     <>
       <nav>
-        <Link className="nav-logo" href="/" onClick={close}>
+        <Link className="nav-logo" href={`/${locale}`} onClick={close}>
           <Image src="/logo.svg" alt="Bonsight" width={100} height={50} />
         </Link>
 
         <div className="nav-links">
-          <Link href="/" onClick={() => dl({ event: 'nav_link_click', link_text: 'inicio', destination: '/' })}>
-            Inicio
+          <Link href={`/${locale}`} onClick={() => dl({ event: 'nav_link_click', link_text: en ? 'home' : 'inicio', destination: `/${locale}` })}>
+            {en ? 'Home' : 'Inicio'}
           </Link>
 
           <div
@@ -91,25 +98,25 @@ export default function Navbar() {
           >
             <a>Growth ▾</a>
             <div className="nav-dropdown-menu">
-              <Link href="/services/data-strategy" onClick={() => dl({ event: 'nav_link_click', link_text: 'data_strategy', destination: '/services/data-strategy', menu_name: 'growth' })}>
+              <Link href={`/${locale}/services/data-strategy`} onClick={() => dl({ event: 'nav_link_click', link_text: 'data_strategy', destination: `/${locale}/services/data-strategy`, menu_name: 'growth' })}>
                 <span className="menu-icon-svg"><IconData /></span>
                 <span className="menu-item-text">
                   <span className="menu-item-name">Data Strategy</span>
-                  <span className="menu-item-desc">Arquitectura de datos y KPIs</span>
+                  <span className="menu-item-desc">{en ? 'Data architecture and KPIs' : 'Arquitectura de datos y KPIs'}</span>
                 </span>
               </Link>
-              <Link href="/services/growth" onClick={() => dl({ event: 'nav_link_click', link_text: 'growth_digital', destination: '/services/growth', menu_name: 'growth' })}>
+              <Link href={`/${locale}/services/growth`} onClick={() => dl({ event: 'nav_link_click', link_text: 'growth_digital', destination: `/${locale}/services/growth`, menu_name: 'growth' })}>
                 <span className="menu-icon-svg"><IconGrowth /></span>
                 <span className="menu-item-text">
                   <span className="menu-item-name">Growth Digital</span>
-                  <span className="menu-item-desc">Adquisición, SEO y performance</span>
+                  <span className="menu-item-desc">{en ? 'Acquisition, SEO and performance' : 'Adquisición, SEO y performance'}</span>
                 </span>
               </Link>
-              <Link href="/services/cro" onClick={() => dl({ event: 'nav_link_click', link_text: 'cro', destination: '/services/cro', menu_name: 'growth' })}>
+              <Link href={`/${locale}/services/cro`} onClick={() => dl({ event: 'nav_link_click', link_text: 'cro', destination: `/${locale}/services/cro`, menu_name: 'growth' })}>
                 <span className="menu-icon-svg"><IconCRO /></span>
                 <span className="menu-item-text">
                   <span className="menu-item-name">CRO</span>
-                  <span className="menu-item-desc">Experimentación y conversión</span>
+                  <span className="menu-item-desc">{en ? 'Experimentation and conversion' : 'Experimentación y conversión'}</span>
                 </span>
               </Link>
             </div>
@@ -121,25 +128,25 @@ export default function Navbar() {
           >
             <a>Boost ▾</a>
             <div className="nav-dropdown-menu">
-              <Link href="/services/mentoring" onClick={() => dl({ event: 'nav_link_click', link_text: 'mentoring_de_equipos', destination: '/services/mentoring', menu_name: 'boost' })}>
+              <Link href={`/${locale}/services/mentoring`} onClick={() => dl({ event: 'nav_link_click', link_text: 'mentoring', destination: `/${locale}/services/mentoring`, menu_name: 'boost' })}>
                 <span className="menu-icon-svg"><IconMentoring /></span>
                 <span className="menu-item-text">
-                  <span className="menu-item-name">Mentoring de Equipos</span>
-                  <span className="menu-item-desc">Desarrollo de equipos y feedback</span>
+                  <span className="menu-item-name">{en ? 'Team Mentoring' : 'Mentoring de Equipos'}</span>
+                  <span className="menu-item-desc">{en ? 'Team development and feedback' : 'Desarrollo de equipos y feedback'}</span>
                 </span>
               </Link>
-              <Link href="/services/procesos" onClick={() => dl({ event: 'nav_link_click', link_text: 'mejora_de_procesos', destination: '/services/procesos', menu_name: 'boost' })}>
+              <Link href={`/${locale}/services/procesos`} onClick={() => dl({ event: 'nav_link_click', link_text: 'procesos', destination: `/${locale}/services/procesos`, menu_name: 'boost' })}>
                 <span className="menu-icon-svg"><IconProcess /></span>
                 <span className="menu-item-text">
-                  <span className="menu-item-name">Mejora de Procesos</span>
-                  <span className="menu-item-desc">Flujos ágiles y metodologías</span>
+                  <span className="menu-item-name">{en ? 'Process Improvement' : 'Mejora de Procesos'}</span>
+                  <span className="menu-item-desc">{en ? 'Agile flows and methodologies' : 'Flujos ágiles y metodologías'}</span>
                 </span>
               </Link>
-              <Link href="/services/liderazgo" onClick={() => dl({ event: 'nav_link_click', link_text: 'soporte_a_lideres', destination: '/services/liderazgo', menu_name: 'boost' })}>
+              <Link href={`/${locale}/services/liderazgo`} onClick={() => dl({ event: 'nav_link_click', link_text: 'liderazgo', destination: `/${locale}/services/liderazgo`, menu_name: 'boost' })}>
                 <span className="menu-icon-svg"><IconLeadership /></span>
                 <span className="menu-item-text">
-                  <span className="menu-item-name">Soporte a Líderes</span>
-                  <span className="menu-item-desc">Coaching y alineación ejecutiva</span>
+                  <span className="menu-item-name">{en ? 'Leadership Support' : 'Soporte a Líderes'}</span>
+                  <span className="menu-item-desc">{en ? 'Coaching and executive alignment' : 'Coaching y alineación ejecutiva'}</span>
                 </span>
               </Link>
             </div>
@@ -148,10 +155,16 @@ export default function Navbar() {
           <a
             className="nav-cta"
             data-route="/#contacto"
-            onClick={() => dl({ event: 'cta_click', cta_text: 'conversemos', cta_location: 'nav' })}
+            onClick={() => dl({ event: 'cta_click', cta_text: en ? 'lets_talk' : 'conversemos', cta_location: 'nav' })}
           >
-            Conversemos
+            {en ? "Let's Talk" : 'Conversemos'}
           </a>
+
+          <div className="nav-lang-switcher">
+            <Link href={esHref} className={locale === 'es' ? 'active' : ''}><span className="nav-lang-flag">🇪🇸</span>ES</Link>
+            <span className="nav-lang-divider">|</span>
+            <Link href={enHref} className={locale === 'en' ? 'active' : ''}><span className="nav-lang-flag">🇺🇸</span>EN</Link>
+          </div>
         </div>
 
         <button
@@ -160,7 +173,7 @@ export default function Navbar() {
             dl({ event: open ? 'mobile_menu_close' : 'mobile_menu_open' });
             setOpen(o => !o);
           }}
-          aria-label={open ? 'Cerrar menú' : 'Abrir menú'}
+          aria-label={open ? (en ? 'Close menu' : 'Cerrar menú') : (en ? 'Open menu' : 'Abrir menú')}
         >
           {open ? <IconClose /> : <IconMenu />}
         </button>
@@ -168,37 +181,45 @@ export default function Navbar() {
 
       {open && (
         <div className="nav-mobile">
-          <Link className="nav-mobile-item" href="/" onClick={() => closeAndTrack('Inicio', '/')}>Inicio</Link>
+          <Link className="nav-mobile-item" href={`/${locale}`} onClick={() => closeAndTrack(en ? 'Home' : 'Inicio', `/${locale}`)}>
+            {en ? 'Home' : 'Inicio'}
+          </Link>
 
           <div className="nav-mobile-group-title">Bonsight Growth</div>
-          <Link className="nav-mobile-subitem" href="/services/data-strategy" onClick={() => closeAndTrack('Data Strategy', '/services/data-strategy', 'growth')}>
+          <Link className="nav-mobile-subitem" href={`/${locale}/services/data-strategy`} onClick={() => closeAndTrack('Data Strategy', `/${locale}/services/data-strategy`, 'growth')}>
             <IconData /> Data Strategy
           </Link>
-          <Link className="nav-mobile-subitem" href="/services/growth" onClick={() => closeAndTrack('Growth Digital', '/services/growth', 'growth')}>
+          <Link className="nav-mobile-subitem" href={`/${locale}/services/growth`} onClick={() => closeAndTrack('Growth Digital', `/${locale}/services/growth`, 'growth')}>
             <IconGrowth /> Growth Digital
           </Link>
-          <Link className="nav-mobile-subitem" href="/services/cro" onClick={() => closeAndTrack('CRO', '/services/cro', 'growth')}>
-            <IconCRO /> CRO — Optimización de conversión
+          <Link className="nav-mobile-subitem" href={`/${locale}/services/cro`} onClick={() => closeAndTrack('CRO', `/${locale}/services/cro`, 'growth')}>
+            <IconCRO /> {en ? 'CRO — Conversion Optimization' : 'CRO — Optimización de conversión'}
           </Link>
 
           <div className="nav-mobile-group-title">Bonsight Boost</div>
-          <Link className="nav-mobile-subitem" href="/services/mentoring" onClick={() => closeAndTrack('Mentoring de Equipos', '/services/mentoring', 'boost')}>
-            <IconMentoring /> Mentoring de equipos
+          <Link className="nav-mobile-subitem" href={`/${locale}/services/mentoring`} onClick={() => closeAndTrack(en ? 'Team Mentoring' : 'Mentoring de Equipos', `/${locale}/services/mentoring`, 'boost')}>
+            <IconMentoring /> {en ? 'Team mentoring' : 'Mentoring de equipos'}
           </Link>
-          <Link className="nav-mobile-subitem" href="/services/procesos" onClick={() => closeAndTrack('Mejora de Procesos', '/services/procesos', 'boost')}>
-            <IconProcess /> Mejora de procesos
+          <Link className="nav-mobile-subitem" href={`/${locale}/services/procesos`} onClick={() => closeAndTrack(en ? 'Process Improvement' : 'Mejora de Procesos', `/${locale}/services/procesos`, 'boost')}>
+            <IconProcess /> {en ? 'Process improvement' : 'Mejora de procesos'}
           </Link>
-          <Link className="nav-mobile-subitem" href="/services/liderazgo" onClick={() => closeAndTrack('Soporte a Líderes', '/services/liderazgo', 'boost')}>
-            <IconLeadership /> Soporte a líderes
+          <Link className="nav-mobile-subitem" href={`/${locale}/services/liderazgo`} onClick={() => closeAndTrack(en ? 'Leadership Support' : 'Soporte a Líderes', `/${locale}/services/liderazgo`, 'boost')}>
+            <IconLeadership /> {en ? 'Leadership support' : 'Soporte a líderes'}
           </Link>
 
           <a
             className="nav-mobile-cta"
             data-route="/#contacto"
-            onClick={() => { close(); dl({ event: 'cta_click', cta_text: 'conversemos', cta_location: 'mobile_nav' }); }}
+            onClick={() => { close(); dl({ event: 'cta_click', cta_text: en ? 'lets_talk' : 'conversemos', cta_location: 'mobile_nav' }); }}
           >
-            Conversemos →
+            {en ? "Let's Talk →" : 'Conversemos →'}
           </a>
+
+          <div className="nav-mobile-lang">
+            <Link href={esHref} className={locale === 'es' ? 'active' : ''}><span className="nav-lang-flag">🇪🇸</span>ES</Link>
+            <span>|</span>
+            <Link href={enHref} className={locale === 'en' ? 'active' : ''}><span className="nav-lang-flag">🇺🇸</span>EN</Link>
+          </div>
         </div>
       )}
     </>

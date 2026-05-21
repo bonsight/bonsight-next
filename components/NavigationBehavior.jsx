@@ -3,6 +3,15 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
+const LOCALES = ['es', 'en'];
+
+function getLocale(pathname) {
+  for (const l of LOCALES) {
+    if (pathname.startsWith(`/${l}/`) || pathname === `/${l}`) return l;
+  }
+  return 'es';
+}
+
 export default function NavigationBehavior() {
   const router = useRouter();
 
@@ -12,18 +21,18 @@ export default function NavigationBehavior() {
       if (routeTarget) {
         event.preventDefault();
         const route = routeTarget.getAttribute('data-route');
+        const locale = getLocale(window.location.pathname);
         const hashIdx = route.indexOf('#');
 
         if (hashIdx !== -1) {
-          const path = route.slice(0, hashIdx) || '/';
+          const rawPath = route.slice(0, hashIdx) || '/';
           const hash = route.slice(hashIdx + 1);
+          const localePath = rawPath === '/' ? `/${locale}` : `/${locale}${rawPath}`;
 
-          if (path === window.location.pathname) {
-            // Same page — scroll directly
+          if (localePath === window.location.pathname) {
             document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth' });
           } else {
-            // Different page — navigate then poll for element and scroll
-            router.push(path);
+            router.push(localePath);
             let tries = 0;
             const tryScroll = () => {
               const el = document.getElementById(hash);
@@ -36,7 +45,8 @@ export default function NavigationBehavior() {
             setTimeout(tryScroll, 150);
           }
         } else {
-          router.push(route);
+          const localePath = route === '/' ? `/${locale}` : `/${locale}${route}`;
+          router.push(localePath);
         }
         return;
       }
