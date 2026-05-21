@@ -361,6 +361,12 @@ async function handleContactSubmit(e) {
       headers: { 'Accept': 'application/json' }
     });
     if (res.ok) {
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push({
+        event: 'form_submit',
+        form_id: 'contact',
+        service_selected: data.get('service') || 'not_specified'
+      });
       form.querySelectorAll('.form-row, .form-field, .form-footer').forEach(el => el.style.display = 'none');
       successEl.style.display = 'flex';
     } else {

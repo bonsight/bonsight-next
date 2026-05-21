@@ -4,6 +4,14 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 
+import { normalize } from '@/utils/analytics';
+
+const dl = (obj) => {
+  if (typeof window === 'undefined') return;
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push(obj);
+};
+
 const IconData = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
     <ellipse cx="12" cy="5" rx="9" ry="3"/>
@@ -57,7 +65,13 @@ const IconClose = () => (
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
+
   const close = () => setOpen(false);
+
+  const closeAndTrack = (linkText, destination, menuName = 'mobile') => {
+    close();
+    dl({ event: 'nav_link_click', link_text: normalize(linkText), destination, menu_name: normalize(menuName) });
+  };
 
   return (
     <>
@@ -67,26 +81,31 @@ export default function Navbar() {
         </Link>
 
         <div className="nav-links">
-          <Link href="/">Inicio</Link>
+          <Link href="/" onClick={() => dl({ event: 'nav_link_click', link_text: 'inicio', destination: '/' })}>
+            Inicio
+          </Link>
 
-          <div className="nav-dropdown">
+          <div
+            className="nav-dropdown"
+            onMouseEnter={() => dl({ event: 'nav_dropdown_open', menu_name: 'growth' })}
+          >
             <a>Growth ▾</a>
             <div className="nav-dropdown-menu">
-              <Link href="/services/data-strategy">
+              <Link href="/services/data-strategy" onClick={() => dl({ event: 'nav_link_click', link_text: 'data_strategy', destination: '/services/data-strategy', menu_name: 'growth' })}>
                 <span className="menu-icon-svg"><IconData /></span>
                 <span className="menu-item-text">
                   <span className="menu-item-name">Data Strategy</span>
                   <span className="menu-item-desc">Arquitectura de datos y KPIs</span>
                 </span>
               </Link>
-              <Link href="/services/growth">
+              <Link href="/services/growth" onClick={() => dl({ event: 'nav_link_click', link_text: 'growth_digital', destination: '/services/growth', menu_name: 'growth' })}>
                 <span className="menu-icon-svg"><IconGrowth /></span>
                 <span className="menu-item-text">
                   <span className="menu-item-name">Growth Digital</span>
                   <span className="menu-item-desc">Adquisición, SEO y performance</span>
                 </span>
               </Link>
-              <Link href="/services/cro">
+              <Link href="/services/cro" onClick={() => dl({ event: 'nav_link_click', link_text: 'cro', destination: '/services/cro', menu_name: 'growth' })}>
                 <span className="menu-icon-svg"><IconCRO /></span>
                 <span className="menu-item-text">
                   <span className="menu-item-name">CRO</span>
@@ -96,24 +115,27 @@ export default function Navbar() {
             </div>
           </div>
 
-          <div className="nav-dropdown">
+          <div
+            className="nav-dropdown"
+            onMouseEnter={() => dl({ event: 'nav_dropdown_open', menu_name: 'boost' })}
+          >
             <a>Boost ▾</a>
             <div className="nav-dropdown-menu">
-              <Link href="/services/mentoring">
+              <Link href="/services/mentoring" onClick={() => dl({ event: 'nav_link_click', link_text: 'mentoring_de_equipos', destination: '/services/mentoring', menu_name: 'boost' })}>
                 <span className="menu-icon-svg"><IconMentoring /></span>
                 <span className="menu-item-text">
                   <span className="menu-item-name">Mentoring de Equipos</span>
                   <span className="menu-item-desc">Desarrollo de equipos y feedback</span>
                 </span>
               </Link>
-              <Link href="/services/procesos">
+              <Link href="/services/procesos" onClick={() => dl({ event: 'nav_link_click', link_text: 'mejora_de_procesos', destination: '/services/procesos', menu_name: 'boost' })}>
                 <span className="menu-icon-svg"><IconProcess /></span>
                 <span className="menu-item-text">
                   <span className="menu-item-name">Mejora de Procesos</span>
                   <span className="menu-item-desc">Flujos ágiles y metodologías</span>
                 </span>
               </Link>
-              <Link href="/services/liderazgo">
+              <Link href="/services/liderazgo" onClick={() => dl({ event: 'nav_link_click', link_text: 'soporte_a_lideres', destination: '/services/liderazgo', menu_name: 'boost' })}>
                 <span className="menu-icon-svg"><IconLeadership /></span>
                 <span className="menu-item-text">
                   <span className="menu-item-name">Soporte a Líderes</span>
@@ -123,12 +145,21 @@ export default function Navbar() {
             </div>
           </div>
 
-          <Link className="nav-cta" href="/#contacto">Conversemos</Link>
+          <Link
+            className="nav-cta"
+            href="/#contacto"
+            onClick={() => dl({ event: 'cta_click', cta_text: 'conversemos', cta_location: 'nav' })}
+          >
+            Conversemos
+          </Link>
         </div>
 
         <button
           className="nav-hamburger"
-          onClick={() => setOpen(o => !o)}
+          onClick={() => {
+            dl({ event: open ? 'mobile_menu_close' : 'mobile_menu_open' });
+            setOpen(o => !o);
+          }}
           aria-label={open ? 'Cerrar menú' : 'Abrir menú'}
         >
           {open ? <IconClose /> : <IconMenu />}
@@ -137,31 +168,35 @@ export default function Navbar() {
 
       {open && (
         <div className="nav-mobile">
-          <Link className="nav-mobile-item" href="/" onClick={close}>Inicio</Link>
+          <Link className="nav-mobile-item" href="/" onClick={() => closeAndTrack('Inicio', '/')}>Inicio</Link>
 
           <div className="nav-mobile-group-title">Bonsight Growth</div>
-          <Link className="nav-mobile-subitem" href="/services/data-strategy" onClick={close}>
+          <Link className="nav-mobile-subitem" href="/services/data-strategy" onClick={() => closeAndTrack('Data Strategy', '/services/data-strategy', 'growth')}>
             <IconData /> Data Strategy
           </Link>
-          <Link className="nav-mobile-subitem" href="/services/growth" onClick={close}>
+          <Link className="nav-mobile-subitem" href="/services/growth" onClick={() => closeAndTrack('Growth Digital', '/services/growth', 'growth')}>
             <IconGrowth /> Growth Digital
           </Link>
-          <Link className="nav-mobile-subitem" href="/services/cro" onClick={close}>
+          <Link className="nav-mobile-subitem" href="/services/cro" onClick={() => closeAndTrack('CRO', '/services/cro', 'growth')}>
             <IconCRO /> CRO — Optimización de conversión
           </Link>
 
           <div className="nav-mobile-group-title">Bonsight Boost</div>
-          <Link className="nav-mobile-subitem" href="/services/mentoring" onClick={close}>
+          <Link className="nav-mobile-subitem" href="/services/mentoring" onClick={() => closeAndTrack('Mentoring de Equipos', '/services/mentoring', 'boost')}>
             <IconMentoring /> Mentoring de equipos
           </Link>
-          <Link className="nav-mobile-subitem" href="/services/procesos" onClick={close}>
+          <Link className="nav-mobile-subitem" href="/services/procesos" onClick={() => closeAndTrack('Mejora de Procesos', '/services/procesos', 'boost')}>
             <IconProcess /> Mejora de procesos
           </Link>
-          <Link className="nav-mobile-subitem" href="/services/liderazgo" onClick={close}>
+          <Link className="nav-mobile-subitem" href="/services/liderazgo" onClick={() => closeAndTrack('Soporte a Líderes', '/services/liderazgo', 'boost')}>
             <IconLeadership /> Soporte a líderes
           </Link>
 
-          <Link className="nav-mobile-cta" href="/#contacto" onClick={close}>
+          <Link
+            className="nav-mobile-cta"
+            href="/#contacto"
+            onClick={() => { close(); dl({ event: 'cta_click', cta_text: 'conversemos', cta_location: 'mobile_nav' }); }}
+          >
             Conversemos →
           </Link>
         </div>
