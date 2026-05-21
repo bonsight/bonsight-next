@@ -7,6 +7,10 @@ import Analytics from '@/components/Analytics';
 export const metadata = {
   title: 'Bonsight LLC — Estrategia de datos',
   description: 'Estrategia de datos, crecimiento digital, CRO y acompañamiento a equipos.',
+  icons: {
+    icon: '/logo.svg',
+    apple: '/logo.svg',
+  },
 };
 
 export default function RootLayout({ children }) {

@@ -145,13 +145,13 @@ export default function Navbar() {
             </div>
           </div>
 
-          <Link
+          <a
             className="nav-cta"
-            href="/#contacto"
+            data-route="/#contacto"
             onClick={() => dl({ event: 'cta_click', cta_text: 'conversemos', cta_location: 'nav' })}
           >
             Conversemos
-          </Link>
+          </a>
         </div>
 
         <button
@@ -192,13 +192,13 @@ export default function Navbar() {
             <IconLeadership /> Soporte a líderes
           </Link>
 
-          <Link
+          <a
             className="nav-mobile-cta"
-            href="/#contacto"
+            data-route="/#contacto"
             onClick={() => { close(); dl({ event: 'cta_click', cta_text: 'conversemos', cta_location: 'mobile_nav' }); }}
           >
             Conversemos →
-          </Link>
+          </a>
         </div>
       )}
     </>

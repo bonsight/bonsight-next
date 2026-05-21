@@ -11,7 +11,33 @@ export default function NavigationBehavior() {
       const routeTarget = event.target.closest('[data-route]');
       if (routeTarget) {
         event.preventDefault();
-        router.push(routeTarget.getAttribute('data-route'));
+        const route = routeTarget.getAttribute('data-route');
+        const hashIdx = route.indexOf('#');
+
+        if (hashIdx !== -1) {
+          const path = route.slice(0, hashIdx) || '/';
+          const hash = route.slice(hashIdx + 1);
+
+          if (path === window.location.pathname) {
+            // Same page — scroll directly
+            document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth' });
+          } else {
+            // Different page — navigate then poll for element and scroll
+            router.push(path);
+            let tries = 0;
+            const tryScroll = () => {
+              const el = document.getElementById(hash);
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth' });
+              } else if (tries++ < 20) {
+                setTimeout(tryScroll, 100);
+              }
+            };
+            setTimeout(tryScroll, 150);
+          }
+        } else {
+          router.push(route);
+        }
         return;
       }
 
