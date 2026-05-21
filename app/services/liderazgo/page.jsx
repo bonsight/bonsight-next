@@ -2,11 +2,95 @@ import RawHtml from '@/components/RawHtml';
 
 const html = `
 
-<div class="svc-hero"><div class="svc-hero-inner"><div><button class="back-btn" data-route="/">← Volver</button><div class="svc-hero-badge"><svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="12"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg><span>Bonsight Boost</span></div><h1>Soporte a Líderes</h1><button class="btn-primary" data-route="/#contacto">Conversemos</button></div><p class="svc-hero-desc">Potenciamos el liderazgo con visión y estrategia. Brindamos acompañamiento a quienes toman decisiones clave para que lideren con mayor claridad, efectividad e impacto real.</p></div></div>
-<div class="svc-body"><div class="svc-grid"><div><div class="eyebrow">Qué incluye</div><h2 style="font-family:var(--serif);font-size:1.5rem;font-weight:400;margin-bottom:1.5rem">Servicios incluidos</h2><div class="svc-items-list"><div class="svc-item"><div class="svc-item-icon"><svg viewbox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></div><div><h4>Coaching estratégico para líderes</h4><p>Sesiones 1:1 para desarrollar visión estratégica, toma de decisiones y estilo de liderazgo.</p></div></div><div class="svc-item"><div class="svc-item-icon"><svg viewbox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div><div><h4>Facilitación de alineación ejecutiva</h4><p>Alineamos visión, prioridades y forma de trabajo a nivel de equipos directivos.</p></div></div><div class="svc-item"><div class="svc-item-icon"><svg viewbox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></div><div><h4>Gestión de equipos de alto rendimiento</h4><p>Construcción y motivación de equipos de alto desempeño y autonomía sostenida.</p></div></div><div class="svc-item"><div class="svc-item-icon"><svg viewbox="0 0 24 24"><line x1="18" x2="18" y1="20" y2="10"></line><line x1="12" x2="12" y1="20" y2="4"></line><line x1="6" x2="6" y1="20" y2="14"></line></svg></div><div><h4>Liderazgo basado en datos</h4><p>Formamos a líderes para utilizar datos en la toma de decisión y gestión de equipos.</p></div></div></div></div><div class="outcomes-panel"><h3>Lo que lograrás</h3><div class="outcome-item"><div class="outcome-dot"><svg viewbox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div><h4>Claridad estratégica</h4><p>Decisiones más rápidas y alineadas con los objetivos del negocio.</p></div></div><div class="outcome-item"><div class="outcome-dot"><svg viewbox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div><h4>Equipos comprometidos</h4><p>Líderes que inspiran y retienen al talento clave de la organización.</p></div></div><div class="outcome-item"><div class="outcome-dot"><svg viewbox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div><h4>Mejor ejecución</h4><p>Capacidad de transformar la estrategia en resultados concretos y medibles.</p></div></div><div class="outcome-item"><div class="outcome-dot"><svg viewbox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div><h4>Resiliencia organizacional</h4><p>Liderazgo que navega la incertidumbre con foco y adaptabilidad real.</p></div></div></div></div></div>
-<div class="svc-process"><div class="svc-process-inner" style="max-width:1200px;margin:0 auto"><div class="eyebrow" style="color:var(--accent-mid)"><span style="display:inline-block;width:16px;height:1px;background:var(--accent-mid)"></span> Proceso</div><h2 style="font-family:var(--serif);font-size:1.8rem;font-weight:400;color:white;margin-bottom:2rem">Cómo trabajamos</h2><div class="process-steps"><div class="proc-step"><div class="proc-num-wrap" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15)"><div class="proc-num" style="color:rgba(255,255,255,0.4)">01</div></div><h4 style="color:white">Evaluación</h4><p style="color:rgba(255,255,255,0.45)">Entendemos el contexto, desafíos y objetivos de desarrollo del líder.</p></div><div class="proc-step"><div class="proc-num-wrap" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15)"><div class="proc-num" style="color:rgba(255,255,255,0.4)">02</div></div><h4 style="color:white">Plan de trabajo</h4><p style="color:rgba(255,255,255,0.45)">Diseñamos el programa de acompañamiento a medida para cada situación.</p></div><div class="proc-step"><div class="proc-num-wrap" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15)"><div class="proc-num" style="color:rgba(255,255,255,0.4)">03</div></div><h4 style="color:white">Acompañamiento</h4><p style="color:rgba(255,255,255,0.45)">Sesiones con foco en situaciones reales y aprendizaje aplicado.</p></div><div class="proc-step"><div class="proc-num-wrap" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15)"><div class="proc-num" style="color:rgba(255,255,255,0.4)">04</div></div><h4 style="color:white">Evolución</h4><p style="color:rgba(255,255,255,0.45)">Revisamos el progreso y adaptamos el foco según los avances logrados.</p></div></div></div></div>
-<div class="cta-band"><h2>¿Quieres liderar con más impacto?</h2><p>Conversemos sobre cómo potenciar tu liderazgo y el de tu equipo directivo.</p><button class="btn-white" data-route="/#contacto">Agendar conversación →</button></div>
-<footer><div class="footer-logo">BON<span>sight</span> LLC</div><p>© 2025 Bonsight LLC</p></footer>
+<div class="svc-hero"><div class="svc-hero-inner"><div><button class="back-btn" data-route="/">← Volver</button><div class="svc-hero-badge" data-animate><svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="12"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg><span>Bonsight Boost</span></div><h1 data-animate data-animate-delay="1">Soporte a Líderes</h1><button class="btn-primary" data-animate data-animate-delay="2" data-route="/#contacto">Conversemos</button></div><p class="svc-hero-desc" data-animate data-animate-delay="1">Potenciamos el liderazgo con visión y estrategia. Brindamos acompañamiento a quienes toman decisiones clave para que lideren con mayor claridad, efectividad e impacto real.</p></div></div>
+
+<div class="svc-body"><div class="svc-grid"><div><div class="eyebrow" data-animate>Qué incluye</div><h2 style="font-family:var(--serif);font-size:1.5rem;font-weight:400;margin-bottom:1.5rem">Servicios incluidos</h2><div class="svc-items-list"><div class="svc-item" data-animate><div class="svc-item-icon"><svg viewbox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></div><div><h4>Coaching estratégico para líderes</h4><p>Sesiones 1:1 para desarrollar visión estratégica, toma de decisiones y estilo de liderazgo.</p></div></div><div class="svc-item" data-animate><div class="svc-item-icon"><svg viewbox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div><div><h4>Facilitación de alineación ejecutiva</h4><p>Alineamos visión, prioridades y forma de trabajo a nivel de equipos directivos.</p></div></div><div class="svc-item" data-animate><div class="svc-item-icon"><svg viewbox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></div><div><h4>Gestión de equipos de alto rendimiento</h4><p>Construcción y motivación de equipos de alto desempeño y autonomía sostenida.</p></div></div><div class="svc-item" data-animate><div class="svc-item-icon"><svg viewbox="0 0 24 24"><line x1="18" x2="18" y1="20" y2="10"></line><line x1="12" x2="12" y1="20" y2="4"></line><line x1="6" x2="6" y1="20" y2="14"></line></svg></div><div><h4>Liderazgo basado en datos</h4><p>Formamos a líderes para utilizar datos en la toma de decisión y gestión de equipos.</p></div></div></div></div><div class="outcomes-panel"><h3>Lo que lograrás</h3><div class="outcome-item" data-animate><div class="outcome-dot"><svg viewbox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div><h4>Claridad estratégica</h4><p>Decisiones más rápidas y alineadas con los objetivos del negocio.</p></div></div><div class="outcome-item" data-animate><div class="outcome-dot"><svg viewbox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div><h4>Equipos comprometidos</h4><p>Líderes que inspiran y retienen al talento clave de la organización.</p></div></div><div class="outcome-item" data-animate><div class="outcome-dot"><svg viewbox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div><h4>Mejor ejecución</h4><p>Capacidad de transformar la estrategia en resultados concretos y medibles.</p></div></div><div class="outcome-item" data-animate><div class="outcome-dot"><svg viewbox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></div><div><h4>Resiliencia organizacional</h4><p>Liderazgo que navega la incertidumbre con foco y adaptabilidad real.</p></div></div></div></div></div>
+
+<div class="jc-section">
+<div class="jc-header">
+<div class="jc-eyebrow">Proceso</div>
+<h2 class="jc-heading">Cómo trabajamos</h2>
+</div>
+<div class="jc-grid">
+
+<div class="jc-step" data-animate>
+<div class="jc-num-row"><div class="jc-bubble">01</div><div class="jc-trail"></div></div>
+<div class="jc-icon"><svg viewbox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></div>
+<h4 class="jc-title">Evaluación</h4>
+<p class="jc-quote">Entendemos el contexto y desafíos del líder.</p>
+<p class="jc-desc">Entendemos el contexto, desafíos actuales y objetivos de desarrollo de cada líder antes de comenzar.</p>
+</div>
+
+<div class="jc-step" data-animate data-animate-delay="1">
+<div class="jc-num-row"><div class="jc-bubble">02</div><div class="jc-trail"></div></div>
+<div class="jc-icon"><svg viewbox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
+<h4 class="jc-title">Plan de trabajo</h4>
+<p class="jc-quote">Diseñamos el programa de acompañamiento a medida.</p>
+<p class="jc-desc">Diseñamos el programa de acompañamiento personalizado para cada situación y objetivo específico.</p>
+</div>
+
+<div class="jc-step" data-animate data-animate-delay="2">
+<div class="jc-num-row"><div class="jc-bubble">03</div><div class="jc-trail"></div></div>
+<div class="jc-icon"><svg viewbox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div>
+<h4 class="jc-title">Acompañamiento</h4>
+<p class="jc-quote">Sesiones con foco en situaciones reales de liderazgo.</p>
+<p class="jc-desc">Sesiones estructuradas con foco en situaciones reales del día a día y aprendizaje aplicado.</p>
+</div>
+
+<div class="jc-step" data-animate data-animate-delay="3">
+<div class="jc-num-row"><div class="jc-bubble">04</div><div class="jc-trail"></div></div>
+<div class="jc-icon"><svg viewbox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg></div>
+<h4 class="jc-title">Evolución</h4>
+<p class="jc-quote">Revisamos el progreso y adaptamos el foco.</p>
+<p class="jc-desc">Revisamos el progreso periódicamente y adaptamos el foco del programa según los avances logrados.</p>
+</div>
+
+</div>
+</div>
+
+<div class="cta-band" data-animate><h2>¿Quieres liderar con más impacto?</h2><p>Conversemos sobre cómo potenciar tu liderazgo y el de tu equipo directivo.</p><button class="btn-white" data-route="/#contacto">Agendar conversación →</button></div>
+<footer class="footer-main">
+<div class="footer-main-inner">
+<div class="footer-col footer-col-brand">
+<div class="footer-logo">BON<span>sight</span> LLC</div>
+<p class="footer-tagline">Estrategia de datos y crecimiento digital para empresas que quieren crecer con foco.</p>
+<div class="footer-social">
+<a class="footer-social-icon" href="https://www.instagram.com/wearebonsight" target="_blank" rel="noopener" aria-label="Instagram"><svg width="16" height="16" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg></a>
+<a class="footer-social-icon" href="https://www.linkedin.com/company/wearebonsight/" target="_blank" rel="noopener" aria-label="LinkedIn"><svg width="16" height="16" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg></a>
+<a class="footer-social-icon" href="https://x.com/WeAreBonsight" target="_blank" rel="noopener" aria-label="X"><svg width="15" height="15" viewbox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+<a class="footer-social-icon" href="https://www.tiktok.com/@wearebonsigth" target="_blank" rel="noopener" aria-label="TikTok"><svg width="15" height="15" viewbox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.19a8.14 8.14 0 0 0 4.77 1.52V6.27a4.85 4.85 0 0 1-1-.58z"/></svg></a>
+</div>
+</div>
+<div class="footer-col">
+<div class="footer-col-label">Bonsight Growth</div>
+<nav class="footer-nav">
+<a data-route="/services/data-strategy">Data Strategy</a>
+<a data-route="/services/growth">Growth Digital</a>
+<a data-route="/services/cro">CRO</a>
+</nav>
+</div>
+<div class="footer-col">
+<div class="footer-col-label">Bonsight Boost</div>
+<nav class="footer-nav">
+<a data-route="/services/mentoring">Mentoring de Equipos</a>
+<a data-route="/services/procesos">Mejora de Procesos</a>
+<a data-route="/services/liderazgo">Soporte a Líderes</a>
+</nav>
+</div>
+<div class="footer-col">
+<div class="footer-col-label">Contacto</div>
+<div class="footer-contact-items">
+<a href="mailto:sales@bonsight.co" class="footer-contact-link"><svg width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>sales@bonsight.co</a>
+<a href="tel:+13123509796" class="footer-contact-link"><svg width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.99 12 19.79 19.79 0 0 1 1.92 3.38 2 2 0 0 1 3.89 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>+1 312 350 9796</a>
+<div class="footer-contact-addr"><svg width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Orlando, Florida<br>United States</span></div>
+</div>
+</div>
+</div>
+<div class="footer-bottom">
+<span class="footer-bottom-logo">BON<span>sight</span> LLC</span>
+<span>© 2025 Bonsight LLC · Todos los derechos reservados</span>
+</div>
+</footer>
 
 `;
 

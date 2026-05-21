@@ -14,7 +14,7 @@ const html = `
 </div>
 </div>
 <div class="hero-right">
-<img class="hero-photo" src="/team.svg" alt="Equipo Bonsight" />
+<img class="hero-photo" src="/hero_home.png" alt="Equipo Bonsight" />
 </div>
 </div>
 
@@ -137,7 +137,8 @@ const html = `
 <!-- CLIENTS -->
 <div class="clients-wrap">
 <div class="clients-inner">
-<div class="clients-label">Empresas que confían en Bonsight</div>
+<div class="clients-label" data-animate>Clientes</div>
+<h2 class="clients-heading" data-animate data-animate-delay="1">Empresas que confían en Bonsight</h2>
 <div class="clients-row">
 <div class="client-logo client-logo--link" data-animate data-route="/cases/sesuveca">
 <svg fill="none" height="36" viewbox="0 0 160 36" width="160" xmlns="http://www.w3.org/2000/svg">
@@ -278,15 +279,47 @@ const html = `
   </div>
 </section>
 
-<footer>
+<footer class="footer-main">
+<div class="footer-main-inner">
+<div class="footer-col footer-col-brand">
 <div class="footer-logo">BON<span>sight</span> LLC</div>
-<div class="footer-links">
-<a data-route="/services/data-strategy">Data Strategy</a>
-<a data-route="/services/growth">Growth</a>
-<a data-route="/services/cro">CRO</a>
-<a data-route="/services/mentoring">Mentoring</a>
+<p class="footer-tagline">Estrategia de datos y crecimiento digital para empresas que quieren crecer con foco.</p>
+<div class="footer-social">
+<a class="footer-social-icon" href="https://www.instagram.com/wearebonsight" target="_blank" rel="noopener" aria-label="Instagram"><svg width="16" height="16" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg></a>
+<a class="footer-social-icon" href="https://www.linkedin.com/company/wearebonsight/" target="_blank" rel="noopener" aria-label="LinkedIn"><svg width="16" height="16" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg></a>
+<a class="footer-social-icon" href="https://x.com/WeAreBonsight" target="_blank" rel="noopener" aria-label="X"><svg width="15" height="15" viewbox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+<a class="footer-social-icon" href="https://www.tiktok.com/@wearebonsigth" target="_blank" rel="noopener" aria-label="TikTok"><svg width="15" height="15" viewbox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.19a8.14 8.14 0 0 0 4.77 1.52V6.27a4.85 4.85 0 0 1-1-.58z"/></svg></a>
 </div>
-<p>© 2025 Bonsight LLC</p>
+</div>
+<div class="footer-col">
+<div class="footer-col-label">Bonsight Growth</div>
+<nav class="footer-nav">
+<a data-route="/services/data-strategy">Data Strategy</a>
+<a data-route="/services/growth">Growth Digital</a>
+<a data-route="/services/cro">CRO</a>
+</nav>
+</div>
+<div class="footer-col">
+<div class="footer-col-label">Bonsight Boost</div>
+<nav class="footer-nav">
+<a data-route="/services/mentoring">Mentoring de Equipos</a>
+<a data-route="/services/procesos">Mejora de Procesos</a>
+<a data-route="/services/liderazgo">Soporte a Líderes</a>
+</nav>
+</div>
+<div class="footer-col">
+<div class="footer-col-label">Contacto</div>
+<div class="footer-contact-items">
+<a href="mailto:sales@bonsight.co" class="footer-contact-link"><svg width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>sales@bonsight.co</a>
+<a href="tel:+13123509796" class="footer-contact-link"><svg width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.99 12 19.79 19.79 0 0 1 1.92 3.38 2 2 0 0 1 3.89 1.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>+1 312 350 9796</a>
+<div class="footer-contact-addr"><svg width="14" height="14" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Orlando, Florida<br>United States</span></div>
+</div>
+</div>
+</div>
+<div class="footer-bottom">
+<span class="footer-bottom-logo">BON<span>sight</span> LLC</span>
+<span>© 2025 Bonsight LLC · Todos los derechos reservados</span>
+</div>
 </footer>
 
 <script>
