@@ -819,6 +819,13 @@ a.svc-card { text-decoration: none; color: inherit; }
 .consulta-bubble--loading span{width:5px;height:5px;border-radius:50%;background:rgba(52,211,153,0.4);animation:chatDot 1.3s ease-in-out infinite}
 .consulta-bubble--loading span:nth-child(2){animation-delay:0.2s}
 .consulta-bubble--loading span:nth-child(3){animation-delay:0.4s}
+@keyframes kaiNodeSeq{0%,60%,100%{opacity:0.4;transform:scale(1)}30%{opacity:1;transform:scale(1.35)}}
+@keyframes kaiDotBreath{0%,100%{opacity:0.7;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
+.kai-avatar--thinking .kai-node{animation:kaiNodeSeq 1.8s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+.kai-avatar--thinking .kai-node--1{animation-delay:0s}
+.kai-avatar--thinking .kai-node--2{animation-delay:0.6s}
+.kai-avatar--thinking .kai-node--3{animation-delay:1.2s}
+.kai-avatar--thinking .kai-dot{animation:kaiDotBreath 0.9s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
 .kai-num{color:#34d399;font-weight:600;letter-spacing:-0.015em}
 .kai-bold{color:rgba(255,255,255,0.92);font-weight:600}
 .kai-para{margin-top:0.5em}
@@ -832,6 +839,7 @@ a.svc-card { text-decoration: none; color: inherit; }
 .consulta-cta-primary:hover{background:var(--accent-mid)}
 .consulta-cta-wa{display:inline-flex;align-items:center;gap:0.5rem;background:rgba(37,211,102,0.09);border:1px solid rgba(37,211,102,0.22);color:rgba(37,211,102,0.9);padding:0.7rem 1.375rem;border-radius:8px;font-size:0.825rem;font-weight:500;text-decoration:none;transition:all 0.15s;letter-spacing:-0.005em}
 .consulta-cta-wa:hover{background:rgba(37,211,102,0.17);border-color:rgba(37,211,102,0.38)}
+.consulta-limit{padding:1.125rem 2rem;border-top:1px solid rgba(255,255,255,0.06);font-size:0.8rem;color:rgba(255,255,255,0.35);text-align:center;flex-shrink:0;font-family:var(--mono);letter-spacing:0.02em}
 .consulta-footer{display:flex;align-items:center;gap:0.625rem;padding:1.125rem 2rem;border-top:1px solid rgba(255,255,255,0.06);flex-shrink:0}
 .consulta-input{flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;color:rgba(255,255,255,0.88);font-size:0.875rem;padding:0.8rem 1.125rem;outline:none;transition:border-color 0.15s,background 0.15s;font-family:inherit;letter-spacing:-0.005em}
 .consulta-input::placeholder{color:rgba(255,255,255,0.18)}
