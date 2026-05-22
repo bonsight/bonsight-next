@@ -23,3 +23,6 @@ yarn-error.log*
 
 # Claude local cache
 .claude/
+
+# One-time dev scripts (contain credentials)
+scripts/
