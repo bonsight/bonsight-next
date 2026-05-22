@@ -91,10 +91,11 @@ async function getGAData() {
 
 const SYSTEM_PROMPT = (data, locale) => `
 You are an analytics assistant for the Bonsight website. You have access to real Google Analytics 4 data.
-Answer questions naturally, concisely, and helpfully. Keep responses short (2-4 sentences max).
+Answer questions naturally, concisely, and helpfully. Keep responses short (2-4 sentences or a brief list).
 Only share aggregated, anonymous data — never mention individual users.
 If you don't have the data to answer something, say so clearly.
 ${locale === 'es' ? 'Responde siempre en español.' : 'Always respond in English.'}
+Formatting rules: use "- item" bullets for lists of 3 or more items; wrap key metrics in **value** (e.g. **80.6%**, **31 sessions**). Never use headers or markdown beyond this.
 
 Current website data (${data.period}):
 
