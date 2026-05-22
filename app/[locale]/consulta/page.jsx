@@ -5,6 +5,9 @@ import { usePathname } from 'next/navigation';
 
 const CALENDLY = 'https://calendly.com/rafa-bonsight/30min';
 const WA_NUMBER = '13123509796';
+const MAX_MESSAGES = 20;
+const RESET_HOURS = 24;
+const STORAGE_KEY = 'bsKaiData';
 
 const T = {
   es: {
@@ -15,6 +18,7 @@ const T = {
     ctaWA: 'Escribir por WhatsApp',
     waMsg: 'Hola, vengo del sitio de Bonsight y quisiera continuar la conversación con el equipo.',
     error: 'Algo salió mal. Intenta de nuevo.',
+    limitMsg: 'Has llegado al límite de esta conversación. Para continuar, agenda una llamada o escríbenos por WhatsApp.',
     initialMessage: 'Hola, soy Kai, el asistente de Bonsight. Estoy aquí para entender qué está buscando y ver si podemos ayudarle.\n\n¿Qué problema está intentando resolver en este momento?',
   },
   en: {
@@ -25,6 +29,7 @@ const T = {
     ctaWA: 'Chat on WhatsApp',
     waMsg: 'Hi, I came from the Bonsight website and would like to continue the conversation with the team.',
     error: 'Something went wrong. Please try again.',
+    limitMsg: "You've reached the limit for this conversation. To continue, schedule a call or reach out on WhatsApp.",
     initialMessage: "Hi, I'm Kai, Bonsight's consulting assistant. I'm here to understand what you're looking for and see if we can help.\n\nWhat problem are you trying to solve right now?",
   },
 };
@@ -82,14 +87,20 @@ function renderMessage(text) {
   return result.length ? result : text;
 }
 
-const KaiAvatar = ({ size = 40 }) => (
-  <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="20" cy="20" r="19.5" fill="rgba(52,211,153,0.07)" stroke="rgba(52,211,153,0.22)" strokeWidth="1"/>
-    <circle cx="20" cy="20" r="14.5" fill="none" stroke="rgba(52,211,153,0.08)" strokeWidth="0.75"/>
-    <circle cx="20" cy="16.5" r="5.5" fill="rgba(52,211,153,0.1)" stroke="rgba(52,211,153,0.6)" strokeWidth="1.2"/>
-    <path d="M8.5 33c0-6.4 5.1-10.5 11.5-10.5S31.5 26.6 31.5 33" stroke="rgba(52,211,153,0.55)" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
-    <circle cx="29" cy="9" r="2.5" fill="#34d399"/>
-    <path d="M29 5.5v1.5M32 7l-1 1M33.5 10h-1.5" stroke="rgba(52,211,153,0.5)" strokeWidth="0.85" strokeLinecap="round"/>
+const KaiAvatar = ({ size = 40, thinking = false }) => (
+  <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className={thinking ? 'kai-avatar--thinking' : ''}>
+    <circle cx="20" cy="20" r="19.5" fill="rgba(52,211,153,0.06)" stroke="rgba(52,211,153,0.18)" strokeWidth="1"/>
+    <line x1="13" y1="13" x2="27" y2="13" stroke="rgba(52,211,153,0.18)" strokeWidth="0.9"/>
+    <line x1="13" y1="13" x2="20" y2="28" stroke="rgba(52,211,153,0.18)" strokeWidth="0.9"/>
+    <line x1="27" y1="13" x2="20" y2="28" stroke="rgba(52,211,153,0.18)" strokeWidth="0.9"/>
+    <line x1="13" y1="13" x2="20" y2="20" stroke="rgba(52,211,153,0.38)" strokeWidth="0.9"/>
+    <line x1="27" y1="13" x2="20" y2="20" stroke="rgba(52,211,153,0.38)" strokeWidth="0.9"/>
+    <line x1="20" y1="28" x2="20" y2="20" stroke="rgba(52,211,153,0.38)" strokeWidth="0.9"/>
+    <circle cx="13" cy="13" r="2.2" fill="rgba(52,211,153,0.1)" stroke="rgba(52,211,153,0.5)" strokeWidth="1" className="kai-node kai-node--1"/>
+    <circle cx="27" cy="13" r="2.2" fill="rgba(52,211,153,0.1)" stroke="rgba(52,211,153,0.5)" strokeWidth="1" className="kai-node kai-node--2"/>
+    <circle cx="20" cy="28" r="2.2" fill="rgba(52,211,153,0.1)" stroke="rgba(52,211,153,0.5)" strokeWidth="1" className="kai-node kai-node--3"/>
+    <circle cx="20" cy="20" r="4" fill="rgba(52,211,153,0.15)" stroke="#34d399" strokeWidth="1.2"/>
+    <circle cx="20" cy="20" r="1.8" fill="#34d399" className="kai-dot"/>
   </svg>
 );
 
@@ -111,6 +122,24 @@ const IconWA = () => (
   </svg>
 );
 
+function readStorage() {
+  try {
+    const d = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const expired = d.resetAt && Date.now() > d.resetAt;
+    if (expired) return { count: 0, resetAt: null };
+    return { count: d.count || 0, resetAt: d.resetAt || null };
+  } catch {
+    return { count: 0, resetAt: null };
+  }
+}
+
+function writeStorage(count) {
+  try {
+    const resetAt = Date.now() + RESET_HOURS * 3600 * 1000;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ count, resetAt }));
+  } catch {}
+}
+
 export default function ConsultaPage() {
   const pathname = usePathname();
   const locale = pathname?.startsWith('/es') ? 'es' : 'en';
@@ -122,10 +151,18 @@ export default function ConsultaPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [showCta, setShowCta] = useState(false);
+  const [limited, setLimited] = useState(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+  const msgCountRef = useRef(0);
 
   const assistantCount = messages.filter((m) => m.role === 'assistant').length;
+
+  useEffect(() => {
+    const { count } = readStorage();
+    msgCountRef.current = count;
+    if (count >= MAX_MESSAGES) { setLimited(true); setShowCta(true); }
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -141,7 +178,12 @@ export default function ConsultaPage() {
 
   const send = async (text) => {
     const question = (text || input).trim();
-    if (!question || loading) return;
+    if (!question || loading || limited) return;
+
+    const newCount = msgCountRef.current + 1;
+    msgCountRef.current = newCount;
+    writeStorage(newCount);
+    if (newCount >= MAX_MESSAGES) { setLimited(true); setShowCta(true); }
 
     const newMessages = [...messages, { role: 'user', content: question }];
     setMessages(newMessages);
@@ -164,6 +206,7 @@ export default function ConsultaPage() {
       setMessages((prev) => [...prev, { role: 'assistant', content: t.error }]);
     } finally {
       setLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
   };
 
@@ -172,7 +215,7 @@ export default function ConsultaPage() {
       <div className="consulta-chat">
 
         <div className="consulta-chat-header">
-          <KaiAvatar size={40} />
+          <KaiAvatar size={40} thinking={loading} />
           <div>
             <div className="consulta-chat-name">
               Kai
@@ -199,7 +242,7 @@ export default function ConsultaPage() {
           {loading && (
             <div className="consulta-msg consulta-msg--assistant">
               <div className="consulta-msg-avatar">
-                <KaiAvatar size={28} />
+                <KaiAvatar size={28} thinking={true} />
               </div>
               <div className="consulta-bubble consulta-bubble--loading">
                 <span /><span /><span />
@@ -210,24 +253,28 @@ export default function ConsultaPage() {
           <div ref={bottomRef} />
         </div>
 
-        <div className="consulta-footer">
-          <input
-            ref={inputRef}
-            className="consulta-input"
-            placeholder={t.placeholder}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && send()}
-            disabled={loading}
-          />
-          <button
-            className="consulta-send"
-            onClick={() => send()}
-            disabled={loading || !input.trim()}
-          >
-            <IconSend />
-          </button>
-        </div>
+        {limited ? (
+          <div className="consulta-limit">{t.limitMsg}</div>
+        ) : (
+          <div className="consulta-footer">
+            <input
+              ref={inputRef}
+              className="consulta-input"
+              placeholder={t.placeholder}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && send()}
+              disabled={loading}
+            />
+            <button
+              className="consulta-send"
+              onClick={() => send()}
+              disabled={loading || !input.trim()}
+            >
+              <IconSend />
+            </button>
+          </div>
+        )}
 
         {showCta && (
           <div className="consulta-cta">
