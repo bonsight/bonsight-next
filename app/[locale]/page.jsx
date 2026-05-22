@@ -12,7 +12,7 @@ function getHtml(locale) {
 <h1>${en ? 'Data that <em>drives</em> real decisions' : 'Datos que <em>impulsan</em> decisiones reales'}</h1>
 <p class="hero-sub">${en ? 'We help companies organize their data, improve their measurement, and optimize their digital experience to grow with strength and focus.' : 'Ayudamos a empresas a ordenar sus datos, mejorar su medición y optimizar su experiencia digital para crecer con solidez y foco.'}</p>
 <div class="hero-actions">
-<button class="btn-primary" data-route="/#contacto">${en ? "Let's Talk" : 'Conversemos'}</button>
+<button class="btn-primary" data-route="/consulta">${en ? "Let's Talk" : 'Conversemos'}</button>
 <button class="btn-outline" data-scroll="#svc-anchor">${en ? 'View services →' : 'Ver servicios →'}</button>
 </div>
 </div>
