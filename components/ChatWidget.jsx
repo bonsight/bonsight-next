@@ -187,6 +187,8 @@ export default function ChatWidget() {
   const locale = pathname?.startsWith('/es') ? 'es' : 'en';
   const t = T[locale];
 
+  if (pathname?.includes('/consulta')) return null;
+
   const initChat = () => {
     try {
       const stored = JSON.parse(localStorage.getItem('bsChatData') || '{}');

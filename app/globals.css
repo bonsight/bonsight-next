@@ -825,7 +825,7 @@ a.svc-card { text-decoration: none; color: inherit; }
 .kai-list{display:flex;flex-direction:column;gap:0.35rem;margin-top:0.4rem}
 .kai-list-item{display:flex;align-items:flex-start;gap:0.5rem;line-height:1.6}
 .kai-list-dot{width:4px;height:4px;border-radius:50%;background:rgba(52,211,153,0.55);flex-shrink:0;margin-top:0.62em}
-.consulta-cta{padding:1.125rem 2rem;border-top:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.015);flex-shrink:0;animation:slideInUp 0.3s ease-out}
+.consulta-cta{padding:0.875rem 2rem 1.25rem;border-top:none;background:rgba(255,255,255,0.015);flex-shrink:0;animation:slideInUp 0.3s ease-out}
 .consulta-cta-label{font-family:var(--mono);font-size:0.58rem;color:rgba(52,211,153,0.45);text-transform:uppercase;letter-spacing:0.14em;margin-bottom:0.875rem}
 .consulta-cta-actions{display:flex;gap:0.75rem;flex-wrap:wrap}
 .consulta-cta-primary{display:inline-flex;align-items:center;gap:0.5rem;background:var(--accent);color:var(--white);padding:0.7rem 1.375rem;border-radius:8px;font-size:0.825rem;font-weight:500;text-decoration:none;transition:background 0.15s;letter-spacing:-0.005em}

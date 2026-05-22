@@ -129,10 +129,10 @@ export default function ConsultaPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+  }, [messages, loading, showCta]);
 
   useEffect(() => {
-    if (assistantCount >= 5) setShowCta(true);
+    if (assistantCount >= 4) setShowCta(true);
   }, [assistantCount]);
 
   useEffect(() => {
@@ -155,7 +155,11 @@ export default function ConsultaPage() {
         body: JSON.stringify({ messages: newMessages, locale }),
       });
       const data = await res.json();
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
+      const reply = data.reply;
+      setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
+      if (reply.includes('opciones para continuar') || reply.includes('options to continue')) {
+        setShowCta(true);
+      }
     } catch {
       setMessages((prev) => [...prev, { role: 'assistant', content: t.error }]);
     } finally {
@@ -206,6 +210,25 @@ export default function ConsultaPage() {
           <div ref={bottomRef} />
         </div>
 
+        <div className="consulta-footer">
+          <input
+            ref={inputRef}
+            className="consulta-input"
+            placeholder={t.placeholder}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && send()}
+            disabled={loading}
+          />
+          <button
+            className="consulta-send"
+            onClick={() => send()}
+            disabled={loading || !input.trim()}
+          >
+            <IconSend />
+          </button>
+        </div>
+
         {showCta && (
           <div className="consulta-cta">
             <div className="consulta-cta-label">{t.ctaTitle}</div>
@@ -226,25 +249,6 @@ export default function ConsultaPage() {
             </div>
           </div>
         )}
-
-        <div className="consulta-footer">
-          <input
-            ref={inputRef}
-            className="consulta-input"
-            placeholder={t.placeholder}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && send()}
-            disabled={loading}
-          />
-          <button
-            className="consulta-send"
-            onClick={() => send()}
-            disabled={loading || !input.trim()}
-          >
-            <IconSend />
-          </button>
-        </div>
 
       </div>
     </div>
