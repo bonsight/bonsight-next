@@ -1,0 +1,66 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="62%">
+      <stop offset="0%" stop-color="#123f32"/>
+      <stop offset="58%" stop-color="#09251f"/>
+      <stop offset="100%" stop-color="#061713"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="302" y1="165" x2="722" y2="860" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7CF0B8"/>
+      <stop offset="58%" stop-color="#22C896"/>
+      <stop offset="100%" stop-color="#00907B"/>
+    </linearGradient>
+    <linearGradient id="halfLight" x1="242" y1="501" x2="435" y2="687" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E2FFE8"/>
+      <stop offset="1" stop-color="#B6E8C7"/>
+    </linearGradient>
+    <linearGradient id="halfLight2" x1="593" y1="507" x2="764" y2="690" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E2FFE8"/>
+      <stop offset="1" stop-color="#B6E8C7"/>
+    </linearGradient>
+    <linearGradient id="centerCircle" x1="419" y1="355" x2="628" y2="596" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F9C55"/>
+      <stop offset="1" stop-color="#286532"/>
+    </linearGradient>
+    <filter id="shadow" x="53" y="53" width="918" height="918" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="26" stdDeviation="28" flood-color="#1BE3A2" flood-opacity="0.22"/>
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+    <filter id="soft" x="200" y="190" width="624" height="640" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+    <clipPath id="leftClip"><path d="M242 608C242 548.9 289.9 501 349 501C408.1 501 456 548.9 456 608H242Z"/></clipPath>
+    <clipPath id="rightClip"><path d="M580 608C580 548.9 627.9 501 687 501C746.1 501 794 548.9 794 608H580Z"/></clipPath>
+    <clipPath id="innerClip"><circle cx="512" cy="512" r="286"/></clipPath>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <circle cx="512" cy="512" r="426" fill="url(#bg)"/>
+    <circle cx="512" cy="512" r="421" stroke="#11382E" stroke-width="10" opacity="0.75"/>
+  </g>
+
+  <circle cx="512" cy="512" r="302" stroke="url(#ring)" stroke-width="56"/>
+  <circle cx="512" cy="512" r="355" stroke="#0C2A23" stroke-width="33" opacity="0.7"/>
+
+  <g filter="url(#soft)" clip-path="url(#innerClip)">
+    <path d="M242 608C242 548.9 289.9 501 349 501C408.1 501 456 548.9 456 608H242Z" fill="url(#halfLight)"/>
+    <g clip-path="url(#leftClip)" fill="#1E6444">
+      <rect x="294" y="574" width="25" height="71"/>
+      <rect x="335" y="548" width="25" height="97"/>
+      <rect x="376" y="524" width="25" height="121"/>
+    </g>
+    <path d="M580 608C580 548.9 627.9 501 687 501C746.1 501 794 548.9 794 608H580Z" fill="url(#halfLight2)"/>
+    <g clip-path="url(#rightClip)" fill="#1E6444">
+      <rect x="634" y="581" width="25" height="64"/>
+      <rect x="676" y="556" width="25" height="89"/>
+      <rect x="718" y="526" width="25" height="119"/>
+    </g>
+    <circle cx="512" cy="480" r="119" fill="url(#centerCircle)"/>
+    <g stroke="#0A241E" stroke-width="18" stroke-linejoin="miter" stroke-linecap="square">
+      <path d="M445 486L488 446L526 471L575 422"/>
+      <path d="M485 603V504"/>
+      <path d="M535 603V474"/>
+      <path d="M585 603V407"/>
+    </g>
+  </g>
+</svg>

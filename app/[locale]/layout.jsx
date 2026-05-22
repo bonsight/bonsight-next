@@ -1,6 +1,7 @@
 import Navbar from '@/components/Navbar';
 import NavigationBehavior from '@/components/NavigationBehavior';
 import Analytics from '@/components/Analytics';
+import ChatWidget from '@/components/ChatWidget';
 
 export default async function LocaleLayout({ children, params }) {
   const { locale } = await params;
@@ -10,6 +11,7 @@ export default async function LocaleLayout({ children, params }) {
       <NavigationBehavior />
       <Analytics />
       {children}
+      <ChatWidget />
     </>
   );
 }

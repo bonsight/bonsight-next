@@ -9,9 +9,14 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@google-analytics/data": "^6.0.0",
     "next": "latest",
+    "openai": "^6.39.0",
     "react": "latest",
     "react-dom": "latest"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@google-analytics/admin": "^9.1.0",
+    "googleapis": "^172.0.0"
+  }
 }
