@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 
 const CALENDLY = 'https://calendly.com/rafa-bonsight/30min';
 const WA_NUMBER = '13123509796';
+const dl = (obj) => { if (typeof window !== 'undefined') { window.dataLayer = window.dataLayer || []; window.dataLayer.push(obj); } };
 const MAX_MESSAGES = 20;
 const RESET_HOURS = 24;
 const STORAGE_KEY = 'bsKaiData';
@@ -280,7 +281,7 @@ export default function ConsultaPage() {
           <div className="consulta-cta">
             <div className="consulta-cta-label">{t.ctaTitle}</div>
             <div className="consulta-cta-actions">
-              <a className="consulta-cta-primary" href={CALENDLY} target="_blank" rel="noopener noreferrer">
+              <a className="consulta-cta-primary" href={CALENDLY} target="_blank" rel="noopener noreferrer" onClick={() => dl({ event: 'cta_click', cta_text: 'calendly', cta_location: 'kai_cta', destination: 'calendly', page_path: window.location.pathname })}>
                 <IconCalendar />
                 {t.ctaCall}
               </a>
@@ -289,6 +290,7 @@ export default function ConsultaPage() {
                 href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(t.waMsg)}`}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => dl({ event: 'cta_click', cta_location: 'kai_cta', destination: 'whatsapp', page_path: window.location.pathname })}
               >
                 <IconWA />
                 {t.ctaWA}

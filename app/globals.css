@@ -73,7 +73,7 @@ nav{position:sticky;top:0;z-index:100;background:var(--white);border-bottom:1px 
 .hero h1 em{font-style:normal;color:var(--accent-mid)}
 .hero-sub{font-size:0.95rem;color:rgba(255,255,255,0.55);max-width:460px;margin-bottom:2.5rem;line-height:1.85;font-weight:300;animation:heroSlideUp 0.7s ease-out 0.3s both}
 .hero-actions{display:flex;gap:1rem;flex-wrap:wrap;animation:heroSlideUp 0.7s ease-out 0.45s both}
-.btn-primary{background:var(--accent);color:var(--white);padding:0.75rem 2rem;border:none;font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:background 0.2s;font-family:var(--sans)}
+.btn-primary{background:var(--accent);color:var(--white);padding:0.75rem 2rem;border:none;font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:background 0.2s;font-family:var(--sans);text-decoration:none;display:inline-block}
 .btn-primary:hover{background:var(--accent-mid)}
 .btn-outline{background:transparent;color:rgba(255,255,255,0.7);padding:0.75rem 2rem;border:1px solid rgba(255,255,255,0.2);font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:all 0.2s;font-family:var(--sans)}
 .btn-outline:hover{border-color:var(--accent-mid);color:var(--accent-mid)}
@@ -242,8 +242,12 @@ nav{position:sticky;top:0;z-index:100;background:var(--white);border-bottom:1px 
 .cta-band{background:var(--accent);padding:5rem 4rem;text-align:center}
 .cta-band h2{font-family:var(--serif);font-size:clamp(1.6rem,3vw,2.4rem);font-weight:400;letter-spacing:-0.02em;margin-bottom:1rem;color:var(--white)}
 .cta-band p{font-size:0.9rem;color:rgba(255,255,255,0.7);max-width:460px;margin:0 auto 2.5rem;line-height:1.8;font-weight:300}
-.btn-white{background:var(--white);color:var(--accent);padding:0.85rem 2.5rem;border:none;font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;font-weight:500;transition:all 0.2s;font-family:var(--sans)}
+.btn-white{background:var(--white);color:var(--accent);padding:0.85rem 2.5rem;border:none;font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;font-weight:500;transition:all 0.2s;font-family:var(--sans);text-decoration:none;display:inline-block}
+
 .btn-white:hover{background:var(--accent-light)}
+.cta-band-actions{display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap}
+.btn-wa-outline{display:inline-flex;align-items:center;gap:0.5rem;padding:0.85rem 2rem;border:1.5px solid rgba(255,255,255,0.6);color:var(--white);background:transparent;font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:500;font-family:var(--sans);text-decoration:none;transition:all 0.2s;cursor:pointer}
+.btn-wa-outline:hover{background:rgba(255,255,255,0.12);border-color:var(--white)}
 
 /* ── FOOTER ── */
 footer,.footer-main{background:var(--dark2);border-top:1px solid rgba(255,255,255,0.05)}
@@ -861,4 +865,16 @@ a.svc-card { text-decoration: none; color: inherit; }
   .chat-panel{width:calc(100vw - 2rem);right:1rem;bottom:5rem}
   .chat-fab{right:1rem;bottom:1rem}
   .chat-nudge{right:1rem;bottom:calc(1rem + 62px)}
+  .consulta-wrap{height:calc(100dvh - 64px)}
+  .consulta-messages{padding:0.875rem 1rem}
+  .consulta-bubble{padding:0.75rem 1rem;font-size:0.84rem}
+  .consulta-chat-header{padding:0.875rem 1rem}
+  .consulta-footer{padding:0.75rem 1rem}
+  .consulta-input{font-size:1rem}
+  .consulta-cta{padding:0.75rem 1rem 1rem}
+  .consulta-cta-actions{flex-direction:column}
+  .consulta-cta-primary,.consulta-cta-wa{justify-content:center;width:100%;box-sizing:border-box}
+  .consulta-msg--assistant{max-width:95%}
+  .consulta-msg--user{max-width:92%}
+  .consulta-limit{padding:0.875rem 1rem}
 }

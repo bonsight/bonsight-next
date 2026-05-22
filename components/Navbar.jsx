@@ -152,13 +152,13 @@ export default function Navbar({ locale = 'es' }) {
             </div>
           </div>
 
-          <a
+          <Link
             className="nav-cta"
-            data-route="/#contacto"
-            onClick={() => dl({ event: 'cta_click', cta_text: en ? 'lets_talk' : 'conversemos', cta_location: 'nav' })}
+            href={`/${locale}/consulta`}
+            onClick={() => dl({ event: 'cta_click', cta_text: en ? 'lets_talk' : 'conversemos', cta_location: 'nav', destination: 'kai' })}
           >
             {en ? "Let's Talk" : 'Conversemos'}
-          </a>
+          </Link>
 
           <div className="nav-lang-switcher">
             <Link href={esHref} className={locale === 'es' ? 'active' : ''}><span className="nav-lang-flag">🇪🇸</span>ES</Link>
@@ -207,13 +207,13 @@ export default function Navbar({ locale = 'es' }) {
             <IconLeadership /> {en ? 'Leadership support' : 'Soporte a líderes'}
           </Link>
 
-          <a
+          <Link
             className="nav-mobile-cta"
-            data-route="/#contacto"
-            onClick={() => { close(); dl({ event: 'cta_click', cta_text: en ? 'lets_talk' : 'conversemos', cta_location: 'mobile_nav' }); }}
+            href={`/${locale}/consulta`}
+            onClick={() => { close(); dl({ event: 'cta_click', cta_text: en ? 'lets_talk' : 'conversemos', cta_location: 'mobile_nav', destination: 'kai' }); }}
           >
             {en ? "Let's Talk →" : 'Conversemos →'}
-          </a>
+          </Link>
 
           <div className="nav-mobile-lang">
             <Link href={esHref} className={locale === 'es' ? 'active' : ''}><span className="nav-lang-flag">🇪🇸</span>ES</Link>

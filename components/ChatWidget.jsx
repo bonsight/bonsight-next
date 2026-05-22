@@ -8,6 +8,7 @@ const MAX_QUESTIONS = 6;
 const BLOCK_HOURS = 24;
 const FORMSPREE = 'https://formspree.io/f/xkoejwqn';
 const WA_NUMBER = '13123509796';
+const dl = (obj) => { if (typeof window !== 'undefined') { window.dataLayer = window.dataLayer || []; window.dataLayer.push(obj); } };
 
 const T = {
   en: {
@@ -235,6 +236,7 @@ export default function ChatWidget() {
 
   useEffect(() => {
     if (open) {
+      dl({ event: 'widget_open', widget: 'analytics', page_path: window.location.pathname });
       setNudge(false);
       sessionStorage.setItem('chatNudge_v2', '1');
       setTimeout(() => inputRef.current?.focus(), 300);
@@ -256,6 +258,9 @@ export default function ChatWidget() {
     const question = (text || input).trim();
     if (!question || loading || gated || hardBlocked) return;
 
+    const isQuickSuggestion = !!text;
+    dl({ event: 'chat_message_sent', widget: 'analytics', is_suggestion: isQuickSuggestion, page_path: window.location.pathname });
+
     const newMessages = [...messages, { role: 'user', content: question }];
     setMessages(newMessages);
     setInput('');
@@ -274,9 +279,11 @@ export default function ChatWidget() {
       if (next >= MAX_QUESTIONS) {
         const blockedAt = Date.now();
         setHardBlocked(true);
+        dl({ event: 'widget_hard_blocked', widget: 'analytics', page_path: window.location.pathname });
         saveChat({ questionsUsed: next, blockedAt, leadDone });
       } else if (next >= FREE_QUESTIONS && !leadDone) {
         setGated(true);
+        dl({ event: 'widget_gate_shown', widget: 'analytics', page_path: window.location.pathname });
         saveChat({ questionsUsed: next, leadDone });
       } else {
         saveChat({ questionsUsed: next, leadDone });
@@ -301,6 +308,7 @@ export default function ChatWidget() {
       setLeadDone(true);
       setGated(false);
       saveChat({ questionsUsed, leadDone: true });
+      dl({ event: 'lead_captured', widget: 'analytics', page_path: window.location.pathname });
       setMessages((prev) => [...prev, { role: 'assistant', content: t.gate.success }]);
     } catch {
       setLeadDone(true);

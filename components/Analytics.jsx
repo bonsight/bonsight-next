@@ -77,7 +77,7 @@ export default function Analytics() {
       const t = e.target;
 
       if (t.closest('.contact-whatsapp')) {
-        dl({ event: 'whatsapp_click', page_path: pathname });
+        dl({ event: 'cta_click', cta_location: 'contact', destination: 'whatsapp', page_path: pathname });
         return;
       }
 
@@ -97,18 +97,24 @@ export default function Analytics() {
         return;
       }
 
-      if (t.closest('.hero-actions') && t.closest('button')) {
-        dl({ event: 'cta_click', cta_text: normalize(t.closest('button').textContent), cta_location: 'hero', page_path: pathname });
+      if (t.closest('.hero-actions')) {
+        const el = t.closest('button, a');
+        if (el) dl({ event: 'cta_click', cta_text: normalize(el.textContent), cta_location: 'hero', destination: 'kai', page_path: pathname });
         return;
       }
 
       if (t.closest('.svc-hero') && t.closest('.btn-primary')) {
-        dl({ event: 'cta_click', cta_text: normalize(t.closest('button').textContent), cta_location: 'service_hero', page_path: pathname });
+        const el = t.closest('.btn-primary');
+        dl({ event: 'cta_click', cta_text: normalize(el.textContent), cta_location: 'service_hero', destination: 'calendly', page_path: pathname });
         return;
       }
 
-      if (t.closest('.cta-band') && t.closest('button')) {
-        dl({ event: 'cta_click', cta_text: normalize(t.closest('button').textContent), cta_location: 'cta_band', page_path: pathname });
+      if (t.closest('.cta-band')) {
+        const el = t.closest('.btn-white, .btn-wa-outline, button');
+        if (el) {
+          const isWA = el.classList.contains('btn-wa-outline');
+          dl({ event: 'cta_click', cta_text: normalize(el.textContent), cta_location: 'cta_band', destination: isWA ? 'whatsapp' : 'calendly', page_path: pathname });
+        }
         return;
       }
 
