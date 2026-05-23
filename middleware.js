@@ -12,9 +12,11 @@ export function middleware(request) {
 
   if (hasLocale) {
     const locale = locales.find((l) => pathname.startsWith(`/${l}/`) || pathname === `/${l}`);
-    const res = NextResponse.next();
-    res.headers.set('x-locale', locale);
-    return res;
+    const basePath = pathname.slice(`/${locale}`.length) || '';
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-locale', locale);
+    requestHeaders.set('x-pathname', basePath);
+    return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
   const url = request.nextUrl.clone();
