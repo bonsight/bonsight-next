@@ -1,15 +1,12 @@
 const BASE = 'https://bonsight.co';
 
 const pages = [
-  { path: '',                        freq: 'weekly',  priority: 1.0 },
-  { path: '/services/data-strategy', freq: 'monthly', priority: 0.8 },
-  { path: '/services/growth',        freq: 'monthly', priority: 0.8 },
-  { path: '/services/cro',           freq: 'monthly', priority: 0.8 },
-  { path: '/services/mentoring',     freq: 'monthly', priority: 0.8 },
-  { path: '/services/procesos',      freq: 'monthly', priority: 0.8 },
-  { path: '/services/liderazgo',     freq: 'monthly', priority: 0.8 },
-  { path: '/cases/olaclick',         freq: 'monthly', priority: 0.7 },
-  { path: '/cases/sesuveca',         freq: 'monthly', priority: 0.7 },
+  { path: '',                freq: 'weekly',  priority: 1.0 },
+  { path: '/services/kairo', freq: 'monthly', priority: 0.9 },
+  { path: '/services/lumen', freq: 'monthly', priority: 0.9 },
+  { path: '/services/arke',  freq: 'monthly', priority: 0.9 },
+  { path: '/cases/olaclick', freq: 'monthly', priority: 0.7 },
+  { path: '/cases/sesuveca', freq: 'monthly', priority: 0.7 },
 ];
 
 export default function sitemap() {
