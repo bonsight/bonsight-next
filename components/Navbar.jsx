@@ -13,41 +13,20 @@ const dl = (obj) => {
   window.dataLayer.push(obj);
 };
 
-const IconData = () => (
+const IconKairo = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <ellipse cx="12" cy="5" rx="9" ry="3"/>
-    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
   </svg>
 );
-const IconGrowth = () => (
+const IconLumen = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
     <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
     <polyline points="16 7 22 7 22 13"/>
   </svg>
 );
-const IconCRO = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <circle cx="11" cy="11" r="8"/>
-    <path d="M21 21l-4.35-4.35"/>
-    <path d="M11 8v6M8 11h6"/>
-  </svg>
-);
-const IconMentoring = () => (
+const IconArke = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-  </svg>
-);
-const IconProcess = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <polyline points="17 1 21 5 17 9"/>
-    <path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4"/>
-    <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-  </svg>
-);
-const IconLeadership = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
   </svg>
 );
 const IconMenu = () => (
@@ -92,65 +71,15 @@ export default function Navbar({ locale = 'es' }) {
             {en ? 'Home' : 'Inicio'}
           </Link>
 
-          <div
-            className="nav-dropdown"
-            onMouseEnter={() => dl({ event: 'nav_dropdown_open', menu_name: 'growth' })}
-          >
-            <a>Growth ▾</a>
-            <div className="nav-dropdown-menu">
-              <Link href={`/${locale}/services/data-strategy`} onClick={() => dl({ event: 'nav_link_click', link_text: 'data_strategy', destination: `/${locale}/services/data-strategy`, menu_name: 'growth' })}>
-                <span className="menu-icon-svg"><IconData /></span>
-                <span className="menu-item-text">
-                  <span className="menu-item-name">Data Strategy</span>
-                  <span className="menu-item-desc">{en ? 'Data architecture and KPIs' : 'Arquitectura de datos y KPIs'}</span>
-                </span>
-              </Link>
-              <Link href={`/${locale}/services/growth`} onClick={() => dl({ event: 'nav_link_click', link_text: 'growth_digital', destination: `/${locale}/services/growth`, menu_name: 'growth' })}>
-                <span className="menu-icon-svg"><IconGrowth /></span>
-                <span className="menu-item-text">
-                  <span className="menu-item-name">Growth Digital</span>
-                  <span className="menu-item-desc">{en ? 'Acquisition, SEO and performance' : 'Adquisición, SEO y performance'}</span>
-                </span>
-              </Link>
-              <Link href={`/${locale}/services/cro`} onClick={() => dl({ event: 'nav_link_click', link_text: 'cro', destination: `/${locale}/services/cro`, menu_name: 'growth' })}>
-                <span className="menu-icon-svg"><IconCRO /></span>
-                <span className="menu-item-text">
-                  <span className="menu-item-name">CRO</span>
-                  <span className="menu-item-desc">{en ? 'Experimentation and conversion' : 'Experimentación y conversión'}</span>
-                </span>
-              </Link>
-            </div>
-          </div>
-
-          <div
-            className="nav-dropdown"
-            onMouseEnter={() => dl({ event: 'nav_dropdown_open', menu_name: 'boost' })}
-          >
-            <a>Boost ▾</a>
-            <div className="nav-dropdown-menu">
-              <Link href={`/${locale}/services/mentoring`} onClick={() => dl({ event: 'nav_link_click', link_text: 'mentoring', destination: `/${locale}/services/mentoring`, menu_name: 'boost' })}>
-                <span className="menu-icon-svg"><IconMentoring /></span>
-                <span className="menu-item-text">
-                  <span className="menu-item-name">{en ? 'Team Mentoring' : 'Mentoring de Equipos'}</span>
-                  <span className="menu-item-desc">{en ? 'Team development and feedback' : 'Desarrollo de equipos y feedback'}</span>
-                </span>
-              </Link>
-              <Link href={`/${locale}/services/procesos`} onClick={() => dl({ event: 'nav_link_click', link_text: 'procesos', destination: `/${locale}/services/procesos`, menu_name: 'boost' })}>
-                <span className="menu-icon-svg"><IconProcess /></span>
-                <span className="menu-item-text">
-                  <span className="menu-item-name">{en ? 'Process Improvement' : 'Mejora de Procesos'}</span>
-                  <span className="menu-item-desc">{en ? 'Agile flows and methodologies' : 'Flujos ágiles y metodologías'}</span>
-                </span>
-              </Link>
-              <Link href={`/${locale}/services/liderazgo`} onClick={() => dl({ event: 'nav_link_click', link_text: 'liderazgo', destination: `/${locale}/services/liderazgo`, menu_name: 'boost' })}>
-                <span className="menu-icon-svg"><IconLeadership /></span>
-                <span className="menu-item-text">
-                  <span className="menu-item-name">{en ? 'Leadership Support' : 'Soporte a Líderes'}</span>
-                  <span className="menu-item-desc">{en ? 'Coaching and executive alignment' : 'Coaching y alineación ejecutiva'}</span>
-                </span>
-              </Link>
-            </div>
-          </div>
+          <Link href={`/${locale}/services/kairo`} onClick={() => dl({ event: 'nav_link_click', link_text: 'kairo', destination: `/${locale}/services/kairo` })}>
+            Kairo
+          </Link>
+          <Link href={`/${locale}/services/lumen`} onClick={() => dl({ event: 'nav_link_click', link_text: 'lumen', destination: `/${locale}/services/lumen` })}>
+            Lumen
+          </Link>
+          <Link href={`/${locale}/services/arke`} onClick={() => dl({ event: 'nav_link_click', link_text: 'arke', destination: `/${locale}/services/arke` })}>
+            Arke
+          </Link>
 
           <Link
             className="nav-cta"
@@ -185,26 +114,15 @@ export default function Navbar({ locale = 'es' }) {
             {en ? 'Home' : 'Inicio'}
           </Link>
 
-          <div className="nav-mobile-group-title">Bonsight Growth</div>
-          <Link className="nav-mobile-subitem" href={`/${locale}/services/data-strategy`} onClick={() => closeAndTrack('Data Strategy', `/${locale}/services/data-strategy`, 'growth')}>
-            <IconData /> Data Strategy
+          <div className="nav-mobile-group-title">{en ? 'Services' : 'Servicios'}</div>
+          <Link className="nav-mobile-subitem" href={`/${locale}/services/kairo`} onClick={() => closeAndTrack('Kairo', `/${locale}/services/kairo`, 'services')}>
+            <IconKairo /> Kairo
           </Link>
-          <Link className="nav-mobile-subitem" href={`/${locale}/services/growth`} onClick={() => closeAndTrack('Growth Digital', `/${locale}/services/growth`, 'growth')}>
-            <IconGrowth /> Growth Digital
+          <Link className="nav-mobile-subitem" href={`/${locale}/services/lumen`} onClick={() => closeAndTrack('Lumen', `/${locale}/services/lumen`, 'services')}>
+            <IconLumen /> Lumen
           </Link>
-          <Link className="nav-mobile-subitem" href={`/${locale}/services/cro`} onClick={() => closeAndTrack('CRO', `/${locale}/services/cro`, 'growth')}>
-            <IconCRO /> {en ? 'CRO — Conversion Optimization' : 'CRO — Optimización de conversión'}
-          </Link>
-
-          <div className="nav-mobile-group-title">Bonsight Boost</div>
-          <Link className="nav-mobile-subitem" href={`/${locale}/services/mentoring`} onClick={() => closeAndTrack(en ? 'Team Mentoring' : 'Mentoring de Equipos', `/${locale}/services/mentoring`, 'boost')}>
-            <IconMentoring /> {en ? 'Team mentoring' : 'Mentoring de equipos'}
-          </Link>
-          <Link className="nav-mobile-subitem" href={`/${locale}/services/procesos`} onClick={() => closeAndTrack(en ? 'Process Improvement' : 'Mejora de Procesos', `/${locale}/services/procesos`, 'boost')}>
-            <IconProcess /> {en ? 'Process improvement' : 'Mejora de procesos'}
-          </Link>
-          <Link className="nav-mobile-subitem" href={`/${locale}/services/liderazgo`} onClick={() => closeAndTrack(en ? 'Leadership Support' : 'Soporte a Líderes', `/${locale}/services/liderazgo`, 'boost')}>
-            <IconLeadership /> {en ? 'Leadership support' : 'Soporte a líderes'}
+          <Link className="nav-mobile-subitem" href={`/${locale}/services/arke`} onClick={() => closeAndTrack('Arke', `/${locale}/services/arke`, 'services')}>
+            <IconArke /> Arke
           </Link>
 
           <Link
