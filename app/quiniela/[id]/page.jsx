@@ -1,0 +1,184 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { TEAMS } from '@/lib/quiniela'
+
+const s = {
+  page:  { maxWidth: 480, margin: '0 auto', padding: '2.5rem 1.5rem', fontFamily: 'var(--font-sans, system-ui, sans-serif)', minHeight: '100vh', display: 'flex', flexDirection: 'column' },
+  input: { padding: '9px 12px', borderRadius: 8, border: '0.5px solid #ccc', background: 'transparent', color: 'inherit', fontSize: 14, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' },
+  label: { fontSize: 13, color: '#888', marginBottom: 5, display: 'block' },
+  field: { marginBottom: 14 },
+  btn:   { background: '#1D9E75', color: '#fff', border: 'none', padding: '11px', borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: 'pointer', width: '100%' },
+  btnOff:{ background: '#9FE1CB', cursor: 'default' },
+  err:   { fontSize: 13, color: '#c0392b', marginBottom: 12 },
+}
+
+export default function RegistroPage() {
+  const { id: groupId } = useParams()
+  const router = useRouter()
+
+  const [group, setGroup]       = useState(null)
+  const [loading, setLoading]   = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError]       = useState('')
+  const [mode, setMode]         = useState('registro') // 'registro' | 'reacceso'
+
+  const [form, setForm] = useState({ nombre: '', email: '', tel: '', pais: '' })
+  const [reaccesoEmail, setReaccesoEmail] = useState('')
+
+  useEffect(() => {
+    const token = localStorage.getItem(`quiniela_token_${groupId}`)
+    if (token) { router.replace(`/quiniela/${groupId}/picks`); return }
+
+    fetch(`/api/quiniela?action=group&groupId=${groupId}`)
+      .then(r => r.json())
+      .then(data => setGroup(data.group ?? null))
+      .catch(() => setGroup(null))
+      .finally(() => setLoading(false))
+  }, [groupId, router])
+
+  async function handleRegister() {
+    if (!form.nombre.trim() || !form.email.trim() || !form.tel.trim()) {
+      setError('Nombre, email y WhatsApp son obligatorios')
+      return
+    }
+    setSubmitting(true); setError('')
+    try {
+      const res = await fetch('/api/quiniela', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'register', payload: { ...form, groupId } }),
+      })
+      const data = await res.json()
+      if (data.ok && data.token) {
+        localStorage.setItem(`quiniela_token_${groupId}`, data.token)
+        router.push(`/quiniela/${groupId}/picks`)
+      } else if (data.error === 'email_exists') {
+        setError('Ese email ya está registrado. Usa "Acceder con email" abajo.')
+      } else {
+        setError('Error al registrar. Intenta de nuevo.')
+      }
+    } catch { setError('Error de conexión') }
+    finally { setSubmitting(false) }
+  }
+
+  async function handleReacceso() {
+    if (!reaccesoEmail.trim()) { setError('Ingresa tu email'); return }
+    setSubmitting(true); setError('')
+    try {
+      const res = await fetch(`/api/quiniela?action=participanteByEmail&email=${encodeURIComponent(reaccesoEmail)}&groupId=${groupId}`)
+      const data = await res.json()
+      if (data.token) {
+        localStorage.setItem(`quiniela_token_${groupId}`, data.token)
+        router.push(`/quiniela/${groupId}/picks`)
+      } else {
+        setError('No encontramos un participante con ese email en esta quiniela.')
+      }
+    } catch { setError('Error de conexión') }
+    finally { setSubmitting(false) }
+  }
+
+  if (loading) return <div style={{ ...s.page, alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>Cargando...</div>
+
+  if (!group) return (
+    <div style={{ ...s.page, alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+      <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
+      <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>Quiniela no encontrada</div>
+      <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>El código «{groupId}» no existe.</div>
+      <a href="/quiniela" style={{ color: '#1D9E75', fontSize: 13 }}>← Crear o unirse a otra quiniela</a>
+    </div>
+  )
+
+  return (
+    <div style={s.page}>
+      {/* header */}
+      <div style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <div style={{ width: 44, height: 44, background: '#1D9E75', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>⚽</div>
+          <div>
+            <div style={{ fontSize: 19, fontWeight: 600 }}>{group.nombre}</div>
+            <div style={{ fontSize: 13, color: '#888' }}>Organiza: {group.adminNombre}</div>
+          </div>
+        </div>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f5f5f3', borderRadius: 99, padding: '4px 12px', fontSize: 12, color: '#888' }}>
+          Código <strong style={{ color: '#1D9E75', letterSpacing: 1 }}>{groupId}</strong>
+        </div>
+      </div>
+
+      {/* registro form */}
+      {mode === 'registro' && (
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 18 }}>Únete a la quiniela</div>
+
+          <div style={s.field}>
+            <label style={s.label}>Nombre completo *</label>
+            <input style={s.input} placeholder="Ej. Carlos Gómez" value={form.nombre}
+              onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} />
+          </div>
+          <div style={s.field}>
+            <label style={s.label}>Email * (para volver a acceder)</label>
+            <input style={s.input} type="email" placeholder="correo@ejemplo.com" value={form.email}
+              onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
+          </div>
+          <div style={s.field}>
+            <label style={s.label}>WhatsApp * (con código de país)</label>
+            <input style={s.input} type="tel" placeholder="+52 55 1234 5678" value={form.tel}
+              onChange={e => setForm(p => ({ ...p, tel: e.target.value }))} />
+          </div>
+          <div style={s.field}>
+            <label style={s.label}>País favorito</label>
+            <select style={s.input} value={form.pais} onChange={e => setForm(p => ({ ...p, pais: e.target.value }))}>
+              <option value="">— Selecciona —</option>
+              {TEAMS.map(t => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+
+          {error && <div style={s.err}>{error}</div>}
+
+          <button style={{ ...s.btn, ...(submitting ? s.btnOff : {}) }} onClick={handleRegister} disabled={submitting}>
+            {submitting ? 'Registrando...' : 'Registrarme y llenar mis picks →'}
+          </button>
+
+          <div style={{ marginTop: 24, textAlign: 'center' }}>
+            <button onClick={() => { setMode('reacceso'); setError('') }}
+              style={{ background: 'none', border: 'none', color: '#888', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>
+              ¿Ya estás registrado? Acceder con email
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* re-acceso */}
+      {mode === 'reacceso' && (
+        <div style={{ flex: 1 }}>
+          <button onClick={() => { setMode('registro'); setError('') }}
+            style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 13, marginBottom: 20, padding: 0 }}>
+            ← Volver
+          </button>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Acceder con tu email</div>
+          <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Ingresa el email con el que te registraste.</div>
+
+          <div style={s.field}>
+            <label style={s.label}>Email</label>
+            <input style={s.input} type="email" placeholder="correo@ejemplo.com" value={reaccesoEmail}
+              onChange={e => setReaccesoEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleReacceso()} />
+          </div>
+
+          {error && <div style={s.err}>{error}</div>}
+
+          <button style={{ ...s.btn, ...(submitting ? s.btnOff : {}) }} onClick={handleReacceso} disabled={submitting}>
+            {submitting ? 'Buscando...' : 'Acceder →'}
+          </button>
+        </div>
+      )}
+
+      {/* footer */}
+      <div style={{ marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '0.5px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>BON<span style={{ color: '#1D9E75' }}>sight</span></div>
+        <div style={{ fontSize: 11, color: '#bbb' }}>Mundial 2026 · USA, Canadá y México</div>
+      </div>
+    </div>
+  )
+}
