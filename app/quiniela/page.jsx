@@ -133,12 +133,17 @@ export default function QuinielaLanding() {
 
   // ── FORMS (crear / unir / creado) ─────────────────────────────────────────
 
-  if (mode === 'crear') return (
-    <div style={{ ...s.page, padding: '2rem 1.5rem' }}>
-      <button onClick={() => { setMode(null); setError('') }}
-        style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 13, marginBottom: 20, padding: 0 }}>
+  const BackBtn = ({ onClick }) => (
+    <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(8px)', padding: '12px 1.5rem 10px', margin: '0 -1.5rem', borderBottom: '0.5px solid #f0f0f0', marginBottom: 16 }}>
+      <button onClick={onClick} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 13, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
         ← Volver
       </button>
+    </div>
+  )
+
+  if (mode === 'crear') return (
+    <div style={{ ...s.page, padding: '1rem 1.5rem' }}>
+      <BackBtn onClick={() => { setMode(null); setError('') }} />
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>🏆 Crear quiniela</div>
         <div style={{ fontSize: 14, color: '#888', lineHeight: 1.5 }}>Invita a tus amigos, comparte el código y compitan durante todo el Mundial.</div>
@@ -195,11 +200,8 @@ export default function QuinielaLanding() {
   )
 
   if (mode === 'unir') return (
-    <div style={{ ...s.page, padding: '2rem 1.5rem' }}>
-      <button onClick={() => { setMode(null); setError('') }}
-        style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 13, marginBottom: 20, padding: 0 }}>
-        ← Volver
-      </button>
+    <div style={{ ...s.page, padding: '1rem 1.5rem' }}>
+      <BackBtn onClick={() => { setMode(null); setError('') }} />
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>🎟️ Unirme a una quiniela</div>
         <div style={{ fontSize: 14, color: '#888' }}>Pídele el código de acceso al organizador.</div>

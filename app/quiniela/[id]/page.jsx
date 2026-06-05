@@ -169,10 +169,12 @@ export default function RegistroPage() {
       {/* ── reacceso ── */}
       {mode === 'reacceso' && (
         <div style={{ flex: 1 }}>
-          <button onClick={() => { setMode('registro'); setError('') }}
-            style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 13, marginBottom: 20, padding: 0 }}>
-            ← Volver
-          </button>
+          <div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(8px)', padding: '10px 0 8px', marginBottom: 16, borderBottom: '0.5px solid #f0f0f0' }}>
+            <button onClick={() => { setMode('registro'); setError('') }}
+              style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 13, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+              ← Volver
+            </button>
+          </div>
           <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Acceder con tu email</div>
           <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Ingresa el email con el que te registraste.</div>
 

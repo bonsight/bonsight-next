@@ -186,7 +186,7 @@ function PremiosMayores({ campeon, goleador, customGoleador, onCampeon, onGolead
 
 const st = {
   page:    { maxWidth: 720, margin: '0 auto', padding: '2rem 1.5rem 5rem', fontFamily: 'var(--font-sans, system-ui, sans-serif)' },
-  scoreIn: { width: 36, height: 32, textAlign: 'center', border: '0.5px solid #ccc', borderRadius: 6, background: 'transparent', fontSize: 14, fontWeight: 500, color: 'inherit' },
+  scoreIn: { width: 30, height: 30, textAlign: 'center', border: '0.5px solid #ccc', borderRadius: 6, background: 'transparent', fontSize: 13, fontWeight: 500, color: 'inherit' },
   disIn:   { background: '#f5f5f3', color: '#bbb', border: '0.5px solid #eee' },
 }
 
@@ -660,7 +660,7 @@ export default function PicksPage() {
 
       {/* ── partidos ── */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 24px 1fr 80px 80px', gap: 6, fontSize: 11, color: '#aaa', paddingBottom: 6, borderBottom: '0.5px solid #eee', textAlign: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 20px 1fr 70px 66px', gap: 6, fontSize: 11, color: '#aaa', paddingBottom: 6, borderBottom: '0.5px solid #eee', textAlign: 'center' }}>
           <div>Local</div><div></div><div>Visitante</div><div>Marcador</div><div>Resultado</div>
         </div>
 
@@ -677,10 +677,10 @@ export default function PicksPage() {
                   🔒 picks bloqueados — partido ya comenzó
                 </div>
               )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 24px 1fr 80px 80px', gap: 6, alignItems: 'center', padding: '7px 0', borderBottom: '0.5px solid #f0f0f0' }}>
-                <div style={{ fontSize: 13, textAlign: 'center' }}>{f(local)}{local}</div>
-                <div style={{ fontSize: 11, textAlign: 'center', opacity: .3 }}>vs</div>
-                <div style={{ fontSize: 13, textAlign: 'center' }}>{f(visitante)}{visitante}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 20px 1fr 70px 66px', gap: 6, alignItems: 'center', padding: '7px 0', borderBottom: '0.5px solid #f0f0f0' }}>
+                <div style={{ fontSize: 12, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{f(local)}{local}</div>
+                <div style={{ fontSize: 10, textAlign: 'center', opacity: .3 }}>vs</div>
+                <div style={{ fontSize: 12, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{f(visitante)}{visitante}</div>
                 <div style={{ display: 'flex', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
                   <input style={inSty} type="number" min={0} max={20} disabled={locked}
                     value={pick.l} onChange={e => !locked && updatePick(currentPhase, globalIndex, 'l', e.target.value)} />
