@@ -285,11 +285,15 @@ export default function QuinielaLanding() {
           </div>
 
           {/* título */}
-          <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.15, marginBottom: 10 }}>
+          <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.15, marginBottom: 8 }}>
             🏆 Quiniela<br />Mundial 2026
           </div>
+          {/* tagline */}
+          <div style={{ fontSize: 20, fontWeight: 700, color: '#fff', marginBottom: 6, letterSpacing: -0.3 }}>
+            Kai analiza. Tú decides.
+          </div>
           {/* subtítulo */}
-          <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 1.6, marginBottom: 20, maxWidth: 340 }}>
+          <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6, marginBottom: 20, maxWidth: 340 }}>
             Compite con amigos, desafía el consenso y deja que Kai analice cada jornada.
           </div>
           {/* pills del torneo (contexto, no métricas de uso) */}
