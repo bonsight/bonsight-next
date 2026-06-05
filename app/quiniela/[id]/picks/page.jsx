@@ -671,8 +671,16 @@ export default function PicksPage() {
           const localWins     = pick.w === local
           const visitanteWins = pick.w === visitante
           const isEmpate      = pick.w === 'Empate'
+          const isPending     = pick.l === '' && pick.v === '' && !locked
 
-          const rowBg = (wins) => wins ? 'rgba(29,158,117,0.07)' : locked ? '#fafafa' : '#fff'
+          // Colores exclusivamente para Kai — partidos siempre neutros
+          const rowBg  = locked ? '#fafafa' : '#fff'
+          const cardBorder = locked
+            ? '0.5px solid #eee'
+            : isPending
+            ? '0.5px solid rgba(245,200,66,0.35)'
+            : '0.5px solid #e0e0de'
+
           const inputSty = {
             width: 48, height: 44, textAlign: 'center',
             border: '0.5px solid #ddd', borderRadius: 8,
@@ -696,21 +704,26 @@ export default function PicksPage() {
           return (
             <div key={globalIndex}>
               {/* ── Card vertical del partido ── */}
-              <div style={{ border: `0.5px solid ${locked ? '#eee' : '#e0e0de'}`, borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ border: cardBorder, borderRadius: 12, overflow: 'hidden' }}>
                 {locked && (
                   <div style={{ fontSize: 11, color: '#bbb', textAlign: 'center', padding: '4px 0', background: '#f9f9f7' }}>
                     🔒 picks bloqueados
                   </div>
                 )}
+                {isPending && (
+                  <div style={{ fontSize: 11, color: '#92400e', padding: '4px 12px', background: 'rgba(245,200,66,0.1)', borderBottom: '0.5px solid rgba(245,200,66,0.2)' }}>
+                    ⏳ Pendiente
+                  </div>
+                )}
 
                 {/* Fila local */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: rowBg(localWins), borderBottom: '0.5px solid #f0f0f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: rowBg, borderBottom: '0.5px solid #f0f0f0' }}>
                   <div style={{ flex: 1, fontSize: 16, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span>{f(local)}</span><span>{local}</span>
                   </div>
                   <input
                     style={inputSty} type="number" min={0} max={20} disabled={locked}
-                    value={pick.l}
+                    placeholder="?" value={pick.l}
                     onChange={e => !locked && updatePick(currentPhase, globalIndex, 'l', e.target.value)}
                   />
                   <div style={{ width: 28, textAlign: 'center', fontSize: 22 }}>
@@ -719,13 +732,13 @@ export default function PicksPage() {
                 </div>
 
                 {/* Fila visitante */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: rowBg(visitanteWins) }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: rowBg }}>
                   <div style={{ flex: 1, fontSize: 16, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span>{f(visitante)}</span><span>{visitante}</span>
                   </div>
                   <input
                     style={inputSty} type="number" min={0} max={20} disabled={locked}
-                    value={pick.v}
+                    placeholder="?" value={pick.v}
                     onChange={e => !locked && updatePick(currentPhase, globalIndex, 'v', e.target.value)}
                   />
                   <div style={{ width: 28, textAlign: 'center', fontSize: 22 }}>
