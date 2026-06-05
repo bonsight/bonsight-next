@@ -50,7 +50,7 @@ function BottomNav({ groupId, active, isAdmin }) {
   const item = (href, label, key) => (
     <a href={href} style={{
       flex: 1, padding: '10px 0 12px', textAlign: 'center', textDecoration: 'none',
-      fontSize: 12, fontWeight: active === key ? 600 : 400,
+      fontSize: 14, fontWeight: active === key ? 600 : 400,
       color: active === key ? '#1D9E75' : '#aaa',
       borderTop: `2px solid ${active === key ? '#1D9E75' : 'transparent'}`,
       display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -478,7 +478,7 @@ export default function PicksPage() {
     const unlocked = admin?.unlockedPhases.includes(ph)
     const active = currentPhase === ph
     return {
-      padding: '5px 12px', fontSize: 12, borderRadius: 99, border: '0.5px solid #ccc',
+      padding: '5px 13px', fontSize: 14, fontWeight: 500, borderRadius: 99, border: '0.5px solid #ccc',
       cursor: unlocked ? 'pointer' : 'not-allowed',
       background: active ? '#1D9E75' : 'transparent',
       color: active ? '#fff' : unlocked ? 'inherit' : '#bbb',
@@ -567,7 +567,7 @@ export default function PicksPage() {
             <button key={g} onClick={() => setSelectedGrupo(g)} style={{
               minWidth: 36, height: 36, borderRadius: 8,
               border: selectedGrupo === g ? '1.5px solid #1D9E75' : '0.5px solid #ddd',
-              fontSize: 13, fontWeight: selectedGrupo === g ? 700 : 400,
+              fontSize: 14, fontWeight: selectedGrupo === g ? 700 : 400,
               background: selectedGrupo === g ? '#1D9E75' : '#fafafa',
               color: selectedGrupo === g ? '#fff' : '#555', cursor: 'pointer',
             }}>{g}</button>
@@ -605,7 +605,7 @@ export default function PicksPage() {
                   const match = PHASES[currentPhase].matches[s.matchIndex]
                   if (!match) return null
                   return (
-                    <div key={s.matchIndex} style={{ fontSize: 13 }}>
+                    <div key={s.matchIndex} style={{ fontSize: 14 }}>
                       <div style={{ fontWeight: 500, marginBottom: 2 }}>
                         {f(s.local)}{s.local} vs {f(s.visitante)}{s.visitante}
                       </div>
@@ -660,7 +660,7 @@ export default function PicksPage() {
 
       {/* ── partidos ── */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 20px 1fr 70px 66px', gap: 6, fontSize: 11, color: '#aaa', paddingBottom: 6, borderBottom: '0.5px solid #eee', textAlign: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 20px 1fr 70px 34px', gap: 6, fontSize: 11, color: '#aaa', paddingBottom: 6, borderBottom: '0.5px solid #eee', textAlign: 'center' }}>
           <div>Local</div><div></div><div>Visitante</div><div>Marcador</div><div>Resultado</div>
         </div>
 
@@ -677,10 +677,10 @@ export default function PicksPage() {
                   🔒 picks bloqueados — partido ya comenzó
                 </div>
               )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 20px 1fr 70px 66px', gap: 6, alignItems: 'center', padding: '7px 0', borderBottom: '0.5px solid #f0f0f0' }}>
-                <div style={{ fontSize: 12, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{f(local)}{local}</div>
-                <div style={{ fontSize: 10, textAlign: 'center', opacity: .3 }}>vs</div>
-                <div style={{ fontSize: 12, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{f(visitante)}{visitante}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 20px 1fr 70px 34px', gap: 6, alignItems: 'center', padding: '7px 0', borderBottom: '0.5px solid #f0f0f0' }}>
+                <div style={{ fontSize: 14, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{f(local)}{local}</div>
+                <div style={{ fontSize: 11, textAlign: 'center', opacity: .3 }}>vs</div>
+                <div style={{ fontSize: 14, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{f(visitante)}{visitante}</div>
                 <div style={{ display: 'flex', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
                   <input style={inSty} type="number" min={0} max={20} disabled={locked}
                     value={pick.l} onChange={e => !locked && updatePick(currentPhase, globalIndex, 'l', e.target.value)} />
@@ -690,13 +690,14 @@ export default function PicksPage() {
                 </div>
                 <div style={{
                   height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11, fontWeight: 500, borderRadius: 6, padding: '0 4px',
+                  fontSize: pick.w ? 20 : 13, borderRadius: 6,
                   background: pick.w ? '#E1F5EE' : '#f5f5f3',
-                  color: pick.w ? '#0F6E56' : '#ccc',
                   border: `0.5px solid ${pick.w ? '#1D9E75' : '#eee'}`,
-                  overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                 }}>
-                  {pick.w ? `${FLAGS[pick.w] ? FLAGS[pick.w] + ' ' : ''}${pick.w}` : '—'}
+                  {pick.w
+                    ? (pick.w === 'Empate' ? '🤝' : (FLAGS[pick.w] ?? '?'))
+                    : <span style={{ color: '#ccc', fontSize: 13 }}>—</span>
+                  }
                 </div>
               </div>
               {/* ── Módulo Kai (colapsable) ── */}

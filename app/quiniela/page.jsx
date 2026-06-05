@@ -123,7 +123,7 @@ export default function QuinielaLanding() {
 
   const s = {
     input:  { padding: '9px 12px', borderRadius: 8, border: '0.5px solid #ccc', background: 'transparent', color: 'inherit', fontSize: 14, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' },
-    label:  { fontSize: 13, color: '#888', marginBottom: 5, display: 'block' },
+    label:  { fontSize: 14, color: '#888', marginBottom: 6, display: 'block' },
     field:  { marginBottom: 14 },
     btn:    { background: '#1D9E75', color: '#fff', border: 'none', padding: '12px', borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: 'pointer', width: '100%' },
     btnOff: { background: '#9FE1CB', cursor: 'default' },
@@ -135,7 +135,7 @@ export default function QuinielaLanding() {
 
   const BackBtn = ({ onClick }) => (
     <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(8px)', padding: '12px 1.5rem 10px', margin: '0 -1.5rem', borderBottom: '0.5px solid #f0f0f0', marginBottom: 16 }}>
-      <button onClick={onClick} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 13, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+      <button onClick={onClick} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 14, padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
         ← Volver
       </button>
     </div>
@@ -363,7 +363,7 @@ export default function QuinielaLanding() {
         {loaded && activeQuinielas.length === 0 && (
           <div style={{ border: '0.5px solid #e0e0de', borderRadius: 14, padding: '20px' }}>
             <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>⚽ Empieza tu Mundial</div>
-            <div style={{ fontSize: 13, color: '#888', marginBottom: 18 }}>Todo lo que necesitas para competir durante el torneo.</div>
+            <div style={{ fontSize: 14, color: '#888', marginBottom: 18 }}>Todo lo que necesitas para competir durante el torneo.</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 22 }}>
               {[
                 'Crea una quiniela o únete con un código',
@@ -375,7 +375,7 @@ export default function QuinielaLanding() {
                   <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#E1F5EE', color: '#0F6E56', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
                     {i + 1}
                   </div>
-                  <div style={{ fontSize: 13, color: '#444', lineHeight: 1.5 }}>{text}</div>
+                  <div style={{ fontSize: 14, color: '#444', lineHeight: 1.55 }}>{text}</div>
                 </div>
               ))}
             </div>

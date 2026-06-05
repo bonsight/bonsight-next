@@ -353,7 +353,7 @@ export default function SeguimientoPage() {
                     <span style={{ fontSize: 15 }}>{icon}</span>
                     <span style={{ fontSize: 10, fontWeight: 700, color: '#34D399', textTransform: 'uppercase', letterSpacing: .5 }}>{label}</span>
                   </div>
-                  <div style={{ fontSize: 13, color: '#333', lineHeight: 1.55, marginBottom: metrics.length > 0 ? 8 : 0 }}>{insight}</div>
+                  <div style={{ fontSize: 14, color: "#333", lineHeight: 1.55, marginBottom: metrics.length > 0 ? 8 : 0 }}>{insight}</div>
                   {metrics.length > 0 && (
                     <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
                       {metrics.map(m => (
@@ -382,7 +382,7 @@ export default function SeguimientoPage() {
               <div style={{ marginBottom: 10 }}>
                 <KaiLabel title="Tu perfil según Kai" state="thinking" size={18} />
               </div>
-              <div style={{ fontSize: 13, color: '#555', marginBottom: 12 }}>
+              <div style={{ fontSize: 14, color: '#555', marginBottom: 12 }}>
                 Kai necesita al menos 10 picks para entender cómo juegas. Completa más pronósticos para descubrir tu estilo.
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -427,7 +427,7 @@ export default function SeguimientoPage() {
               <div style={{ fontSize: 32 }}>{profile.emoji}</div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: '#0F6E56', marginBottom: 3 }}>{profile.name}</div>
-                <div style={{ fontSize: 13, color: '#555', lineHeight: 1.5 }}>{profile.desc}</div>
+                <div style={{ fontSize: 14, color: '#555', lineHeight: 1.55 }}>{profile.desc}</div>
               </div>
             </div>
           </div>

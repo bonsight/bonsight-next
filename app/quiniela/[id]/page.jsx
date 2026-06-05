@@ -7,7 +7,7 @@ import { TEAMS, FLAGS } from '@/lib/quiniela'
 const s = {
   page:   { maxWidth: 480, margin: '0 auto', padding: '2.5rem 1.5rem', fontFamily: 'var(--font-sans, system-ui, sans-serif)', minHeight: '100vh', display: 'flex', flexDirection: 'column' },
   input:  { padding: '9px 12px', borderRadius: 8, border: '0.5px solid #ccc', background: 'transparent', color: 'inherit', fontSize: 14, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' },
-  label:  { fontSize: 13, color: '#888', marginBottom: 5, display: 'block' },
+  label:  { fontSize: 14, color: '#888', marginBottom: 6, display: 'block' },
   field:  { marginBottom: 14 },
   btn:    { background: '#1D9E75', color: '#fff', border: 'none', padding: '12px', borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: 'pointer', width: '100%' },
   btnOff: { background: '#9FE1CB', cursor: 'default' },
@@ -85,7 +85,7 @@ export default function RegistroPage() {
     <div style={{ ...s.page, alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
       <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
       <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>Quiniela no encontrada</div>
-      <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>El código «{groupId}» no existe.</div>
+      <div style={{ fontSize: 14, color: '#888', marginBottom: 20 }}>El código «{groupId}» no existe.</div>
       <a href="/quiniela" style={{ color: '#1D9E75', fontSize: 13 }}>← Volver al inicio</a>
     </div>
   )
@@ -176,7 +176,7 @@ export default function RegistroPage() {
             </button>
           </div>
           <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Acceder con tu email</div>
-          <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Ingresa el email con el que te registraste.</div>
+          <div style={{ fontSize: 14, color: '#888', marginBottom: 20 }}>Ingresa el email con el que te registraste.</div>
 
           <div style={s.field}>
             <label style={s.label}>Email</label>
