@@ -186,7 +186,7 @@ function PremiosMayores({ campeon, goleador, customGoleador, onCampeon, onGolead
 
 const st = {
   page:    { maxWidth: 720, margin: '0 auto', padding: '2rem 1.5rem 5rem', fontFamily: 'var(--font-sans, system-ui, sans-serif)' },
-  scoreIn: { width: 30, height: 30, textAlign: 'center', border: '0.5px solid #ccc', borderRadius: 6, background: 'transparent', fontSize: 13, fontWeight: 500, color: 'inherit' },
+  scoreIn: { width: 30, height: 30, textAlign: 'center', border: '0.5px solid #ccc', borderRadius: 6, background: 'transparent', fontSize: 16, fontWeight: 500, color: 'inherit' },
   disIn:   { background: '#f5f5f3', color: '#bbb', border: '0.5px solid #eee' },
 }
 
