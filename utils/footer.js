@@ -5,7 +5,7 @@ export function getFooter(locale) {
 <div class="footer-main-inner">
 <div class="footer-col footer-col-brand">
 <div class="footer-logo">BON<span>sight</span> LLC</div>
-<p class="footer-tagline">${en ? 'Data strategy and digital growth for companies that want to grow with focus.' : 'Estrategia de datos y crecimiento digital para empresas que quieren crecer con foco.'}</p>
+<p class="footer-tagline">${en ? 'From strategy to execution. With you every step.' : 'De la estrategia a la ejecución. Contigo en cada paso.'}</p>
 <div class="footer-social">
 <a class="footer-social-icon" href="https://www.instagram.com/wearebonsight" target="_blank" rel="noopener" aria-label="Instagram"><svg width="16" height="16" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg></a>
 <a class="footer-social-icon" href="https://www.linkedin.com/company/wearebonsight/" target="_blank" rel="noopener" aria-label="LinkedIn"><svg width="16" height="16" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg></a>
@@ -14,19 +14,20 @@ export function getFooter(locale) {
 </div>
 </div>
 <div class="footer-col">
-<div class="footer-col-label">Bonsight Growth</div>
+<div class="footer-col-label">${en ? 'Services' : 'Servicios'}</div>
 <nav class="footer-nav">
-<a data-route="/services/data-strategy">Data Strategy</a>
-<a data-route="/services/growth">Growth Digital</a>
-<a data-route="/services/cro">CRO</a>
+<a data-route="/services/kairo">Kairo</a>
+<a data-route="/services/lumen">Lumen</a>
+<a data-route="/services/arke">Arke</a>
 </nav>
 </div>
 <div class="footer-col">
-<div class="footer-col-label">Bonsight Boost</div>
+<div class="footer-col-label">${en ? 'Cases' : 'Casos'}</div>
 <nav class="footer-nav">
-<a data-route="/services/mentoring">${en ? 'Team Mentoring' : 'Mentoring de Equipos'}</a>
-<a data-route="/services/procesos">${en ? 'Process Improvement' : 'Mejora de Procesos'}</a>
-<a data-route="/services/liderazgo">${en ? 'Leadership Support' : 'Soporte a Líderes'}</a>
+<a data-route="/cases/olaclick">OlaClick</a>
+<a data-route="/cases/sesuveca">Sesuveca</a>
+<a data-route="/cases/af-solutions">AF Solutions</a>
+<a data-route="/cases/activo-100x100">Activo 100x100</a>
 </nav>
 </div>
 <div class="footer-col">

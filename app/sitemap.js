@@ -5,8 +5,11 @@ const pages = [
   { path: '/services/kairo', freq: 'monthly', priority: 0.9 },
   { path: '/services/lumen', freq: 'monthly', priority: 0.9 },
   { path: '/services/arke',  freq: 'monthly', priority: 0.9 },
-  { path: '/cases/olaclick', freq: 'monthly', priority: 0.7 },
-  { path: '/cases/sesuveca', freq: 'monthly', priority: 0.7 },
+  { path: '/cases',               freq: 'monthly', priority: 0.8 },
+  { path: '/cases/olaclick',      freq: 'monthly', priority: 0.7 },
+  { path: '/cases/sesuveca',      freq: 'monthly', priority: 0.7 },
+  { path: '/cases/af-solutions',  freq: 'monthly', priority: 0.7 },
+  { path: '/cases/activo-100x100',freq: 'monthly', priority: 0.7 },
 ];
 
 export default function sitemap() {
