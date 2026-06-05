@@ -45,6 +45,39 @@ export async function GET(req) {
       })
     }
 
+    if (action === 'overview') {
+      const groups = (await kv.get('quiniela:groups')) ?? []
+      const data = await Promise.all(
+        groups.map(async ({ id }) => {
+          const [group, participants, confidence, jornada] = await Promise.all([
+            kv.get(`quiniela:group:${id}`),
+            kv.get(`quiniela:${id}:participants`),
+            kv.get(`quiniela:${id}:ai:confidence:grupos`),
+            kv.get(`quiniela:${id}:ai:jornada:grupos`),
+          ])
+          return {
+            id,
+            nombre: group?.nombre ?? '—',
+            adminNombre: group?.adminNombre ?? '—',
+            adminTel: group?.adminTel ?? '—',
+            adminEmail: group?.adminEmail ?? '—',
+            createdAt: group?.createdAt ?? null,
+            fases: group?.fases ?? [],
+            participants: (participants ?? []).map(p => ({
+              nombre: p.nombre, email: p.email, tel: p.tel, pais: p.pais, createdAt: p.createdAt,
+            })),
+            kai: {
+              confidence: Array.isArray(confidence) && confidence.length > 0,
+              confidenceCount: Array.isArray(confidence) ? confidence.length : 0,
+              jornada: !!jornada,
+              jornadaPreview: typeof jornada === 'string' ? jornada.slice(0, 100) : null,
+            },
+          }
+        })
+      )
+      return NextResponse.json({ quinielas: data, total: data.length })
+    }
+
     if (action === 'group' && groupId) {
       const group = await kv.get(`quiniela:group:${groupId}`)
       if (!group) return NextResponse.json({ error: 'not_found' }, { status: 404 })
