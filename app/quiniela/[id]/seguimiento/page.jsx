@@ -585,7 +585,7 @@ export default function SeguimientoPage() {
 
       {/* footer */}
       <div style={{ marginTop: '2.5rem', paddingTop: '1rem', borderTop: '0.5px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontSize: 12, fontWeight: 600 }}>BON<span style={{ color: '#1D9E75' }}>sight</span></div>
+        <a href="/" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}><img src="/logo.svg" style={{ height: 22, width: "auto", opacity: 0.72 }} alt="Bonsight" /></a>
         <div style={{ fontSize: 11, color: '#bbb' }}>Mundial 2026</div>
       </div>
 

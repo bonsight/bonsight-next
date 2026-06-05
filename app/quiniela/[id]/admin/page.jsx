@@ -483,7 +483,7 @@ export default function AdminDashboard() {
 
       {/* ── footer ── */}
       <div style={{ marginTop: '3rem', paddingTop: '1.5rem', borderTop: '0.5px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: .5 }}>BON<span style={{ color: '#1D9E75' }}>sight</span></div>
+        <a href="/" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}><img src="/logo.svg" style={{ height: 22, width: "auto", opacity: 0.72 }} alt="Bonsight" /></a>
         <div style={{ fontSize: 12, color: '#bbb' }}>Quiniela Mundial 2026 · USA, Canadá y México</div>
       </div>
 

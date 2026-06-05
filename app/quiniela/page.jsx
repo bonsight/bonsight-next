@@ -272,9 +272,9 @@ export default function QuinielaLanding() {
         <div style={{ position: 'relative', zIndex: 1 }}>
           {/* branding + KaiCircle */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 2, color: 'rgba(52,211,153,0.8)', textTransform: 'uppercase' }}>
+            <a href="/" style={{ textDecoration: 'none', fontSize: 11, fontWeight: 800, letterSpacing: 2, color: 'rgba(52,211,153,0.8)', textTransform: 'uppercase' }}>
               BONSIGHT
-            </div>
+            </a>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <KaiCircle size={44} state="thinking" />
               <div>
@@ -487,9 +487,9 @@ export default function QuinielaLanding() {
           <div style={{ fontSize: 12, color: '#888', lineHeight: 1.65, marginBottom: 14 }}>
             Kai analiza partidos, interpreta consensos, detecta oportunidades y genera insights antes de cada jornada para ayudarte a tomar mejores decisiones durante todo el Mundial.
           </div>
-          <div style={{ fontSize: 11, color: '#bbb', fontWeight: 600, letterSpacing: 1 }}>
-            © 2026 BONSIGHT
-          </div>
+          <a href="/" style={{ textDecoration: 'none', display: 'inline-block' }}>
+            <img src="/logo.svg" style={{ height: 18, width: 'auto', opacity: 0.4 }} alt="Bonsight" />
+          </a>
         </div>
 
       </div>
