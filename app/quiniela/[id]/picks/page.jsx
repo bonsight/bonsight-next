@@ -90,7 +90,8 @@ function PremiosMayores({ campeon, goleador, customGoleador, onCampeon, onGolead
             ? <span style={{ background: '#E1F5EE', color: '#0F6E56', fontSize: 13, fontWeight: 600, padding: '4px 12px', borderRadius: 99 }}>+{bonusPts} pts</span>
             : <span style={{ background: '#f1efe8', color: '#888', fontSize: 12, padding: '4px 12px', borderRadius: 99 }}>0 pts</span>}
         </div>
-        <div style={{ fontSize: 12, color: '#888', marginBottom: 14 }}>Los pronósticos que pueden definir la quiniela.</div>
+        <div style={{ fontSize: 15, color: "#888", marginBottom: 14 }}>Los pronósticos que pueden definir la quiniela.</div>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           {[
             { label: 'Campeón', pick: campeon, correcto: campeonCorrecto, real: admin.realCampeon },
@@ -114,7 +115,8 @@ function PremiosMayores({ campeon, goleador, customGoleador, onCampeon, onGolead
           <div style={{ fontSize: 15, fontWeight: 700 }}>🏆 Premios Mayores</div>
           <span style={{ background: '#e8e6e0', color: '#666', fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 99 }}>🔒 Confirmado</span>
         </div>
-        <div style={{ fontSize: 12, color: '#aaa', marginBottom: 14 }}>Los pronósticos que pueden definir la quiniela.</div>
+        <div style={{ fontSize: 15, color: "#aaa", marginBottom: 14 }}>Los pronósticos que pueden definir la quiniela.</div>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           {[{ label: 'Campeón', pick: campeon }, { label: 'Goleador', pick: effectiveGoleador }].map(({ label, pick }) => (
             <div key={label} style={{ background: '#fff', borderRadius: 10, padding: 12, border: '0.5px solid #eee' }}>
@@ -137,7 +139,8 @@ function PremiosMayores({ campeon, goleador, customGoleador, onCampeon, onGolead
         <div style={{ fontSize: 15, fontWeight: 700 }}>🏆 Premios Mayores</div>
         {cdText && <span style={{ background: '#fff', border: '0.5px solid #1D9E75', color: '#0F6E56', fontSize: 12, fontWeight: 500, padding: '3px 10px', borderRadius: 99 }}>⏳ Cierre en {cdText}</span>}
       </div>
-      <div style={{ fontSize: 12, color: '#5a8a74', marginBottom: 14 }}>Los pronósticos que pueden definir la quiniela.</div>
+      <div style={{ fontSize: 15, color: "#5a8a74", marginBottom: 14 }}>Los pronósticos que pueden definir la quiniela.</div>
+
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
         {/* Campeón */}
@@ -175,7 +178,7 @@ function PremiosMayores({ campeon, goleador, customGoleador, onCampeon, onGolead
         </div>
       </div>
 
-      <div style={{ fontSize: 11, color: '#5a8a74', borderTop: '0.5px solid rgba(29,158,117,.2)', paddingTop: 10 }}>
+      <div style={{ fontSize: 14, color: '#5a8a74', borderTop: '0.5px solid rgba(29,158,117,.2)', paddingTop: 10 }}>
         Los pronósticos se bloquean automáticamente al iniciar el torneo el 12 de junio.
       </div>
     </div>
@@ -650,9 +653,9 @@ export default function PicksPage() {
               <span style={{ fontSize: 10, fontWeight: 700, color: '#34D399', letterSpacing: 1, textTransform: 'uppercase' }}>Radar Kai — Grupo {selectedGrupo}</span>
             </div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, color: '#444' }}>🔥 {nm(top)} <span style={{ color: '#15803d', fontWeight: 600 }}>{top.confidencePct}%</span></span>
-              {even.matchIndex !== top.matchIndex && <span style={{ fontSize: 11, color: '#444' }}>⚔️ {nm(even)} <span style={{ color: '#92400e', fontWeight: 600 }}>{even.confidencePct}%</span></span>}
-              {bottom.matchIndex !== top.matchIndex && <span style={{ fontSize: 11, color: '#444' }}>🎲 {nm(bottom)}</span>}
+              <span style={{ fontSize: 14, color: '#444' }}>🔥 {nm(top)} <span style={{ color: '#15803d', fontWeight: 600 }}>{top.confidencePct}%</span></span>
+              {even.matchIndex !== top.matchIndex && <span style={{ fontSize: 14, color: '#444' }}>⚔️ {nm(even)} <span style={{ color: '#92400e', fontWeight: 600 }}>{even.confidencePct}%</span></span>}
+              {bottom.matchIndex !== top.matchIndex && <span style={{ fontSize: 14, color: '#444' }}>🎲 {nm(bottom)}</span>}
             </div>
           </div>
         )
@@ -678,9 +681,9 @@ export default function PicksPage() {
                 </div>
               )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 20px 1fr 70px 34px', gap: 6, alignItems: 'center', padding: '7px 0', borderBottom: '0.5px solid #f0f0f0' }}>
-                <div style={{ fontSize: 14, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{f(local)}{local}</div>
+                <div style={{ fontSize: 16, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{f(local)}{local}</div>
                 <div style={{ fontSize: 11, textAlign: 'center', opacity: .3 }}>vs</div>
-                <div style={{ fontSize: 14, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{f(visitante)}{visitante}</div>
+                <div style={{ fontSize: 16, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{f(visitante)}{visitante}</div>
                 <div style={{ display: 'flex', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
                   <input style={inSty} type="number" min={0} max={20} disabled={locked}
                     value={pick.l} onChange={e => !locked && updatePick(currentPhase, globalIndex, 'l', e.target.value)} />
@@ -715,7 +718,7 @@ export default function PicksPage() {
                 const expanded = expandedMatches.has(globalIndex)
 
                 const consensusLine = cs && (
-                  <div style={{ fontSize: 11, color: against ? '#854F0B' : aligned ? '#166534' : '#888' }}>
+                  <div style={{ fontSize: 15, color: against ? '#854F0B' : aligned ? '#166534' : '#888' }}>
                     {against
                       ? `⚠️ Vs. consenso — ${cs.pct}% eligió ${leaderLbl}`
                       : aligned
@@ -743,11 +746,11 @@ export default function PicksPage() {
                         <KaiAvatar size={12} state="ready" />
                         {conf?.confidencePct
                           ? <>
-                              <span style={{ fontSize: 10, fontWeight: 700, color: '#34D399', letterSpacing: .5 }}>Kai</span>
-                              <span style={{ fontSize: 10 }}>{cat.emoji}</span>
-                              <span style={{ fontSize: 10, fontWeight: 500, color: cat.color, flex: 1 }}>{cat.label}</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: '#34D399', letterSpacing: .5 }}>Kai</span>
+                              <span style={{ fontSize: 14 }}>{cat.emoji}</span>
+                              <span style={{ fontSize: 13, fontWeight: 500, color: cat.color, flex: 1 }}>{cat.label}</span>
                             </>
-                          : <span style={{ fontSize: 10, color: '#aaa', flex: 1 }}>Kai · análisis disponible</span>
+                          : <span style={{ fontSize: 13, color: '#aaa', flex: 1 }}>Kai · análisis disponible</span>
                         }
                         <span style={{ fontSize: 9, color: '#aaa' }}>{expanded ? '▲' : '▼'}</span>
                       </div>
@@ -764,13 +767,13 @@ export default function PicksPage() {
                     {expanded && (
                       <div style={{ borderTop: '0.5px solid rgba(52,211,153,0.15)', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
                         {conf?.headline && (
-                          <div style={{ fontSize: 12, fontWeight: 600, color: '#333' }}>{conf.headline}</div>
+                          <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{conf.headline}</div>
                         )}
                         {conf?.insight && (
-                          <div style={{ fontSize: 11, color: '#555' }}>{conf.insight}</div>
+                          <div style={{ fontSize: 14, color: '#555' }}>{conf.insight}</div>
                         )}
                         {opp && (
-                          <div style={{ fontSize: 11, color: '#444' }}>{opp.icon} {opp.text}</div>
+                          <div style={{ fontSize: 15, color: '#444' }}>{opp.icon} {opp.text}</div>
                         )}
                       </div>
                     )}
