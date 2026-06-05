@@ -661,125 +661,121 @@ export default function PicksPage() {
         )
       })()}
 
-      {/* ── partidos ── */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 20px 1fr 70px 34px', gap: 6, fontSize: 11, color: '#aaa', paddingBottom: 6, borderBottom: '0.5px solid #eee', textAlign: 'center' }}>
-          <div>Local</div><div></div><div>Visitante</div><div>Marcador</div><div>Resultado</div>
-        </div>
-
+      {/* ── partidos — layout vertical estilo Google/SofaScore ── */}
+      <div style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {visibleMatches.map(({ local, visitante, globalIndex }) => {
           const cutoff = getMatchCutoff(currentPhase, globalIndex)
           const locked = now >= cutoff.getTime()
-          const pick = picks[currentPhase][globalIndex] ?? { l: '', v: '', w: '' }
-          const inSty = { ...st.scoreIn, ...(locked ? st.disIn : {}) }
+          const pick   = picks[currentPhase][globalIndex] ?? { l: '', v: '', w: '' }
+
+          const localWins     = pick.w === local
+          const visitanteWins = pick.w === visitante
+          const isEmpate      = pick.w === 'Empate'
+
+          const rowBg = (wins) => wins ? 'rgba(29,158,117,0.07)' : locked ? '#fafafa' : '#fff'
+          const inputSty = {
+            width: 48, height: 44, textAlign: 'center',
+            border: '0.5px solid #ddd', borderRadius: 8,
+            fontSize: 20, fontWeight: 600, color: 'inherit',
+            background: locked ? '#f0f0f0' : '#fff',
+            outline: 'none', flexShrink: 0,
+            WebkitAppearance: 'none', MozAppearance: 'textfield',
+          }
+
+          // Kai module
+          const conf = confidence.find(c => c.matchIndex === globalIndex)
+          const cs   = getConsensus(currentPhase, globalIndex, local, visitante)
+          const cat  = getCategory(conf?.confidencePct)
+          const hasPick  = !!pick.w
+          const aligned  = hasPick && cs && pick.w === cs.leader
+          const against  = hasPick && cs && pick.w !== cs.leader
+          const leaderLbl = cs ? (cs.leader === 'Empate' ? 'empate' : `${f(cs.leader)}${cs.leader}`) : null
+          const opp      = getOpportunity(cs, pick.w)
+          const expanded = expandedMatches.has(globalIndex)
 
           return (
             <div key={globalIndex}>
-              {locked && (
-                <div style={{ fontSize: 11, color: '#bbb', padding: '3px 0', textAlign: 'center', background: '#fafafa' }}>
-                  🔒 picks bloqueados — partido ya comenzó
+              {/* ── Card vertical del partido ── */}
+              <div style={{ border: `0.5px solid ${locked ? '#eee' : '#e0e0de'}`, borderRadius: 12, overflow: 'hidden' }}>
+                {locked && (
+                  <div style={{ fontSize: 11, color: '#bbb', textAlign: 'center', padding: '4px 0', background: '#f9f9f7' }}>
+                    🔒 picks bloqueados
+                  </div>
+                )}
+
+                {/* Fila local */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: rowBg(localWins), borderBottom: '0.5px solid #f0f0f0' }}>
+                  <div style={{ flex: 1, fontSize: 16, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>{f(local)}</span><span>{local}</span>
+                  </div>
+                  <input
+                    style={inputSty} type="number" min={0} max={20} disabled={locked}
+                    value={pick.l}
+                    onChange={e => !locked && updatePick(currentPhase, globalIndex, 'l', e.target.value)}
+                  />
+                  <div style={{ width: 28, textAlign: 'center', fontSize: 22 }}>
+                    {localWins ? (FLAGS[local] ?? '') : isEmpate ? '🤝' : ''}
+                  </div>
                 </div>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 20px 1fr 70px 34px', gap: 6, alignItems: 'center', padding: '7px 0', borderBottom: '0.5px solid #f0f0f0' }}>
-                <div style={{ fontSize: 16, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{f(local)}{local}</div>
-                <div style={{ fontSize: 11, textAlign: 'center', opacity: .3 }}>vs</div>
-                <div style={{ fontSize: 16, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{f(visitante)}{visitante}</div>
-                <div style={{ display: 'flex', gap: 3, alignItems: 'center', justifyContent: 'center' }}>
-                  <input style={inSty} type="number" min={0} max={20} disabled={locked}
-                    value={pick.l} onChange={e => !locked && updatePick(currentPhase, globalIndex, 'l', e.target.value)} />
-                  <span style={{ opacity: .35, fontSize: 12 }}>-</span>
-                  <input style={inSty} type="number" min={0} max={20} disabled={locked}
-                    value={pick.v} onChange={e => !locked && updatePick(currentPhase, globalIndex, 'v', e.target.value)} />
-                </div>
-                <div style={{
-                  height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: pick.w ? 20 : 13, borderRadius: 6,
-                  background: pick.w ? '#E1F5EE' : '#f5f5f3',
-                  border: `0.5px solid ${pick.w ? '#1D9E75' : '#eee'}`,
-                }}>
-                  {pick.w
-                    ? (pick.w === 'Empate' ? '🤝' : (FLAGS[pick.w] ?? '?'))
-                    : <span style={{ color: '#ccc', fontSize: 13 }}>—</span>
-                  }
+
+                {/* Fila visitante */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: rowBg(visitanteWins) }}>
+                  <div style={{ flex: 1, fontSize: 16, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>{f(visitante)}</span><span>{visitante}</span>
+                  </div>
+                  <input
+                    style={inputSty} type="number" min={0} max={20} disabled={locked}
+                    value={pick.v}
+                    onChange={e => !locked && updatePick(currentPhase, globalIndex, 'v', e.target.value)}
+                  />
+                  <div style={{ width: 28, textAlign: 'center', fontSize: 22 }}>
+                    {visitanteWins ? (FLAGS[visitante] ?? '') : isEmpate ? '🤝' : ''}
+                  </div>
                 </div>
               </div>
+
               {/* ── Módulo Kai (colapsable) ── */}
-              {(() => {
-                const conf = confidence.find(c => c.matchIndex === globalIndex)
-                const cs   = getConsensus(currentPhase, globalIndex, local, visitante)
-                if (!conf && !cs) return null
-
-                const cat      = getCategory(conf?.confidencePct)
-                const hasPick  = !!pick.w
-                const aligned  = hasPick && cs && pick.w === cs.leader
-                const against  = hasPick && cs && pick.w !== cs.leader
-                const leaderLbl = cs ? (cs.leader === 'Empate' ? 'empate' : `${f(cs.leader)}${cs.leader}`) : null
-                const opp      = getOpportunity(cs, pick.w)
-                const expanded = expandedMatches.has(globalIndex)
-
-                const consensusLine = cs && (
-                  <div style={{ fontSize: 15, color: against ? '#854F0B' : aligned ? '#166534' : '#888' }}>
-                    {against
-                      ? `⚠️ Vs. consenso — ${cs.pct}% eligió ${leaderLbl}`
-                      : aligned
-                      ? `✅ ${cs.pct}% eligió ${leaderLbl}`
-                      : `👥 ${cs.pct}% eligió ${leaderLbl}`
-                    }
+              {(conf || cs) && (
+                <div style={{ background: cat.bg, border: '0.5px solid rgba(52,211,153,0.18)', borderRadius: '0 0 10px 10px', marginTop: -4, overflow: 'hidden' }}>
+                  <div onClick={() => toggleMatch(globalIndex)} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                    {conf?.confidencePct && (
+                      <div style={{ height: 3, background: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                        <div style={{ width: `${conf.confidencePct}%`, height: '100%', background: cat.barColor }} />
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px' }}>
+                      <KaiAvatar size={12} state="ready" />
+                      {conf?.confidencePct
+                        ? <>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#34D399' }}>Kai</span>
+                            <span style={{ fontSize: 14 }}>{cat.emoji}</span>
+                            <span style={{ fontSize: 13, fontWeight: 500, color: cat.color, flex: 1 }}>{cat.label}</span>
+                          </>
+                        : <span style={{ fontSize: 13, color: '#aaa', flex: 1 }}>Kai · análisis disponible</span>
+                      }
+                      <span style={{ fontSize: 9, color: '#aaa' }}>{expanded ? '▲' : '▼'}</span>
+                    </div>
                   </div>
-                )
 
-                return (
-                  <div style={{ gridColumn: '1 / -1', background: cat.bg, border: '0.5px solid rgba(52,211,153,0.18)', borderRadius: 7, marginTop: -1, overflow: 'hidden' }}>
-
-                    {/* Fila colapsada — siempre visible, clickable */}
-                    <div
-                      onClick={() => toggleMatch(globalIndex)}
-                      style={{ cursor: 'pointer', userSelect: 'none' }}
-                    >
-                      {/* Barra visual sutil sin número */}
-                      {conf?.confidencePct && (
-                        <div style={{ height: 3, background: 'rgba(0,0,0,0.06)', borderRadius: '7px 7px 0 0', overflow: 'hidden' }}>
-                          <div style={{ width: `${conf.confidencePct}%`, height: '100%', background: cat.barColor, borderRadius: 99 }} />
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px' }}>
-                        <KaiAvatar size={12} state="ready" />
-                        {conf?.confidencePct
-                          ? <>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: '#34D399', letterSpacing: .5 }}>Kai</span>
-                              <span style={{ fontSize: 14 }}>{cat.emoji}</span>
-                              <span style={{ fontSize: 13, fontWeight: 500, color: cat.color, flex: 1 }}>{cat.label}</span>
-                            </>
-                          : <span style={{ fontSize: 13, color: '#aaa', flex: 1 }}>Kai · análisis disponible</span>
-                        }
-                        <span style={{ fontSize: 9, color: '#aaa' }}>{expanded ? '▲' : '▼'}</span>
+                  {cs && (
+                    <div style={{ paddingLeft: 12, paddingRight: 12, paddingBottom: 7 }}>
+                      <div style={{ fontSize: 15, color: against ? '#854F0B' : aligned ? '#166534' : '#888' }}>
+                        {against ? `⚠️ Vs. consenso — ${cs.pct}% eligió ${leaderLbl}`
+                          : aligned ? `✅ ${cs.pct}% eligió ${leaderLbl}`
+                          : `👥 ${cs.pct}% eligió ${leaderLbl}`}
                       </div>
                     </div>
+                  )}
 
-                    {/* Consenso — siempre visible */}
-                    {cs && (
-                      <div style={{ paddingLeft: 10, paddingRight: 10, paddingBottom: 6 }}>
-                        {consensusLine}
-                      </div>
-                    )}
-
-                    {/* Análisis completo — solo cuando expanded */}
-                    {expanded && (
-                      <div style={{ borderTop: '0.5px solid rgba(52,211,153,0.15)', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                        {conf?.headline && (
-                          <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{conf.headline}</div>
-                        )}
-                        {conf?.insight && (
-                          <div style={{ fontSize: 14, color: '#555' }}>{conf.insight}</div>
-                        )}
-                        {opp && (
-                          <div style={{ fontSize: 15, color: '#444' }}>{opp.icon} {opp.text}</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })()}
+                  {expanded && (
+                    <div style={{ borderTop: '0.5px solid rgba(52,211,153,0.15)', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {conf?.headline && <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{conf.headline}</div>}
+                      {conf?.insight  && <div style={{ fontSize: 14, color: '#555' }}>{conf.insight}</div>}
+                      {opp && <div style={{ fontSize: 15, color: '#444' }}>{opp.icon} {opp.text}</div>}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
