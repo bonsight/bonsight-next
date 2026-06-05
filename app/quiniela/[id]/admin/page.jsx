@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { PHASES, PHASE_ORDER, calcularPuntajes } from '@/lib/quiniela'
+import { KaiLabel } from '@/components/KaiAvatar'
 
 function hasPicks(quiniela, phase) {
   if (!quiniela?.phases?.[phase]) return false
@@ -43,6 +44,9 @@ export default function AdminDashboard() {
   const [adminUnlocked, setAdminUnlocked] = useState(false)
   const [pinInput, setPinInput] = useState('')
   const [pinVisible, setPinVisible] = useState(false)
+  const [jornadaSummary, setJornadaSummary]         = useState(null)
+  const [jornadaStatus, setJornadaStatus]           = useState('idle') // 'idle'|'generating'|'done'
+  const [confidenceStatus, setConfidenceStatus]     = useState('idle')
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
@@ -57,10 +61,50 @@ export default function AdminDashboard() {
         const a = data.admin ?? { unlockedPhases: ['grupos'], results: {}, realCampeon: '', realGoleador: '' }
         setAdmin(a)
         setScores(calcularPuntajes(data.participants ?? [], data.quinielas ?? {}, a))
+
+        // Cargar resumen de jornada si existe
+        const phase = a.unlockedPhases[a.unlockedPhases.length - 1] ?? 'grupos'
+        fetch(`/api/quiniela-ai?action=getJornada&groupId=${groupId}&phase=${phase}`)
+          .then(r => r.json())
+          .then(d => { if (d.summary) { setJornadaSummary(d.summary); setJornadaStatus('done') } })
+          .catch(() => {})
       })
       .catch(() => setGroupError(true))
       .finally(() => setLoading(false))
   }, [groupId])
+
+  async function generateJornada() {
+    setJornadaStatus('generating')
+    const phase = admin.unlockedPhases[admin.unlockedPhases.length - 1] ?? 'grupos'
+    try {
+      const res = await fetch('/api/quiniela-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generateJornadaSummary',
+          payload: { groupId, phase, participants, scores, quinielas, adminResults },
+        }),
+      })
+      const data = await res.json()
+      if (data.summary) { setJornadaSummary(data.summary); setJornadaStatus('done'); showToast('✓ Análisis generado') }
+      else { setJornadaStatus('idle'); showToast('Error al generar') }
+    } catch { setJornadaStatus('idle'); showToast('Error de conexión') }
+  }
+
+  async function generateConfidence() {
+    setConfidenceStatus('generating')
+    const phase = admin.unlockedPhases[admin.unlockedPhases.length - 1] ?? 'grupos'
+    try {
+      const res = await fetch('/api/quiniela-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'generateConfidence', payload: { groupId, phase } }),
+      })
+      const data = await res.json()
+      if (data.ok) { setConfidenceStatus('done'); showToast('✓ Confianza generada') }
+      else { setConfidenceStatus('idle'); showToast('Error al generar') }
+    } catch { setConfidenceStatus('idle'); showToast('Error de conexión') }
+  }
 
   async function saveAdmin(newAdmin) {
     setAdmin(newAdmin)
@@ -180,56 +224,60 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* ── 4 métricas ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
-        <div style={card}>
-          <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>Participantes</div>
-          <div style={{ fontSize: 28, fontWeight: 600 }}>{participants.length}</div>
-        </div>
-
-        <div style={card}>
-          <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>Llenaron picks</div>
-          <div style={{ fontSize: 28, fontWeight: 600, color: '#1D9E75' }}>{withPicks.length}</div>
-          <div style={{ marginTop: 10, height: 4, background: '#eee', borderRadius: 99, overflow: 'hidden' }}>
-            <div style={{ width: `${pickPct}%`, height: '100%', background: '#1D9E75', borderRadius: 99, transition: 'width .4s' }} />
+      {/* ── hero de estado ── */}
+      <div style={{
+        background: 'linear-gradient(135deg, #1D9E75 0%, #0F6E56 100%)',
+        borderRadius: 16, padding: '20px 24px', marginBottom: 20, color: '#fff',
+        boxShadow: '0 4px 20px rgba(15,110,86,.2)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 10, opacity: .7, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Quiniela Activa</div>
+            <div style={{ fontSize: 19, fontWeight: 700 }}>{group?.nombre}</div>
+            <div style={{ fontSize: 12, opacity: .75, marginTop: 2 }}>
+              {PHASES[currentPhase]?.label} · {admin?.unlockedPhases.length} de {activePhaseOrder.length} fases activas
+            </div>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 16 }}>
+            <div style={{ fontSize: 36, fontWeight: 800, lineHeight: 1 }}>{participants.length}</div>
+            <div style={{ fontSize: 11, opacity: .7 }}>participantes</div>
           </div>
         </div>
 
-        <div style={card}>
-          <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>Fase actual</div>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{PHASES[currentPhase]?.label}</div>
-          <div style={{ fontSize: 11, color: '#aaa' }}>
-            {admin?.unlockedPhases.length} de {activePhaseOrder.length} fases activas
-          </div>
+        {/* barra de progreso global */}
+        <div style={{ background: 'rgba(255,255,255,.2)', borderRadius: 99, height: 6, marginBottom: 6 }}>
+          <div style={{ width: `${pickPct}%`, height: '100%', background: '#fff', borderRadius: 99, transition: 'width .4s' }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 12 }}>
+          <span style={{ opacity: .85 }}>
+            {withPicks.length} de {participants.length} completaron sus picks
+          </span>
+          <span style={{ fontWeight: 700 }}>{Math.round(pickPct)}%</span>
         </div>
 
-        <div style={card}>
-          <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>Código de acceso</div>
-          <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: 2, color: '#1D9E75', marginBottom: 8 }}>{groupId}</div>
-          <button
-            onClick={() => { navigator.clipboard.writeText(groupId); showToast('✓ Código copiado') }}
-            style={{ background: 'none', border: '0.5px solid #ccc', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', color: '#888' }}
-          >Copiar</button>
+        {/* estado quick */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          {pending.length > 0 ? (
+            <>
+              <div style={{ background: 'rgba(255,255,255,.15)', borderRadius: 8, padding: '8px 14px', fontSize: 12, flex: 1 }}>
+                ⚠️ <strong>{pending.length}</strong> participante{pending.length > 1 ? 's' : ''} pendiente{pending.length > 1 ? 's' : ''}
+              </div>
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(`Hola! Recuerda llenar tus picks para la quiniela "${group?.nombre}" 🏆 Código: ${groupId}`)}`}
+                target="_blank" rel="noopener"
+                style={{ background: '#25D366', color: '#fff', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 500, textDecoration: 'none', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}
+              >💬 Avisar</a>
+            </>
+          ) : (
+            <div style={{ background: 'rgba(255,255,255,.15)', borderRadius: 8, padding: '8px 14px', fontSize: 12 }}>
+              ✅ Todos los participantes completaron sus picks
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ── alerta picks pendientes ── */}
-      {pending.length > 0 && (
-        <div style={{ background: '#FAEEDA', border: '0.5px solid #F5C842', borderRadius: 10, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span>⚠️</span>
-          <div style={{ flex: 1, fontSize: 13, color: '#854F0B' }}>
-            <strong>{pending.length}</strong> participante{pending.length > 1 ? 's' : ''} aún no {pending.length > 1 ? 'llenaron' : 'llenó'} sus picks para <strong>{PHASES[currentPhase]?.label}</strong>.
-          </div>
-          <a
-            href={`https://wa.me/?text=${encodeURIComponent(`Hola! Recuerda llenar tus picks para la quiniela "${group?.nombre}" 🏆 Código: ${groupId}`)}`}
-            target="_blank" rel="noopener"
-            style={{ padding: '6px 14px', background: '#25D366', color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 500, textDecoration: 'none', whiteSpace: 'nowrap' }}
-          >💬 Avisar a todos</a>
-        </div>
-      )}
-
-      {/* ── dos columnas ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
+      {/* ── contenido en columna única ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
         {/* tabla de posiciones */}
         <div style={card}>
@@ -237,9 +285,8 @@ export default function AdminDashboard() {
             Tabla de posiciones
           </div>
           {sortedScores.length === 0 ? (
-            <div style={{ fontSize: 13, color: '#aaa', textAlign: 'center', padding: '1.5rem 0' }}>
-              Sin puntos aún.<br />
-              <a href={`/quiniela/${groupId}`} style={{ color: '#1D9E75', fontSize: 12 }}>Ingresar resultados →</a>
+            <div style={{ fontSize: 13, color: '#aaa', textAlign: 'center', padding: '1rem 0' }}>
+              Sin puntos aún — los resultados se ingresan desde la quiniela.
             </div>
           ) : (
             <>
@@ -269,97 +316,103 @@ export default function AdminDashboard() {
                   })}
                 </tbody>
               </table>
-              {sortedScores.length > 5 && (
-                <a href={`/quiniela/${groupId}`} style={{ display: 'block', textAlign: 'center', fontSize: 12, color: '#888', marginTop: 12, textDecoration: 'none' }}>
-                  Ver tabla completa →
-                </a>
-              )}
             </>
           )}
         </div>
 
-        {/* columna derecha */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-          {/* pendientes individuales */}
-          {pending.length > 0 && (
-            <div style={card}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#888', letterSpacing: .5, textTransform: 'uppercase', marginBottom: 14 }}>
-                Pendientes de llenar picks
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {pending.map(p => (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Avatar name={p.nombre} size={32} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</div>
-                      {p.tel && <div style={{ fontSize: 11, color: '#aaa' }}>{p.tel}</div>}
-                    </div>
-                    {p.tel ? (
-                      <a
-                        href={`https://wa.me/${p.tel.replace(/\D/g, '')}?text=${waMsg(p.nombre)}`}
-                        target="_blank" rel="noopener"
-                        style={{ width: 32, height: 32, background: '#25D366', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 15, flexShrink: 0 }}
-                        title={`Avisar a ${p.nombre}`}
-                      >💬</a>
-                    ) : (
-                      <div style={{ width: 32, height: 32, background: '#f5f5f3', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, opacity: .35, flexShrink: 0 }} title="Sin teléfono registrado">💬</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* fases + desbloquear */}
+        {/* pendientes individuales */}
+        {pending.length > 0 && (
           <div style={card}>
             <div style={{ fontSize: 11, fontWeight: 600, color: '#888', letterSpacing: .5, textTransform: 'uppercase', marginBottom: 14 }}>
-              Tu quiniela
+              Pendientes de llenar picks
             </div>
-
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>Código de acceso participantes</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-              <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 3, color: '#1D9E75' }}>{groupId}</div>
-              <button
-                onClick={() => { navigator.clipboard.writeText(groupId); showToast('✓ Código copiado') }}
-                style={{ background: 'none', border: '0.5px solid #ccc', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', color: '#888' }}
-              >Copiar</button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {pending.map(p => (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Avatar name={p.nombre} size={32} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</div>
+                    {p.tel && <div style={{ fontSize: 11, color: '#aaa' }}>{p.tel}</div>}
+                  </div>
+                  {p.tel ? (
+                    <a href={`https://wa.me/${p.tel.replace(/\D/g, '')}?text=${waMsg(p.nombre)}`}
+                      target="_blank" rel="noopener"
+                      style={{ width: 32, height: 32, background: '#25D366', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', fontSize: 15, flexShrink: 0 }}>
+                      💬
+                    </a>
+                  ) : (
+                    <div style={{ width: 32, height: 32, background: '#f5f5f3', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, opacity: .35, flexShrink: 0 }}>💬</div>
+                  )}
+                </div>
+              ))}
             </div>
+          </div>
+        )}
 
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>Tu PIN de admin</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, background: '#f9f9f7', borderRadius: 8, padding: '8px 10px' }}>
-              <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: 3, fontFamily: 'monospace', color: '#555', flex: 1 }}>
-                {pinVisible ? group?.adminPin : '•'.repeat(group?.adminPin?.length ?? 6)}
+          {/* card: Acceso */}
+          <div style={card}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#888', letterSpacing: .5, textTransform: 'uppercase', marginBottom: 12 }}>
+              🔑 Acceso a la quiniela
+            </div>
+            {[
+              {
+                label: 'Código participantes',
+                value: <span style={{ fontWeight: 700, letterSpacing: 2, color: '#1D9E75', fontSize: 15 }}>{groupId}</span>,
+                action: <button onClick={() => { navigator.clipboard.writeText(groupId); showToast('✓ Copiado') }}
+                  style={{ background: 'none', border: '0.5px solid #ccc', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', color: '#888', whiteSpace: 'nowrap' }}>
+                  Copiar
+                </button>,
+              },
+              {
+                label: 'PIN de admin',
+                value: <span style={{ fontWeight: 600, letterSpacing: 3, fontFamily: 'monospace', color: '#555', fontSize: 15 }}>
+                  {pinVisible ? group?.adminPin : '•'.repeat(group?.adminPin?.length ?? 6)}
+                </span>,
+                action: <button onClick={() => setPinVisible(v => !v)}
+                  style={{ background: 'none', border: '0.5px solid #ccc', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', color: '#888', whiteSpace: 'nowrap' }}>
+                  {pinVisible ? 'Ocultar' : 'Ver'}
+                </button>,
+              },
+            ].map(({ label, value, action }, i, arr) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: i < arr.length - 1 ? '0.5px solid #f0f0f0' : 'none' }}>
+                <div style={{ fontSize: 12, color: '#888', width: 140, flexShrink: 0 }}>{label}</div>
+                <div style={{ flex: 1 }}>{value}</div>
+                {action}
               </div>
-              <button
-                onClick={() => setPinVisible(v => !v)}
-                style={{ background: 'none', border: '0.5px solid #ccc', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', color: '#888' }}
-              >{pinVisible ? 'Ocultar' : 'Mostrar'}</button>
-            </div>
+            ))}
+          </div>
 
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 10 }}>Fases</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {activePhaseOrder.map(ph => {
+          {/* card: Gestión del torneo */}
+          <div style={card}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#888', letterSpacing: .5, textTransform: 'uppercase', marginBottom: 12 }}>
+              🏆 Gestión del torneo
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {activePhaseOrder.map((ph, idx) => {
                 const unlocked = admin?.unlockedPhases.includes(ph)
                 const isGrupos = ph === 'grupos'
+                const isLast = idx === activePhaseOrder.length - 1
                 return (
-                  <div key={ph} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: 8, background: unlocked ? '#E1F5EE' : '#f5f5f3', border: `0.5px solid ${unlocked ? '#1D9E75' : '#e0e0de'}` }}>
-                    <span style={{ fontSize: 13, color: unlocked ? '#0F6E56' : '#aaa', fontWeight: unlocked ? 500 : 400 }}>
-                      {unlocked ? '✓' : '🔒'} {PHASES[ph].label}
+                  <div key={ph} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: isLast ? 'none' : '0.5px solid #f0f0f0' }}>
+                    <span style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 10 }}>{unlocked ? '🟢' : '⚪'}</span>
+                      <span style={{ color: unlocked ? '#0F6E56' : '#aaa', fontWeight: unlocked ? 500 : 400 }}>{PHASES[ph].label}</span>
+                      {unlocked && <span style={{ fontSize: 10, background: '#E1F5EE', color: '#0F6E56', padding: '1px 6px', borderRadius: 99 }}>activa</span>}
                     </span>
                     {isGrupos ? (
-                      <span style={{ fontSize: 11, color: '#aaa' }}>Siempre activa</span>
+                      <span style={{ fontSize: 11, color: '#ccc' }}>siempre activa</span>
                     ) : (
                       <button
                         onClick={() => unlocked ? lockLastPhase(ph) : unlockNextPhase(ph)}
                         style={{
-                          padding: '4px 12px', fontSize: 12, borderRadius: 6, cursor: 'pointer', border: 'none',
-                          background: unlocked ? 'rgba(15,110,86,.12)' : '#1D9E75',
-                          color: unlocked ? '#0F6E56' : '#fff',
+                          padding: '4px 14px', fontSize: 12, borderRadius: 6, cursor: 'pointer',
+                          border: unlocked ? '0.5px solid #ccc' : 'none',
+                          background: unlocked ? 'transparent' : '#1D9E75',
+                          color: unlocked ? '#888' : '#fff',
                           fontWeight: 500,
                         }}
                       >
-                        {unlocked ? '🔒 Bloquear' : '🔓 Desbloquear'}
+                        {unlocked ? 'Cerrar' : 'Abrir'}
                       </button>
                     )}
                   </div>
@@ -367,6 +420,64 @@ export default function AdminDashboard() {
               })}
             </div>
           </div>
+
+      </div>
+
+      {/* ── Bonsight IA ── */}
+      <div style={card}>
+        <div style={{ marginBottom: 14 }}>
+          <KaiLabel
+            title="Inteligencia Kai"
+            subtitle="Genera análisis y confianza para todos los participantes"
+            state={jornadaStatus === 'generating' || confidenceStatus === 'generating' ? 'thinking' : 'ready'}
+            size={22}
+          />
+        </div>
+
+        {/* Confianza por partido */}
+        <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '0.5px solid #f0f0f0' }}>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Confianza por partido</div>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 10 }}>
+            Kai evalúa 🟢🟡🔴 la dificultad de cada partido. Se genera una vez y sirve para todos.
+          </div>
+          <button
+            onClick={generateConfidence}
+            disabled={confidenceStatus === 'generating'}
+            style={{
+              padding: '7px 16px', fontSize: 12, borderRadius: 8, cursor: confidenceStatus === 'generating' ? 'default' : 'pointer',
+              background: confidenceStatus === 'done' ? '#E1F5EE' : confidenceStatus === 'generating' ? '#f5f5f3' : '#1D9E75',
+              color: confidenceStatus === 'done' ? '#0F6E56' : confidenceStatus === 'generating' ? '#aaa' : '#fff',
+              border: confidenceStatus === 'done' ? '0.5px solid #1D9E75' : 'none',
+              fontWeight: 500,
+            }}
+          >
+            {confidenceStatus === 'generating' ? 'Generando...' : confidenceStatus === 'done' ? '✓ Confianza generada · Regenerar' : 'Generar confianza de partidos'}
+          </button>
+        </div>
+
+        {/* Análisis de jornada */}
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Kai analiza la jornada</div>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 10 }}>
+            Kai genera una narrativa breve visible en Seguimiento para todos. Solo cuando lo activas.
+          </div>
+          <button
+            onClick={generateJornada}
+            disabled={jornadaStatus === 'generating'}
+            style={{
+              padding: '7px 16px', fontSize: 12, borderRadius: 8, cursor: jornadaStatus === 'generating' ? 'default' : 'pointer',
+              background: jornadaStatus === 'generating' ? '#f5f5f3' : '#1D9E75',
+              color: jornadaStatus === 'generating' ? '#aaa' : '#fff',
+              border: 'none', fontWeight: 500, marginBottom: jornadaSummary ? 12 : 0,
+            }}
+          >
+            {jornadaStatus === 'generating' ? 'Kai está analizando…' : jornadaStatus === 'done' ? 'Regenerar análisis de Kai' : 'Activar análisis de Kai'}
+          </button>
+          {jornadaSummary && (
+            <div style={{ background: '#f9f9f7', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#333', lineHeight: 1.6, borderLeft: '3px solid #1D9E75' }}>
+              {jornadaSummary}
+            </div>
+          )}
         </div>
       </div>
 

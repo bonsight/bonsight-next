@@ -34,6 +34,17 @@ export async function GET(req) {
       return NextResponse.json({ groups: groups ?? [] })
     }
 
+    if (action === 'stats') {
+      const [quinielas, participants] = await Promise.all([
+        kv.get('quiniela:stats:quinielas'),
+        kv.get('quiniela:stats:participants'),
+      ])
+      return NextResponse.json({
+        quinielas: quinielas ?? 0,
+        participants: participants ?? 0,
+      })
+    }
+
     if (action === 'group' && groupId) {
       const group = await kv.get(`quiniela:group:${groupId}`)
       if (!group) return NextResponse.json({ error: 'not_found' }, { status: 404 })
@@ -102,6 +113,7 @@ export async function POST(req) {
       }
       await Promise.all([
         kv.set(`quiniela:group:${id}`, group),
+        kv.incr('quiniela:stats:quinielas'),
         kv.set(`quiniela:${id}:admin`, {
           unlockedPhases: ['grupos'],
           results: {},
@@ -141,6 +153,7 @@ export async function POST(req) {
         kv.set(`quiniela:${groupId}:participants`, [...existing, participant]),
         kv.set(`quiniela:token:${token}`, { participantId: participant.id, groupId }),
         kv.set(`quiniela:${groupId}:tokens`, tokensMap),
+        kv.incr('quiniela:stats:participants'),
       ])
       return NextResponse.json({ ok: true, participant, token })
     }
