@@ -362,13 +362,13 @@ export default function QuinielaLanding() {
         <a href="/quiniela/demo" style={{ textDecoration: 'none', display: 'block', background: 'linear-gradient(135deg, #E8F8F1 0%, #f0fdf6 100%)', border: '1.5px solid #1D9E75', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 16px rgba(29,158,117,.08)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={{ fontSize: 18 }}>🤖</span>
-            <span style={{ fontSize: 15, fontWeight: 700, color: '#0F6E56' }}>¿Primera vez aquí?</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: '#0F6E56' }}>¿No sabes por dónde empezar?</span>
           </div>
           <div style={{ fontSize: 13, color: '#5a8a74', lineHeight: 1.55, marginBottom: 14 }}>
-            Explora una quiniela real y descubre cómo funciona Kai antes de crear la tuya.
+            Explora una quiniela completa con rankings, picks y análisis de Kai.
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-            {[['🏆','Ranking activo'],['📊','Consensos'],['🤖','Análisis de Kai'],['⚽','Picks cargados']].map(([e, l]) => (
+            {[['🏆','Ranking activo'],['📊','Consensos entre participantes'],['🤖','Análisis de Kai'],['⚽','Picks cargados']].map(([e, l]) => (
               <span key={l} style={{ fontSize: 11, background: '#fff', color: '#0F6E56', border: '0.5px solid rgba(29,158,117,.25)', padding: '3px 10px', borderRadius: 99, fontWeight: 500 }}>
                 {e} {l}
               </span>
