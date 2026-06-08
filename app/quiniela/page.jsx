@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { PHASE_ORDER, PHASES } from '@/lib/quiniela'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { PHASE_ORDER, PHASES, TEAMS, FLAGS } from '@/lib/quiniela'
 import { KaiAvatar, KaiCircle } from '@/components/KaiAvatar'
 
 // SVG inline del campo táctico (fondo hero)
@@ -28,29 +28,55 @@ function PitchLines() {
   )
 }
 
+const COUNTRY_CODES = [
+  { code: '+52',  label: '+52 · México' },
+  { code: '+1',   label: '+1 · USA / Canadá' },
+  { code: '+54',  label: '+54 · Argentina' },
+  { code: '+56',  label: '+56 · Chile' },
+  { code: '+57',  label: '+57 · Colombia' },
+  { code: '+58',  label: '+58 · Venezuela' },
+  { code: '+51',  label: '+51 · Perú' },
+  { code: '+55',  label: '+55 · Brasil' },
+  { code: '+34',  label: '+34 · España' },
+  { code: '+593', label: '+593 · Ecuador' },
+  { code: '+591', label: '+591 · Bolivia' },
+  { code: '+595', label: '+595 · Paraguay' },
+  { code: '+598', label: '+598 · Uruguay' },
+  { code: '+506', label: '+506 · Costa Rica' },
+  { code: '+507', label: '+507 · Panamá' },
+]
+
 export default function QuinielaLanding() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [mode, setMode] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [activeQuinielas, setActiveQuinielas] = useState([])
+  const [adminQuinielas, setAdminQuinielas] = useState(new Set())
   const [stats, setStats]   = useState({ quinielas: 0, participants: 0 })
   const [loaded, setLoaded] = useState(false)
   const [createdGroup, setCreatedGroup] = useState(null)
-  const [pinVisible, setPinVisible] = useState(false)
   const [fasesExpanded, setFasesExpanded] = useState(false)
 
   const [createForm, setCreateForm] = useState({
-    nombre: '', adminNombre: '', adminEmail: '', adminTel: '', adminPin: '',
+    nombre: '', adminNombre: '', adminEmail: '', adminTelCode: '+52', adminTel: '', adminPais: '',
     fases: ['grupos', 'ronda32', 'octavos', 'cuartos', 'semis', 'final'],
   })
   const [joinCode, setJoinCode] = useState('')
 
   useEffect(() => {
+    if (searchParams.get('reset') === '1') {
+      Object.keys(localStorage).filter(k => k.startsWith('quiniela_')).forEach(k => localStorage.removeItem(k))
+      router.replace('/quiniela')
+      return
+    }
+    if (searchParams.get('accion') === 'crear') setMode('crear')
     // Cargar quinielas activas desde localStorage
     const keys = Object.keys(localStorage).filter(k => k.startsWith('quiniela_token_'))
     if (keys.length > 0) {
       const ids = keys.map(k => k.replace('quiniela_token_', ''))
+      setAdminQuinielas(new Set(ids.filter(id => localStorage.getItem(`quiniela_admin_${id}`))))
       Promise.all(
         ids.map(id =>
           fetch(`/api/quiniela?action=group&groupId=${id}`)
@@ -81,11 +107,10 @@ export default function QuinielaLanding() {
   }
 
   async function handleCreate() {
-    const { nombre, adminNombre, adminEmail, adminTel, adminPin, fases } = createForm
-    if (!nombre.trim() || !adminNombre.trim() || !adminEmail.trim() || !adminTel.trim() || !adminPin.trim()) {
+    const { nombre, adminNombre, adminEmail, adminTelCode, adminTel, adminPais, fases } = createForm
+    if (!nombre.trim() || !adminNombre.trim() || !adminEmail.trim() || !adminTel.trim()) {
       setError('Todos los campos son obligatorios'); return
     }
-    if (adminPin.length < 4) { setError('El PIN debe tener al menos 4 caracteres'); return }
     if (fases.length === 0) { setError('Selecciona al menos una fase'); return }
     setLoading(true); setError('')
     try {
@@ -98,11 +123,14 @@ export default function QuinielaLanding() {
       const { group } = groupData
       const regRes = await fetch('/api/quiniela', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'register', payload: { nombre: adminNombre, email: adminEmail, tel: adminTel, groupId: group.id } }),
+        body: JSON.stringify({ action: 'register', payload: { nombre: adminNombre, email: adminEmail, tel: `${adminTelCode}${adminTel}`, pais: adminPais, groupId: group.id } }),
       })
       const regData = await regRes.json()
-      if (regData.ok && regData.token) localStorage.setItem(`quiniela_token_${group.id}`, regData.token)
-      setCreatedGroup({ id: group.id, nombre: group.nombre, adminPin: group.adminPin })
+      if (regData.ok && regData.token) {
+        localStorage.setItem(`quiniela_token_${group.id}`, regData.token)
+        localStorage.setItem(`quiniela_admin_${group.id}`, '1')
+      }
+      setCreatedGroup({ id: group.id, nombre: group.nombre })
       setMode('creado')
     } catch { setError('Error de conexión') }
     finally { setLoading(false) }
@@ -155,10 +183,22 @@ export default function QuinielaLanding() {
         <input style={s.input} placeholder="Ej. Rafa" value={createForm.adminNombre} onChange={e => setCreateForm(p => ({ ...p, adminNombre: e.target.value }))} /></div>
       <div style={s.field}><label style={s.label}>Email</label>
         <input style={s.input} type="email" placeholder="correo@ejemplo.com" value={createForm.adminEmail} onChange={e => setCreateForm(p => ({ ...p, adminEmail: e.target.value }))} /></div>
-      <div style={s.field}><label style={s.label}>WhatsApp (con código de país)</label>
-        <input style={s.input} type="tel" placeholder="+52 55 1234 5678" value={createForm.adminTel} onChange={e => setCreateForm(p => ({ ...p, adminTel: e.target.value }))} /></div>
-      <div style={s.field}><label style={s.label}>PIN de administrador (mínimo 4 caracteres)</label>
-        <input style={s.input} type="password" placeholder="Define tu PIN secreto" value={createForm.adminPin} onChange={e => setCreateForm(p => ({ ...p, adminPin: e.target.value }))} /></div>
+      <div style={s.field}><label style={s.label}>WhatsApp</label>
+        <div style={{ display: 'flex', borderRadius: 8, border: '0.5px solid #ccc', overflow: 'hidden' }}>
+          <select value={createForm.adminTelCode} onChange={e => setCreateForm(p => ({ ...p, adminTelCode: e.target.value }))}
+            style={{ padding: '9px 6px', background: 'transparent', border: 'none', borderRight: '0.5px solid #ccc', fontSize: 13, color: 'inherit', cursor: 'pointer', outline: 'none', flexShrink: 0 }}>
+            {COUNTRY_CODES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+          </select>
+          <input style={{ flex: 1, padding: '9px 10px', background: 'transparent', border: 'none', fontSize: 14, fontFamily: 'inherit', color: 'inherit', outline: 'none', minWidth: 0 }}
+            type="tel" placeholder="55 1234 5678" value={createForm.adminTel} onChange={e => setCreateForm(p => ({ ...p, adminTel: e.target.value }))} />
+        </div>
+      </div>
+      <div style={s.field}><label style={s.label}>¿A quién le vas? 🏆</label>
+        <select style={s.input} value={createForm.adminPais} onChange={e => setCreateForm(p => ({ ...p, adminPais: e.target.value }))}>
+          <option value="">— Selecciona tu equipo —</option>
+          {TEAMS.map(t => <option key={t} value={t}>{FLAGS[t] ? `${FLAGS[t]} ` : ''}{t}</option>)}
+        </select>
+      </div>
       <div style={{ marginBottom: 20 }}>
         {!fasesExpanded ? (
           <div style={{ background: '#f5f5f3', borderRadius: 8, padding: '12px 14px' }}>
@@ -228,27 +268,24 @@ export default function QuinielaLanding() {
       </div>
       <div style={{ border: '0.5px solid #e0e0de', borderRadius: 12, padding: 16, marginBottom: 12 }}>
         <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>Código para participantes</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: 3, color: '#1D9E75' }}>{createdGroup.id}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: 3, color: '#1D9E75', flex: 1 }}>{createdGroup.id}</div>
           <button onClick={() => navigator.clipboard.writeText(createdGroup.id)}
-            style={{ background: 'none', border: '0.5px solid #ccc', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', color: '#888' }}>Copiar</button>
+            style={{ background: 'none', border: '0.5px solid #ccc', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', color: '#888' }}>Copiar código</button>
         </div>
-        <div style={{ fontSize: 12, color: '#aaa', marginTop: 6 }}>Comparte este código con los participantes.</div>
-      </div>
-      <div style={{ background: '#FAEEDA', border: '0.5px solid #F5C842', borderRadius: 12, padding: 16, marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-          <span>🔐</span><span style={{ fontSize: 13, fontWeight: 600, color: '#854F0B' }}>Tu PIN de administrador</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: 4, color: '#854F0B', fontFamily: 'monospace' }}>
-            {pinVisible ? createdGroup.adminPin : '•'.repeat(createdGroup.adminPin.length)}
-          </div>
-          <button onClick={() => setPinVisible(v => !v)}
-            style={{ background: 'none', border: '0.5px solid #F5C842', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', color: '#854F0B' }}>
-            {pinVisible ? 'Ocultar' : 'Mostrar'}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => navigator.clipboard.writeText(`${window.location.origin}/quiniela/${createdGroup.id}`)}
+            style={{ flex: 1, background: '#f5f5f3', border: '0.5px solid #ddd', borderRadius: 8, padding: '9px 10px', fontSize: 12, cursor: 'pointer', color: '#555', fontWeight: 500 }}>
+            🔗 Copiar link
           </button>
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent(`¡Únete a mi Quiniela del Mundial 2026! 🏆\n\n${createdGroup.nombre}\nCódigo: ${createdGroup.id}\n\n👉 ${typeof window !== 'undefined' ? window.location.origin : ''}/quiniela/${createdGroup.id}`)}`}
+            target="_blank" rel="noopener"
+            style={{ flex: 1, background: '#25D366', color: '#fff', borderRadius: 8, padding: '9px 10px', fontSize: 12, fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+            💬 WhatsApp
+          </a>
         </div>
-        <div style={{ fontSize: 12, color: '#9a6010' }}>Guárdalo — lo necesitarás para acceder al panel admin.</div>
       </div>
       <a href={`/quiniela/${createdGroup.id}/picks`}
         style={{ display: 'block', textAlign: 'center', background: '#1D9E75', color: '#fff', padding: '13px', borderRadius: 8, fontSize: 14, fontWeight: 500, textDecoration: 'none', marginBottom: 10 }}>
@@ -305,7 +342,7 @@ export default function QuinielaLanding() {
             ))}
           </div>
           {/* CTAs */}
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
             <button onClick={() => setMode('crear')} style={{ flex: 1, background: '#34D399', color: '#0a1f12', border: 'none', padding: '12px', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
               Crear quiniela
             </button>
@@ -313,10 +350,34 @@ export default function QuinielaLanding() {
               Ingresar código
             </button>
           </div>
+          <a href="/quiniela/demo" style={{ display: 'block', textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: 13, textDecoration: 'none', padding: '4px 0' }}>
+            👀 Ver demo con Kai →
+          </a>
         </div>
       </div>
 
       <div style={{ padding: '1.5rem 1.5rem', display: 'flex', flexDirection: 'column', gap: 16, flex: 1 }}>
+
+        {/* ── DEMO CARD ── */}
+        <a href="/quiniela/demo" style={{ textDecoration: 'none', display: 'block', background: 'linear-gradient(135deg, #E8F8F1 0%, #f0fdf6 100%)', border: '1.5px solid #1D9E75', borderRadius: 16, padding: '18px 20px', boxShadow: '0 2px 16px rgba(29,158,117,.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{ fontSize: 18 }}>🤖</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: '#0F6E56' }}>¿Primera vez aquí?</span>
+          </div>
+          <div style={{ fontSize: 13, color: '#5a8a74', lineHeight: 1.55, marginBottom: 14 }}>
+            Explora una quiniela real y descubre cómo funciona Kai antes de crear la tuya.
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+            {[['🏆','Ranking activo'],['📊','Consensos'],['🤖','Análisis de Kai'],['⚽','Picks cargados']].map(([e, l]) => (
+              <span key={l} style={{ fontSize: 11, background: '#fff', color: '#0F6E56', border: '0.5px solid rgba(29,158,117,.25)', padding: '3px 10px', borderRadius: 99, fontWeight: 500 }}>
+                {e} {l}
+              </span>
+            ))}
+          </div>
+          <div style={{ background: '#1D9E75', color: '#fff', padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, textAlign: 'center' }}>
+            Ver Demo →
+          </div>
+        </a>
 
         {/* ── KAI ONLINE ── */}
         <div style={{ background: '#0c0f14', border: '1px solid rgba(52,211,153,0.2)', borderRadius: 14, padding: '18px', boxShadow: '0 4px 24px rgba(0,0,0,0.3)' }}>
@@ -400,35 +461,59 @@ export default function QuinielaLanding() {
             <div style={{ fontSize: 11, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 10 }}>
               Tus quinielas activas
             </div>
-            {activeQuinielas.map(({ groupId, group }) => (
-              <div key={groupId} style={{ background: 'linear-gradient(135deg, #E1F5EE, #f0fdf6)', border: '1px solid #1D9E75', borderRadius: 12, padding: '14px 16px', marginBottom: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: '#0F6E56' }}>{group.nombre}</div>
-                    <div style={{ fontSize: 11, color: '#5a8a74', marginTop: 3 }}>
-                      Código: <strong style={{ letterSpacing: 1 }}>{groupId}</strong>
+            {activeQuinielas.map(({ groupId, group }) => {
+              const isAdminHere = adminQuinielas.has(groupId)
+              return (
+                <div key={groupId} style={{ background: 'linear-gradient(135deg, #E1F5EE, #f0fdf6)', border: '1px solid #1D9E75', borderRadius: 12, padding: '14px 16px', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: '#0F6E56' }}>{group.nombre}</div>
+                        {isAdminHere && (
+                          <span style={{ fontSize: 10, background: '#FEF9EC', color: '#854F0B', border: '0.5px solid #F5C842', padding: '2px 8px', borderRadius: 99, fontWeight: 600, whiteSpace: 'nowrap' }}>👑 Admin</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#5a8a74' }}>
+                        Código: <strong style={{ letterSpacing: 1 }}>{groupId}</strong>
+                      </div>
                     </div>
-                  </div>
-                  <span style={{ fontSize: 10, background: 'rgba(52,211,153,0.15)', color: '#0F6E56', padding: '3px 8px', borderRadius: 99, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    🤖 Kai activo
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-                  {(group.fases ?? []).slice(0, 3).map(ph => (
-                    <span key={ph} style={{ fontSize: 10, background: '#E1F5EE', color: '#0F6E56', padding: '2px 8px', borderRadius: 99 }}>
-                      {PHASES[ph]?.label}
+                    <span style={{ fontSize: 10, background: 'rgba(52,211,153,0.15)', color: '#0F6E56', padding: '3px 8px', borderRadius: 99, fontWeight: 600, whiteSpace: 'nowrap', marginLeft: 8 }}>
+                      🤖 Kai activo
                     </span>
-                  ))}
-                  {(group.fases ?? []).length > 3 && (
-                    <span style={{ fontSize: 10, color: '#aaa' }}>+{(group.fases ?? []).length - 3} más</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                    {(group.fases ?? []).slice(0, 3).map(ph => (
+                      <span key={ph} style={{ fontSize: 10, background: '#E1F5EE', color: '#0F6E56', padding: '2px 8px', borderRadius: 99 }}>
+                        {PHASES[ph]?.label}
+                      </span>
+                    ))}
+                    {(group.fases ?? []).length > 3 && (
+                      <span style={{ fontSize: 10, color: '#aaa' }}>+{(group.fases ?? []).length - 3} más</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: isAdminHere ? 8 : 0 }}>
+                    <a href={`/quiniela/${groupId}/picks`}
+                      style={{ flex: 1, display: 'block', textAlign: 'center', background: '#1D9E75', color: '#fff', padding: '10px', borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: 'none' }}>
+                      Ir a mis picks →
+                    </a>
+                    <button
+                      onClick={() => {
+                        const msg = encodeURIComponent(`¡Únete a la Quiniela del Mundial 2026! 🏆\n\n${group.nombre}\nCódigo: ${groupId}\n\n👉 ${window.location.origin}/quiniela/${groupId}`)
+                        window.open(`https://wa.me/?text=${msg}`, '_blank')
+                      }}
+                      style={{ width: 42, height: 42, background: '#25D366', border: 'none', borderRadius: 8, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      💬
+                    </button>
+                  </div>
+                  {isAdminHere && (
+                    <a href={`/quiniela/${groupId}/admin`}
+                      style={{ display: 'block', textAlign: 'center', background: 'transparent', color: '#0F6E56', padding: '9px', borderRadius: 8, fontSize: 12, fontWeight: 500, textDecoration: 'none', border: '0.5px solid #1D9E75' }}>
+                      ⚙️ Gestionar quiniela
+                    </a>
                   )}
                 </div>
-                <a href={`/quiniela/${groupId}/picks`}
-                  style={{ display: 'block', textAlign: 'center', background: '#1D9E75', color: '#fff', padding: '10px', borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: 'none' }}>
-                  Ir a mis picks →
-                </a>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 

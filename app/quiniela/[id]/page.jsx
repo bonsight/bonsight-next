@@ -4,6 +4,24 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { TEAMS, FLAGS } from '@/lib/quiniela'
 
+const COUNTRY_CODES = [
+  { code: '+52',  label: '+52 · México' },
+  { code: '+1',   label: '+1 · USA / Canadá' },
+  { code: '+54',  label: '+54 · Argentina' },
+  { code: '+56',  label: '+56 · Chile' },
+  { code: '+57',  label: '+57 · Colombia' },
+  { code: '+58',  label: '+58 · Venezuela' },
+  { code: '+51',  label: '+51 · Perú' },
+  { code: '+55',  label: '+55 · Brasil' },
+  { code: '+34',  label: '+34 · España' },
+  { code: '+593', label: '+593 · Ecuador' },
+  { code: '+591', label: '+591 · Bolivia' },
+  { code: '+595', label: '+595 · Paraguay' },
+  { code: '+598', label: '+598 · Uruguay' },
+  { code: '+506', label: '+506 · Costa Rica' },
+  { code: '+507', label: '+507 · Panamá' },
+]
+
 const s = {
   page:   { maxWidth: 480, margin: '0 auto', padding: '2.5rem 1.5rem', fontFamily: 'var(--font-sans, system-ui, sans-serif)', minHeight: '100vh', display: 'flex', flexDirection: 'column' },
   input:  { padding: '9px 12px', borderRadius: 8, border: '0.5px solid #ccc', background: 'transparent', color: 'inherit', fontSize: 14, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' },
@@ -24,7 +42,7 @@ export default function RegistroPage() {
   const [error, setError]         = useState('')
   const [mode, setMode]           = useState('registro') // 'registro' | 'reacceso'
 
-  const [form, setForm] = useState({ nombre: '', email: '', tel: '', pais: '' })
+  const [form, setForm] = useState({ nombre: '', email: '', telCode: '+52', tel: '', pais: '' })
   const [reaccesoEmail, setReaccesoEmail] = useState('')
 
   useEffect(() => {
@@ -48,7 +66,7 @@ export default function RegistroPage() {
       const res = await fetch('/api/quiniela', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'register', payload: { ...form, groupId } }),
+        body: JSON.stringify({ action: 'register', payload: { ...form, tel: `${form.telCode}${form.tel}`, groupId } }),
       })
       const data = await res.json()
       if (data.ok && data.token) {
@@ -127,10 +145,17 @@ export default function RegistroPage() {
               onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
           </div>
           <div style={s.field}>
-            <label style={s.label}>WhatsApp * (con código de país)</label>
-            <input style={s.input} type="tel" placeholder="+52 55 1234 5678"
-              value={form.tel}
-              onChange={e => setForm(p => ({ ...p, tel: e.target.value }))} />
+            <label style={s.label}>WhatsApp *</label>
+            <div style={{ display: 'flex', borderRadius: 8, border: '0.5px solid #ccc', overflow: 'hidden' }}>
+              <select value={form.telCode} onChange={e => setForm(p => ({ ...p, telCode: e.target.value }))}
+                style={{ padding: '9px 6px', background: 'transparent', border: 'none', borderRight: '0.5px solid #ccc', fontSize: 13, color: 'inherit', cursor: 'pointer', outline: 'none', flexShrink: 0 }}>
+                {COUNTRY_CODES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+              </select>
+              <input style={{ flex: 1, padding: '9px 10px', background: 'transparent', border: 'none', fontSize: 14, fontFamily: 'inherit', color: 'inherit', outline: 'none', minWidth: 0 }}
+                type="tel" placeholder="55 1234 5678"
+                value={form.tel}
+                onChange={e => setForm(p => ({ ...p, tel: e.target.value }))} />
+            </div>
           </div>
           <div style={s.field}>
             <label style={s.label}>¿A quién le vas? 🏆</label>

@@ -185,6 +185,135 @@ function PremiosMayores({ campeon, goleador, customGoleador, onCampeon, onGolead
   )
 }
 
+// ── OnboardingModal ──────────────────────────────────────────────────────────
+
+const ONBOARDING_STEPS = [
+  {
+    icon: '🏆',
+    title: 'Bienvenido a la Quiniela',
+    desc: 'Cada pick que haces acumula puntos. Exacto = 3 pts, ganador correcto = 1 pt. Kai te ayuda a decidir mejor.',
+  },
+  {
+    icon: '🤖',
+    title: '¿Qué es Kai?',
+    desc: 'Kai analiza cada partido y te dice qué tan predecible es el resultado.',
+    items: [
+      { e: '🔥', label: 'Muy favorable', desc: 'El partido tiene un claro favorito (85%+)' },
+      { e: '🟢', label: 'Favorable', desc: 'Un equipo lleva ventaja real (70–84%)' },
+      { e: '🟡', label: 'Partido abierto', desc: 'Equilibrado — cualquier resultado es posible' },
+      { e: '🔴', label: 'Muy incierto', desc: 'Pick de alto riesgo, muy difícil de acertar' },
+    ],
+  },
+  {
+    icon: '👥',
+    title: '¿Qué es "Vs. consenso"?',
+    desc: 'Kai compara tu pick con el del resto de tu quiniela.',
+    items: [
+      { e: '⚠️', label: 'Vs. consenso', desc: 'Vas contra la mayoría — si acertás, adelantás en la tabla' },
+      { e: '✅', label: 'Con la mayoría', desc: 'Pick más seguro, menor diferencial frente al grupo' },
+    ],
+  },
+  {
+    icon: '✅',
+    title: '¡Listo!',
+    desc: 'Llena tus picks, guárdalos y sigue la tabla en Seguimiento. El botón ⓘ de Kai está siempre disponible.',
+  },
+]
+
+function OnboardingModal({ step, total, onNext, onSkip }) {
+  const s = ONBOARDING_STEPS[step]
+  const isLast = step === total - 1
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 9999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', padding: '28px 24px 40px', width: '100%', maxWidth: 480, boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginBottom: 24 }}>
+          {ONBOARDING_STEPS.map((_, i) => (
+            <div key={i} style={{ width: i === step ? 20 : 6, height: 6, borderRadius: 99, background: i === step ? '#1D9E75' : '#e0e0de', transition: 'width .25s' }} />
+          ))}
+        </div>
+        <div style={{ fontSize: 36, marginBottom: 10 }}>{s.icon}</div>
+        <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, lineHeight: 1.25 }}>{s.title}</div>
+        <div style={{ fontSize: 14, color: '#555', lineHeight: 1.6, marginBottom: s.items ? 16 : 28 }}>{s.desc}</div>
+        {s.items && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+            {s.items.map(item => (
+              <div key={item.label} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: '#f9f9f7', borderRadius: 10, padding: '10px 12px' }}>
+                <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1.4 }}>{item.e}</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#222', marginBottom: 1 }}>{item.label}</div>
+                  <div style={{ fontSize: 12, color: '#888' }}>{item.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={onNext} style={{ background: '#1D9E75', color: '#fff', border: 'none', padding: '13px', borderRadius: 10, fontSize: 15, fontWeight: 600, cursor: 'pointer', width: '100%', marginBottom: 10 }}>
+          {isLast ? '¡Entendido, a mis picks! →' : 'Siguiente →'}
+        </button>
+        {!isLast && (
+          <button onClick={onSkip} style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 13, cursor: 'pointer', width: '100%' }}>
+            Saltar
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── KaiHelpModal ─────────────────────────────────────────────────────────────
+
+function KaiHelpModal({ onClose }) {
+  const sections = [
+    {
+      title: 'Nivel de certeza del resultado',
+      items: [
+        { e: '🔥', label: 'Muy favorable', desc: 'El partido tiene un claro favorito. Pick confiable (85%+).' },
+        { e: '🟢', label: 'Favorable', desc: 'Un equipo lleva ventaja real. Bastante predecible (70–84%).' },
+        { e: '🟡', label: 'Partido abierto', desc: 'Equilibrado. Cualquier resultado es posible. Riesgo medio (55–69%).' },
+        { e: '🔴', label: 'Muy incierto', desc: 'Pick difícil, alto riesgo. Si acertás, más diferencial en la tabla.' },
+      ],
+    },
+    {
+      title: 'Consenso de la quiniela',
+      items: [
+        { e: '⚠️', label: 'Vs. consenso', desc: 'Tu pick va contra la mayoría. Si acertás, adelantás a varios en la tabla.' },
+        { e: '✅', label: 'Con la mayoría', desc: 'Tu pick coincide con el del grupo. Más seguro, menor diferencial.' },
+        { e: '💡', label: 'Oportunidad estratégica', desc: 'Kai detecta que según tu posición en la tabla, ir contra el consenso puede convenir o no.' },
+      ],
+    },
+  ]
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onClose}>
+      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', padding: '24px 20px 40px', width: '100%', maxWidth: 480, boxSizing: 'border-box', maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>🤖 Indicadores de Kai</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#aaa', padding: 0, lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ fontSize: 13, color: '#666', lineHeight: 1.55, marginBottom: 18 }}>
+          Kai analiza estadísticas, forma reciente y contexto del torneo para evaluar cada partido.
+        </div>
+        {sections.map(sec => (
+          <div key={sec.title} style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 10 }}>{sec.title}</div>
+            {sec.items.map((item, i, arr) => (
+              <div key={item.label} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 0', borderBottom: i < arr.length - 1 ? '0.5px solid #f0f0f0' : 'none' }}>
+                <span style={{ fontSize: 20, flexShrink: 0, lineHeight: 1.3 }}>{item.e}</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{item.label}</div>
+                  <div style={{ fontSize: 12, color: '#888', lineHeight: 1.5 }}>{item.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+        <button onClick={onClose} style={{ background: '#1D9E75', color: '#fff', border: 'none', padding: '12px', borderRadius: 10, fontSize: 14, fontWeight: 500, cursor: 'pointer', width: '100%' }}>
+          Entendido
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const st = {
@@ -210,6 +339,9 @@ export default function PicksPage() {
   const [toast, setToast]             = useState('')
   const [isAdmin, setIsAdmin]         = useState(false)
   const [expandedMatches, setExpandedMatches] = useState(new Set())
+  const [kaiHelpOpen, setKaiHelpOpen] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [onboardingStep, setOnboardingStep] = useState(0)
 
   function toggleMatch(idx) {
     setExpandedMatches(prev => {
@@ -345,6 +477,7 @@ export default function PicksPage() {
         .catch(() => {})
 
       setAuth('ok')
+      if (!localStorage.getItem('quiniela_onboarding_done')) setShowOnboarding(true)
     }).catch(() => {
       setAuth('denied'); router.replace(`/quiniela/${groupId}`)
     }).finally(() => setLoading(false))
@@ -476,6 +609,11 @@ export default function PicksPage() {
         return PHASES.grupos.matches.slice(gi * 6, gi * 6 + 6).map((m, i) => ({ ...m, globalIndex: gi * 6 + i }))
       })()
     : PHASES[currentPhase].matches.map((m, i) => ({ ...m, globalIndex: i }))
+
+  const firstPendingIndex = visibleMatches.find(({ globalIndex }) => {
+    const p = picks[currentPhase][globalIndex] ?? { l: '', v: '', w: '' }
+    return p.l === '' && p.v === '' && now < getMatchCutoff(currentPhase, globalIndex).getTime()
+  })?.globalIndex ?? -1
 
   const phaseTab = (ph) => {
     const unlocked = admin?.unlockedPhases.includes(ph)
@@ -711,8 +849,15 @@ export default function PicksPage() {
                   </div>
                 )}
                 {isPending && (
-                  <div style={{ fontSize: 11, color: '#92400e', padding: '4px 12px', background: 'rgba(245,200,66,0.1)', borderBottom: '0.5px solid rgba(245,200,66,0.2)' }}>
-                    ⏳ Pendiente
+                  <div style={{ background: 'rgba(245,200,66,0.1)', borderBottom: '0.5px solid rgba(245,200,66,0.2)' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#92400e', padding: '5px 12px 3px' }}>
+                      ⚽ Completa tu pronóstico
+                    </div>
+                    {globalIndex === firstPendingIndex && (
+                      <div style={{ fontSize: 11, color: '#9a6010', padding: '0 12px 5px', lineHeight: 1.4 }}>
+                        Ingresa los goles que crees que marcará cada equipo.
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -766,6 +911,12 @@ export default function PicksPage() {
                           </>
                         : <span style={{ fontSize: 13, color: '#aaa', flex: 1 }}>Kai · análisis disponible</span>
                       }
+                      <button
+                        onClick={e => { e.stopPropagation(); setKaiHelpOpen(true) }}
+                        style={{ background: 'none', border: 'none', fontSize: 13, cursor: 'pointer', color: '#bbb', padding: '0 2px', flexShrink: 0, lineHeight: 1 }}
+                        title="¿Qué significan estos indicadores?">
+                        ⓘ
+                      </button>
                       <span style={{ fontSize: 9, color: '#aaa' }}>{expanded ? '▲' : '▼'}</span>
                     </div>
                   </div>
@@ -825,6 +976,25 @@ export default function PicksPage() {
 
       {toast && (
         <div style={{ position: 'fixed', bottom: 60, left: '50%', transform: 'translateX(-50%)', background: '#1D9E75', color: '#fff', padding: '9px 18px', borderRadius: 8, fontSize: 13, zIndex: 999, pointerEvents: 'none', whiteSpace: 'nowrap' }}>{toast}</div>
+      )}
+      {kaiHelpOpen && <KaiHelpModal onClose={() => setKaiHelpOpen(false)} />}
+      {showOnboarding && (
+        <OnboardingModal
+          step={onboardingStep}
+          total={ONBOARDING_STEPS.length}
+          onNext={() => {
+            if (onboardingStep < ONBOARDING_STEPS.length - 1) {
+              setOnboardingStep(n => n + 1)
+            } else {
+              localStorage.setItem('quiniela_onboarding_done', '1')
+              setShowOnboarding(false)
+            }
+          }}
+          onSkip={() => {
+            localStorage.setItem('quiniela_onboarding_done', '1')
+            setShowOnboarding(false)
+          }}
+        />
       )}
     </div>
   )

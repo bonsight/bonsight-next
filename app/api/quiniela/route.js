@@ -46,36 +46,41 @@ export async function GET(req) {
     }
 
     if (action === 'overview') {
-      const groups = (await kv.get('quiniela:groups')) ?? []
+      const [groups, globalConfidence] = await Promise.all([
+        kv.get('quiniela:groups'),
+        kv.get('quiniela:global:confidence:grupos'),
+      ])
+      const groupList = groups ?? []
+      const globalConfidenceGenerated = Array.isArray(globalConfidence) && globalConfidence.length > 0
+
       const data = await Promise.all(
-        groups.map(async ({ id }) => {
-          const [group, participants, confidence, jornada] = await Promise.all([
+        groupList.map(async ({ id }) => {
+          const [group, participants, jornada, quinielas] = await Promise.all([
             kv.get(`quiniela:group:${id}`),
             kv.get(`quiniela:${id}:participants`),
-            kv.get(`quiniela:${id}:ai:confidence:grupos`),
             kv.get(`quiniela:${id}:ai:jornada:grupos`),
+            kv.get(`quiniela:${id}:quinielas`),
           ])
           return {
             id,
             nombre: group?.nombre ?? '—',
             adminNombre: group?.adminNombre ?? '—',
             adminTel: group?.adminTel ?? '—',
-            adminEmail: group?.adminEmail ?? '—',
             createdAt: group?.createdAt ?? null,
             fases: group?.fases ?? [],
             participants: (participants ?? []).map(p => ({
               nombre: p.nombre, email: p.email, tel: p.tel, pais: p.pais, createdAt: p.createdAt,
             })),
+            picksCount: Object.keys(quinielas ?? {}).length,
             kai: {
-              confidence: Array.isArray(confidence) && confidence.length > 0,
-              confidenceCount: Array.isArray(confidence) ? confidence.length : 0,
+              confidence: globalConfidenceGenerated,
               jornada: !!jornada,
               jornadaPreview: typeof jornada === 'string' ? jornada.slice(0, 100) : null,
             },
           }
         })
       )
-      return NextResponse.json({ quinielas: data, total: data.length })
+      return NextResponse.json({ quinielas: data, total: data.length, globalConfidenceGenerated })
     }
 
     if (action === 'group' && groupId) {
@@ -84,17 +89,30 @@ export async function GET(req) {
       return NextResponse.json({ group })
     }
 
+    if (action === 'globalAdmin') {
+      const admin = (await kv.get('quiniela:global:admin')) ?? { results: {}, realCampeon: '', realGoleador: '' }
+      return NextResponse.json({ admin })
+    }
+
     if (action === 'all' && groupId) {
-      const [participants, quinielasRaw, adminRaw, group] = await Promise.all([
+      const [participants, quinielasRaw, adminRaw, group, globalAdmin] = await Promise.all([
         kv.get(`quiniela:${groupId}:participants`),
         kv.get(`quiniela:${groupId}:quinielas`),
         kv.get(`quiniela:${groupId}:admin`),
         kv.get(`quiniela:group:${groupId}`),
+        kv.get('quiniela:global:admin'),
       ])
+      const perAdmin = adminRaw ?? {}
+      const mergedAdmin = {
+        unlockedPhases: perAdmin.unlockedPhases ?? ['grupos'],
+        results: globalAdmin?.results ?? perAdmin.results ?? {},
+        realCampeon: globalAdmin?.realCampeon ?? perAdmin.realCampeon ?? '',
+        realGoleador: globalAdmin?.realGoleador ?? perAdmin.realGoleador ?? '',
+      }
       return NextResponse.json({
         participants: participants ?? [],
         quinielas: quinielasRaw ?? {},
-        admin: adminRaw ?? { unlockedPhases: ['grupos'], results: {}, realCampeon: '', realGoleador: '' },
+        admin: mergedAdmin,
         group: group ?? null,
       })
     }
@@ -138,8 +156,8 @@ export async function POST(req) {
       const group = {
         id,
         nombre: payload.nombre,
-        adminPin: payload.adminPin,
         adminNombre: payload.adminNombre,
+        adminEmail: payload.adminEmail,
         adminTel: payload.adminTel,
         fases: payload.fases ?? ['grupos', 'ronda32', 'octavos', 'cuartos', 'semis', 'final'],
         createdAt: new Date().toISOString(),
@@ -205,6 +223,12 @@ export async function POST(req) {
       const { groupId, ...adminData } = payload
       if (!groupId) return NextResponse.json({ error: 'groupId required' }, { status: 400 })
       await kv.set(`quiniela:${groupId}:admin`, adminData)
+      return NextResponse.json({ ok: true })
+    }
+
+    if (action === 'saveGlobalResults') {
+      const { results, realCampeon, realGoleador } = payload
+      await kv.set('quiniela:global:admin', { results, realCampeon, realGoleador })
       return NextResponse.json({ ok: true })
     }
 

@@ -1,6 +1,6 @@
 import { Redis } from '@upstash/redis'
 import { NextResponse } from 'next/server'
-import { PHASES } from '@/lib/quiniela'
+import { PHASES, calcularPuntajes } from '@/lib/quiniela'
 
 const kv = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -44,9 +44,11 @@ export async function GET(req) {
   const participantId = searchParams.get('participantId')
 
   try {
-    if (action === 'getConfidence' && groupId && phase) {
-      const data = await kv.get(`quiniela:${groupId}:ai:confidence:${phase}`)
-      return NextResponse.json({ confidence: data ?? null })
+    if (action === 'getConfidence' && phase) {
+      const global = await kv.get(`quiniela:global:confidence:${phase}`)
+      if (global) return NextResponse.json({ confidence: global })
+      const perQ = groupId ? await kv.get(`quiniela:${groupId}:ai:confidence:${phase}`) : null
+      return NextResponse.json({ confidence: perQ ?? null })
     }
     if (action === 'getJornada' && groupId && phase) {
       const data = await kv.get(`quiniela:${groupId}:ai:jornada:${phase}`)
@@ -56,7 +58,7 @@ export async function GET(req) {
       const data = await kv.get(`quiniela:${groupId}:ai:suggestion:${participantId}:${phase}`)
       return NextResponse.json({ suggestion: data ?? null })
     }
-    return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
+    return NextResponse.json({ error: 'Unknown GET action' }, { status: 400 })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
@@ -146,7 +148,7 @@ ${matchList}`
         allConfidence = parseJSON(text)
       }
 
-      await kv.set(`quiniela:${groupId}:ai:confidence:${phase}`, allConfidence)
+      await kv.set(`quiniela:global:confidence:${phase}`, allConfidence)
       return NextResponse.json({ ok: true, confidence: allConfidence, count: allConfidence.length })
     }
 
@@ -256,7 +258,77 @@ Si todos ya tienen pick, devuelve: []`
       return NextResponse.json({ ok: true, suggestion })
     }
 
-    return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
+    // ── 4. Generar análisis de jornada para TODAS las quinielas ─────────────────
+    if (action === 'generateAllJornadas') {
+      const { phase } = payload
+      const phaseLabel = PHASES[phase]?.label ?? phase
+      const groups = (await kv.get('quiniela:groups')) ?? []
+      const globalAdmin = (await kv.get('quiniela:global:admin')) ?? {}
+
+      const system = `Eres Kai, el narrador de una quiniela del Mundial 2026 entre amigos.
+Tono: humano, entusiasta, competitivo, ligero. Como un amigo comentando el partido, no un locutor.
+Responde SOLO con el texto narrativo. Sin etiquetas, sin markdown, sin nada más.`
+
+      let generated = 0
+      for (const { id: gid } of groups) {
+        const [participants, quinielasData, perAdmin] = await Promise.all([
+          kv.get(`quiniela:${gid}:participants`),
+          kv.get(`quiniela:${gid}:quinielas`),
+          kv.get(`quiniela:${gid}:admin`),
+        ])
+        const partList = participants ?? []
+        if (partList.length === 0) continue
+
+        const adminData = {
+          unlockedPhases: perAdmin?.unlockedPhases ?? ['grupos'],
+          results: globalAdmin?.results ?? perAdmin?.results ?? {},
+          realCampeon: globalAdmin?.realCampeon ?? perAdmin?.realCampeon ?? '',
+          realGoleador: globalAdmin?.realGoleador ?? perAdmin?.realGoleador ?? '',
+        }
+        const scores = calcularPuntajes(partList, quinielasData ?? {}, adminData)
+        const sortedScores = [...scores].sort((a, b) => b.pts - a.pts)
+
+        const rankingCtx = sortedScores.map((s, i) => {
+          const p = partList.find(x => x.id === s.participantId)
+          const bd = s.breakdown
+          return `${i + 1}. ${p?.nombre ?? '?'} — ${s.pts} pts (exactos: ${bd.exacto}, ganadores: ${bd.ganador})`
+        }).join('\n')
+
+        let pickAudaz = null
+        const phaseResults = adminData.results[phase] ?? []
+        const phaseMatches = PHASES[phase]?.matches ?? []
+        phaseMatches.forEach((m, i) => {
+          const real = phaseResults[i]
+          if (!real || real.l === '' || real.v === '') return
+          const realWin = Number(real.l) > Number(real.v) ? m.local : Number(real.l) < Number(real.v) ? m.visitante : 'Empate'
+          let correctPickers = [], incorrectPickers = 0
+          partList.forEach(p => {
+            const w = (quinielasData ?? {})[p.id]?.phases?.[phase]?.[i]?.w
+            if (w === realWin) correctPickers.push(p.nombre)
+            else if (w) incorrectPickers++
+          })
+          if (correctPickers.length === 1 && incorrectPickers >= 2)
+            pickAudaz = { nombre: correctPickers[0], partido: `${m.local} vs ${m.visitante}`, resultado: realWin }
+        })
+
+        const userMessage = `Escribe el análisis de la ${phaseLabel} para esta quiniela. Máximo 4 líneas.
+
+Ranking actual:
+${rankingCtx}
+${pickAudaz ? `\nPick más audaz: ${pickAudaz.nombre} acertó ${pickAudaz.resultado} en ${pickAudaz.partido} cuando la mayoría eligió lo contrario.` : ''}
+
+Incluye: mejor jornada, pick audaz si lo hay, quién remonta, lectura entretenida del estado.
+Suena natural. Sin frases corporativas.`
+
+        const text = (await callClaude(system, userMessage, 400)).trim()
+        await kv.set(`quiniela:${gid}:ai:jornada:${phase}`, text)
+        generated++
+        await new Promise(r => setTimeout(r, 200))
+      }
+      return NextResponse.json({ ok: true, generated })
+    }
+
+    return NextResponse.json({ error: 'Unknown POST action' }, { status: 400 })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
