@@ -398,9 +398,9 @@ export default function QuinielaLanding() {
           {/* stats de uso real (quinielas + participantes — no del torneo, eso va en el hero) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
             {[
-              { val: stats.quinielas > 0 ? stats.quinielas : '—', label: 'Quinielas' },
-              { val: stats.participants > 0 ? stats.participants : '—', label: 'Participantes' },
-              { val: stats.quinielas > 0 ? `${stats.quinielas * 72}+` : '—', label: 'Picks posibles' },
+              { val: loaded ? stats.quinielas : '·', label: 'Quinielas' },
+              { val: loaded ? stats.participants : '·', label: 'Participantes' },
+              { val: loaded ? `${stats.quinielas * 72}+` : '·', label: 'Picks posibles' },
             ].map(({ val, label }) => (
               <div key={label} style={{ background: 'rgba(52,211,153,0.07)', border: '0.5px solid rgba(52,211,153,0.15)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
                 <div style={{ fontSize: 18, fontWeight: 700, color: '#34D399', lineHeight: 1 }}>{val}</div>
