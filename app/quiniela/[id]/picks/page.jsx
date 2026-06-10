@@ -6,14 +6,12 @@ import { PHASES, PHASE_ORDER, TEAMS, SCORERS, FLAGS, calcularPuntajes } from '@/
 import { KaiLabel, KaiAvatar } from '@/components/KaiAvatar'
 
 const GRUPO_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L']
-const TORNEO_INICIO = new Date('2026-06-12T14:00:00Z')
+const TORNEO_INICIO = new Date('2026-06-11T16:00:00Z')
 
 function getMatchCutoff(phase, globalIndex) {
   if (phase === 'grupos') {
-    const w = globalIndex % 6
-    if (w < 2) return TORNEO_INICIO
-    if (w < 4) return new Date('2026-06-17T13:00:00Z')
-    return new Date('2026-06-23T13:00:00Z')
+    const match = PHASES.grupos.matches[globalIndex]
+    return match?.kickoff ? new Date(match.kickoff) : TORNEO_INICIO
   }
   return {
     ronda32: new Date('2026-06-28T13:00:00Z'),
@@ -179,7 +177,7 @@ function PremiosMayores({ campeon, goleador, customGoleador, onCampeon, onGolead
       </div>
 
       <div style={{ fontSize: 14, color: '#5a8a74', borderTop: '0.5px solid rgba(29,158,117,.2)', paddingTop: 10 }}>
-        Los pronósticos se bloquean automáticamente al iniciar el torneo el 12 de junio.
+        Los pronósticos se bloquean automáticamente al inicio de cada partido.
       </div>
     </div>
   )
@@ -669,7 +667,10 @@ export default function PicksPage() {
             <div style={{ fontSize: 10, color: '#9a6010', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 2 }}>Cierre de picks · {PHASES[currentPhase]?.label}</div>
             <div style={{ fontSize: 18, fontWeight: 700, color: '#854F0B' }}>⏳ {cdHeader}</div>
           </div>
-          <div style={{ fontSize: 11, color: '#9a6010', textAlign: 'right' }}>12 jun 2026<br/>08:00 am ET</div>
+          <div style={{ fontSize: 11, color: '#9a6010', textAlign: 'right' }}>
+            {TORNEO_INICIO.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}<br/>
+            {TORNEO_INICIO.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}
+          </div>
         </div>
       )}
 
