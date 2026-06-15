@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { PHASES, PHASE_ORDER, TEAMS, SCORERS, FLAGS, calcularPuntajes } from '@/lib/quiniela'
+import { PHASES, PHASE_ORDER, TEAMS, SCORERS, FLAGS, calcularPuntajes, isMatchFinal, evaluatePick } from '@/lib/quiniela'
 import { KaiLabel, KaiAvatar } from '@/components/KaiAvatar'
 
 const GRUPO_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L']
@@ -385,7 +385,7 @@ export default function PicksPage() {
 
     Promise.all([
       fetch(`/api/quiniela?action=participante&token=${token}`).then(r => r.json()),
-      fetch(`/api/quiniela?action=all&groupId=${groupId}`).then(r => r.json()),
+      fetch(`/api/quiniela?action=all&groupId=${groupId}&token=${token}`).then(r => r.json()),
     ]).then(([pData, aData]) => {
       if (pData.error) { setAuth('denied'); router.replace(`/quiniela/${groupId}`); return }
 
@@ -812,6 +812,11 @@ export default function PicksPage() {
           const isEmpate      = pick.w === 'Empate'
           const isPending     = pick.l === '' && pick.v === '' && !locked
 
+          // Resultado real (si ya se jugó) + evaluación del pick
+          const real      = admin?.results?.[currentPhase]?.[globalIndex]
+          const matchFinal = isMatchFinal(real)
+          const result    = matchFinal ? evaluatePick(pick, real, { local, visitante }) : null
+
           // Colores exclusivamente para Kai — partidos siempre neutros
           const rowBg  = locked ? '#fafafa' : '#fff'
           const cardBorder = locked
@@ -844,7 +849,19 @@ export default function PicksPage() {
             <div key={globalIndex}>
               {/* ── Card vertical del partido ── */}
               <div style={{ border: cardBorder, borderRadius: 12, overflow: 'hidden' }}>
-                {locked && (
+                {matchFinal ? (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, padding: '5px 12px', background: '#f9f9f7', borderBottom: '0.5px solid #eee' }}>
+                    <span style={{ color: '#888' }}>Resultado: <strong style={{ color: '#444' }}>{real.l}–{real.v}</strong></span>
+                    <span style={{
+                      fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4,
+                      color: result.status === 'fallo' ? '#c0392b' : result.status === 'sin_pick' ? '#bbb' : '#1D9E75',
+                    }}>
+                      {(result.status === 'exacto' || result.status === 'acierto') && <>✅ +{result.pts}</>}
+                      {result.status === 'fallo' && <>❌ 0</>}
+                      {result.status === 'sin_pick' && '—'}
+                    </span>
+                  </div>
+                ) : locked && (
                   <div style={{ fontSize: 11, color: '#bbb', textAlign: 'center', padding: '4px 0', background: '#f9f9f7' }}>
                     🔒 picks bloqueados
                   </div>

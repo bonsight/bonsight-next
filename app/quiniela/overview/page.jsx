@@ -1,19 +1,31 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { PHASES, PHASE_ORDER, FLAGS, TEAMS, SCORERS } from '@/lib/quiniela'
+import { PHASES, PHASE_ORDER, FLAGS, TEAMS, SCORERS, isMatchFinal } from '@/lib/quiniela'
 
 const KEY = 'bonsight2026'
 const GRUPO_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L']
 const f = (team) => FLAGS[team] ? `${FLAGS[team]} ` : ''
 
 function emptyResults() {
-  return Object.fromEntries(PHASE_ORDER.map(ph => [ph, PHASES[ph].matches.map(() => ({ l: '', v: '' }))]))
+  return Object.fromEntries(PHASE_ORDER.map(ph => [ph, PHASES[ph].matches.map(() => ({ l: '', v: '', final: false }))]))
 }
 
 function fmt(iso) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+const MATCH_DURATION_MS = 2 * 60 * 60 * 1000
+
+function getMatchTimeState(kickoff, now, real) {
+  const kickoffTime = new Date(kickoff).getTime()
+  const elapsed = now - kickoffTime
+  const confirmed = isMatchFinal(real)
+  const live = !confirmed && elapsed >= 0 && elapsed < MATCH_DURATION_MS
+  const unconfirmed = !confirmed && elapsed >= MATCH_DURATION_MS
+  const upcoming = !confirmed && elapsed < 0
+  return { kickoffTime, elapsed, confirmed, live, unconfirmed, upcoming }
 }
 
 function initials(name) {
@@ -24,6 +36,19 @@ function Avatar({ name, size = 32 }) {
   return (
     <div style={{ width: size, height: size, borderRadius: '50%', background: '#E1F5EE', color: '#0F6E56', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: Math.round(size * 0.34), fontWeight: 600, flexShrink: 0 }}>
       {initials(name)}
+    </div>
+  )
+}
+
+const stepBtnSty = { width: 28, height: 28, borderRadius: 8, border: '0.5px solid #ddd', background: '#fafafa', fontSize: 16, fontWeight: 700, cursor: 'pointer', color: '#555', flexShrink: 0 }
+
+function ScoreStepper({ value, onChange }) {
+  const n = value === '' ? 0 : Number(value)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <button onClick={() => onChange(String(Math.max(0, n - 1)))} style={stepBtnSty}>−</button>
+      <div style={{ width: 28, textAlign: 'center', fontSize: 18, fontWeight: 700 }}>{value === '' ? '—' : value}</div>
+      <button onClick={() => onChange(String(n + 1))} style={stepBtnSty}>+</button>
     </div>
   )
 }
@@ -410,6 +435,13 @@ function ResultsSection() {
   const [grupo, setGrupo]             = useState('A')
   const [saving, setSaving]           = useState(false)
   const [toast, setToast]             = useState('')
+  const [viewMode, setViewMode]       = useState('fase')
+  const [now, setNow]                 = useState(() => Date.now())
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60000)
+    return () => clearInterval(interval)
+  }, [])
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
@@ -422,7 +454,9 @@ function ResultsSection() {
             const next = emptyResults()
             PHASE_ORDER.forEach(ph => {
               if (d.admin.results[ph]) {
-                d.admin.results[ph].forEach((r, i) => { if (r) next[ph][i] = r })
+                d.admin.results[ph].forEach((r, i) => {
+                  if (r) next[ph][i] = { l: r.l, v: r.v, final: r.final ?? (r.l !== '' && r.v !== '') }
+                })
               }
             })
             return next
@@ -468,8 +502,69 @@ function ResultsSection() {
   const inpSty = { width: 44, height: 40, textAlign: 'center', border: '0.5px solid #ddd', borderRadius: 8, fontSize: 18, fontWeight: 600, background: '#fafafa', outline: 'none', WebkitAppearance: 'none', MozAppearance: 'textfield' }
   const filledInp = { ...inpSty, background: '#E1F5EE', borderColor: '#1D9E75' }
 
+  const today = new Date().toLocaleDateString('en-CA')
+  const todayMatches = PHASES.grupos.matches
+    .map((m, i) => ({ ...m, idx: i }))
+    .filter(m => new Date(m.kickoff).toLocaleDateString('en-CA') === today)
+
   return (
     <div>
+      {/* View toggle */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+        <button onClick={() => setViewMode('fase')}
+          style={{ flex: 1, padding: '8px', fontSize: 12, fontWeight: 600, borderRadius: 8, border: `0.5px solid ${viewMode === 'fase' ? '#1D9E75' : '#ccc'}`, background: viewMode === 'fase' ? '#1D9E75' : '#fff', color: viewMode === 'fase' ? '#fff' : '#555', cursor: 'pointer' }}>
+          Por fase
+        </button>
+        <button onClick={() => setViewMode('hoy')}
+          style={{ flex: 1, padding: '8px', fontSize: 12, fontWeight: 600, borderRadius: 8, border: `0.5px solid ${viewMode === 'hoy' ? '#1D9E75' : '#ccc'}`, background: viewMode === 'hoy' ? '#1D9E75' : '#fff', color: viewMode === 'hoy' ? '#fff' : '#555', cursor: 'pointer' }}>
+          📅 Partidos de hoy{todayMatches.length > 0 ? ` (${todayMatches.length})` : ''}
+        </button>
+      </div>
+
+      {viewMode === 'hoy' && (
+        <div style={{ marginBottom: 16 }}>
+          {todayMatches.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '2rem', color: '#aaa', fontSize: 13 }}>No hay partidos de la fase de grupos programados para hoy.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {todayMatches.map(({ local, visitante, idx, kickoff }) => {
+                const r = results.grupos[idx] ?? { l: '', v: '', final: false }
+                const { live, confirmed } = getMatchTimeState(kickoff, now, r)
+                const statusLabel = confirmed ? '✅ Finalizado' : live ? '🔴 EN VIVO' : '⏳ Por jugar'
+                const statusColor = confirmed ? '#1D9E75' : live ? '#c0392b' : '#aaa'
+                return (
+                  <div key={idx} style={{ border: '0.5px solid #e8e6e0', borderRadius: 12, padding: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, color: '#888' }}>
+                        {new Date(kickoff).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short' })}
+                      </span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: statusColor }}>{statusLabel}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ flex: 1, fontSize: 14, fontWeight: 500, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {f(local)}{local}
+                      </div>
+                      <ScoreStepper value={r.l} onChange={v => updateScore('grupos', idx, 'l', v)} />
+                      <span style={{ color: '#ccc' }}>–</span>
+                      <ScoreStepper value={r.v} onChange={v => updateScore('grupos', idx, 'v', v)} />
+                      <div style={{ flex: 1, fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {f(visitante)}{visitante}
+                      </div>
+                    </div>
+                    <button onClick={() => updateScore('grupos', idx, 'final', !r.final)}
+                      style={{ marginTop: 10, width: '100%', padding: '8px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        background: r.final ? '#fff3f3' : '#1D9E75', color: r.final ? '#c0392b' : '#fff' }}>
+                      {r.final ? 'Reabrir (marcar como no confirmado)' : '✅ Confirmar resultado final'}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {viewMode === 'fase' && (<>
       {/* Progress summary */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, padding: '12px 16px', background: '#f5f5f3', borderRadius: 12 }}>
         <div style={{ flex: 1 }}>
@@ -533,6 +628,16 @@ function ResultsSection() {
               <div style={{ flex: 1, fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {f(visitante)}{visitante}
               </div>
+              <button onClick={() => updateScore(phase, idx, 'final', !r.final)}
+                title={r.final ? 'Resultado confirmado — clic para marcar como no confirmado' : 'Confirmar como resultado oficial'}
+                style={{
+                  flexShrink: 0, fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 99, cursor: 'pointer',
+                  border: `0.5px solid ${r.final ? '#1D9E75' : '#ddd'}`,
+                  background: r.final ? '#1D9E75' : '#fff',
+                  color: r.final ? '#fff' : '#aaa',
+                }}>
+                {r.final ? '✓ Confirmado' : '⏳ Sin confirmar'}
+              </button>
             </div>
           )
         })}
@@ -547,7 +652,7 @@ function ResultsSection() {
             <select value={realCampeon} onChange={e => setRealCampeon(e.target.value)}
               style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `0.5px solid ${realCampeon ? '#4ade80' : '#ccc'}`, background: realCampeon ? '#E1F5EE' : '#fff', fontSize: 13, color: 'inherit' }}>
               <option value="">— Seleccionar —</option>
-              {TEAMS.map(t => <option key={t} value={t}>{f(t)}{t}</option>)}
+              {TEAMS.map((t, idx) => <option key={`${t}-${idx}`} value={t}>{f(t)}{t}</option>)}
             </select>
           </div>
           <div>
@@ -555,11 +660,12 @@ function ResultsSection() {
             <select value={realGoleador} onChange={e => setRealGoleador(e.target.value)}
               style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `0.5px solid ${realGoleador ? '#4ade80' : '#ccc'}`, background: realGoleador ? '#E1F5EE' : '#fff', fontSize: 13, color: 'inherit' }}>
               <option value="">— Seleccionar —</option>
-              {SCORERS.filter(s => s !== 'Otro').map(s => <option key={s} value={s}>{s}</option>)}
+              {SCORERS.filter(s => s !== 'Otro').map((s, idx) => <option key={`${s}-${idx}`} value={s}>{s}</option>)}
             </select>
           </div>
         </div>
       </div>
+      </>)}
 
       {/* Save button */}
       <button onClick={handleSave} disabled={saving}
@@ -592,6 +698,12 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [tab, setTab]         = useState('alertas')
+  const [now, setNow]         = useState(Date.now())
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60000)
+    return () => clearInterval(interval)
+  }, [])
 
   function login() {
     if (pin === KEY) { setAuthed(true); setPin('') }

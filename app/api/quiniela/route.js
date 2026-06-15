@@ -1,6 +1,7 @@
 import { Redis } from '@upstash/redis'
 import { NextResponse } from 'next/server'
 import { createHash, randomBytes } from 'crypto'
+import { PHASES, PHASE_ORDER, isMatchFinal, evaluatePick, buildHistory, calcularPuntajes } from '@/lib/quiniela'
 
 const kv = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -27,6 +28,7 @@ export async function GET(req) {
   const groupId  = searchParams.get('groupId')
   const token    = searchParams.get('token')
   const email    = searchParams.get('email')
+  const participantId = searchParams.get('participantId')
 
   try {
     if (action === 'groups') {
@@ -109,11 +111,175 @@ export async function GET(req) {
         realCampeon: globalAdmin?.realCampeon ?? perAdmin.realCampeon ?? '',
         realGoleador: globalAdmin?.realGoleador ?? perAdmin.realGoleador ?? '',
       }
+
+      let quinielas = quinielasRaw ?? {}
+
+      // Si el cliente se identifica con su token, ocultamos los picks de los
+      // DEMÁS participantes para partidos que aún no son finales — el
+      // solicitante conserva su propia quiniela completa (la necesita para editar).
+      if (token) {
+        const tokenData = await kv.get(`quiniela:token:${token}`)
+        const requesterId = tokenData?.groupId === groupId ? tokenData.participantId : null
+        if (requesterId) {
+          quinielas = Object.fromEntries(Object.entries(quinielas).map(([pid, q]) => {
+            if (pid === requesterId) return [pid, q]
+            const phases = {}
+            PHASE_ORDER.forEach((ph) => {
+              const picks = q.phases?.[ph]
+              if (!picks) return
+              phases[ph] = picks.map((pick, i) =>
+                isMatchFinal(mergedAdmin.results?.[ph]?.[i]) ? pick : { l: '', v: '', w: '' }
+              )
+            })
+            return [pid, { ...q, phases }]
+          }))
+        }
+      }
+
       return NextResponse.json({
         participants: participants ?? [],
-        quinielas: quinielasRaw ?? {},
+        quinielas,
         admin: mergedAdmin,
         group: group ?? null,
+      })
+    }
+
+    if (action === 'participantDetail' && groupId && participantId) {
+      const tokenData = token ? await kv.get(`quiniela:token:${token}`) : null
+      if (!tokenData || tokenData.groupId !== groupId) {
+        return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+      }
+
+      const [participants, quinielasRaw, adminRaw, globalAdmin] = await Promise.all([
+        kv.get(`quiniela:${groupId}:participants`),
+        kv.get(`quiniela:${groupId}:quinielas`),
+        kv.get(`quiniela:${groupId}:admin`),
+        kv.get('quiniela:global:admin'),
+      ])
+
+      const participant = (participants ?? []).find((p) => p.id === participantId)
+      if (!participant) return NextResponse.json({ error: 'not_found' }, { status: 404 })
+
+      const perAdmin = adminRaw ?? {}
+      const admin = {
+        unlockedPhases: perAdmin.unlockedPhases ?? ['grupos'],
+        results: globalAdmin?.results ?? perAdmin.results ?? {},
+        realCampeon: globalAdmin?.realCampeon ?? perAdmin.realCampeon ?? '',
+        realGoleador: globalAdmin?.realGoleador ?? perAdmin.realGoleador ?? '',
+      }
+
+      const quinielas = quinielasRaw ?? {}
+      const q = quinielas[participantId]
+      const myQ = quinielas[tokenData.participantId]
+
+      // ── Posición en la tabla oficial ──
+      const sortedScores = [...calcularPuntajes(participants ?? [], quinielas, admin)].sort((a, b) => b.pts - a.pts)
+      const position = sortedScores.findIndex((s) => s.participantId === participantId) + 1
+      const myPts = sortedScores.find((s) => s.participantId === tokenData.participantId)?.pts ?? 0
+
+      let pts = 0, exactos = 0, aciertos = 0, fallos = 0, totalCerrados = 0, picksDiferentes = 0
+      PHASE_ORDER.forEach((ph) => {
+        if (!admin.unlockedPhases.includes(ph)) return
+        const picks = q?.phases?.[ph] ?? []
+        const myPicks = myQ?.phases?.[ph] ?? []
+        const reals = admin.results?.[ph] ?? []
+        PHASES[ph].matches.forEach((m, i) => {
+          const real = reals[i]
+          if (!isMatchFinal(real)) return
+          totalCerrados++
+          const { status, pts: matchPts } = evaluatePick(picks[i], real, m)
+          pts += matchPts
+          if (status === 'exacto') exactos++
+          else if (status === 'acierto') aciertos++
+          else if (status === 'fallo') fallos++
+
+          const targetW = picks[i]?.w
+          const myW = myPicks[i]?.w
+          if (targetW && myW && targetW !== myW) picksDiferentes++
+        })
+      })
+      if (admin.realCampeon && q?.campeon === admin.realCampeon) pts += 5
+      if (admin.realGoleador && q?.goleador === admin.realGoleador) pts += 3
+
+      const efectividad = totalCerrados > 0 ? Math.round(((exactos + aciertos) / totalCerrados) * 100) : 0
+
+      const history = buildHistory(q, admin, admin.unlockedPhases)
+        .map((group) => ({ ...group, matches: group.matches.filter((e) => e.status !== 'pendiente') }))
+        .filter((group) => group.matches.length > 0)
+
+      const totalSlots = admin.unlockedPhases.reduce((acc, ph) => acc + PHASES[ph].matches.length, 0)
+      const pendingPicks = totalSlots - totalCerrados
+
+      const vsMe = { ptsDiff: pts - myPts, picksDiferentes }
+
+      // ── Insights heurísticos (máx. 2, sin IA) ──
+      const insights = []
+
+      // 1. Partido clave: su mejor resultado "exacto" (+3)
+      let partidoClave = null
+      for (const group of history) {
+        partidoClave = group.matches.find((e) => e.status === 'exacto')
+        if (partidoClave) break
+      }
+      if (partidoClave) {
+        insights.push({
+          icon: '🎯', label: 'Partido clave',
+          text: `Su pronóstico de ${partidoClave.local} ${partidoClave.pick.l}-${partidoClave.pick.v} ${partidoClave.visitante} fue exacto — le dio +3 puntos.`,
+        })
+      }
+
+      // 2. Golpe de la jornada: pick correcto y minoritario vs. consenso (solo partidos finalizados)
+      if (insights.length < 2) {
+        const matchConsensus = {}
+        admin.unlockedPhases.forEach((ph) => {
+          const reals = admin.results?.[ph] ?? []
+          PHASES[ph].matches.forEach((m, i) => {
+            if (!isMatchFinal(reals[i])) return
+            const votes = {}
+            let total = 0
+            Object.values(quinielas).forEach((qq) => {
+              const w = qq.phases?.[ph]?.[i]?.w
+              if (w) { votes[w] = (votes[w] ?? 0) + 1; total++ }
+            })
+            if (total >= 2) {
+              const leader = Object.entries(votes).sort((a, b) => b[1] - a[1])[0]?.[0]
+              matchConsensus[`${ph}-${i}`] = { leader, total, votes, match: m, real: reals[i] }
+            }
+          })
+        })
+
+        let golpe = null
+        let minPct = 100
+        Object.entries(matchConsensus).forEach(([key, cs]) => {
+          const [ph, idxStr] = key.split('-')
+          const i = parseInt(idxStr)
+          const myPick = q?.phases?.[ph]?.[i]
+          if (!myPick?.w || myPick.w === cs.leader) return
+          const { status } = evaluatePick(myPick, cs.real, cs.match)
+          if (status !== 'exacto' && status !== 'acierto') return
+          const count = cs.votes[myPick.w] ?? 0
+          const pct = Math.round((count / cs.total) * 100)
+          if (pct < minPct) {
+            minPct = pct
+            golpe = { match: cs.match, option: myPick.w, count, total: cs.total }
+          }
+        })
+        if (golpe) {
+          insights.push({
+            icon: '🎲', label: 'Golpe de la jornada',
+            text: `Fue de los pocos en acertar ${golpe.option === 'Empate' ? 'el empate' : golpe.option} en ${golpe.match.local} vs ${golpe.match.visitante} — solo ${golpe.count} de ${golpe.total} eligieron eso.`,
+          })
+        }
+      }
+
+      return NextResponse.json({
+        participant: { nombre: participant.nombre, pais: participant.pais },
+        position,
+        stats: { pts, exactos, aciertos, fallos, totalCerrados, efectividad },
+        vsMe,
+        pendingPicks,
+        insights,
+        history,
       })
     }
 
