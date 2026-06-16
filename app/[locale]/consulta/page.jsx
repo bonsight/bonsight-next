@@ -12,7 +12,7 @@ const STORAGE_KEY = 'bsKaiData';
 
 const T = {
   es: {
-    chatSub: 'Consultor Bonsight · En línea',
+    chatSub: 'BONSIGHT LLC · EN LÍNEA',
     placeholder: 'Escribe tu respuesta…',
     ctaTitle: 'Próximo paso',
     ctaCall: 'Agendar llamada de 30 min',
@@ -20,10 +20,10 @@ const T = {
     waMsg: 'Hola, vengo del sitio de Bonsight y quisiera continuar la conversación con el equipo.',
     error: 'Algo salió mal. Intenta de nuevo.',
     limitMsg: 'Has llegado al límite de esta conversación. Para continuar, agenda una llamada o escríbenos por WhatsApp.',
-    initialMessage: 'Hola, soy Kai, el asistente de Bonsight. Estoy aquí para entender qué está buscando y ver si podemos ayudarle.\n\n¿Qué problema está intentando resolver en este momento?',
+    initialMessage: 'Hola, bienvenido a Bonsight. Estoy aquí para entender qué necesitas y ver si podemos ayudarte.\n\n¿A qué se dedica tu empresa?',
   },
   en: {
-    chatSub: 'Bonsight Consultant · Online',
+    chatSub: 'BONSIGHT LLC · ONLINE',
     placeholder: 'Type your response…',
     ctaTitle: 'Next step',
     ctaCall: 'Schedule a 30-min call',
@@ -31,7 +31,7 @@ const T = {
     waMsg: 'Hi, I came from the Bonsight website and would like to continue the conversation with the team.',
     error: 'Something went wrong. Please try again.',
     limitMsg: "You've reached the limit for this conversation. To continue, schedule a call or reach out on WhatsApp.",
-    initialMessage: "Hi, I'm Kai, Bonsight's consulting assistant. I'm here to understand what you're looking for and see if we can help.\n\nWhat problem are you trying to solve right now?",
+    initialMessage: "Hi, welcome to Bonsight. I'm here to understand what you need and see if we can help.\n\nWhat does your company do?",
   },
 };
 
@@ -88,22 +88,28 @@ function renderMessage(text) {
   return result.length ? result : text;
 }
 
-const KaiAvatar = ({ size = 40, thinking = false }) => (
-  <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className={thinking ? 'kai-avatar--thinking' : ''}>
-    <circle cx="20" cy="20" r="19.5" fill="rgba(52,211,153,0.06)" stroke="rgba(52,211,153,0.18)" strokeWidth="1"/>
-    <line x1="13" y1="13" x2="27" y2="13" stroke="rgba(52,211,153,0.18)" strokeWidth="0.9"/>
-    <line x1="13" y1="13" x2="20" y2="28" stroke="rgba(52,211,153,0.18)" strokeWidth="0.9"/>
-    <line x1="27" y1="13" x2="20" y2="28" stroke="rgba(52,211,153,0.18)" strokeWidth="0.9"/>
-    <line x1="13" y1="13" x2="20" y2="20" stroke="rgba(52,211,153,0.38)" strokeWidth="0.9"/>
-    <line x1="27" y1="13" x2="20" y2="20" stroke="rgba(52,211,153,0.38)" strokeWidth="0.9"/>
-    <line x1="20" y1="28" x2="20" y2="20" stroke="rgba(52,211,153,0.38)" strokeWidth="0.9"/>
-    <circle cx="13" cy="13" r="2.2" fill="rgba(52,211,153,0.1)" stroke="rgba(52,211,153,0.5)" strokeWidth="1" className="kai-node kai-node--1"/>
-    <circle cx="27" cy="13" r="2.2" fill="rgba(52,211,153,0.1)" stroke="rgba(52,211,153,0.5)" strokeWidth="1" className="kai-node kai-node--2"/>
-    <circle cx="20" cy="28" r="2.2" fill="rgba(52,211,153,0.1)" stroke="rgba(52,211,153,0.5)" strokeWidth="1" className="kai-node kai-node--3"/>
-    <circle cx="20" cy="20" r="4" fill="rgba(52,211,153,0.15)" stroke="#34d399" strokeWidth="1.2"/>
-    <circle cx="20" cy="20" r="1.8" fill="#34d399" className="kai-dot"/>
-  </svg>
-);
+const BonsightMark = ({ size = 'sm' }) => {
+  const lg = size === 'lg';
+  return (
+    <div style={{
+      width: lg ? 46 : 32,
+      height: lg ? 46 : 32,
+      background: '#fff',
+      border: '0.5px solid #e0e0dc',
+      borderRadius: lg ? 10 : 8,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    }}>
+      <svg width={lg ? 32 : 20} height={lg ? 26 : 16} viewBox="0 0 72 58" fill="none">
+        <circle cx="22" cy="38" r="20" fill="#9FDBC8"/>
+        <circle cx="36" cy="22" r="20" fill="#085041"/>
+        <circle cx="50" cy="38" r="20" fill="#2EBF8E"/>
+      </svg>
+    </div>
+  );
+};
 
 const IconSend = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -192,7 +198,7 @@ export default function ConsultaPage() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/kai', {
+      const res = await fetch('/api/advisor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: newMessages, locale }),
@@ -216,13 +222,13 @@ export default function ConsultaPage() {
       <div className="consulta-chat">
 
         <div className="consulta-chat-header">
-          <KaiAvatar size={40} thinking={loading} />
+          <BonsightMark size="lg" />
           <div>
-            <div className="consulta-chat-name">
-              Kai
+            <div className="consulta-chat-name">Bonsight Advisor</div>
+            <div className="consulta-chat-sub">
               <span className="consulta-live-dot" />
+              {t.chatSub}
             </div>
-            <div className="consulta-chat-sub">{t.chatSub}</div>
           </div>
         </div>
 
@@ -231,7 +237,7 @@ export default function ConsultaPage() {
             <div key={i} className={`consulta-msg consulta-msg--${m.role}`}>
               {m.role === 'assistant' && (
                 <div className="consulta-msg-avatar">
-                  <KaiAvatar size={28} />
+                  <BonsightMark size="sm" />
                 </div>
               )}
               <div className="consulta-bubble">
@@ -243,7 +249,7 @@ export default function ConsultaPage() {
           {loading && (
             <div className="consulta-msg consulta-msg--assistant">
               <div className="consulta-msg-avatar">
-                <KaiAvatar size={28} thinking={true} />
+                <BonsightMark size="sm" />
               </div>
               <div className="consulta-bubble consulta-bubble--loading">
                 <span /><span /><span />
@@ -258,22 +264,25 @@ export default function ConsultaPage() {
           <div className="consulta-limit">{t.limitMsg}</div>
         ) : (
           <div className="consulta-footer">
-            <input
-              ref={inputRef}
-              className="consulta-input"
-              placeholder={t.placeholder}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && send()}
-              disabled={loading}
-            />
-            <button
-              className="consulta-send"
-              onClick={() => send()}
-              disabled={loading || !input.trim()}
-            >
-              <IconSend />
-            </button>
+            <div className="consulta-footer-inner">
+              <input
+                ref={inputRef}
+                className="consulta-input"
+                placeholder={t.placeholder}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && send()}
+                disabled={loading}
+              />
+              <button
+                className="consulta-send"
+                onClick={() => send()}
+                disabled={loading || !input.trim()}
+              >
+                <IconSend />
+              </button>
+            </div>
+            <div className="consulta-powered">Powered by <span>Bonsight LLC</span></div>
           </div>
         )}
 
