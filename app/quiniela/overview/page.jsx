@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { PHASES, PHASE_ORDER, FLAGS, TEAMS, SCORERS, isMatchFinal } from '@/lib/quiniela'
 
-const KEY = 'bonsight2026'
+const KEY = '1234'
 const GRUPO_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L']
 const f = (team) => FLAGS[team] ? `${FLAGS[team]} ` : ''
 
@@ -425,23 +425,16 @@ function KaiSection({ quinielas, globalConfidenceGenerated, onRefresh }) {
   )
 }
 
-// ── Results Section ───────────────────────────────────────────────────────────
+// ── Results Section (por fase) ────────────────────────────────────────────────
 
 function ResultsSection() {
-  const [results, setResults]         = useState(emptyResults)
-  const [realCampeon, setRealCampeon] = useState('')
+  const [results, setResults]           = useState(emptyResults)
+  const [realCampeon, setRealCampeon]   = useState('')
   const [realGoleador, setRealGoleador] = useState('')
-  const [phase, setPhase]             = useState('grupos')
-  const [grupo, setGrupo]             = useState('A')
-  const [saving, setSaving]           = useState(false)
-  const [toast, setToast]             = useState('')
-  const [viewMode, setViewMode]       = useState('fase')
-  const [now, setNow]                 = useState(() => Date.now())
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 60000)
-    return () => clearInterval(interval)
-  }, [])
+  const [phase, setPhase]               = useState('grupos')
+  const [grupo, setGrupo]               = useState('A')
+  const [saving, setSaving]             = useState(false)
+  const [toast, setToast]               = useState('')
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
@@ -502,69 +495,31 @@ function ResultsSection() {
   const inpSty = { width: 44, height: 40, textAlign: 'center', border: '0.5px solid #ddd', borderRadius: 8, fontSize: 18, fontWeight: 600, background: '#fafafa', outline: 'none', WebkitAppearance: 'none', MozAppearance: 'textfield' }
   const filledInp = { ...inpSty, background: '#E1F5EE', borderColor: '#1D9E75' }
 
-  const today = new Date().toLocaleDateString('en-CA')
-  const todayMatches = PHASES.grupos.matches
-    .map((m, i) => ({ ...m, idx: i }))
-    .filter(m => new Date(m.kickoff).toLocaleDateString('en-CA') === today)
-
   return (
     <div>
-      {/* View toggle */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-        <button onClick={() => setViewMode('fase')}
-          style={{ flex: 1, padding: '8px', fontSize: 12, fontWeight: 600, borderRadius: 8, border: `0.5px solid ${viewMode === 'fase' ? '#1D9E75' : '#ccc'}`, background: viewMode === 'fase' ? '#1D9E75' : '#fff', color: viewMode === 'fase' ? '#fff' : '#555', cursor: 'pointer' }}>
-          Por fase
-        </button>
-        <button onClick={() => setViewMode('hoy')}
-          style={{ flex: 1, padding: '8px', fontSize: 12, fontWeight: 600, borderRadius: 8, border: `0.5px solid ${viewMode === 'hoy' ? '#1D9E75' : '#ccc'}`, background: viewMode === 'hoy' ? '#1D9E75' : '#fff', color: viewMode === 'hoy' ? '#fff' : '#555', cursor: 'pointer' }}>
-          📅 Partidos de hoy{todayMatches.length > 0 ? ` (${todayMatches.length})` : ''}
-        </button>
+      {/* Premios especiales */}
+      <div style={{ border: '0.5px solid #e0e0de', borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 12 }}>🏆 Premios Especiales</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>Campeón real</div>
+            <select value={realCampeon} onChange={e => setRealCampeon(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `0.5px solid ${realCampeon ? '#4ade80' : '#ccc'}`, background: realCampeon ? '#E1F5EE' : '#fff', fontSize: 13, color: 'inherit' }}>
+              <option value="">— Seleccionar —</option>
+              {TEAMS.map((t, idx) => <option key={`${t}-${idx}`} value={t}>{f(t)}{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>Goleador real</div>
+            <select value={realGoleador} onChange={e => setRealGoleador(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `0.5px solid ${realGoleador ? '#4ade80' : '#ccc'}`, background: realGoleador ? '#E1F5EE' : '#fff', fontSize: 13, color: 'inherit' }}>
+              <option value="">— Seleccionar —</option>
+              {SCORERS.filter(s => s !== 'Otro').map((s, idx) => <option key={`${s}-${idx}`} value={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
       </div>
 
-      {viewMode === 'hoy' && (
-        <div style={{ marginBottom: 16 }}>
-          {todayMatches.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '2rem', color: '#aaa', fontSize: 13 }}>No hay partidos de la fase de grupos programados para hoy.</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {todayMatches.map(({ local, visitante, idx, kickoff }) => {
-                const r = results.grupos[idx] ?? { l: '', v: '', final: false }
-                const { live, confirmed } = getMatchTimeState(kickoff, now, r)
-                const statusLabel = confirmed ? '✅ Finalizado' : live ? '🔴 EN VIVO' : '⏳ Por jugar'
-                const statusColor = confirmed ? '#1D9E75' : live ? '#c0392b' : '#aaa'
-                return (
-                  <div key={idx} style={{ border: '0.5px solid #e8e6e0', borderRadius: 12, padding: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <span style={{ fontSize: 11, color: '#888' }}>
-                        {new Date(kickoff).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short' })}
-                      </span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: statusColor }}>{statusLabel}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ flex: 1, fontSize: 14, fontWeight: 500, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {f(local)}{local}
-                      </div>
-                      <ScoreStepper value={r.l} onChange={v => updateScore('grupos', idx, 'l', v)} />
-                      <span style={{ color: '#ccc' }}>–</span>
-                      <ScoreStepper value={r.v} onChange={v => updateScore('grupos', idx, 'v', v)} />
-                      <div style={{ flex: 1, fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {f(visitante)}{visitante}
-                      </div>
-                    </div>
-                    <button onClick={() => updateScore('grupos', idx, 'final', !r.final)}
-                      style={{ marginTop: 10, width: '100%', padding: '8px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                        background: r.final ? '#fff3f3' : '#1D9E75', color: r.final ? '#c0392b' : '#fff' }}>
-                      {r.final ? 'Reabrir (marcar como no confirmado)' : '✅ Confirmar resultado final'}
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {viewMode === 'fase' && (<>
       {/* Progress summary */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, padding: '12px 16px', background: '#f5f5f3', borderRadius: 12 }}>
         <div style={{ flex: 1 }}>
@@ -643,30 +598,6 @@ function ResultsSection() {
         })}
       </div>
 
-      {/* Premios especiales */}
-      <div style={{ border: '0.5px solid #e0e0de', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 12 }}>🏆 Premios Especiales</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <div>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>Campeón real</div>
-            <select value={realCampeon} onChange={e => setRealCampeon(e.target.value)}
-              style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `0.5px solid ${realCampeon ? '#4ade80' : '#ccc'}`, background: realCampeon ? '#E1F5EE' : '#fff', fontSize: 13, color: 'inherit' }}>
-              <option value="">— Seleccionar —</option>
-              {TEAMS.map((t, idx) => <option key={`${t}-${idx}`} value={t}>{f(t)}{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>Goleador real</div>
-            <select value={realGoleador} onChange={e => setRealGoleador(e.target.value)}
-              style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: `0.5px solid ${realGoleador ? '#4ade80' : '#ccc'}`, background: realGoleador ? '#E1F5EE' : '#fff', fontSize: 13, color: 'inherit' }}>
-              <option value="">— Seleccionar —</option>
-              {SCORERS.filter(s => s !== 'Otro').map((s, idx) => <option key={`${s}-${idx}`} value={s}>{s}</option>)}
-            </select>
-          </div>
-        </div>
-      </div>
-      </>)}
-
       {/* Save button */}
       <button onClick={handleSave} disabled={saving}
         style={{ width: '100%', padding: '12px', background: saving ? '#9FE1CB' : '#1D9E75', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: saving ? 'default' : 'pointer' }}>
@@ -681,24 +612,327 @@ function ResultsSection() {
   )
 }
 
+// ── Partidos de hoy (operativo) ──────────────────────────────────────────────
+
+function PartidosHoyOperativo({ now }) {
+  const [results, setResults]           = useState(emptyResults)
+  const [realCampeon, setRealCampeon]   = useState('')
+  const [realGoleador, setRealGoleador] = useState('')
+  const [expanded, setExpanded]         = useState(null)
+  const [saving, setSaving]             = useState(false)
+  const [toast, setToast]               = useState('')
+
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500) }
+
+  useEffect(() => {
+    fetch('/api/quiniela?action=globalAdmin')
+      .then(r => r.json())
+      .then(d => {
+        if (d.admin?.results) {
+          setResults(() => {
+            const next = emptyResults()
+            PHASE_ORDER.forEach(ph => {
+              if (d.admin.results[ph]) {
+                d.admin.results[ph].forEach((r, i) => {
+                  if (r) next[ph][i] = { l: r.l, v: r.v, final: r.final ?? (r.l !== '' && r.v !== '') }
+                })
+              }
+            })
+            return next
+          })
+        }
+        if (d.admin?.realCampeon)  setRealCampeon(d.admin.realCampeon)
+        if (d.admin?.realGoleador) setRealGoleador(d.admin.realGoleador)
+      })
+      .catch(() => {})
+  }, [])
+
+  function updateScore(ph, idx, field, val) {
+    setResults(prev => {
+      const next = { ...prev, [ph]: [...prev[ph]] }
+      next[ph][idx] = { ...next[ph][idx], [field]: val }
+      return next
+    })
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/quiniela', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveGlobalResults', payload: { results, realCampeon, realGoleador } }),
+      })
+      const d = await res.json()
+      if (d.ok) { showToast('✓ Guardado'); setExpanded(null) }
+      else showToast('Error al guardar')
+    } catch { showToast('Error de conexión') }
+    finally { setSaving(false) }
+  }
+
+  const today = new Date(now).toLocaleDateString('en-CA')
+  const todayMatches = PHASES.grupos.matches
+    .map((m, i) => ({ ...m, idx: i }))
+    .filter(m => new Date(m.kickoff).toLocaleDateString('en-CA') === today)
+    .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff))
+
+  const confirmedCount = todayMatches.filter(m => (results.grupos[m.idx] ?? {}).final).length
+  const liveList = todayMatches.filter(m => {
+    const elapsed = now - new Date(m.kickoff).getTime()
+    return elapsed >= 0 && elapsed < MATCH_DURATION_MS
+  })
+  const pendingCount = todayMatches.length - confirmedCount
+  const formatTime = (iso) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+
+  if (todayMatches.length === 0) return (
+    <div style={{ border: '0.5px solid #e0e0de', borderRadius: 12, padding: '14px 16px', marginBottom: 20, background: '#fafaf8' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 4 }}>⚽ Partidos de hoy</div>
+      <div style={{ fontSize: 13, color: '#aaa' }}>Sin partidos programados para hoy</div>
+    </div>
+  )
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      {/* Header + resumen */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: .5 }}>
+          ⚽ Partidos de hoy ({todayMatches.length})
+        </div>
+        <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#888', alignItems: 'center' }}>
+          {liveList.length > 0 && <span style={{ color: '#c0392b', fontWeight: 700 }}>🔴 {liveList.length} en vivo</span>}
+          <span>✅ {confirmedCount} confirmado{confirmedCount !== 1 ? 's' : ''}</span>
+          <span>⏳ {pendingCount} pendiente{pendingCount !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+
+      {todayMatches.map((m) => {
+        const r = results.grupos[m.idx] ?? { l: '', v: '', final: false }
+        const { live, confirmed } = getMatchTimeState(m.kickoff, now, r)
+        const isExpanded = expanded === m.idx
+        const borderColor = live ? '#c0392b44' : confirmed ? '#4ade8066' : '#e0e0de'
+        const bgColor     = live ? '#fef9f9'    : confirmed ? '#f0fdf6'   : '#fff'
+
+        return (
+          <div key={m.idx} style={{ border: `0.5px solid ${borderColor}`, borderRadius: 12, marginBottom: 8, overflow: 'hidden', background: bgColor }}>
+            <div onClick={() => setExpanded(isExpanded ? null : m.idx)}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', cursor: 'pointer' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  {f(m.local)}{m.local} <span style={{ color: '#aaa', fontWeight: 400 }}>vs</span> {f(m.visitante)}{m.visitante}
+                </div>
+                {m.ciudad && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>📍 {m.ciudad} · {formatTime(m.kickoff)}</div>}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                {confirmed && r.l !== '' && (
+                  <span style={{ fontSize: 15, fontWeight: 800, color: '#1D9E75' }}>{r.l} – {r.v}</span>
+                )}
+                <span style={{ fontSize: 11, fontWeight: 700, color: live ? '#c0392b' : confirmed ? '#1D9E75' : '#888' }}>
+                  {live ? '🔴 En vivo' : confirmed ? '✅ Conf.' : '⏳ Por jugar'}
+                </span>
+                <span style={{ fontSize: 10, color: '#bbb' }}>{isExpanded ? '▲' : '▼'}</span>
+              </div>
+            </div>
+
+            {isExpanded && (
+              <div style={{ padding: '14px 16px', borderTop: '0.5px solid #f0f0f0', background: '#fafaf8' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <div style={{ flex: 1, fontSize: 14, fontWeight: 500, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {f(m.local)}{m.local}
+                  </div>
+                  <ScoreStepper value={r.l} onChange={v => updateScore('grupos', m.idx, 'l', v)} />
+                  <span style={{ color: '#ccc' }}>–</span>
+                  <ScoreStepper value={r.v} onChange={v => updateScore('grupos', m.idx, 'v', v)} />
+                  <div style={{ flex: 1, fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {f(m.visitante)}{m.visitante}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => updateScore('grupos', m.idx, 'final', !r.final)}
+                    style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      background: r.final ? '#fff3f3' : '#E1F5EE', color: r.final ? '#c0392b' : '#0F6E56' }}>
+                    {r.final ? 'Desconfirmar' : '✅ Marcar confirmado'}
+                  </button>
+                  <button onClick={handleSave} disabled={saving}
+                    style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: saving ? 'default' : 'pointer',
+                      background: saving ? '#9FE1CB' : '#1D9E75', color: '#fff' }}>
+                    {saving ? 'Guardando...' : '💾 Guardar'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#1D9E75', color: '#fff', padding: '9px 18px', borderRadius: 8, fontSize: 13, zIndex: 999, whiteSpace: 'nowrap' }}>{toast}</div>
+      )}
+    </div>
+  )
+}
+
+// ── Atención requerida ────────────────────────────────────────────────────────
+
+function AtenciónSección({ quinielas, pendingMatchesCount, onOpenResultados }) {
+  const { sinPicks, kaiPendiente } = buildGroupedSignals(quinielas)
+  const total = (pendingMatchesCount ?? 0) + sinPicks.length + kaiPendiente.length
+
+  if (total === 0) return (
+    <div style={{ border: '0.5px solid #4ade8066', borderRadius: 12, padding: '14px 16px', background: '#E1F5EE', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+      <span style={{ fontSize: 20 }}>✅</span>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#0F6E56' }}>Todo al día</div>
+        <div style={{ fontSize: 12, color: '#0F6E56', opacity: .7 }}>Sin acciones pendientes en la plataforma</div>
+      </div>
+    </div>
+  )
+
+  return (
+    <div style={{ border: '0.5px solid #c0392b44', borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+      <div style={{ padding: '12px 16px', background: '#fdecea', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 16 }}>⚠️</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#c0392b', flex: 1 }}>Atención requerida</span>
+        <span style={{ fontSize: 10, background: '#c0392b', color: '#fff', borderRadius: 99, padding: '2px 8px', fontWeight: 700 }}>{total}</span>
+      </div>
+      <div style={{ background: '#fff' }}>
+        {pendingMatchesCount > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: sinPicks.length + kaiPendiente.length > 0 ? '0.5px solid #f5f5f3' : 'none' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>⏱️ Resultados pendientes</div>
+              <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>{pendingMatchesCount} partido{pendingMatchesCount !== 1 ? 's' : ''} sin confirmar</div>
+            </div>
+            <button onClick={onOpenResultados} style={{ padding: '6px 14px', fontSize: 12, borderRadius: 8, border: '0.5px solid #c0392b', background: '#fff', color: '#c0392b', cursor: 'pointer', fontWeight: 600, flexShrink: 0, marginLeft: 12 }}>
+              → Resultados
+            </button>
+          </div>
+        )}
+        {sinPicks.length > 0 && (
+          <div style={{ padding: '12px 16px', borderBottom: kaiPendiente.length > 0 ? '0.5px solid #f5f5f3' : 'none' }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>⏳ Picks incompletos</div>
+            <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>{sinPicks.length} quiniela{sinPicks.length !== 1 ? 's' : ''} con participantes sin completar</div>
+          </div>
+        )}
+        {kaiPendiente.length > 0 && (
+          <div style={{ padding: '12px 16px' }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>🤖 Análisis Kai pendiente</div>
+            <div style={{ fontSize: 12, color: '#888', marginTop: 1 }}>{kaiPendiente.length} quiniela{kaiPendiente.length !== 1 ? 's' : ''} sin análisis de jornada</div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Líderes de la plataforma ──────────────────────────────────────────────────
+
+function LideresSección({ lideres }) {
+  if (!lideres) return null
+  const anyData = (lideres.mejorParticipante?.pts ?? 0) > 0
+
+  const cards = [
+    {
+      icon: '🥇', title: 'Mejor participante',
+      value: lideres.mejorParticipante?.nombre ?? '—',
+      sub: lideres.mejorParticipante?.pts > 0
+        ? `${lideres.mejorParticipante.pts} pts · ${lideres.mejorParticipante.quiniela}`
+        : 'Sin puntos aún',
+    },
+    {
+      icon: '🏆', title: 'Mejor quiniela',
+      value: lideres.mejorQuiniela?.nombre ?? '—',
+      sub: (lideres.mejorQuiniela?.avgPts ?? 0) > 0
+        ? `Promedio ${lideres.mejorQuiniela.avgPts} pts`
+        : 'Sin puntos aún',
+    },
+    {
+      icon: '🎯', title: 'Más exactos',
+      value: lideres.masExactos?.nombre ?? '—',
+      sub: (lideres.masExactos?.exactos ?? 0) > 0
+        ? `${lideres.masExactos.exactos} resultado${lideres.masExactos.exactos !== 1 ? 's' : ''} exacto${lideres.masExactos.exactos !== 1 ? 's' : ''} · ${lideres.masExactos.quiniela}`
+        : 'Sin resultados exactos aún',
+    },
+    {
+      icon: '👥', title: 'Quiniela más activa',
+      value: lideres.masActiva?.nombre ?? '—',
+      sub: lideres.masActiva ? `${lideres.masActiva.participantes} participante${lideres.masActiva.participantes !== 1 ? 's' : ''}` : '—',
+    },
+  ]
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 10 }}>
+        Líderes de la plataforma
+        {!anyData && <span style={{ fontWeight: 400, fontSize: 10, textTransform: 'none', letterSpacing: 0, marginLeft: 6 }}>— visibles cuando haya resultados confirmados</span>}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {cards.map((c, i) => (
+          <div key={i} style={{ border: '0.5px solid #e0e0de', borderRadius: 12, padding: '14px 16px', background: '#fafaf8' }}>
+            <div style={{ fontSize: 18, marginBottom: 6 }}>{c.icon}</div>
+            <div style={{ fontSize: 10, color: '#aaa', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 4 }}>{c.title}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.value}</div>
+            <div style={{ fontSize: 11, color: '#888', lineHeight: 1.4 }}>{c.sub}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Admin accordion ───────────────────────────────────────────────────────────
+
+function AdminAcordeon({ quinielas, globalConfidenceGenerated, onRefresh, openSection, onSectionChange }) {
+  const [localOpen, setLocalOpen] = useState(null)
+  const open = openSection !== undefined ? openSection : localOpen
+
+  function setOpen(val) {
+    const next = open === val ? null : val
+    onSectionChange?.(next)
+    setLocalOpen(next)
+  }
+
+  const adminTabs = [
+    { key: 'quinielas',     label: 'Quinielas',    count: quinielas.length },
+    { key: 'participantes', label: 'Participantes', count: quinielas.reduce((a, q) => a + q.participants.length, 0) },
+    { key: 'alertas',       label: 'Alertas' },
+    { key: 'resultados',    label: 'Resultados' },
+  ]
+
+  return (
+    <div style={{ border: '0.5px solid #e0e0de', borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
+      <div style={{ padding: '12px 16px', background: '#fafaf8' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#555' }}>⚙️ Administración</span>
+      </div>
+      <div style={{ display: 'flex', borderTop: '0.5px solid #eee' }}>
+        {adminTabs.map((t, i) => (
+          <button key={t.key} onClick={() => setOpen(t.key)}
+            style={{ flex: 1, padding: '9px 6px', fontSize: 12, background: open === t.key ? '#E1F5EE' : '#fff', border: 'none', borderRight: i < adminTabs.length - 1 ? '0.5px solid #eee' : 'none', cursor: 'pointer', fontWeight: open === t.key ? 700 : 400, color: open === t.key ? '#0F6E56' : '#888', transition: 'all .15s', lineHeight: 1.3 }}>
+            {t.label}
+            {t.count != null && <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: open === t.key ? '#0F6E56' : '#1D9E75' }}>{t.count}</span>}
+          </button>
+        ))}
+      </div>
+      {open && (
+        <div style={{ padding: '16px', borderTop: '0.5px solid #eee' }}>
+          {open === 'quinielas'     && <QuinielasSection quinielas={quinielas} />}
+          {open === 'participantes' && <ParticipantesSection quinielas={quinielas} />}
+          {open === 'alertas'       && <AlertasSection quinielas={quinielas} />}
+          {open === 'resultados'    && <ResultsSection />}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-const TABS = [
-  { key: 'alertas',       label: 'Alertas' },
-  { key: 'quinielas',     label: 'Quinielas' },
-  { key: 'participantes', label: 'Participantes' },
-  { key: 'kai',           label: 'Kai' },
-  { key: 'resultados',    label: 'Resultados' },
-]
-
 export default function OverviewPage() {
-  const [authed, setAuthed]   = useState(false)
-  const [pin, setPin]         = useState('')
-  const [data, setData]       = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
-  const [tab, setTab]         = useState('alertas')
-  const [now, setNow]         = useState(Date.now())
+  const [authed, setAuthed]           = useState(false)
+  const [pin, setPin]                 = useState('')
+  const [data, setData]               = useState(null)
+  const [loading, setLoading]         = useState(false)
+  const [error, setError]             = useState('')
+  const [now, setNow]                 = useState(Date.now())
+  const [adminSection, setAdminSection] = useState(null)
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 60000)
@@ -748,13 +982,13 @@ export default function OverviewPage() {
 
   const quinielas = data.quinielas ?? []
   const totalParticipants = quinielas.reduce((a, q) => a + q.participants.length, 0)
-  const { sinPicks, kaiPendiente, bajaPart } = buildGroupedSignals(quinielas)
-  const affectedIds = new Set([...sinPicks, ...kaiPendiente, ...bajaPart].map(s => s.id))
-  const totalSignals = affectedIds.size
-  const totalSinPicks = sinPicks.reduce((a, s) => {
-    const q = quinielas.find(q => q.id === s.id)
-    return a + (q ? q.participants.length - q.picksCount : 0)
-  }, 0)
+  const today = new Date(now).toLocaleDateString('en-CA')
+  const todayMatches = PHASES.grupos.matches.filter(m => new Date(m.kickoff).toLocaleDateString('en-CA') === today)
+  const liveCount = todayMatches.filter(m => {
+    const elapsed = now - new Date(m.kickoff).getTime()
+    return elapsed >= 0 && elapsed < MATCH_DURATION_MS
+  }).length
+  const pendingMatchesCount = data.pendingMatchesCount ?? 0
 
   return (
     <div style={s.page}>
@@ -777,34 +1011,42 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      {/* Metrics */}
+      {/* Ops metrics */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: '1.5rem' }}>
-        <Metric value={totalSignals} label="con alertas" highlight={totalSignals > 0} onClick={() => setTab('alertas')} />
-        <Metric value={totalSinPicks} label="sin picks" onClick={() => setTab('alertas')} />
-        <Metric value={kaiPendiente.length} label="Kai pendiente" onClick={() => setTab('kai')} />
-        <Metric value={quinielas.length} label="quinielas" onClick={() => setTab('quinielas')} />
-        <Metric value={totalParticipants} label="participantes" onClick={() => setTab('participantes')} />
+        <Metric value={todayMatches.length} label="hoy" />
+        <Metric value={liveCount} label="en vivo" highlight={liveCount > 0} />
+        <Metric value={pendingMatchesCount} label="pendientes" highlight={pendingMatchesCount > 0} onClick={() => setAdminSection('resultados')} />
+        <Metric value={quinielas.length} label="quinielas" onClick={() => setAdminSection('quinielas')} />
+        <Metric value={totalParticipants} label="participantes" onClick={() => setAdminSection('participantes')} />
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: '1.5rem', borderBottom: '0.5px solid #eee', paddingBottom: 0 }}>
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            style={{ padding: '8px 16px', fontSize: 13, fontWeight: tab === t.key ? 700 : 400, background: 'none', border: 'none', cursor: 'pointer', color: tab === t.key ? '#1D9E75' : '#888', borderBottom: `2px solid ${tab === t.key ? '#1D9E75' : 'transparent'}`, marginBottom: -1, transition: 'all .15s' }}>
-            {t.label}
-            {t.key === 'alertas' && totalSignals > 0 && (
-              <span style={{ marginLeft: 5, fontSize: 10, background: '#c0392b', color: '#fff', borderRadius: 99, padding: '1px 5px', fontWeight: 700 }}>{totalSignals}</span>
-            )}
-          </button>
-        ))}
+      {/* Partidos de hoy — centro operativo */}
+      <PartidosHoyOperativo now={now} />
+
+      {/* Kai */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 10 }}>Kai · Herramientas globales</div>
+        <KaiTools phase="grupos" globalConfidenceGenerated={data.globalConfidenceGenerated} quinielas={quinielas} onRefresh={loadData} />
       </div>
 
-      {/* Content */}
-      {tab === 'alertas'       && <AlertasSection quinielas={quinielas} />}
-      {tab === 'quinielas'     && <QuinielasSection quinielas={quinielas} />}
-      {tab === 'participantes' && <ParticipantesSection quinielas={quinielas} />}
-      {tab === 'kai'           && <KaiSection quinielas={quinielas} globalConfidenceGenerated={data.globalConfidenceGenerated} onRefresh={loadData} />}
-      {tab === 'resultados'    && <ResultsSection />}
+      {/* Líderes */}
+      <LideresSección lideres={data.lideres} />
+
+      {/* Atención requerida */}
+      <AtenciónSección
+        quinielas={quinielas}
+        pendingMatchesCount={pendingMatchesCount}
+        onOpenResultados={() => setAdminSection('resultados')}
+      />
+
+      {/* Administración */}
+      <AdminAcordeon
+        quinielas={quinielas}
+        globalConfidenceGenerated={data.globalConfidenceGenerated}
+        onRefresh={loadData}
+        openSection={adminSection}
+        onSectionChange={setAdminSection}
+      />
 
       <div style={{ marginTop: '3rem', paddingTop: '1rem', borderTop: '0.5px solid #eee', fontSize: 12, color: '#ccc', textAlign: 'center' }}>
         Bonsight · Uso interno

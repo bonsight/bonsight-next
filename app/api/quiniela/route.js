@@ -48,12 +48,23 @@ export async function GET(req) {
     }
 
     if (action === 'overview') {
-      const [groups, globalConfidence] = await Promise.all([
+      const [groups, globalConfidence, globalAdmin] = await Promise.all([
         kv.get('quiniela:groups'),
         kv.get('quiniela:global:confidence:grupos'),
+        kv.get('quiniela:global:admin'),
       ])
       const groupList = groups ?? []
       const globalConfidenceGenerated = Array.isArray(globalConfidence) && globalConfidence.length > 0
+      const admin = { results: {}, realCampeon: '', realGoleador: '', ...(globalAdmin ?? {}) }
+
+      // Count matches that have elapsed but have no confirmed result
+      const nowMs = Date.now()
+      const MATCH_DURATION_MS = 2 * 60 * 60 * 1000
+      const pendingMatchesCount = PHASES.grupos.matches.filter((m, i) => {
+        const result = admin.results?.grupos?.[i]
+        const elapsed = nowMs - new Date(m.kickoff).getTime()
+        return !isMatchFinal(result) && elapsed >= MATCH_DURATION_MS
+      }).length
 
       const data = await Promise.all(
         groupList.map(async ({ id }) => {
@@ -63,6 +74,14 @@ export async function GET(req) {
             kv.get(`quiniela:${id}:ai:jornada:grupos`),
             kv.get(`quiniela:${id}:quinielas`),
           ])
+
+          const rawParticipants = participants ?? []
+          const rawQuinielas = quinielas ?? {}
+          const scores = calcularPuntajes(rawParticipants, rawQuinielas, admin)
+          const scoreMap = Object.fromEntries(scores.map(s => [s.participantId, s]))
+          const totalPts = scores.reduce((a, s) => a + s.pts, 0)
+          const avgPts = scores.length > 0 ? Math.round((totalPts / scores.length) * 10) / 10 : 0
+
           return {
             id,
             nombre: group?.nombre ?? '—',
@@ -70,10 +89,13 @@ export async function GET(req) {
             adminTel: group?.adminTel ?? '—',
             createdAt: group?.createdAt ?? null,
             fases: group?.fases ?? [],
-            participants: (participants ?? []).map(p => ({
+            participants: rawParticipants.map(p => ({
               nombre: p.nombre, email: p.email, tel: p.tel, pais: p.pais, createdAt: p.createdAt,
+              pts: scoreMap[p.id]?.pts ?? 0,
+              breakdown: scoreMap[p.id]?.breakdown ?? { exacto: 0, ganador: 0, campeon: 0, goleador: 0 },
             })),
-            picksCount: Object.keys(quinielas ?? {}).length,
+            picksCount: Object.keys(rawQuinielas).length,
+            avgPts,
             kai: {
               confidence: globalConfidenceGenerated,
               jornada: !!jornada,
@@ -82,7 +104,24 @@ export async function GET(req) {
           }
         })
       )
-      return NextResponse.json({ quinielas: data, total: data.length, globalConfidenceGenerated })
+
+      // Build platform-wide leaders
+      const allWithScores = data.flatMap(q =>
+        q.participants.map(p => ({ ...p, quinielaNombre: q.nombre, quinielaId: q.id }))
+      )
+      const byPts    = [...allWithScores].sort((a, b) => b.pts - a.pts)
+      const byExacto = [...allWithScores].sort((a, b) => (b.breakdown?.exacto ?? 0) - (a.breakdown?.exacto ?? 0))
+      const byAvg    = [...data].sort((a, b) => b.avgPts - a.avgPts)
+      const byPart   = [...data].sort((a, b) => b.participants.length - a.participants.length)
+
+      const lideres = {
+        mejorParticipante: byPts[0]    ? { nombre: byPts[0].nombre,    pts: byPts[0].pts,              quiniela: byPts[0].quinielaNombre }    : null,
+        mejorQuiniela:     byAvg[0]    ? { nombre: byAvg[0].nombre,    avgPts: byAvg[0].avgPts,        id: byAvg[0].id }                      : null,
+        masExactos:        byExacto[0] ? { nombre: byExacto[0].nombre, exactos: byExacto[0].breakdown?.exacto ?? 0, quiniela: byExacto[0].quinielaNombre } : null,
+        masActiva:         byPart[0]   ? { nombre: byPart[0].nombre,   participantes: byPart[0].participants.length, id: byPart[0].id }        : null,
+      }
+
+      return NextResponse.json({ quinielas: data, total: data.length, globalConfidenceGenerated, pendingMatchesCount, lideres })
     }
 
     if (action === 'group' && groupId) {

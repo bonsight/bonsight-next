@@ -293,6 +293,7 @@ export default function SeguimientoPage() {
   const todayMatches = PHASES.grupos.matches
     .map((m, i) => ({ ...m, idx: i }))
     .filter(m => new Date(m.kickoff).toLocaleDateString('en-CA') === today)
+    .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff))
 
   const activeTodayMatches = todayMatches.filter(({ kickoff, idx }) => {
     const real = admin?.results?.grupos?.[idx]
@@ -314,7 +315,7 @@ export default function SeguimientoPage() {
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 10, textTransform: 'uppercase', letterSpacing: .5 }}>⚡ Jornada en curso</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {todayMatches.map(({ local, visitante, idx, kickoff }) => {
+            {todayMatches.map(({ local, visitante, idx, kickoff, ciudad }) => {
               const real  = admin?.results?.grupos?.[idx]
               const hasScore = !!real && real.l !== '' && real.v !== ''
 
@@ -357,6 +358,7 @@ export default function SeguimientoPage() {
                   </div>
                   <div style={{ marginTop: 6, fontSize: 12, color: '#aaa' }}>
                     {formatKickoffDayLabel(kickoff, now)} · {formatKickoffLocal(kickoff)}
+                    {ciudad && <span> · 📍 {ciudad}</span>}
                     {countdown && <span style={{ color: '#888' }}> · {countdown}</span>}
                     {pendingNote && <span style={{ fontStyle: 'italic' }}> · {pendingNote}</span>}
                   </div>

@@ -3,7 +3,28 @@ import { NextResponse } from 'next/server';
 const locales = ['es', 'en'];
 const defaultLocale = 'en';
 
-export function proxy(request) {
+async function sha256Hex(input) {
+  const data = new TextEncoder().encode(input);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function proxy(request) {
+  const host = request.headers.get('host') || '';
+
+  if (host.startsWith('aria.')) {
+    const { pathname } = request.nextUrl;
+    const expected = await sha256Hex(process.env.ARIA_ACCESS_CODE || '');
+    const isAuthed = request.cookies.get('aria_auth')?.value === expected;
+    const isLogin = pathname === '/login';
+
+    const url = request.nextUrl.clone();
+    url.pathname = (isAuthed || isLogin)
+      ? `/aria${pathname === '/' ? '' : pathname}`
+      : '/aria/login';
+    return NextResponse.rewrite(url);
+  }
+
   const { pathname } = request.nextUrl;
 
   const hasLocale = locales.some(
