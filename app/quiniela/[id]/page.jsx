@@ -47,7 +47,7 @@ export default function RegistroPage() {
 
   useEffect(() => {
     const token = localStorage.getItem(`quiniela_token_${groupId}`)
-    if (token) { router.replace(`/quiniela/${groupId}/picks`); return }
+    if (token) { router.replace(`/quiniela/${groupId}/seguimiento`); return }
 
     fetch(`/api/quiniela?action=group&groupId=${groupId}`)
       .then(r => r.json())
@@ -71,7 +71,7 @@ export default function RegistroPage() {
       const data = await res.json()
       if (data.ok && data.token) {
         localStorage.setItem(`quiniela_token_${groupId}`, data.token)
-        router.push(`/quiniela/${groupId}/picks`)
+        router.push(`/quiniela/${groupId}/seguimiento`)
       } else if (data.error === 'email_exists') {
         setError('Ese email ya está registrado. Usa "Acceder con email" abajo.')
       } else {
@@ -89,7 +89,7 @@ export default function RegistroPage() {
       const data = await res.json()
       if (data.token) {
         localStorage.setItem(`quiniela_token_${groupId}`, data.token)
-        router.push(`/quiniela/${groupId}/picks`)
+        router.push(`/quiniela/${groupId}/seguimiento`)
       } else {
         setError('No encontramos un participante con ese email en esta quiniela.')
       }

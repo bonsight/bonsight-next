@@ -716,7 +716,7 @@ export default function SeguimientoPage() {
           : `Basado en ${totalPicks} picks analizados`
 
         return (
-          <div style={{ border: locked ? '0.5px solid rgba(52,211,153,0.25)' : '1px solid #1D9E75', borderRadius: 12, marginBottom: 20, background: locked ? 'rgba(52,211,153,0.03)' : 'linear-gradient(135deg,#f0faf6,#fff)', overflow: 'hidden' }}>
+          <div style={{ border: '0.5px solid #e0e0de', borderRadius: 12, marginBottom: 20, background: '#fafafa', overflow: 'hidden' }}>
             <button
               onClick={() => setShowKaiProfile(v => !v)}
               style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}
