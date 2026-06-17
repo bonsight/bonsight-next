@@ -159,13 +159,21 @@ export default function SeguimientoPage() {
   // sin tabs — ambas secciones visibles en scroll
   const [loading, setLoading]     = useState(true)
   const [isAdmin, setIsAdmin]     = useState(false)
-  const [jornadaSummary, setJornadaSummary] = useState(null)
+  const [jornadaSummary, setJornadaSummary]   = useState(null)
+  const [jornadaInsights, setJornadaInsights] = useState([])
   const [showProjection, setShowProjection] = useState(true)
   const [showKaiCenter, setShowKaiCenter] = useState(false)
   const [showKaiProfile, setShowKaiProfile] = useState(false)
   const [detailParticipant, setDetailParticipant] = useState(null)
   const [showFullHistory, setShowFullHistory] = useState(false)
+  const [expandedMatchIds, setExpandedMatchIds] = useState(new Set())
   const [now, setNow] = useState(() => Date.now())
+
+  const toggleMatchExpand = (idx) => setExpandedMatchIds(prev => {
+    const next = new Set(prev)
+    if (next.has(idx)) next.delete(idx); else next.add(idx)
+    return next
+  })
 
   function openDetail(pid) {
     setDetailParticipant({ loading: true })
@@ -221,11 +229,16 @@ export default function SeguimientoPage() {
       setMyScore(me ?? { pts: 0, breakdown: { exacto: 0, ganador: 0, campeon: 0, goleador: 0 } })
       setMyPosition(pos)
 
-      // Cargar resumen de jornada si existe
+      // Cargar análisis de jornada si existe
       const currentPhase = a.unlockedPhases[a.unlockedPhases.length - 1] ?? 'grupos'
-      fetch(`/api/quiniela-ai?action=getJornada&groupId=${groupId}&phase=${currentPhase}`)
+      fetch(`/api/quiniela-ai?action=getContent&groupId=${groupId}&phase=${currentPhase}`)
         .then(r => r.json())
-        .then(d => { if (d.summary) setJornadaSummary(d.summary) })
+        .then(d => {
+          if (d.content) {
+            if (d.content.summary) setJornadaSummary(d.content.summary)
+            if (d.content.insights?.length) setJornadaInsights(d.content.insights)
+          }
+        })
         .catch(() => {})
 
       setAuth('ok')
@@ -311,77 +324,136 @@ export default function SeguimientoPage() {
   return (
     <div style={st.page}>
       {/* ── Jornada en curso ── */}
-      {activeTodayMatches.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 10, textTransform: 'uppercase', letterSpacing: .5 }}>⚡ Jornada en curso</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {todayMatches.map(({ local, visitante, idx, kickoff, ciudad }) => {
-              const real  = admin?.results?.grupos?.[idx]
-              const hasScore = !!real && real.l !== '' && real.v !== ''
+      {activeTodayMatches.length > 0 && (() => {
+        const finalizedIdxs = todayMatches.filter(({ kickoff, idx }) => {
+          const real = admin?.results?.grupos?.[idx]
+          if (!real || real.l === '' || real.v === '') return false
+          const { confirmed, live, upcoming } = getMatchTimeState(kickoff, now, real)
+          return confirmed || (!live && !upcoming)
+        }).map(m => m.idx)
+        const allExpanded = finalizedIdxs.length > 0 && finalizedIdxs.every(i => expandedMatchIds.has(i))
 
-              // Estado automático según el horario de kickoff y el resultado disponible.
-              const { live, upcoming, kickoffTime } = getMatchTimeState(kickoff, now, real)
-              const confirmed = isMatchFinal(real)
-              const matchFinished = !upcoming && !live
-              const statusFinal = hasScore && matchFinished
-              const statusPending = !hasScore && matchFinished
+        return (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: .5 }}>⚡ Jornada en curso</div>
+              {finalizedIdxs.length > 0 && (
+                <button
+                  onClick={() => allExpanded
+                    ? setExpandedMatchIds(prev => { const n = new Set(prev); finalizedIdxs.forEach(i => n.delete(i)); return n })
+                    : setExpandedMatchIds(prev => new Set([...prev, ...finalizedIdxs]))
+                  }
+                  style={{ background: 'none', border: 'none', fontSize: 11, color: '#1D9E75', cursor: 'pointer', padding: 0 }}
+                >
+                  {allExpanded ? 'Colapsar todos ▲' : 'Expandir todos ▼'}
+                </button>
+              )}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {todayMatches.map(({ local, visitante, idx, kickoff, ciudad }) => {
+                const real  = admin?.results?.grupos?.[idx]
+                const hasScore = !!real && real.l !== '' && real.v !== ''
+                const { live, upcoming, kickoffTime } = getMatchTimeState(kickoff, now, real)
+                const confirmed = isMatchFinal(real)
+                const matchFinished = !upcoming && !live
+                const statusFinal = hasScore && matchFinished
+                const statusPending = !hasScore && matchFinished
+                const isCollapsible = (confirmed || statusFinal) && !live
+                const isExpanded = expandedMatchIds.has(idx)
 
-              let statusLabel, statusColor
-              if (confirmed)        { statusLabel = '✅ Finalizado'; statusColor = '#1D9E75' }
-              else if (live)        { statusLabel = '🔴 En vivo';    statusColor = '#c0392b' }
-              else if (statusFinal) { statusLabel = '✅ Finalizado'; statusColor = '#1D9E75' }
-              else if (statusPending) { statusLabel = '⏱️ Pendiente de resultado'; statusColor = '#aaa' }
-              else                  { statusLabel = '⏳ Por jugar';  statusColor = '#aaa' }
+                const pick = myQ?.phases?.grupos?.[idx]
+                const hasPick = pick && (pick.l !== '' || pick.v !== '')
+                const pickResult = hasScore && hasPick ? evaluatePick(pick, real, { local, visitante }) : null
 
-              let pendingNote = null
-              if (live && !hasScore) pendingNote = 'Marcador pendiente de actualización'
-              else if (live && hasScore) pendingNote = 'Resultado provisional'
-              else if (statusPending) pendingNote = 'Resultado pendiente de actualización'
-              else if (statusFinal && !confirmed) pendingNote = 'Resultado sin confirmar'
-
-              const countdown = upcoming && kickoffTime - now < 24 * 3600000 ? formatMatchCountdown(kickoff, now) : null
-
-              const pick = myQ?.phases?.grupos?.[idx]
-              const hasPick = pick && (pick.l !== '' || pick.v !== '')
-              const pickResult = hasScore && hasPick ? evaluatePick(pick, real, { local, visitante }) : null
-              const provisional = live || (statusFinal && !confirmed)
-
-              return (
-                <div key={idx} style={{ border: '0.5px solid #eee', borderRadius: 12, padding: '10px 14px', background: live ? '#fff8f0' : '#fff' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: statusColor, marginBottom: 6 }}>{statusLabel}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
-                    <span style={{ flex: 1, textAlign: 'right', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{FLAGS[local] || ''} {local}</span>
-                    <span style={{ background: '#f5f5f3', color: '#333', fontWeight: 700, padding: '3px 10px', borderRadius: 6, fontSize: 15, flexShrink: 0 }}>
-                      {hasScore ? `${real.l}–${real.v}` : 'vs'}
-                    </span>
-                    <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{visitante} {FLAGS[visitante] || ''}</span>
-                  </div>
-                  <div style={{ marginTop: 6, fontSize: 12, color: '#aaa' }}>
-                    {formatKickoffDayLabel(kickoff, now)} · {formatKickoffLocal(kickoff)}
-                    {ciudad && <span> · 📍 {ciudad}</span>}
-                    {countdown && <span style={{ color: '#888' }}> · {countdown}</span>}
-                    {pendingNote && <span style={{ fontStyle: 'italic' }}> · {pendingNote}</span>}
-                  </div>
-                  {hasPick && (
-                    <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
-                      <span style={{ color: '#888' }}>
-                        Tu pick: {pick.l}–{pick.v}{pick.w && ` · ${pick.w === 'Empate' ? 'Empate' : pick.w}`}
+                // ── Vista colapsada (finalizado, no expandido) ──
+                if (isCollapsible && !isExpanded) {
+                  const isExacto  = pickResult?.status === 'exacto'
+                  const isAcierto = pickResult?.status === 'acierto'
+                  const isFallo   = pickResult?.status === 'fallo'
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => toggleMatchExpand(idx)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, border: '0.5px solid #eee', borderRadius: 10, padding: '9px 14px', background: '#fff', cursor: 'pointer' }}
+                    >
+                      <span style={{ color: '#1D9E75', fontSize: 12, flexShrink: 0 }}>✓</span>
+                      <span style={{ fontSize: 11, color: '#aaa', flexShrink: 0 }}>{formatKickoffLocal(kickoff)}</span>
+                      <span style={{ flex: 1, fontSize: 13, color: '#444', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {FLAGS[local] || ''} {local} <strong style={{ fontWeight: 700, color: '#222' }}>{real.l}–{real.v}</strong> {visitante} {FLAGS[visitante] || ''}
                       </span>
-                      <span style={{ fontWeight: 700, color: pickResult?.status === 'fallo' ? '#c0392b' : '#1D9E75' }}>
-                        {pickResult ? (
-                          (pickResult.status === 'exacto' || pickResult.status === 'acierto') ? `✅ +${pickResult.pts}` : '❌ 0'
-                        ) : provisional ? (
-                          statusPending ? '⏳ A la espera de resultado' : '⏳ Resultado provisional'
-                        ) : null}
-                      </span>
+                      {hasPick && (
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, flexShrink: 0,
+                          background: isExacto ? '#FEF3C7' : isAcierto ? '#E1F5EE' : isFallo ? '#FEF2F2' : '#f5f5f3',
+                          color:      isExacto ? '#92600A' : isAcierto ? '#0F6E56' : isFallo ? '#c0392b' : '#bbb',
+                        }}>
+                          {isExacto || isAcierto ? `+${pickResult.pts}` : isFallo ? '0' : '—'}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 9, color: '#ccc', flexShrink: 0 }}>▼</span>
                     </div>
-                  )}
-                </div>
-              )
-            })}
+                  )
+                }
+
+                // ── Vista expandida ──
+                let statusLabel, statusColor
+                if (confirmed)          { statusLabel = '✅ Finalizado';              statusColor = '#1D9E75' }
+                else if (live)          { statusLabel = '🔴 En vivo';                 statusColor = '#c0392b' }
+                else if (statusFinal)   { statusLabel = '✅ Finalizado';              statusColor = '#1D9E75' }
+                else if (statusPending) { statusLabel = '⏱️ Pendiente de resultado';  statusColor = '#aaa' }
+                else                    { statusLabel = '⏳ Por jugar';               statusColor = '#aaa' }
+
+                let pendingNote = null
+                if (live && !hasScore) pendingNote = 'Marcador pendiente de actualización'
+                else if (live && hasScore) pendingNote = 'Resultado provisional'
+                else if (statusPending) pendingNote = 'Resultado pendiente de actualización'
+                else if (statusFinal && !confirmed) pendingNote = 'Resultado sin confirmar'
+
+                const countdown = upcoming && kickoffTime - now < 24 * 3600000 ? formatMatchCountdown(kickoff, now) : null
+                const provisional = live || (statusFinal && !confirmed)
+
+                return (
+                  <div key={idx} style={{ border: '0.5px solid #eee', borderRadius: 12, padding: '10px 14px', background: live ? '#fff8f0' : '#fff' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: statusColor }}>{statusLabel}</div>
+                      {isCollapsible && (
+                        <button onClick={() => toggleMatchExpand(idx)} style={{ background: 'none', border: 'none', fontSize: 10, color: '#ccc', cursor: 'pointer', padding: 0, lineHeight: 1 }}>▲</button>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                      <span style={{ flex: 1, textAlign: 'right', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{FLAGS[local] || ''} {local}</span>
+                      <span style={{ background: '#f5f5f3', color: '#333', fontWeight: 700, padding: '3px 10px', borderRadius: 6, fontSize: 15, flexShrink: 0 }}>
+                        {hasScore ? `${real.l}–${real.v}` : 'vs'}
+                      </span>
+                      <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{visitante} {FLAGS[visitante] || ''}</span>
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 12, color: '#aaa' }}>
+                      {formatKickoffDayLabel(kickoff, now)} · {formatKickoffLocal(kickoff)}
+                      {ciudad && <span> · 📍 {ciudad}</span>}
+                      {countdown && <span style={{ color: '#888' }}> · {countdown}</span>}
+                      {pendingNote && <span style={{ fontStyle: 'italic' }}> · {pendingNote}</span>}
+                    </div>
+                    {hasPick && (
+                      <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                        <span style={{ color: '#888' }}>
+                          Tu pick: {pick.l}–{pick.v}{pick.w && ` · ${pick.w === 'Empate' ? 'Empate' : pick.w}`}
+                        </span>
+                        <span style={{ fontWeight: 700, color: pickResult?.status === 'fallo' ? '#c0392b' : '#1D9E75' }}>
+                          {pickResult ? (
+                            (pickResult.status === 'exacto' || pickResult.status === 'acierto') ? `✅ +${pickResult.pts}` : '❌ 0'
+                          ) : provisional ? (
+                            statusPending ? '⏳ A la espera de resultado' : '⏳ Resultado provisional'
+                          ) : null}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── card posición prominente ── */}
       <div style={{
@@ -456,6 +528,231 @@ export default function SeguimientoPage() {
           <div style={{ fontSize: 14, color: '#333', lineHeight: 1.65 }}>{jornadaSummary}</div>
         </div>
       )}
+
+      {/* ── Centro de Inteligencia Kai ── */}
+      {(() => {
+        if (participants.length === 0) return null
+
+        // ── AI insights (desde generateJornadaContent) ──
+        if (jornadaInsights.length > 0) {
+          const TIPO_ICON = {
+            pick_unico: '🎯', fallo_total: '💥', remontada: '📈',
+            caida: '📉', patron: '🧩', exacto_clave: '⭐',
+          }
+          const sorted = [...jornadaInsights].sort((a, b) => a.prioridad - b.prioridad)
+          return (
+            <div style={{ border: '0.5px solid #e0e0de', borderRadius: 12, marginBottom: 20, background: '#fafafa', overflow: 'hidden' }}>
+              <button
+                onClick={() => setShowKaiCenter(v => !v)}
+                style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}
+              >
+                <KaiLabel title="Centro de Inteligencia Kai" subtitle="Los hallazgos más interesantes de la jornada." state="ready" size={20} />
+                <span style={{ fontSize: 10, color: '#aaa', flexShrink: 0, marginLeft: 8 }}>{showKaiCenter ? '▲' : '▼'}</span>
+              </button>
+              {showKaiCenter && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 16px 16px' }}>
+                  {sorted.map((ins, i) => (
+                    <div key={i} style={{ background: 'rgba(52,211,153,0.04)', border: '0.5px solid rgba(52,211,153,0.18)', borderRadius: 10, padding: '12px 14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <span style={{ fontSize: 15 }}>{TIPO_ICON[ins.tipo] ?? '✦'}</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#34D399', textTransform: 'uppercase', letterSpacing: .5 }}>{ins.titular}</span>
+                      </div>
+                      <div style={{ fontSize: 14, color: '#333', lineHeight: 1.55, marginBottom: ins.protagonista ? 8 : 0 }}>{ins.descripcion}</div>
+                      {ins.protagonista && (
+                        <span style={{ fontSize: 10, background: 'rgba(52,211,153,0.12)', color: '#0F6E56', padding: '2px 8px', borderRadius: 99 }}>{ins.protagonista}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        }
+
+        // ── Fallback: tarjetas computadas en frontend ──
+        const sorted = [...scores].sort((a, b) => b.pts - a.pts)
+
+        const matchConsensus = {}
+        PHASE_ORDER.forEach(ph => {
+          PHASES[ph].matches.forEach((m, i) => {
+            const votes = {}
+            let total = 0
+            Object.values(quinielas).forEach(q => {
+              const w = q.phases?.[ph]?.[i]?.w
+              if (w) { votes[w] = (votes[w] ?? 0) + 1; total++ }
+            })
+            if (total >= 2) {
+              const leader = Object.entries(votes).sort((a, b) => b[1] - a[1])[0]?.[0]
+              matchConsensus[`${ph}-${i}`] = { leader, total, votes, match: m }
+            }
+          })
+        })
+
+        const pStats = {}
+        participants.forEach(p => {
+          const q = quinielas[p.id]
+          if (!q) { pStats[p.id] = { contrarian: 0, total: 0, pct: 0, draws: 0, goals: 0, picks: 0 }; return }
+          let contrarian = 0, consensusTotal = 0, draws = 0, goals = 0, picks = 0
+          PHASE_ORDER.forEach(ph => {
+            ;(q.phases?.[ph] ?? []).forEach((pk, i) => {
+              if (!pk.w) return
+              if (pk.w === 'Empate') draws++
+              if (pk.l !== '' && pk.v !== '') { goals += Number(pk.l) + Number(pk.v); picks++ }
+              const cs = matchConsensus[`${ph}-${i}`]
+              if (cs) { consensusTotal++; if (pk.w !== cs.leader) contrarian++ }
+            })
+          })
+          pStats[p.id] = {
+            contrarian, total: consensusTotal,
+            pct: consensusTotal > 0 ? Math.round((contrarian / consensusTotal) * 100) : 0,
+            draws, goals, picks,
+            avgGoals: picks > 0 ? goals / picks : 0,
+          }
+        })
+
+        const liderId = sorted[0]?.participantId
+        const lider = participants.find(p => p.id === liderId)
+        const ptsLead = sorted.length > 1 ? sorted[0].pts - sorted[1].pts : 0
+        const hayFavorito = (sorted[0]?.pts ?? 0) > 0 && ptsLead > 0
+        const masAtrevido = participants.filter(p => pStats[p.id]?.total >= 3).sort((a, b) => (pStats[b.id]?.pct ?? 0) - (pStats[a.id]?.pct ?? 0))[0]
+        const reyEmpates = participants.filter(p => pStats[p.id]?.draws > 0).sort((a, b) => (pStats[b.id]?.draws ?? 0) - (pStats[a.id]?.draws ?? 0))[0]
+        const sortedByExactos = [...sorted].sort((a, b) => (b.breakdown?.exacto ?? 0) - (a.breakdown?.exacto ?? 0))
+        const reyExactos = (sortedByExactos[0]?.breakdown?.exacto ?? 0) > 0 ? participants.find(p => p.id === sortedByExactos[0]?.participantId) : null
+
+        let golpe = null, minPct = 100
+        Object.entries(matchConsensus).forEach(([key, cs]) => {
+          const [ph, idxStr] = key.split('-')
+          const i = parseInt(idxStr)
+          Object.entries(cs.votes).forEach(([option, count]) => {
+            if (option === cs.leader) return
+            const pct = Math.round((count / cs.total) * 100)
+            if (pct < minPct) {
+              const pickers = participants.filter(p => quinielas[p.id]?.phases?.[ph]?.[i]?.w === option)
+              if (pickers.length > 0) {
+                minPct = pct
+                const real = admin?.results?.[ph]?.[i]
+                const realWin = real && real.l !== '' ? (Number(real.l) > Number(real.v) ? cs.match.local : Number(real.l) < Number(real.v) ? cs.match.visitante : 'Empate') : null
+                golpe = { match: cs.match, option, pickers, count, total: cs.total, isCorrect: realWin === option }
+              }
+            }
+          })
+        })
+
+        const cards = [
+          { icon: '🏆', label: 'Favorito para levantar la copa',
+            insight: hayFavorito ? `Kai considera que ${lider?.nombre} es actualmente el principal candidato, con ${ptsLead} punto${ptsLead > 1 ? 's' : ''} de ventaja sobre el segundo.` : (sorted[0]?.pts ?? 0) === 0 ? `Kai aún no detecta un favorito claro. Todo está por decidirse.` : `Kai detecta un empate en la cima — la quiniela todavía está completamente abierta.`,
+            metrics: hayFavorito ? [`${sorted[0]?.pts ?? 0} pts totales`, `+${ptsLead} sobre el 2°`] : [] },
+          masAtrevido && masAtrevido.id !== lider?.id && { icon: '🔥', label: 'Más atrevido en sus picks', insight: `${masAtrevido.nombre} va contra el consenso en el ${pStats[masAtrevido.id].pct}% de sus picks.`, metrics: [`${pStats[masAtrevido.id].pct}% contra la mayoría`, `${pStats[masAtrevido.id].contrarian} picks diferenciales`] },
+          reyEmpates && reyEmpates.id !== masAtrevido?.id && { icon: '🧠', label: 'Rey de los empates', insight: `${reyEmpates.nombre} ha pronosticado ${pStats[reyEmpates.id].draws} empate${pStats[reyEmpates.id].draws !== 1 ? 's' : ''} — el estilo más conservador de la quiniela.`, metrics: [`${pStats[reyEmpates.id].draws} empates pronosticados`] },
+          reyExactos && { icon: '🎯', label: 'Rey de los exactos', insight: `Kai detecta que ${reyExactos.nombre} tiene el mayor porcentaje de aciertos exactos.`, metrics: [`${sortedByExactos[0]?.breakdown?.exacto ?? 0} resultados exactos`] },
+          golpe && { icon: '🎲', label: 'Golpe de la jornada', insight: golpe.count === 1 ? `${golpe.pickers[0]?.nombre} fue el único que eligió ${golpe.option === 'Empate' ? 'empate' : golpe.option} en ${golpe.match.local} vs ${golpe.match.visitante}.${golpe.isCorrect ? ' Y acertó.' : ''}` : `Solo ${golpe.count} eligieron ${golpe.option === 'Empate' ? 'empate' : golpe.option} en ${golpe.match.local} vs ${golpe.match.visitante}.${golpe.isCorrect ? ' Y acertaron.' : ''}`, metrics: [`${golpe.count} de ${golpe.total} eligieron ${golpe.option}`, golpe.isCorrect ? '✅ Resultado correcto' : 'Resultado por verse'] },
+        ].filter(Boolean)
+
+        if (cards.length === 0) return null
+
+        return (
+          <div style={{ border: '0.5px solid #e0e0de', borderRadius: 12, marginBottom: 20, background: '#fafafa', overflow: 'hidden' }}>
+            <button
+              onClick={() => setShowKaiCenter(v => !v)}
+              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <KaiLabel title="Centro de Inteligencia Kai" subtitle="Lo que Kai está detectando en la quiniela." state="ready" size={20} />
+              <span style={{ fontSize: 10, color: '#aaa', flexShrink: 0, marginLeft: 8 }}>{showKaiCenter ? '▲' : '▼'}</span>
+            </button>
+            {showKaiCenter && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 16px 16px' }}>
+                {cards.map(({ icon, label, insight, metrics }) => (
+                  <div key={label} style={{ background: 'rgba(52,211,153,0.04)', border: '0.5px solid rgba(52,211,153,0.18)', borderRadius: 10, padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                      <span style={{ fontSize: 15 }}>{icon}</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#34D399', textTransform: 'uppercase', letterSpacing: .5 }}>{label}</span>
+                    </div>
+                    <div style={{ fontSize: 14, color: '#333', lineHeight: 1.55, marginBottom: metrics.length > 0 ? 8 : 0 }}>{insight}</div>
+                    {metrics.length > 0 && (
+                      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                        {metrics.map(m => <span key={m} style={{ fontSize: 10, background: 'rgba(52,211,153,0.12)', color: '#0F6E56', padding: '2px 8px', borderRadius: 99 }}>{m}</span>)}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ── Perfil del participante según Kai ── */}
+      {(() => {
+        const myQ = quinielas[participant?.id]
+        let totalPicks = 0
+        PHASE_ORDER.forEach(ph => {
+          totalPicks += (myQ?.phases?.[ph] ?? []).filter(pk => pk.l !== '').length
+        })
+
+        const locked = totalPicks < 10
+
+        let profile = null
+        if (!locked) {
+          let totalGoals = 0, pickCount = 0, drawCount = 0
+          PHASE_ORDER.forEach(ph => {
+            ;(myQ?.phases?.[ph] ?? []).forEach(pk => {
+              if (pk.l !== '' && pk.v !== '') {
+                totalGoals += Number(pk.l) + Number(pk.v); pickCount++
+                if (pk.w === 'Empate') drawCount++
+              }
+            })
+          })
+          const avg = pickCount > 0 ? totalGoals / pickCount : 0
+          const drawRatio = pickCount > 0 ? drawCount / pickCount : 0
+
+          if (avg > 3.5) profile = { emoji: '⚡', name: 'Arriesgado', desc: 'Kai detecta que favoreces los marcadores abiertos y apuestas por resultados contundentes. Te gustan los goles.' }
+          else if (drawRatio > 0.25) profile = { emoji: '🧠', name: 'Estratégico', desc: 'Kai ve que priorizas la prudencia. Muchos empates y resultados ajustados en tus picks — un estilo táctico y cuidadoso.' }
+          else if (avg > 2.3) profile = { emoji: '🎯', name: 'Francotirador', desc: 'Kai identifica un estilo equilibrado. Ni muy conservador ni muy agresivo — confías en tu lectura de cada partido.' }
+          else profile = { emoji: '📈', name: 'Analítico', desc: 'Kai detecta un enfoque medido y racional. Priorizas no equivocarte antes que arriesgar en marcadores altos.' }
+        }
+
+        const subtitle = locked
+          ? `${10 - totalPicks} picks más para desbloquear tu perfil`
+          : `Basado en ${totalPicks} picks analizados`
+
+        return (
+          <div style={{ border: locked ? '0.5px solid rgba(52,211,153,0.25)' : '1px solid #1D9E75', borderRadius: 12, marginBottom: 20, background: locked ? 'rgba(52,211,153,0.03)' : 'linear-gradient(135deg,#f0faf6,#fff)', overflow: 'hidden' }}>
+            <button
+              onClick={() => setShowKaiProfile(v => !v)}
+              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              <KaiLabel title="Tu perfil según Kai" subtitle={subtitle} state={locked ? 'thinking' : 'ready'} size={18} />
+              <span style={{ fontSize: 10, color: '#aaa', flexShrink: 0, marginLeft: 8 }}>{showKaiProfile ? '▲' : '▼'}</span>
+            </button>
+            {showKaiProfile && (
+              <div style={{ padding: '0 16px 16px' }}>
+                {locked ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ fontSize: 14, color: '#555' }}>
+                      Kai necesita al menos 10 picks para entender cómo juegas. Completa más pronósticos para descubrir tu estilo.
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {[['🔥','Arriesgado'],['🧠','Estratégico'],['⚖️','Conservador'],['🎯','Cazador de sorpresas']].map(([e, l]) => (
+                        <span key={l} style={{ fontSize: 12, background: '#f5f5f3', border: '0.5px solid #e0e0de', borderRadius: 99, padding: '4px 12px', color: '#888' }}>
+                          {e} {l}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ fontSize: 32 }}>{profile.emoji}</div>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: '#0F6E56', marginBottom: 3 }}>{profile.name}</div>
+                      <div style={{ fontSize: 14, color: '#555', lineHeight: 1.55 }}>{profile.desc}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── TABLA ── */}
       <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 12, textTransform: 'uppercase', letterSpacing: .5 }}>Tabla de posiciones</div>
@@ -650,241 +947,6 @@ export default function SeguimientoPage() {
           })()}
         </div>
       )}
-
-      {/* ── Centro de Inteligencia Kai ── */}
-      {(() => {
-        if (participants.length === 0) return null
-
-        const sorted = [...scores].sort((a, b) => b.pts - a.pts)
-
-        // ── Consenso por partido (para calcular picks atrevidos) ──
-        const matchConsensus = {}
-        PHASE_ORDER.forEach(ph => {
-          PHASES[ph].matches.forEach((m, i) => {
-            const votes = {}
-            let total = 0
-            Object.values(quinielas).forEach(q => {
-              const w = q.phases?.[ph]?.[i]?.w
-              if (w) { votes[w] = (votes[w] ?? 0) + 1; total++ }
-            })
-            if (total >= 2) {
-              const leader = Object.entries(votes).sort((a, b) => b[1] - a[1])[0]?.[0]
-              matchConsensus[`${ph}-${i}`] = { leader, total, votes, match: m }
-            }
-          })
-        })
-
-        // ── Stats por participante ──
-        const pStats = {}
-        participants.forEach(p => {
-          const q = quinielas[p.id]
-          if (!q) { pStats[p.id] = { contrarian: 0, total: 0, pct: 0, draws: 0, goals: 0, picks: 0 }; return }
-          let contrarian = 0, consensusTotal = 0, draws = 0, goals = 0, picks = 0
-          PHASE_ORDER.forEach(ph => {
-            ;(q.phases?.[ph] ?? []).forEach((pk, i) => {
-              if (!pk.w) return
-              if (pk.w === 'Empate') draws++
-              if (pk.l !== '' && pk.v !== '') { goals += Number(pk.l) + Number(pk.v); picks++ }
-              const cs = matchConsensus[`${ph}-${i}`]
-              if (cs) { consensusTotal++; if (pk.w !== cs.leader) contrarian++ }
-            })
-          })
-          pStats[p.id] = {
-            contrarian, total: consensusTotal,
-            pct: consensusTotal > 0 ? Math.round((contrarian / consensusTotal) * 100) : 0,
-            draws, goals, picks,
-            avgGoals: picks > 0 ? goals / picks : 0,
-          }
-        })
-
-        // ── Computar reconocimientos ──
-
-        // 1. Favorito para levantar la copa
-        const liderId = sorted[0]?.participantId
-        const lider = participants.find(p => p.id === liderId)
-        const ptsLead = sorted.length > 1 ? sorted[0].pts - sorted[1].pts : 0
-        const hayFavorito = (sorted[0]?.pts ?? 0) > 0 && ptsLead > 0
-
-        // 2. Más atrevido
-        const masAtrevido = participants
-          .filter(p => pStats[p.id]?.total >= 3)
-          .sort((a, b) => (pStats[b.id]?.pct ?? 0) - (pStats[a.id]?.pct ?? 0))[0]
-
-        // 3. Rey de los empates
-        const reyEmpates = participants
-          .filter(p => pStats[p.id]?.draws > 0)
-          .sort((a, b) => (pStats[b.id]?.draws ?? 0) - (pStats[a.id]?.draws ?? 0))[0]
-
-        // 4. Rey de los exactos (solo si hay resultados)
-        const sortedByExactos = [...sorted].sort((a, b) => (b.breakdown?.exacto ?? 0) - (a.breakdown?.exacto ?? 0))
-        const reyExactos = (sortedByExactos[0]?.breakdown?.exacto ?? 0) > 0
-          ? participants.find(p => p.id === sortedByExactos[0]?.participantId)
-          : null
-
-        // 5. Golpe de la jornada — pick más minoritario de toda la quiniela
-        let golpe = null
-        let minPct = 100
-        Object.entries(matchConsensus).forEach(([key, cs]) => {
-          const [ph, idxStr] = key.split('-')
-          const i = parseInt(idxStr)
-          Object.entries(cs.votes).forEach(([option, count]) => {
-            if (option === cs.leader) return
-            const pct = Math.round((count / cs.total) * 100)
-            if (pct < minPct) {
-              const pickers = participants.filter(p => quinielas[p.id]?.phases?.[ph]?.[i]?.w === option)
-              if (pickers.length > 0) {
-                minPct = pct
-                // Check if correct
-                const real = admin?.results?.[ph]?.[i]
-                const realWin = real && real.l !== '' ? (Number(real.l) > Number(real.v) ? cs.match.local : Number(real.l) < Number(real.v) ? cs.match.visitante : 'Empate') : null
-                golpe = { match: cs.match, option, pickers, count, total: cs.total, isCorrect: realWin === option }
-              }
-            }
-          })
-        })
-
-        // ── Construir tarjetas — nombre siempre integrado en el insight ──
-        const cards = [
-          {
-            icon: '🏆', label: 'Favorito para levantar la copa',
-            insight: hayFavorito
-              ? `Kai considera que ${lider?.nombre} es actualmente el principal candidato al título, con ${ptsLead} punto${ptsLead > 1 ? 's' : ''} de ventaja sobre el segundo.`
-              : (sorted[0]?.pts ?? 0) === 0
-              ? `Kai aún no detecta un favorito claro. La quiniela está en blanco y todo está por decidirse.`
-              : `Kai detecta un empate en la cima — la quiniela todavía está completamente abierta.`,
-            metrics: hayFavorito ? [`${sorted[0]?.pts ?? 0} pts totales`, `+${ptsLead} sobre el 2°`] : [],
-          },
-          masAtrevido && masAtrevido.id !== lider?.id && {
-            icon: '🔥', label: 'Más atrevido en sus picks',
-            insight: `${masAtrevido.nombre} va contra el consenso en el ${pStats[masAtrevido.id].pct}% de sus picks — más que cualquier otro participante.`,
-            metrics: [`${pStats[masAtrevido.id].pct}% contra la mayoría`, `${pStats[masAtrevido.id].contrarian} picks diferenciales`],
-          },
-          reyEmpates && reyEmpates.id !== masAtrevido?.id && {
-            icon: '🧠', label: 'Rey de los empates',
-            insight: `${reyEmpates.nombre} ha pronosticado ${pStats[reyEmpates.id].draws} empate${pStats[reyEmpates.id].draws !== 1 ? 's' : ''} — el estilo más conservador de la quiniela.`,
-            metrics: [`${pStats[reyEmpates.id].draws} empates pronosticados`, '1° en predicciones conservadoras'],
-          },
-          reyExactos && {
-            icon: '🎯', label: 'Rey de los exactos',
-            insight: `Kai detecta que ${reyExactos.nombre} tiene el mayor porcentaje de aciertos exactos de toda la quiniela.`,
-            metrics: [`${sortedByExactos[0]?.breakdown?.exacto ?? 0} resultados exactos`, `${(sortedByExactos[0]?.breakdown?.exacto ?? 0) * 3} pts de exactos`],
-          },
-          golpe && {
-            icon: '🎲', label: 'Golpe de la jornada',
-            insight: golpe.count === 1
-              ? `${golpe.pickers[0]?.nombre} fue el único participante que eligió ${golpe.option === 'Empate' ? 'empate' : golpe.option} en ${golpe.match.local} vs ${golpe.match.visitante}.${golpe.isCorrect ? ' Y acertó.' : ''}`
-              : `Solo ${golpe.count} participantes eligieron ${golpe.option === 'Empate' ? 'empate' : golpe.option} en ${golpe.match.local} vs ${golpe.match.visitante}.${golpe.isCorrect ? ' Y acertaron.' : ''}`,
-            metrics: [`${golpe.count} de ${golpe.total} eligieron ${golpe.option}`, golpe.isCorrect ? '✅ Resultado correcto' : 'Resultado por verse'],
-          },
-        ].filter(Boolean)
-
-        if (cards.length === 0) return null
-
-        return (
-          <div style={{ border: '0.5px solid #e0e0de', borderRadius: 12, marginBottom: 20, background: '#fafafa', overflow: 'hidden' }}>
-            <button
-              onClick={() => setShowKaiCenter(v => !v)}
-              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}
-            >
-              <KaiLabel title="Centro de Inteligencia Kai" subtitle="Lo que Kai está detectando en la quiniela." state="ready" size={20} />
-              <span style={{ fontSize: 10, color: '#aaa', flexShrink: 0, marginLeft: 8 }}>{showKaiCenter ? '▲' : '▼'}</span>
-            </button>
-            {showKaiCenter && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 16px 16px' }}>
-                {cards.map(({ icon, label, insight, metrics }) => (
-                  <div key={label} style={{ background: 'rgba(52,211,153,0.04)', border: '0.5px solid rgba(52,211,153,0.18)', borderRadius: 10, padding: '12px 14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                      <span style={{ fontSize: 15 }}>{icon}</span>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#34D399', textTransform: 'uppercase', letterSpacing: .5 }}>{label}</span>
-                    </div>
-                    <div style={{ fontSize: 14, color: "#333", lineHeight: 1.55, marginBottom: metrics.length > 0 ? 8 : 0 }}>{insight}</div>
-                    {metrics.length > 0 && (
-                      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                        {metrics.map(m => (
-                          <span key={m} style={{ fontSize: 10, background: 'rgba(52,211,153,0.12)', color: '#0F6E56', padding: '2px 8px', borderRadius: 99 }}>{m}</span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )
-      })()}
-
-      {/* ── Perfil del participante según Kai ── */}
-      {(() => {
-        const myQ = quinielas[participant?.id]
-        let totalPicks = 0
-        PHASE_ORDER.forEach(ph => {
-          totalPicks += (myQ?.phases?.[ph] ?? []).filter(pk => pk.l !== '').length
-        })
-
-        const locked = totalPicks < 10
-
-        let profile = null
-        if (!locked) {
-          let totalGoals = 0, pickCount = 0, drawCount = 0
-          PHASE_ORDER.forEach(ph => {
-            ;(myQ?.phases?.[ph] ?? []).forEach(pk => {
-              if (pk.l !== '' && pk.v !== '') {
-                totalGoals += Number(pk.l) + Number(pk.v); pickCount++
-                if (pk.w === 'Empate') drawCount++
-              }
-            })
-          })
-          const avg = pickCount > 0 ? totalGoals / pickCount : 0
-          const drawRatio = pickCount > 0 ? drawCount / pickCount : 0
-
-          if (avg > 3.5) profile = { emoji: '⚡', name: 'Arriesgado', desc: 'Kai detecta que favoreces los marcadores abiertos y apuestas por resultados contundentes. Te gustan los goles.' }
-          else if (drawRatio > 0.25) profile = { emoji: '🧠', name: 'Estratégico', desc: 'Kai ve que priorizas la prudencia. Muchos empates y resultados ajustados en tus picks — un estilo táctico y cuidadoso.' }
-          else if (avg > 2.3) profile = { emoji: '🎯', name: 'Francotirador', desc: 'Kai identifica un estilo equilibrado. Ni muy conservador ni muy agresivo — confías en tu lectura de cada partido.' }
-          else profile = { emoji: '📈', name: 'Analítico', desc: 'Kai detecta un enfoque medido y racional. Priorizas no equivocarte antes que arriesgar en marcadores altos.' }
-        }
-
-        const subtitle = locked
-          ? `${10 - totalPicks} picks más para desbloquear tu perfil`
-          : `Basado en ${totalPicks} picks analizados`
-
-        return (
-          <div style={{ border: locked ? '0.5px solid rgba(52,211,153,0.25)' : '1px solid #1D9E75', borderRadius: 12, marginBottom: 20, background: locked ? 'rgba(52,211,153,0.03)' : 'linear-gradient(135deg,#f0faf6,#fff)', overflow: 'hidden' }}>
-            <button
-              onClick={() => setShowKaiProfile(v => !v)}
-              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}
-            >
-              <KaiLabel title="Tu perfil según Kai" subtitle={subtitle} state={locked ? 'thinking' : 'ready'} size={18} />
-              <span style={{ fontSize: 10, color: '#aaa', flexShrink: 0, marginLeft: 8 }}>{showKaiProfile ? '▲' : '▼'}</span>
-            </button>
-            {showKaiProfile && (
-              <div style={{ padding: '0 16px 16px' }}>
-                {locked ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ fontSize: 14, color: '#555' }}>
-                      Kai necesita al menos 10 picks para entender cómo juegas. Completa más pronósticos para descubrir tu estilo.
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {[['🔥','Arriesgado'],['🧠','Estratégico'],['⚖️','Conservador'],['🎯','Cazador de sorpresas']].map(([e, l]) => (
-                        <span key={l} style={{ fontSize: 12, background: '#f5f5f3', border: '0.5px solid #e0e0de', borderRadius: 99, padding: '4px 12px', color: '#888' }}>
-                          {e} {l}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ fontSize: 32 }}>{profile.emoji}</div>
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: '#0F6E56', marginBottom: 3 }}>{profile.name}</div>
-                      <div style={{ fontSize: 14, color: '#555', lineHeight: 1.55 }}>{profile.desc}</div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )
-      })()}
 
       {/* footer */}
       <div style={{ marginTop: '2.5rem', paddingTop: '1rem', borderTop: '0.5px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

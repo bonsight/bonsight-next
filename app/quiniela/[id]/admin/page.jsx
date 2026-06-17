@@ -43,8 +43,9 @@ export default function AdminDashboard() {
   const [toast, setToast] = useState('')
   const [adminUnlocked, setAdminUnlocked] = useState(false)
   const [notAuthorized, setNotAuthorized] = useState(false)
-  const [jornadaSummary, setJornadaSummary]         = useState(null)
-  const [jornadaStatus, setJornadaStatus]           = useState('idle') // 'idle'|'generating'|'done'
+  const [jornadaSummary, setJornadaSummary]   = useState(null)
+  const [jornadaInsights, setJornadaInsights] = useState([])
+  const [jornadaStatus, setJornadaStatus]     = useState('idle') // 'idle'|'generating'|'done'
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
@@ -78,11 +79,17 @@ export default function AdminDashboard() {
           setNotAuthorized(true)
         }
 
-        // Cargar resumen de jornada si existe
+        // Cargar análisis de jornada si existe
         const phase = a.unlockedPhases[a.unlockedPhases.length - 1] ?? 'grupos'
-        fetch(`/api/quiniela-ai?action=getJornada&groupId=${groupId}&phase=${phase}`)
+        fetch(`/api/quiniela-ai?action=getContent&groupId=${groupId}&phase=${phase}`)
           .then(r => r.json())
-          .then(d => { if (d.summary) { setJornadaSummary(d.summary); setJornadaStatus('done') } })
+          .then(d => {
+            if (d.content) {
+              setJornadaSummary(d.content.summary ?? null)
+              setJornadaInsights(d.content.insights ?? [])
+              setJornadaStatus('done')
+            }
+          })
           .catch(() => {})
       })
       .catch(() => setGroupError(true))
@@ -97,13 +104,17 @@ export default function AdminDashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'generateJornadaSummary',
-          payload: { groupId, phase, participants, scores, quinielas, adminResults },
+          action: 'generateJornadaContent',
+          payload: { groupId, phase, participants, scores, quinielas, adminResults: admin.results },
         }),
       })
       const data = await res.json()
-      if (data.summary) { setJornadaSummary(data.summary); setJornadaStatus('done'); showToast('✓ Análisis generado') }
-      else { setJornadaStatus('idle'); showToast('Error al generar') }
+      if (data.summary) {
+        setJornadaSummary(data.summary)
+        setJornadaInsights(data.insights ?? [])
+        setJornadaStatus('done')
+        showToast('✓ Análisis generado')
+      } else { setJornadaStatus('idle'); showToast('Error al generar') }
     } catch { setJornadaStatus('idle'); showToast('Error de conexión') }
   }
 
@@ -434,8 +445,24 @@ export default function AdminDashboard() {
             {jornadaStatus === 'generating' ? 'Kai está analizando…' : jornadaStatus === 'done' ? 'Regenerar análisis de Kai' : 'Activar análisis de Kai'}
           </button>
           {jornadaSummary && (
-            <div style={{ background: '#f9f9f7', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#333', lineHeight: 1.6, borderLeft: '3px solid #1D9E75' }}>
-              {jornadaSummary}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ background: '#f9f9f7', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#333', lineHeight: 1.6, borderLeft: '3px solid #1D9E75' }}>
+                {jornadaSummary}
+              </div>
+              {jornadaInsights.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {[...jornadaInsights].sort((a, b) => a.prioridad - b.prioridad).map((ins, i) => (
+                    <div key={i} style={{ background: '#f4fbf8', border: '0.5px solid #c6e8da', borderRadius: 8, padding: '8px 12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#0F6E56', background: '#E1F5EE', padding: '1px 7px', borderRadius: 10 }}>{ins.tipo}</span>
+                        {ins.protagonista && <span style={{ fontSize: 11, color: '#666' }}>{ins.protagonista}</span>}
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a', marginBottom: 2 }}>{ins.titular}</div>
+                      <div style={{ fontSize: 12, color: '#555', lineHeight: 1.5 }}>{ins.descripcion}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

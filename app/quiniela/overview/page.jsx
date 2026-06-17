@@ -285,11 +285,34 @@ function ParticipantesSection({ quinielas }) {
   )
 }
 
+function SpinnerIcon() {
+  return (
+    <span style={{ display: 'inline-block', width: 12, height: 12, border: '1.5px solid rgba(52,211,153,0.3)', borderTopColor: '#34D399', borderRadius: '50%', animation: 'kaiSpin 0.7s linear infinite' }} />
+  )
+}
+
 function KaiTools({ phase, globalConfidenceGenerated, quinielas, onRefresh }) {
-  const [confStatus, setConfStatus]     = useState('idle')
+  const [confStatus, setConfStatus]       = useState('idle')
   const [jornadaStatus, setJornadaStatus] = useState('idle')
+  const [jornadaGroupStatus, setJornadaGroupStatus] = useState({}) // id → 'pending'|'active'|'done'|'error'|'skipped'
+  const [jornadaDone, setJornadaDone]     = useState(0)
+  const [jornadaTotal, setJornadaTotal]   = useState(0)
+  // Default: only quinielas with participants selected
+  const [selectedIds, setSelectedIds] = useState(() =>
+    new Set(quinielas.filter(q => (q.participants?.length ?? 0) > 0).map(q => q.id))
+  )
   const [toast, setToast] = useState('')
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000) }
+
+  const toggleId = (id) => setSelectedIds(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+  const allSelected = quinielas.every(q => selectedIds.has(q.id))
+  const toggleAll = () => setSelectedIds(
+    allSelected ? new Set() : new Set(quinielas.map(q => q.id))
+  )
 
   async function generateConfidence() {
     setConfStatus('generating')
@@ -304,23 +327,71 @@ function KaiTools({ phase, globalConfidenceGenerated, quinielas, onRefresh }) {
     } catch { setConfStatus('idle'); showToast('Error de conexión') }
   }
 
-  async function generateAllJornadas() {
+  async function generateJornadas() {
+    if (selectedIds.size === 0) return
     setJornadaStatus('generating')
+    setJornadaGroupStatus({})
+    setJornadaDone(0)
+    setJornadaTotal(0)
+
     try {
       const res = await fetch('/api/quiniela-ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generateAllJornadas', payload: { phase } }),
+        body: JSON.stringify({ action: 'generateAllJornadas', payload: { phase, groupIds: [...selectedIds] } }),
       })
-      const d = await res.json()
-      if (d.ok) { setJornadaStatus('done'); showToast(`✓ Análisis generado para ${d.generated} quinielas`); onRefresh() }
-      else { setJornadaStatus('idle'); showToast('Error al generar análisis') }
-    } catch { setJornadaStatus('idle'); showToast('Error de conexión') }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop()
+        for (const part of parts) {
+          const line = part.trim()
+          if (!line.startsWith('data: ')) continue
+          try {
+            const ev = JSON.parse(line.slice(6))
+            if (ev.type === 'start') {
+              setJornadaTotal(ev.total)
+              setJornadaGroupStatus(Object.fromEntries(ev.groups.map(g => [g.id, 'pending'])))
+            } else if (ev.type === 'active') {
+              setJornadaGroupStatus(prev => ({ ...prev, [ev.id]: 'active' }))
+            } else if (ev.type === 'progress') {
+              setJornadaDone(ev.count)
+              setJornadaGroupStatus(prev => ({ ...prev, [ev.id]: ev.status }))
+            } else if (ev.type === 'complete') {
+              setJornadaStatus('done')
+              setJornadaDone(ev.generated)
+              onRefresh()
+            }
+          } catch {}
+        }
+      }
+    } catch {
+      setJornadaStatus('idle')
+      showToast('Error de conexión')
+    }
   }
 
   const quinielasWithJornada = quinielas.filter(q => q.kai.jornada).length
+  const isGenerating = jornadaStatus === 'generating'
+  const nSelected = selectedIds.size
+
+  const btnLabel = isGenerating
+    ? 'Generando...'
+    : nSelected === 0
+      ? 'Selecciona quinielas'
+      : nSelected === quinielas.length
+        ? '⚡ Generar para todas'
+        : `⚡ Generar para ${nSelected}`
 
   return (
     <div style={{ background: 'linear-gradient(135deg, #0c0f14, #0f1a10)', borderRadius: 14, padding: '18px 20px', marginBottom: 16 }}>
+      <style>{`@keyframes kaiSpin{to{transform:rotate(360deg)}}`}</style>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
         <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#34D399' }} />
         <span style={{ fontSize: 13, fontWeight: 700, color: '#34D399', letterSpacing: .5, textTransform: 'uppercase' }}>Kai · Herramientas globales</span>
@@ -347,22 +418,93 @@ function KaiTools({ phase, globalConfidenceGenerated, quinielas, onRefresh }) {
         </div>
       </div>
 
-      {/* Análisis de jornada para todas */}
-      <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '12px 14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+      {/* Análisis de jornada con selección */}
+      <div style={{
+        background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '12px 14px',
+        border: isGenerating ? '1px solid rgba(52,211,153,0.35)' : '1px solid transparent',
+        transition: 'border-color 0.3s',
+      }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 2 }}>Análisis de jornada</div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>
-              {quinielasWithJornada}/{quinielas.length} quinielas con análisis generado
+              {isGenerating
+                ? `Generando análisis... ${jornadaDone} de ${jornadaTotal} quinielas`
+                : `${quinielasWithJornada}/${quinielas.length} con análisis · ${nSelected} seleccionadas`}
             </div>
           </div>
-          <button onClick={generateAllJornadas} disabled={jornadaStatus === 'generating'}
-            style={{ padding: '6px 14px', fontSize: 12, borderRadius: 8, border: 'none', cursor: jornadaStatus === 'generating' ? 'default' : 'pointer', fontWeight: 600, flexShrink: 0, marginLeft: 12,
-              background: jornadaStatus === 'generating' ? '#555' : jornadaStatus === 'done' ? 'rgba(52,211,153,0.2)' : '#34D399',
-              color: jornadaStatus === 'generating' ? '#aaa' : jornadaStatus === 'done' ? '#34D399' : '#0a1f12',
+          <button onClick={generateJornadas} disabled={isGenerating || nSelected === 0}
+            style={{ padding: '6px 14px', fontSize: 12, borderRadius: 8, border: 'none', flexShrink: 0, marginLeft: 12, fontWeight: 600,
+              cursor: isGenerating || nSelected === 0 ? 'default' : 'pointer',
+              background: isGenerating ? '#333' : nSelected === 0 ? '#222' : '#34D399',
+              color: isGenerating ? '#666' : nSelected === 0 ? '#444' : '#0a1f12',
             }}>
-            {jornadaStatus === 'generating' ? `Generando…` : jornadaStatus === 'done' ? '✓ Listo' : '⚡ Generar para todas'}
+            {btnLabel}
           </button>
+        </div>
+
+        {/* Barra de progreso */}
+        {isGenerating && jornadaTotal > 0 && (
+          <div style={{ height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2, marginBottom: 10, overflow: 'hidden' }}>
+            <div style={{ height: '100%', background: '#34D399', borderRadius: 2, width: `${(jornadaDone / jornadaTotal) * 100}%`, transition: 'width 0.4s ease' }} />
+          </div>
+        )}
+
+        {/* Seleccionar todas / link */}
+        {!isGenerating && (
+          <div style={{ marginBottom: 6 }}>
+            <button onClick={toggleAll} style={{ background: 'none', border: 'none', padding: 0, fontSize: 11, color: 'rgba(52,211,153,0.7)', cursor: 'pointer', textDecoration: 'underline' }}>
+              {allSelected ? 'Deseleccionar todas' : 'Seleccionar todas'}
+            </button>
+          </div>
+        )}
+
+        {/* Lista */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 280, overflowY: 'auto' }}>
+          {quinielas.map(q => {
+            const status = jornadaGroupStatus[q.id]
+            const isSelected = selectedIds.has(q.id)
+            const inRun = isGenerating && isSelected
+            return (
+              <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 2px', borderRadius: 6,
+                opacity: isGenerating && !isSelected ? 0.3 : 1 }}>
+                {/* Left icon: checkbox or status */}
+                <span style={{ width: 16, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {isGenerating
+                    ? (status === 'done' || status === 'skipped'
+                        ? <span style={{ color: '#34D399', fontSize: 11 }}>✓</span>
+                        : status === 'active'
+                          ? <SpinnerIcon />
+                          : status === 'error'
+                            ? <span style={{ color: '#f87171', fontSize: 11 }}>✗</span>
+                            : <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>○</span>)
+                    : <input type="checkbox" checked={isSelected} onChange={() => toggleId(q.id)}
+                        style={{ width: 13, height: 13, accentColor: '#34D399', cursor: 'pointer' }} />}
+                </span>
+
+                {/* Name */}
+                <span style={{ fontSize: 12, flex: 1,
+                  color: inRun
+                    ? (status === 'done' || status === 'skipped' ? '#34D399' : status === 'active' ? '#fff' : status === 'error' ? '#f87171' : 'rgba(255,255,255,0.3)')
+                    : isSelected ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)',
+                }}>
+                  {q.nombre}
+                </span>
+
+                {/* Right label */}
+                <span style={{ fontSize: 11, flexShrink: 0,
+                  color: inRun
+                    ? (status === 'done' ? '#34D399' : status === 'active' ? 'rgba(52,211,153,0.65)' : status === 'error' ? '#f87171' : 'rgba(255,255,255,0.18)')
+                    : q.kai.jornada ? 'rgba(52,211,153,0.55)' : 'rgba(255,255,255,0.18)',
+                }}>
+                  {inRun
+                    ? (status === 'done' ? 'listo' : status === 'active' ? 'generando...' : status === 'error' ? 'error' : status === 'skipped' ? 'sin datos' : 'pendiente')
+                    : q.kai.jornada ? 'con análisis' : '—'}
+                </span>
+              </div>
+            )
+          })}
         </div>
       </div>
 
