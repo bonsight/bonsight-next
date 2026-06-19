@@ -25,6 +25,12 @@ export default async function KaiTenantPage({ params, searchParams }) {
 
   if (!meta) notFound();
 
+  const allowed = process.env.ALLOWED_TENANTS;
+  if (allowed) {
+    const set = new Set(allowed.split(',').map((s) => s.trim()));
+    if (!set.has(tenant)) notFound();
+  }
+
   // Per-tenant auth guard — only active if tenant has an accessCode
   if (meta.accessCode) {
     const cookieStore = await cookies();
