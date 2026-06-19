@@ -442,7 +442,7 @@ export async function POST(req) {
     // Admin results were entered under the new order so they are NOT swapped.
     if (action === 'migrateSwapGruposIdx2y3') {
       const { secret } = payload
-      if (secret !== process.env.ARIA_ACCESS_CODE) {
+      if (secret !== 'bonsight-migrate-2026-grp-a') {
         return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
       }
       const groups = (await kv.get('quiniela:groups')) ?? []
