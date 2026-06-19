@@ -1,13 +1,13 @@
 import { isAuthorized } from '@/lib/aria/auth';
-import { getInvestigation, updateInvestigationMeta, deleteInvestigation, BUSINESS_ID } from '@/lib/aria/memory';
+import { getInvestigation, updateInvestigationMeta, deleteInvestigation } from '@/lib/aria/memory';
 
 export async function GET(req, { params }) {
   if (!(await isAuthorized())) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
 
-  const { id } = await params;
-  const investigation = await getInvestigation(BUSINESS_ID, id);
+  const { tenant, id } = await params;
+  const investigation = await getInvestigation(tenant, id);
   if (!investigation) {
     return Response.json({ error: 'No encontrada.' }, { status: 404 });
   }
@@ -20,9 +20,9 @@ export async function PATCH(req, { params }) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
 
-  const { id } = await params;
+  const { tenant, id } = await params;
   const updates = await req.json();
-  const result = await updateInvestigationMeta(BUSINESS_ID, id, updates);
+  const result = await updateInvestigationMeta(tenant, id, updates);
   if (!result.ok) return Response.json({ error: result.error }, { status: 400 });
   return Response.json({ meta: result.meta });
 }
@@ -32,7 +32,7 @@ export async function DELETE(req, { params }) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
 
-  const { id } = await params;
-  await deleteInvestigation(BUSINESS_ID, id);
+  const { tenant, id } = await params;
+  await deleteInvestigation(tenant, id);
   return Response.json({ ok: true });
 }

@@ -81,6 +81,54 @@ export default function AriaPage() {
     localStorage.setItem(ACTIVE_ID_KEY, id);
   }
 
+  async function handleDeleteInvestigation(id) {
+    await fetch(`/api/aria/investigations/${id}`, { method: 'DELETE' });
+    const remaining = investigations.filter((inv) => inv.id !== id);
+    setInvestigations(remaining);
+    if (investigationId === id) {
+      const next = remaining.find((inv) => inv.estado !== 'archivada');
+      if (next) {
+        handleSelectInvestigation(next.id);
+      } else if (remaining.length > 0) {
+        handleSelectInvestigation(remaining[0].id);
+      } else {
+        handleNewInvestigation();
+      }
+    }
+  }
+
+  async function handleArchiveInvestigation(id) {
+    const res = await fetch(`/api/aria/investigations/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estado: 'archivada' }),
+    });
+    const data = await res.json();
+    if (data.meta) {
+      setInvestigations((prev) => upsertInvestigation(prev, data.meta));
+      if (investigationId === id) {
+        const next = investigations.find((inv) => inv.id !== id && inv.estado !== 'archivada');
+        if (next) {
+          handleSelectInvestigation(next.id);
+        } else {
+          handleNewInvestigation();
+        }
+      }
+    }
+  }
+
+  async function handleRestoreInvestigation(id) {
+    const res = await fetch(`/api/aria/investigations/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estado: 'abierta' }),
+    });
+    const data = await res.json();
+    if (data.meta) {
+      setInvestigations((prev) => upsertInvestigation(prev, data.meta));
+    }
+  }
+
   async function send(overrideText) {
     const text = (overrideText ?? input).trim();
     if (!text || loading || !investigationId) return;
@@ -133,6 +181,9 @@ export default function AriaPage() {
         activeId={investigationId}
         onSelect={handleSelectInvestigation}
         onNew={handleNewInvestigation}
+        onArchive={handleArchiveInvestigation}
+        onRestore={handleRestoreInvestigation}
+        onDelete={handleDeleteInvestigation}
       />
       <div className="aria-page">
         <header className="aria-header">

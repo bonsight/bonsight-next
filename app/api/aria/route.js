@@ -10,7 +10,7 @@ import {
 } from '@/lib/aria/memory';
 import { summarizeIfNeeded } from '@/lib/aria/summarize';
 import { buildAriaSystemPrompt } from '@/lib/aria/prompts';
-import { CLIENT_PROFILE } from '@/lib/aria/clientProfile';
+import { getBusinessProfile } from '@/lib/businessMemory';
 
 const MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 16000;
@@ -99,6 +99,12 @@ const tools = [
         preguntas_abiertas: { type: 'array', items: { type: 'string' } },
         objetivos_actualizados: { type: 'array', items: { type: 'string' } },
         sugerencia_proxima_sesion: { type: 'string' },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Entre 3 y 6 tags cortos (1-3 palabras) que indexen el contenido real de esta investigación para búsqueda futura. Incluye: canales analizados (ej. "ig/paid", "linkedin"), métricas clave (ej. "bounce rate", "conversiones"), productos involucrados (ej. "quiniela", "kai"), conceptos analíticos (ej. "CRO", "funnel") y cualquier término específico que alguien usaría para encontrar esta investigación. No repitas el área ni el título.',
+        },
       },
       required: ['resumen_sesion'],
     },
@@ -372,12 +378,16 @@ export async function POST(req) {
 
     const investigationContext = await getInvestigationMeta(BUSINESS_ID, investigationId);
     const currentDate = new Date().toISOString().slice(0, 10);
-    const system = buildAriaSystemPrompt({ investigationContext, clientProfile: CLIENT_PROFILE, currentDate });
+    const clientProfile = await getBusinessProfile(BUSINESS_ID);
+    const system = buildAriaSystemPrompt({ investigationContext, clientProfile, currentDate });
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const userQuery = String(messages[messages.length - 1]?.content ?? '').slice(0, 200);
-    const cleanMessages = messages.map(({ role, content }) => ({ role, content }));
+    const cleanMessages = messages.map(({ role, content }) => ({
+      role,
+      content: String(content ?? '') || '…',
+    }));
     const conversation = await summarizeIfNeeded(cleanMessages);
     let finalText = '';
     let presentation = null;
@@ -439,9 +449,29 @@ export async function POST(req) {
 
       conversation.push({ role: 'assistant', content: response.content });
 
+      const toolBlocks = response.content.filter((b) => b.type === 'tool_use');
+
+      const toolOutputs = await Promise.all(
+        toolBlocks.map(async (block) => {
+          let content;
+          let isError = false;
+          const toolStart = Date.now();
+          try {
+            content = JSON.stringify(await executeTool(block.name, block.input, investigationId));
+          } catch (err) {
+            content = JSON.stringify({ error: err.message });
+            isError = true;
+          }
+          return { block, content, isError, ms: Date.now() - toolStart };
+        })
+      );
+
       const toolResults = [];
-      for (const block of response.content) {
-        if (block.type !== 'tool_use') continue;
+      const lastCall = callLogs[callLogs.length - 1];
+      lastCall.tools = [];
+
+      for (const { block, content, isError, ms } of toolOutputs) {
+        lastCall.tools.push({ name: block.name, ms, isError });
 
         if (block.name === 'present_analysis') {
           presentation = { ...block.input, dataSources: [...dataSources] };
@@ -449,19 +479,6 @@ export async function POST(req) {
         if (block.name === 'present_advisory') {
           advisory = { ...block.input };
         }
-
-        let content;
-        let isError = false;
-        const toolStart = Date.now();
-        try {
-          content = JSON.stringify(await executeTool(block.name, block.input, investigationId));
-        } catch (err) {
-          content = JSON.stringify({ error: err.message });
-          isError = true;
-        }
-        const lastCall = callLogs[callLogs.length - 1];
-        (lastCall.tools ??= []).push({ name: block.name, ms: Date.now() - toolStart, isError });
-
         if (block.name === 'ga4_query' && !isError) {
           dataSources.push({
             metrics: block.input?.metrics ?? [],

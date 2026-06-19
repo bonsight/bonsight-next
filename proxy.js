@@ -25,6 +25,19 @@ export async function proxy(request) {
     return NextResponse.rewrite(url);
   }
 
+  if (host.startsWith('kai.')) {
+    const { pathname } = request.nextUrl;
+    const expected = await sha256Hex(process.env.KAI_ACCESS_CODE || '');
+    const isAuthed = request.cookies.get('kai_auth')?.value === expected;
+    const isLogin = pathname === '/login';
+
+    const url = request.nextUrl.clone();
+    url.pathname = (isAuthed || isLogin)
+      ? `/kai${pathname === '/' ? '' : pathname}`
+      : '/kai/login';
+    return NextResponse.rewrite(url);
+  }
+
   const { pathname } = request.nextUrl;
 
   const hasLocale = locales.some(
@@ -46,5 +59,5 @@ export async function proxy(request) {
 }
 
 export const config = {
-  matcher: ['/((?!api|quiniela|_next/static|_next/image|favicon\\.svg|logo\\.svg|hero_home\\.png|.*\\.ico|sitemap\\.xml|robots\\.txt).*)'],
+  matcher: ['/((?!api|aria|kai|quiniela|_next/static|_next/image|favicon\\.svg|logo\\.svg|hero_home\\.png|.*\\.ico|sitemap\\.xml|robots\\.txt).*)'],
 };
