@@ -11,35 +11,63 @@ async function sha256Hex(input) {
 
 export async function proxy(request) {
   const host = request.headers.get('host') || '';
-
-  if (host.startsWith('aria.')) {
-    const { pathname } = request.nextUrl;
-    const expected = await sha256Hex(process.env.ARIA_ACCESS_CODE || '');
-    const isAuthed = request.cookies.get('aria_auth')?.value === expected;
-    const isLogin = pathname === '/login';
-
-    const url = request.nextUrl.clone();
-    url.pathname = (isAuthed || isLogin)
-      ? `/aria${pathname === '/' ? '' : pathname}`
-      : '/aria/login';
-    return NextResponse.rewrite(url);
-  }
-
-  if (host.startsWith('kai.')) {
-    const { pathname } = request.nextUrl;
-    const expected = await sha256Hex(process.env.KAI_ACCESS_CODE || '');
-    const isAuthed = request.cookies.get('kai_auth')?.value === expected;
-    const isLogin = pathname === '/login';
-
-    const url = request.nextUrl.clone();
-    url.pathname = (isAuthed || isLogin)
-      ? `/kai${pathname === '/' ? '' : pathname}`
-      : '/kai/login';
-    return NextResponse.rewrite(url);
-  }
-
   const { pathname } = request.nextUrl;
 
+  // ── kai.bonsight.co ───────────────────────────────────────
+  if (host.startsWith('kai.')) {
+    const url = request.nextUrl.clone();
+
+    // Login page — always accessible
+    if (pathname === '/login') {
+      url.pathname = '/kai/login';
+      return NextResponse.rewrite(url);
+    }
+
+    // Admin routes — require global KAI_ACCESS_CODE
+    if (pathname === '/' || pathname.startsWith('/admin')) {
+      const expected = await sha256Hex(process.env.KAI_ACCESS_CODE || '');
+      const isAuthed = request.cookies.get('kai_auth')?.value === expected;
+      if (!isAuthed) {
+        url.pathname = '/kai/login';
+        return NextResponse.rewrite(url);
+      }
+      url.pathname = pathname === '/' ? '/kai' : `/kai${pathname}`;
+      return NextResponse.rewrite(url);
+    }
+
+    // Tenant routes (/[slug], /[slug]/*) — per-tenant auth handled at page level
+    url.pathname = `/kai${pathname}`;
+    return NextResponse.rewrite(url);
+  }
+
+  // ── aria.bonsight.co ──────────────────────────────────────
+  if (host.startsWith('aria.')) {
+    const url = request.nextUrl.clone();
+
+    // Login page — always accessible
+    if (pathname === '/login') {
+      url.pathname = '/aria/login';
+      return NextResponse.rewrite(url);
+    }
+
+    // Root and admin — require global ARIA_ACCESS_CODE
+    if (pathname === '/' || pathname.startsWith('/admin')) {
+      const expected = await sha256Hex(process.env.ARIA_ACCESS_CODE || '');
+      const isAuthed = request.cookies.get('aria_auth')?.value === expected;
+      if (!isAuthed) {
+        url.pathname = '/aria/login';
+        return NextResponse.rewrite(url);
+      }
+      url.pathname = pathname === '/' ? '/aria' : `/aria${pathname}`;
+      return NextResponse.rewrite(url);
+    }
+
+    // Tenant routes — per-tenant auth handled at page level
+    url.pathname = `/aria${pathname}`;
+    return NextResponse.rewrite(url);
+  }
+
+  // ── Main site — locale routing ────────────────────────────
   const hasLocale = locales.some(
     (l) => pathname.startsWith(`/${l}/`) || pathname === `/${l}`
   );
