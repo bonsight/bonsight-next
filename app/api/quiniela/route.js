@@ -437,6 +437,35 @@ export async function POST(req) {
       return NextResponse.json({ ok: true })
     }
 
+    // One-time migration: swap grupos picks[2] ↔ picks[3] for all quinielas.
+    // Needed because commit a1b15b2 reordered Group A matchday-2 pairs (índices 2 y 3).
+    // Admin results were entered under the new order so they are NOT swapped.
+    if (action === 'migrateSwapGruposIdx2y3') {
+      const { secret } = payload
+      if (secret !== process.env.ARIA_ACCESS_CODE) {
+        return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+      }
+      const groups = (await kv.get('quiniela:groups')) ?? []
+      const report = []
+      for (const { id: gid } of groups) {
+        const quinielas = (await kv.get(`quiniela:${gid}:quinielas`)) ?? {}
+        let changed = 0
+        for (const pid of Object.keys(quinielas)) {
+          const q = quinielas[pid]
+          const gr = q.phases?.grupos
+          if (!Array.isArray(gr)) continue
+          const tmp = gr[2]
+          gr[2] = gr[3] ?? { l: '', v: '', w: '' }
+          gr[3] = tmp ?? { l: '', v: '', w: '' }
+          quinielas[pid] = { ...q, phases: { ...q.phases, grupos: gr } }
+          changed++
+        }
+        if (changed > 0) await kv.set(`quiniela:${gid}:quinielas`, quinielas)
+        report.push({ groupId: gid, participantsMigrated: changed })
+      }
+      return NextResponse.json({ ok: true, report })
+    }
+
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
   } catch (e) {
     return NextResponse.json({ error: 'KV error', detail: String(e) }, { status: 500 })
