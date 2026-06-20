@@ -1207,9 +1207,128 @@ function SummaryTab({ slug }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────
 
-const TABS = ['Business Profile', 'Conversaciones', 'Documentos', 'Stakeholders', 'Intelligence', 'Aprendizajes', 'Resumen'];
+const TABS = ['Business Profile', 'Conversaciones', 'Documentos', 'Stakeholders', 'Intelligence', 'Aprendizajes', 'Resumen', 'Costos IA'];
 
-export default function TenantDetail({ meta, profile, conversations, allLearnings = [], participantMap = {}, knowledgeQuality = {}, recentSession = null, changeCounts = {}, recentLearnings = [], ariaInvestigations = [] }) {
+// ── Costs Tab ──────────────────────────────────────────────────────────────
+
+function fmtT(n) {
+  if (!n || n === 0) return '0';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(Math.round(n));
+}
+function fmtC(n) { return `USD ${Number(n ?? 0).toFixed(2)}`; }
+
+function TokenBar({ input, output }) {
+  const total = (input ?? 0) + (output ?? 0);
+  if (!total) return null;
+  const pct = Math.round((input / total) * 100);
+  return (
+    <div className="cost-token-bar">
+      <div className="cost-token-bar-input" style={{ width: `${pct}%` }} />
+      <div className="cost-token-bar-output" style={{ width: `${100 - pct}%` }} />
+    </div>
+  );
+}
+
+function CostsTab({ usage, events }) {
+  const { total = {}, byFeature = [] } = usage ?? {};
+  const maxCost = byFeature[0]?.cost ?? 1;
+
+  const now = Date.now();
+  const DAY = 86400000;
+  const todayEvents = (events ?? []).filter((e) => now - new Date(e.createdAt).getTime() < DAY);
+  const weekEvents  = (events ?? []).filter((e) => now - new Date(e.createdAt).getTime() < 7 * DAY && now - new Date(e.createdAt).getTime() >= DAY);
+
+  function groupByFeature(evts) {
+    const map = {};
+    for (const e of evts) {
+      const k = `${e.product}:${e.feature}`;
+      if (!map[k]) map[k] = { label: e.feature, product: e.product, calls: 0, cost: 0, tokens: 0 };
+      map[k].calls++;
+      map[k].cost += e.cost ?? 0;
+      map[k].tokens += (e.inputTokens ?? 0) + (e.outputTokens ?? 0);
+    }
+    return Object.values(map).sort((a, b) => b.cost - a.cost);
+  }
+
+  const LABELS = { chat: 'Discovery Chat', executive_summary: 'Executive Summary', diagnosis: 'Diagnóstico', summary: 'Resumen', insights: 'Insights', transversals: 'Patrones Transversales' };
+
+  function EventGroup({ title, evts }) {
+    if (!evts.length) return null;
+    const grouped = groupByFeature(evts);
+    return (
+      <div className="cost-event-group">
+        <div className="cost-event-period">{title}</div>
+        {grouped.map((g) => (
+          <div key={`${g.product}:${g.label}`} className="cost-event-row">
+            <span className="cost-event-feature">{LABELS[g.label] ?? g.label}</span>
+            <span className="cost-event-calls">{g.calls} llamada{g.calls !== 1 ? 's' : ''}</span>
+            <span className="cost-event-cost">{fmtC(g.cost)}</span>
+            <span className="cost-event-tokens">{fmtT(g.tokens)} tokens</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="cost-tab">
+      {/* Global stat cards */}
+      <div className="cost-tab-stats">
+        <div className="cost-tab-stat">
+          <div className="cost-tab-stat-label">Costo este mes</div>
+          <div className="cost-tab-stat-value">{fmtC(total.cost)}</div>
+        </div>
+        <div className="cost-tab-stat">
+          <div className="cost-tab-stat-label">Input tokens</div>
+          <div className="cost-tab-stat-value cost-tab-stat-value--tok">{fmtT(total.input_tokens)}</div>
+        </div>
+        <div className="cost-tab-stat">
+          <div className="cost-tab-stat-label">Output tokens</div>
+          <div className="cost-tab-stat-value cost-tab-stat-value--tok">{fmtT(total.output_tokens)}</div>
+        </div>
+        <div className="cost-tab-stat">
+          <div className="cost-tab-stat-label">Total tokens</div>
+          <div className="cost-tab-stat-value cost-tab-stat-value--tok">{fmtT((total.input_tokens ?? 0) + (total.output_tokens ?? 0))}</div>
+          <TokenBar input={total.input_tokens} output={total.output_tokens} />
+        </div>
+      </div>
+
+      {/* By feature */}
+      {byFeature.length > 0 && (
+        <div className="cost-tab-section">
+          <div className="cost-tab-section-title">Por funcionalidad</div>
+          {byFeature.map((f) => (
+            <div key={`${f.product}:${f.feature}`} className="cost-feature-row">
+              <span className="cost-feature-label">{LABELS[f.feature] ?? f.feature}</span>
+              <div className="cost-feature-bar-wrap">
+                <div className="cost-feature-bar" style={{ width: `${Math.round((f.cost / maxCost) * 100)}%` }} />
+              </div>
+              <span className="cost-feature-cost">{fmtC(f.cost)}</span>
+              <span className="cost-feature-tokens">{fmtT(f.input_tokens + f.output_tokens)} tok</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Recent activity */}
+      {(todayEvents.length > 0 || weekEvents.length > 0) && (
+        <div className="cost-tab-section">
+          <div className="cost-tab-section-title">Actividad reciente</div>
+          <EventGroup title="Hoy" evts={todayEvents} />
+          <EventGroup title="Últimos 7 días" evts={weekEvents} />
+        </div>
+      )}
+
+      {!total.calls && (
+        <div className="cost-tab-empty">Sin datos aún. Los costos se registrarán en la próxima conversación.</div>
+      )}
+    </div>
+  );
+}
+
+export default function TenantDetail({ meta, profile, conversations, allLearnings = [], participantMap = {}, knowledgeQuality = {}, recentSession = null, changeCounts = {}, recentLearnings = [], ariaInvestigations = [], tenantUsage = null, usageEvents = [] }) {
   const [activeTab, setActiveTab] = useState(0);
   const [copied, setCopied] = useState(false);
 
@@ -1356,6 +1475,9 @@ export default function TenantDetail({ meta, profile, conversations, allLearning
 
         {/* Resumen Tab */}
         {activeTab === 6 && <SummaryTab slug={meta.slug} />}
+
+        {/* Costos IA Tab */}
+        {activeTab === 7 && <CostsTab usage={tenantUsage} events={usageEvents} />}
 
       </div>
     </>

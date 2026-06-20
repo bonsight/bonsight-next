@@ -1327,3 +1327,352 @@
   width: 100%;
   justify-content: center;
 }
+
+/* ─── Costs Dashboard (global page) ───────────────────────── */
+.costs-page {
+  padding: 28px 32px;
+  max-width: 860px;
+}
+
+.costs-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.costs-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: -0.02em;
+}
+
+.costs-month {
+  font-size: 12px;
+  color: #999;
+  margin-top: 2px;
+}
+
+.costs-back {
+  font-size: 12px;
+  color: #888;
+  text-decoration: none;
+}
+.costs-back:hover { color: #333; }
+
+.costs-global-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.costs-stat-card {
+  background: #fff;
+  border: 0.5px solid #e0e0dc;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.costs-stat-card--primary {
+  background: #f0faf5;
+  border-color: #b3e8d6;
+}
+
+.costs-stat-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.costs-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: -0.02em;
+}
+.costs-stat-value--tokens { color: #1D9E75; }
+
+.costs-stat-calls, .costs-stat-hint {
+  font-size: 11px;
+  color: #aaa;
+  margin-top: 4px;
+}
+
+.costs-section { margin-bottom: 28px; }
+
+.costs-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  letter-spacing: 0.02em;
+  margin-bottom: 12px;
+}
+
+.costs-product-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.costs-product-card {
+  background: #fff;
+  border: 0.5px solid #e0e0dc;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.costs-product-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-bottom: 8px;
+}
+
+.costs-product-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.costs-product-cost {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: -0.02em;
+}
+
+.costs-product-tokens {
+  font-size: 12px;
+  color: #888;
+  margin: 4px 0 8px;
+}
+
+.costs-feature-list {
+  background: #fff;
+  border: 0.5px solid #e0e0dc;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.costs-feature-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 180px;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px;
+  border-bottom: 0.5px solid #f0f0ec;
+}
+.costs-feature-row:last-child { border-bottom: none; }
+
+.costs-feature-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.costs-feature-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #222;
+}
+
+.costs-feature-product {
+  font-size: 10px;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.costs-feature-calls {
+  font-size: 10.5px;
+  color: #bbb;
+}
+
+.costs-feature-bar-wrap {
+  height: 4px;
+  background: #f0f0ec;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.costs-feature-bar {
+  height: 100%;
+  background: #1D9E75;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.costs-feature-numbers {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.costs-feature-cost {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111;
+}
+
+.costs-feature-tokens {
+  font-size: 11px;
+  color: #888;
+}
+
+.costs-empty {
+  font-size: 12.5px;
+  color: #aaa;
+  padding: 20px 0;
+}
+
+/* Token bar (shared) */
+.cost-token-bar {
+  display: flex;
+  height: 3px;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+  background: #f0f0ec;
+}
+.cost-token-bar-input  { background: #1D9E75; }
+.cost-token-bar-output { background: #6EE7B7; }
+
+/* ─── Costs Tab (per-tenant) ───────────────────────────────── */
+.cost-tab { display: flex; flex-direction: column; gap: 20px; }
+
+.cost-tab-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.cost-tab-stat {
+  background: #fff;
+  border: 0.5px solid #e0e0dc;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.cost-tab-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 5px;
+}
+
+.cost-tab-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: -0.02em;
+}
+.cost-tab-stat-value--tok { color: #1D9E75; font-size: 16px; }
+
+.cost-tab-section { }
+
+.cost-tab-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+}
+
+.cost-feature-row {
+  display: grid;
+  grid-template-columns: 160px 1fr 80px 70px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 0.5px solid #f5f5f3;
+}
+.cost-feature-row:last-child { border-bottom: none; }
+
+.cost-feature-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+}
+
+.cost-feature-bar-wrap {
+  height: 4px;
+  background: #f0f0ec;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.cost-feature-bar {
+  height: 100%;
+  background: #1D9E75;
+  border-radius: 2px;
+}
+
+.cost-feature-cost {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  text-align: right;
+}
+
+.cost-feature-tokens {
+  font-size: 11px;
+  color: #888;
+  text-align: right;
+}
+
+.cost-event-group { margin-bottom: 14px; }
+
+.cost-event-period {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #bbb;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.cost-event-row {
+  display: grid;
+  grid-template-columns: 160px 80px 80px 80px;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 0.5px solid #f5f5f3;
+}
+.cost-event-row:last-child { border-bottom: none; }
+
+.cost-event-feature {
+  font-size: 12px;
+  color: #333;
+}
+
+.cost-event-calls {
+  font-size: 11px;
+  color: #aaa;
+}
+
+.cost-event-cost {
+  font-size: 12px;
+  font-weight: 500;
+  color: #222;
+}
+
+.cost-event-tokens {
+  font-size: 11px;
+  color: #888;
+}
+
+.cost-tab-empty {
+  font-size: 12.5px;
+  color: #bbb;
+  padding: 16px 0;
+}

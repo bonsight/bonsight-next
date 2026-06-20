@@ -4,6 +4,7 @@ import { listConversations, getConversationMessages, getConversationCheckpointSu
 import { listLearnings } from '@/lib/kai/learnings';
 import { listInvestigations } from '@/lib/aria/memory';
 import { calcOverallScore } from '@/lib/kai/scoring';
+import { getTenantMonthlyUsage, getRecentEvents, currentMonth } from '@/lib/kai/usage';
 import TenantDetail from './TenantDetail';
 
 export async function generateMetadata({ params }) {
@@ -49,12 +50,14 @@ function extractRole(messages) {
 export default async function TenantAdminPage({ params }) {
   const { tenant } = await params;
 
-  const [meta, profile, conversations, ariaInvestigations, allLearnings] = await Promise.all([
+  const [meta, profile, conversations, ariaInvestigations, allLearnings, tenantUsage, usageEvents] = await Promise.all([
     getTenantMeta(tenant),
     getBusinessProfile(tenant),
     listConversations(tenant),
     listInvestigations(tenant),
     listLearnings(tenant),
+    getTenantMonthlyUsage(tenant, currentMonth()),
+    getRecentEvents(tenant, 50),
   ]);
 
   if (!meta) notFound();
@@ -165,6 +168,8 @@ export default async function TenantAdminPage({ params }) {
       changeCounts={changeCounts}
       recentLearnings={recentLearnings}
       ariaInvestigations={ariaInvestigations}
+      tenantUsage={tenantUsage}
+      usageEvents={usageEvents}
     />
   );
 }
