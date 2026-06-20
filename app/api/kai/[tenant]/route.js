@@ -13,6 +13,7 @@ import {
 import { listAriaSuggestions, updateSuggestionStatus, applySuggestionToProfile } from '@/lib/kai/suggestions';
 import { addLearning } from '@/lib/kai/learnings';
 import { regenerateAllArtifacts } from '@/lib/kai/artifacts';
+import { trackUsage } from '@/lib/kai/usage';
 
 const MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 1000;
@@ -837,6 +838,8 @@ export async function POST(req, { params }) {
       system: buildSystemPrompt(meta.name, businessProfile, previousConvs, pendingSuggestions),
       messages: cleanMessages,
     });
+
+    after(() => trackUsage({ tenant, product: 'kai', feature: 'chat', model: MODEL, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }));
 
     const rawReply = response.content
       .filter((b) => b.type === 'text')

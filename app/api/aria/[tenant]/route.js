@@ -8,6 +8,7 @@ import {
   recordAriaMetrics,
 } from '@/lib/aria/memory';
 import { getTenantMeta, getBusinessProfile } from '@/lib/kai/tenants';
+import { trackUsage } from '@/lib/kai/usage';
 import { listConversations } from '@/lib/kai/memory';
 import { summarizeIfNeeded } from '@/lib/aria/summarize';
 import { addAriaSuggestion } from '@/lib/kai/suggestions';
@@ -733,6 +734,11 @@ export async function POST(req, { params }) {
     if (!finalText && (presentation || advisory)) {
       finalText = presentation?.summary || advisory?.justification || '';
     }
+
+    // Track total usage across all agentic loop iterations
+    const totalInput  = callLogs.reduce((s, l) => s + (l.usage?.input_tokens  ?? 0), 0);
+    const totalOutput = callLogs.reduce((s, l) => s + (l.usage?.output_tokens ?? 0), 0);
+    trackUsage({ tenant, product: 'aria', feature: 'chat', model: MODEL, inputTokens: totalInput, outputTokens: totalOutput }).catch(() => null);
 
     const metrics = {
       investigationId,

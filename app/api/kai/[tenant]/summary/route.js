@@ -3,6 +3,7 @@ import { Redis } from '@upstash/redis';
 import { isKaiAuthorized } from '@/lib/kai/auth';
 import { getTenantMeta, getBusinessProfile } from '@/lib/kai/tenants';
 import { listLearnings } from '@/lib/kai/learnings';
+import { trackUsage } from '@/lib/kai/usage';
 
 const kv = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
 const cacheKey = (tenant) => `kai:${tenant}:summary`;
@@ -68,6 +69,8 @@ Reglas:
 - Tono ejecutivo, no genérico. Refleja el contexto real del negocio.`,
     }],
   });
+
+  trackUsage({ tenant, product: 'kai', feature: 'summary', model: 'claude-sonnet-4-6', inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }).catch(() => null);
 
   const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
   const generatedAt = new Date().toISOString();

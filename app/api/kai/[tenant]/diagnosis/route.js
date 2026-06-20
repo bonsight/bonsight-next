@@ -3,6 +3,7 @@ import { Redis } from '@upstash/redis';
 import { isKaiAuthorized } from '@/lib/kai/auth';
 import { getTenantMeta } from '@/lib/kai/tenants';
 import { listLearnings } from '@/lib/kai/learnings';
+import { trackUsage } from '@/lib/kai/usage';
 
 const kv = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -66,6 +67,8 @@ Reglas:
 - Máximo 3 evidencias, mínimo 1`,
     }],
   });
+
+  trackUsage({ tenant, product: 'kai', feature: 'diagnosis', model: 'claude-sonnet-4-6', inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }).catch(() => null);
 
   const text      = response.content[0]?.text ?? '';
   const jsonMatch = text.match(/\{[\s\S]*\}/);
