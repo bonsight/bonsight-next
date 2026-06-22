@@ -235,8 +235,8 @@ function learningChipType(l) {
   return 'aprendizaje';
 }
 
-function LearningsAreaGroup({ area, areaLearnings, areaColor }) {
-  const [open, setOpen] = useState(false);
+function LearningsAreaGroup({ area, areaLearnings, areaColor, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
   const count = areaLearnings.length;
   return (
     <div className="kcv-lag">
@@ -244,7 +244,7 @@ function LearningsAreaGroup({ area, areaLearnings, areaColor }) {
         <span className="kcv-lag-dot" style={{ background: areaColor }} />
         <span className="kcv-lag-name">{area.label}</span>
         <span className="kcv-lag-count-text">{count} aprendizaje{count !== 1 ? 's' : ''}</span>
-        <span className="kcv-lag-arrow">{open ? '▼' : '▶'}</span>
+        <IconChevron size={12} style={{ color: 'var(--kai-text-faint)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
       </button>
       {open && (
         <div className="kcv-lag-items">
@@ -441,6 +441,33 @@ function NextSessionBlock({ profile, learnings, onStart }) {
 
 // ── ResumenSection ──────────────────────────────────────────────────────────
 
+// ── MobileCard — collapsible section card (mobile only) ───────────────────
+
+function MobileCard({ title, subtitle, badge, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="kcv-mobile-card">
+      {/* Mobile: collapsible toggle (hidden on desktop via CSS) */}
+      <button className="kcv-mc-toggle" onClick={() => setOpen((v) => !v)}>
+        <div className="kcv-mc-toggle-text">
+          <span className="kcv-mc-toggle-title">{title}</span>
+          {subtitle && <span className="kcv-mc-toggle-sub">{subtitle}</span>}
+        </div>
+        {badge != null && <span className="kcv-mc-badge">{badge}</span>}
+        <span style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>
+          <IconChevron size={14} style={{ color: 'var(--kai-text-faint)', display: 'block' }} />
+        </span>
+      </button>
+      {/* Body: always visible on desktop (CSS), toggle on mobile */}
+      <div className={`kcv-mc-body${open ? ' kcv-mc-body--open' : ''}`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── ResumenSection ──────────────────────────────────────────────────────────
+
 function ResumenSection({ profile, tenantMeta, learnings = [], transversals = [], onStartSession }) {
   const [coverageOpen, setCoverageOpen] = useState(false);
 
@@ -453,54 +480,55 @@ function ResumenSection({ profile, tenantMeta, learnings = [], transversals = []
   const opps         = profile?.opportunities ?? [];
   const stakeholders = profile?.stakeholders ?? [];
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+  const hasFindingsContent = transversals.length > 0 || risks.length > 0 || opps.length > 0 || learnings.length > 0;
 
-      {/* 1 — Resumen ejecutivo */}
-      <div>
-        <div className="kcv-resumen-section-header">
-          <span className="kcv-resumen-section-title">Resumen ejecutivo</span>
+  return (
+    <div className="kcv-resumen-sections">
+
+      {/* 1 — Métricas: 3×2 desktop / 2×2 mobile */}
+      <div className="kcv-metrics-grid">
+        <div className="kcv-metric-card">
+          <div className="kcv-metric-label">Entendimiento</div>
+          <div className="kcv-metric-value green">{score}%</div>
+          <div className="kcv-metric-sub">{areaScores.filter((a) => a.score > 0).length} áreas</div>
         </div>
-        <div className="kcv-metrics-grid">
-          <div className="kcv-metric-card">
-            <div className="kcv-metric-label">Entendimiento de la empresa</div>
-            <div className="kcv-metric-value green">{score}%</div>
-            <div className="kcv-metric-sub">{areaScores.filter((a) => a.score > 0).length} áreas con cobertura</div>
-          </div>
-          <div className="kcv-metric-card">
-            <div className="kcv-metric-label">Aprendizajes generados</div>
-            <div className="kcv-metric-value">{learnings.length || '—'}</div>
-            <div className="kcv-metric-sub">detectados por Kai</div>
-          </div>
-          <div className="kcv-metric-card">
-            <div className="kcv-metric-label">Riesgos detectados</div>
-            <div className={`kcv-metric-value${risks.length > 0 ? ' red' : ''}`}>{risks.length}</div>
-            <div className="kcv-metric-sub">identificados hasta ahora</div>
-          </div>
-          <div className="kcv-metric-card">
-            <div className="kcv-metric-label">Oportunidades</div>
-            <div className="kcv-metric-value">{opps.length || '—'}</div>
-            <div className="kcv-metric-sub">identificadas</div>
-          </div>
-          <div className="kcv-metric-card">
-            <div className="kcv-metric-label">Stakeholders mapeados</div>
-            <div className="kcv-metric-value">{stakeholders.length || '—'}</div>
-            <div className="kcv-metric-sub">personas identificadas</div>
-          </div>
-          <div className="kcv-metric-card">
-            <div className="kcv-metric-label">Confianza del diagnóstico</div>
-            <div className="kcv-metric-value" style={{ fontSize: 16 }}>{confidenceLabel(score)}</div>
-            <div className="kcv-metric-sub">basado en {score}% de cobertura</div>
-          </div>
+        <div className="kcv-metric-card">
+          <div className="kcv-metric-label">Aprendizajes</div>
+          <div className="kcv-metric-value">{learnings.length || '—'}</div>
+          <div className="kcv-metric-sub">por Kai</div>
+        </div>
+        <div className="kcv-metric-card">
+          <div className="kcv-metric-label">Riesgos</div>
+          <div className={`kcv-metric-value${risks.length > 0 ? ' red' : ''}`}>{risks.length}</div>
+          <div className="kcv-metric-sub">detectados</div>
+        </div>
+        <div className="kcv-metric-card kcv-metric-hide-mobile">
+          <div className="kcv-metric-label">Oportunidades</div>
+          <div className="kcv-metric-value">{opps.length || '—'}</div>
+          <div className="kcv-metric-sub">identificadas</div>
+        </div>
+        <div className="kcv-metric-card kcv-metric-hide-mobile">
+          <div className="kcv-metric-label">Stakeholders</div>
+          <div className="kcv-metric-value">{stakeholders.length || '—'}</div>
+          <div className="kcv-metric-sub">personas</div>
+        </div>
+        <div className="kcv-metric-card">
+          <div className="kcv-metric-label">Confianza</div>
+          <div className="kcv-metric-value" style={{ fontSize: 16 }}>{confidenceLabel(score)}</div>
+          <div className="kcv-metric-sub">{score}% cobertura</div>
         </div>
       </div>
 
       {/* 2 — Hallazgos clave */}
-      <TopFindings profile={profile} learnings={learnings} transversals={transversals} />
+      {hasFindingsContent && (
+        <MobileCard title="Hallazgos clave">
+          <TopFindings profile={profile} learnings={learnings} transversals={transversals} />
+        </MobileCard>
+      )}
 
       {/* 3 — Riesgos y oportunidades */}
       {(risks.length > 0 || opps.length > 0) && (
-        <div>
+        <MobileCard title="Riesgos y oportunidades">
           <div className="kcv-resumen-section-header">
             <span className="kcv-resumen-section-title">Riesgos y oportunidades</span>
           </div>
@@ -518,12 +546,12 @@ function ResumenSection({ profile, tenantMeta, learnings = [], transversals = []
                 : <p className="kcv-riskop-empty">No se han detectado oportunidades aún.</p>}
             </div>
           </div>
-        </div>
+        </MobileCard>
       )}
 
-      {/* 4 — Stakeholders identificados */}
+      {/* 4 — Stakeholders */}
       {stakeholders.length > 0 && (
-        <div>
+        <MobileCard title="Stakeholders" badge={`${stakeholders.length} persona${stakeholders.length !== 1 ? 's' : ''}`}>
           <div className="kcv-resumen-section-header">
             <span className="kcv-resumen-section-title">Stakeholders identificados</span>
             <span className="kcv-resumen-section-sub">{stakeholders.length} persona{stakeholders.length !== 1 ? 's' : ''}</span>
@@ -538,23 +566,19 @@ function ResumenSection({ profile, tenantMeta, learnings = [], transversals = []
                   <div className="kcv-stakeholder-avatar">{initials}</div>
                   <div className="kcv-stakeholder-info">
                     <span className="kcv-stakeholder-name">{name}</span>
-                    {roles.length > 0 && (
-                      <span className="kcv-stakeholder-role-inline">· {roles[0]}</span>
-                    )}
+                    {roles.length > 0 && <span className="kcv-stakeholder-role-inline">· {roles[0]}</span>}
                   </div>
                 </div>
               );
             })}
           </div>
-        </div>
+        </MobileCard>
       )}
 
-      {/* 5 — Cobertura por área (colapsable, cerrada por defecto) */}
-      <div>
-        <button
-          onClick={() => setCoverageOpen((v) => !v)}
-          className="kcv-resumen-section-header kcv-resumen-section-toggle"
-        >
+      {/* 5 — Cobertura por área */}
+      <MobileCard title="Cobertura por área">
+        {/* Desktop: colapsable toggle (hidden on mobile via CSS) */}
+        <button onClick={() => setCoverageOpen((v) => !v)} className="kcv-resumen-section-header kcv-resumen-section-toggle">
           <span className="kcv-resumen-section-title">Cobertura por área</span>
           <span className="kcv-resumen-section-caret">{coverageOpen ? '▼' : '▶'}</span>
         </button>
@@ -570,9 +594,7 @@ function ResumenSection({ profile, tenantMeta, learnings = [], transversals = []
                 </span>
               </span>
             ))}
-            {sortedAreas.length > 3 && (
-              <span className="kcv-coverage-preview-more">+{sortedAreas.length - 3} más</span>
-            )}
+            {sortedAreas.length > 3 && <span className="kcv-coverage-preview-more">+{sortedAreas.length - 3} más</span>}
           </div>
         )}
         {coverageOpen && (
@@ -580,11 +602,15 @@ function ResumenSection({ profile, tenantMeta, learnings = [], transversals = []
             {sortedAreas.map((a) => <CoverageAreaRow key={a.id} area={a} profile={profile} />)}
           </div>
         )}
-      </div>
+        {/* Mobile: always show full list inside MobileCard body */}
+        <div className="kcv-mc-coverage-full">
+          {sortedAreas.map((a) => <CoverageAreaRow key={a.id} area={a} profile={profile} />)}
+        </div>
+      </MobileCard>
 
       {/* 6 — Vacíos de conocimiento */}
       {gaps.length > 0 && (
-        <div>
+        <MobileCard title="Vacíos de conocimiento" subtitle="Qué aprender después">
           <div className="kcv-resumen-section-header">
             <span className="kcv-resumen-section-title">Vacíos de conocimiento</span>
             <span className="kcv-resumen-section-sub">Qué debería aprender Kai a continuación</span>
@@ -592,11 +618,13 @@ function ResumenSection({ profile, tenantMeta, learnings = [], transversals = []
           <div className="kcv-gap-grid">
             {gaps.map((a) => <GapCard key={a.id} area={a} />)}
           </div>
-        </div>
+        </MobileCard>
       )}
 
       {/* 7 — Próxima sesión recomendada */}
-      <NextSessionBlock profile={profile} learnings={learnings} onStart={onStartSession} />
+      <MobileCard title="Próxima sesión recomendada">
+        <NextSessionBlock profile={profile} learnings={learnings} onStart={onStartSession} />
+      </MobileCard>
 
     </div>
   );
@@ -743,10 +771,61 @@ function TransversalCard({ t }) {
   );
 }
 
+const APRENDIZAJES_FILTERS = [
+  { id: 'todos',         label: 'Todos',            color: '#1D9E75', bg: '#0A2318', border: '#1D9E7540' },
+  { id: 'dolores',       label: '⚠️ Dolores',        color: '#E07B5A', bg: '#2A1208', border: '#E07B5A40' },
+  { id: 'oportunidades', label: '🚀 Oportunidades',  color: '#9B8FE4', bg: '#1A1533', border: '#9B8FE440' },
+  { id: 'transversales', label: '🔗 Transversales',  color: '#7B9FE0', bg: '#1a1a2e', border: '#7B9FE040' },
+];
+
+const PARTICIPANT_AVATAR_COLORS = [
+  { bg: '#0A2318', color: '#20C997' },
+  { bg: '#0F1D2E', color: '#378ADD' },
+  { bg: '#1C1C1C', color: '#9CA3AF' },
+  { bg: '#1A1533', color: '#9B8FE4' },
+  { bg: '#2A1A0A', color: '#E0A352' },
+];
+
+function TransversalGroup({ transversals, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="kcv-lag">
+      <button className="kcv-lag-header" onClick={() => setOpen((v) => !v)}>
+        <IconNetwork size={10} style={{ color: '#7B9FE0', flexShrink: 0 }} />
+        <span className="kcv-lag-name">Transversales</span>
+        <span className="kcv-lag-count-text">
+          {transversals.length} transversal{transversals.length !== 1 ? 'es' : ''}
+        </span>
+        <IconChevron size={14} style={{ color: 'var(--kai-text-faint)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
+      </button>
+      {open && (
+        <div className="kcv-lag-body" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 12px 12px' }}>
+          {transversals.map((t) => (
+            <div key={t.id} className="kcv-featured-trans">
+              <div className="kcv-featured-trans-header">
+                <IconNetwork size={12} style={{ color: '#7B9FE0', flexShrink: 0 }} />
+                <span className="kcv-featured-trans-label">Aprendizaje transversal</span>
+                {t.sources_count > 0 && <span className="kcv-featured-trans-count">{t.sources_count} fuentes</span>}
+              </div>
+              <p className="kcv-featured-trans-title">{t.title}</p>
+              {t.description && <p className="kcv-featured-trans-desc">{t.description}</p>}
+              {t.participants?.length > 0 && (
+                <div className="kcv-featured-trans-chips">
+                  {t.participants.map((p, i) => <span key={i} className="kcv-featured-trans-chip">{p}</span>)}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AprendizajesSection({ tenant }) {
-  const [learnings, setLearnings]     = useState(null);
+  const [learnings, setLearnings]       = useState(null);
   const [transversals, setTransversals] = useState(null);
-  const [filter, setFilter] = useState('todos');
+  const [filter, setFilter]             = useState('todos');
 
   useEffect(() => {
     Promise.all([
@@ -759,64 +838,109 @@ function AprendizajesSection({ tenant }) {
 
   if (!learnings || !transversals) return <p style={{ fontSize: 13, color: 'var(--kai-text-muted)' }}>Cargando…</p>;
 
-  const impactVariant = { alto: 'red', medio: 'amber', bajo: 'neutral' };
-  const emptyFilter = (
-    (filter === 'todos'         && learnings.length === 0 && transversals.length === 0) ||
-    (filter === 'transversales' && transversals.length === 0) ||
-    (filter === 'individuales'  && learnings.length === 0)
-  );
+  // Dynamic chips: Todos + areas that have learnings + Transversales if they exist
+  const availableFilters = [
+    { id: 'todos', label: 'Todos', color: '#1D9E75', bg: '#0A2318', border: '#1D9E7540' },
+    ...AREAS
+      .map((a, i) => ({ ...a, color: AREA_COLORS[i], bg: `${AREA_COLORS[i]}18`, border: `${AREA_COLORS[i]}40` }))
+      .filter((a) => learnings.some((l) => {
+        const aId = AREA_ID_MAP[l.area?.toLowerCase()?.trim()] ?? l.area?.toLowerCase()?.trim();
+        return aId === a.id;
+      }))
+      .map((a) => ({ id: a.id, label: a.label, color: a.color, bg: a.bg, border: a.border })),
+    ...(transversals.length > 0
+      ? [{ id: 'transversales', label: '🔗 Transversales', color: '#7B9FE0', bg: '#1a1a2e', border: '#7B9FE040' }]
+      : []),
+  ];
+  const activeFilter = availableFilters.find((f) => f.id === filter) ? filter : 'todos';
+
+  const showTransversals = activeFilter === 'todos' || activeFilter === 'transversales';
+  const showLearnings    = activeFilter !== 'transversales';
+
+  const filteredLearnings = (activeFilter === 'todos' || activeFilter === 'transversales')
+    ? learnings
+    : learnings.filter((l) => {
+        const aId = AREA_ID_MAP[l.area?.toLowerCase()?.trim()] ?? l.area?.toLowerCase()?.trim();
+        return aId === activeFilter;
+      });
+
+  // Group by area
+  const learningGroups = AREAS.map((a, i) => ({
+    ...a,
+    color: AREA_COLORS[i],
+    items: filteredLearnings.filter((l) => {
+      const aId = AREA_ID_MAP[l.area?.toLowerCase()?.trim()] ?? l.area?.toLowerCase()?.trim();
+      return aId === a.id;
+    }),
+  })).filter((g) => g.items.length > 0);
+
+  const ungrouped = filteredLearnings.filter((l) => {
+    const aId = AREA_ID_MAP[l.area?.toLowerCase()?.trim()] ?? l.area?.toLowerCase()?.trim();
+    return !AREAS.find((a) => a.id === aId);
+  });
+
+  const isEmpty = (showTransversals && transversals.length === 0 && !showLearnings) ||
+                  (showLearnings && filteredLearnings.length === 0 && !showTransversals) ||
+                  (learnings.length === 0 && transversals.length === 0);
 
   return (
     <div>
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
-        {[
-          { id: 'todos',         label: `Todos (${learnings.length + transversals.length})` },
-          { id: 'transversales', label: `Transversales (${transversals.length})` },
-          { id: 'individuales',  label: `Individuales (${learnings.length})` },
-        ].map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setFilter(f.id)}
-            style={{
-              padding: '5px 12px', borderRadius: 8, border: '0.5px solid var(--kai-border)',
-              background: filter === f.id ? 'var(--kai-surface)' : 'transparent',
-              color: filter === f.id ? 'var(--kai-text)' : 'var(--kai-text-muted)',
-              fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
+      {/* Filter chips — only categories that have data */}
+      <div className="kcv-ap-filters">
+        {availableFilters.map((f) => {
+          const active = activeFilter === f.id;
+          return (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
+              className="kcv-ap-chip"
+              style={{
+                color:       active ? f.color : 'var(--kai-text-muted)',
+                background:  active ? f.bg    : 'transparent',
+                borderColor: active ? f.border : 'var(--kai-border)',
+              }}
+            >
+              {f.label}
+            </button>
+          );
+        })}
       </div>
 
-      {emptyFilter && (
-        <p style={{ fontSize: 13, color: 'var(--kai-text-muted)', lineHeight: 1.7 }}>
-          {filter === 'transversales'
+      {isEmpty && (
+        <p style={{ fontSize: 13, color: 'var(--kai-text-muted)', lineHeight: 1.7, marginTop: 16 }}>
+          {activeFilter === 'transversales'
             ? 'Los aprendizajes transversales aparecen cuando Kai detecta patrones comunes entre múltiples participantes.'
-            : 'Kai genera aprendizajes automáticamente conforme conversas. Aún no hay aprendizajes en esta categoría.'}
+            : 'Kai genera aprendizajes conforme conversas. Aún no hay aprendizajes en esta categoría.'}
         </p>
       )}
 
-      {/* Transversals at the top */}
-      {(filter === 'todos' || filter === 'transversales') && transversals.map((t) => (
-        <TransversalCard key={t.id} t={t} />
-      ))}
+      {/* Transversals — collapsible group */}
+      {showTransversals && transversals.length > 0 && (
+        <TransversalGroup transversals={transversals} defaultOpen={true} />
+      )}
 
-      {/* Individual learnings */}
-      {(filter === 'todos' || filter === 'individuales') && learnings.map((l) => {
-        const date = new Date(l.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-        return (
-          <div key={l.id} className="kcv-learning-card">
-            <div className="kcv-learning-card-meta">
-              {l.area && <Badge variant="neutral">{l.area}</Badge>}
-              <Badge variant={impactVariant[l.impact] ?? 'neutral'}>{l.impact}</Badge>
-              <span style={{ fontSize: 11, color: 'var(--kai-text-faint)', marginLeft: 'auto' }}>{date}</span>
-            </div>
-            <p className="kcv-learning-card-content">{l.content}</p>
-          </div>
-        );
-      })}
+      {/* Learnings grouped by area */}
+      {showLearnings && (
+        <div className="kcv-lag-list">
+          {learningGroups.map((g, i) => (
+            <LearningsAreaGroup
+              key={g.id}
+              area={g}
+              areaLearnings={g.items}
+              areaColor={g.color}
+              defaultOpen={i === 0}
+            />
+          ))}
+          {ungrouped.length > 0 && (
+            <LearningsAreaGroup
+              area={{ id: 'otros', label: 'Sin área' }}
+              areaLearnings={ungrouped}
+              areaColor="#6B7280"
+              defaultOpen={learningGroups.length === 0}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1060,8 +1184,9 @@ function EjecutivoSection({ tenant, isDemo = false }) {
   );
 }
 
-function ParticipantCard({ p, profile, learnings, isTop }) {
-  const initials = p.participant.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+function ParticipantCard({ p, profile, learnings, isTop, idx = 0 }) {
+  const initials    = p.participant.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  const avatarColor = PARTICIPANT_AVATAR_COLORS[idx % PARTICIPANT_AVATAR_COLORS.length];
 
   const areaScoresMap = Object.fromEntries(
     AREAS.map((a) => [a.id, areaScore(a, profile, learnings)])
@@ -1073,19 +1198,21 @@ function ParticipantCard({ p, profile, learnings, isTop }) {
     return { ...a, partial };
   }).filter(Boolean);
 
-  const hasActivity = p.conversation_count > 0 || p.learning_count > 0;
+  const hasActivity  = p.conversation_count > 0 || p.learning_count > 0;
+  const hasLearnings = p.learning_count > 0;
 
   return (
     <div className={`kcv-participant-card${isTop ? ' kcv-participant-card--top' : ''}`}>
-      {isTop && (
-        <span className="kcv-participant-top-badge">Fuente principal de conocimiento</span>
-      )}
-
-      {/* Header */}
+      {/* Header — badge inline after name */}
       <div className="kcv-participant-header">
-        <div className="kcv-participant-avatar">{initials}</div>
+        <div className="kcv-participant-avatar" style={{ background: avatarColor.bg, color: avatarColor.color }}>
+          {initials}
+        </div>
         <div className="kcv-participant-identity">
-          <span className="kcv-participant-name">{p.participant}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span className="kcv-participant-name">{p.participant}</span>
+            {isTop && <span className="kcv-participant-top-badge">Fuente principal</span>}
+          </div>
           {p.role && <span className="kcv-participant-role">{p.role}</span>}
         </div>
       </div>
@@ -1106,19 +1233,27 @@ function ParticipantCard({ p, profile, learnings, isTop }) {
             </div>
             <div className="kcv-participant-stat-sep" />
             <div className="kcv-participant-stat">
-              <span className="kcv-participant-stat-val">{p.learning_count}</span>
+              <span className="kcv-participant-stat-val" style={hasLearnings ? { color: '#20C997' } : {}}>
+                {p.learning_count}
+              </span>
               <span className="kcv-participant-stat-label">
                 {p.learning_count === 1 ? 'aprendizaje' : 'aprendizajes'}
               </span>
             </div>
           </div>
 
-          {/* Contribuciones clave */}
-          {p.top_learnings?.length > 0 && (
+          {!hasLearnings && (
+            <p className="kcv-participant-no-data" style={{ marginTop: 0 }}>
+              Aún sin aprendizajes registrados.
+            </p>
+          )}
+
+          {/* Contribuciones clave — max 3 */}
+          {hasLearnings && p.top_learnings?.length > 0 && (
             <div className="kcv-participant-section">
               <span className="kcv-participant-section-label">Contribuciones clave</span>
               <ul className="kcv-participant-contributions">
-                {p.top_learnings.map((text, i) => (
+                {p.top_learnings.slice(0, 3).map((text, i) => (
                   <li key={i} className="kcv-participant-contribution-item">{text}</li>
                 ))}
               </ul>
@@ -1126,15 +1261,15 @@ function ParticipantCard({ p, profile, learnings, isTop }) {
           )}
 
           {/* Áreas cubiertas */}
-          {coveredAreas.length > 0 && (
+          {hasLearnings && coveredAreas.length > 0 && (
             <div className="kcv-participant-section">
               <span className="kcv-participant-section-label">Áreas</span>
               <div className="kcv-participant-areas-list">
                 {coveredAreas.map((a) => (
                   <div key={a.id} className={`kcv-participant-area-row${a.partial ? ' partial' : ''}`}>
-                    <span className="kcv-participant-area-icon">{a.partial ? '⚠' : '✓'}</span>
+                    <span className="kcv-participant-area-icon">{a.partial ? '△' : '✓'}</span>
                     <span className="kcv-participant-area-name">
-                      {a.label}{a.partial ? ' (parcial)' : ''}
+                      {a.label} · {a.partial ? 'parcial' : 'completada'}
                     </span>
                   </div>
                 ))}
@@ -1217,7 +1352,7 @@ function ParticipantesSection({ tenant, profile, learnings }) {
       )}
 
       {participants.map((p, i) => (
-        <ParticipantCard key={i} p={p} profile={profile} learnings={learnings} isTop={i === 0 && p.learning_count > 0} />
+        <ParticipantCard key={i} idx={i} p={p} profile={profile} learnings={learnings} isTop={i === 0 && p.learning_count > 0} />
       ))}
     </div>
   );
@@ -1229,6 +1364,17 @@ const AREA_LABELS = {
 };
 
 const IMPACT_COLORS = { alto: '#E05252', medio: '#E0A352', bajo: '#9CA3AF' };
+
+function relTime(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  const h  = ms / 3600000;
+  if (h < 1)  return 'hace unos min';
+  if (h < 24) return `hace ${Math.floor(h)} h`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `hace ${d} día${d !== 1 ? 's' : ''}`;
+  const mo = Math.floor(d / 30);
+  return `hace ${mo} ${mo === 1 ? 'mes' : 'meses'}`;
+}
 
 function SessionCard({ session, tenant }) {
   const [open, setOpen]       = useState(false);
@@ -1358,6 +1504,108 @@ function SessionCard({ session, tenant }) {
   );
 }
 
+function MobileSessionRow({ session, tenant, isRecent, isLast }) {
+  const [open,    setOpen]    = useState(false);
+  const [detail,  setDetail]  = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const toggle = async () => {
+    if (open) { setOpen(false); return; }
+    setOpen(true);
+    if (detail || loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/sessions?id=${session.id}`);
+      setDetail(await res.json());
+    } catch { /* ignore */ } finally { setLoading(false); }
+  };
+
+  const shortDate = new Date(session.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  const areaLabel = AREA_LABELS[session.areas?.[0]] ?? session.areas?.[0] ?? 'General';
+  const delta     = (session.score_before !== null && session.score_after !== null)
+    ? session.score_after - session.score_before : null;
+
+  const LTYPE = {
+    dolor:       { icon: '⚠️', color: '#E07B5A', bg: '#2A1208' },
+    oportunidad: { icon: '🚀', color: '#9B8FE4', bg: '#1A1535' },
+  };
+  const allItems = detail
+    ? detail.learnings?.length
+      ? detail.learnings.map((l) => {
+          const t = LTYPE[l.type] ?? { icon: '💡', color: '#1D9E75', bg: '#0d1f19' };
+          return { ...t, text: l.content };
+        })
+      : [
+          ...(detail.risks        ?? []).map((r) => ({ icon: '⚠️', color: '#E07B5A', bg: '#2A1208', text: r })),
+          ...(detail.opportunities ?? []).map((o) => ({ icon: '🚀', color: '#9B8FE4', bg: '#1A1535', text: o })),
+        ]
+    : [];
+
+  return (
+    <div className="kcv-tl-row">
+      <div className="kcv-tl-col">
+        <div className={`kcv-tl-dot${isRecent ? ' kcv-tl-dot--filled' : ''}`} />
+        {!isLast && <div className="kcv-tl-line" />}
+      </div>
+      <div className={`kcv-tl-card${open ? ' kcv-tl-card--open' : ''}`} onClick={toggle}>
+        <div className="kcv-tl-card-top">
+          <span className="kcv-tl-card-area">{areaLabel}</span>
+          <span className="kcv-tl-card-date">{shortDate} · {relTime(session.createdAt)}</span>
+        </div>
+        {session.participant && (
+          <p className="kcv-tl-card-participant">
+            {session.participant}{session.role ? ` · ${session.role}` : ''}
+          </p>
+        )}
+        <div className="kcv-tl-chips">
+          {session.learning_count > 0 && (
+            <span className="kcv-tl-chip kcv-tl-chip--ap">
+              💡 {session.learning_count} {session.learning_count === 1 ? 'aprendizaje' : 'aprendizajes'}
+            </span>
+          )}
+          {(session.risk_count ?? 0) > 0 && (
+            <span className="kcv-tl-chip kcv-tl-chip--risk">
+              ⚠️ {session.risk_count} {session.risk_count === 1 ? 'riesgo' : 'riesgos'}
+            </span>
+          )}
+          {(session.opportunity_count ?? 0) > 0 && (
+            <span className="kcv-tl-chip kcv-tl-chip--opp">
+              🚀 {session.opportunity_count} {session.opportunity_count === 1 ? 'oportunidad' : 'oportunidades'}
+            </span>
+          )}
+        </div>
+        {delta !== null && delta > 0 && (
+          <div className="kcv-tl-coverage">
+            <span className="kcv-tl-cov-from">{session.score_before}%</span>
+            <span className="kcv-tl-cov-arrow">→</span>
+            <span className="kcv-tl-cov-to">{session.score_after}%</span>
+            <span className="kcv-tl-cov-gain">+{delta}%</span>
+          </div>
+        )}
+        {open && (
+          <div className="kcv-tl-detail">
+            {loading && <p className="kcv-tl-detail-empty">Cargando…</p>}
+            {detail && allItems.length > 0 && (
+              <>
+                <p className="kcv-tl-detail-label">QUÉ APRENDIÓ KAI</p>
+                {allItems.map((item, i) => (
+                  <div key={i} className="kcv-tl-detail-item">
+                    <span className="kcv-tl-detail-icon" style={{ background: item.bg, color: item.color }}>{item.icon}</span>
+                    <span className="kcv-tl-detail-text">{item.text}</span>
+                  </div>
+                ))}
+              </>
+            )}
+            {detail && allItems.length === 0 && (
+              <p className="kcv-tl-detail-empty">Sin aprendizajes en esta sesión.</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function HistorialSection({ tenant, tenantMeta }) {
   const [sessions, setSessions] = useState(null);
 
@@ -1378,10 +1626,45 @@ function HistorialSection({ tenant, tenantMeta }) {
     </div>
   );
 
+  const now     = new Date();
+  const isRecent = (s) => {
+    const d = new Date(s.createdAt);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  };
+
+  const monthGroups = [];
+  const monthMap    = {};
+  for (const s of sessions) {
+    const key = new Date(s.createdAt).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).toUpperCase();
+    if (!monthMap[key]) { monthMap[key] = []; monthGroups.push({ key, items: monthMap[key] }); }
+    monthMap[key].push(s);
+  }
+
   return (
-    <div className="kcv-session-list">
-      {sessions.map((s) => <SessionCard key={s.id} session={s} tenant={tenant} />)}
-    </div>
+    <>
+      {/* Desktop: flat list */}
+      <div className="kcv-session-list kcv-historial-desktop">
+        {sessions.map((s) => <SessionCard key={s.id} session={s} tenant={tenant} />)}
+      </div>
+
+      {/* Mobile: vertical timeline grouped by month */}
+      <div className="kcv-historial-tl">
+        {monthGroups.map(({ key, items }) => (
+          <div key={key} className="kcv-historial-tl-month">
+            <p className="kcv-historial-tl-month-label">{key}</p>
+            {items.map((s, i) => (
+              <MobileSessionRow
+                key={s.id}
+                session={s}
+                tenant={tenant}
+                isRecent={isRecent(s)}
+                isLast={i === items.length - 1}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -1458,6 +1741,7 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
   const [learnings, setLearnings]         = useState([]);
   const [transversals, setTransversals]   = useState([]);
   const [isDemoMode, setIsDemoMode]       = useState(!!tenantMeta.isDemo);
+  const [drawerOpen, setDrawerOpen]       = useState(false);
 
   // Demo-specific: animated profile (starts empty, fills as demo plays)
   const [demoProfile, setDemoProfile]     = useState({});
@@ -1593,11 +1877,36 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
   };
 
 
+  const companyInitial = (tenantMeta.name ?? 'K').charAt(0).toUpperCase();
+  const companySub = [tenantMeta.country, tenantMeta.industry].filter(Boolean).join(' · ');
+
   return (
     <div className="kcv-root kai-root">
-      {/* ── Sidebar ── */}
-      <aside className="kcv-sidebar">
-        {/* Header */}
+
+      {/* ── Drawer overlay (mobile only) ── */}
+      <div
+        className={`kcv-drawer-overlay${drawerOpen ? ' kcv-drawer-overlay--open' : ''}`}
+        onClick={() => setDrawerOpen(false)}
+      />
+
+      {/* ── Sidebar / Drawer ── */}
+      <aside className={`kcv-sidebar${drawerOpen ? ' kcv-sidebar--open' : ''}`}>
+
+        {/* Mobile drawer header (company initial + name + ×) */}
+        <div className="kcv-mobile-header">
+          <div className="kcv-mobile-header-avatar">{companyInitial}</div>
+          <div className="kcv-mobile-header-info">
+            <span className="kcv-mobile-header-name">{tenantMeta.name}{tenantMeta.isDemo ? ' (Demo)' : ''}</span>
+            {companySub && <span className="kcv-mobile-header-sub">{companySub}</span>}
+          </div>
+          <button className="kcv-drawer-close-btn" onClick={() => setDrawerOpen(false)} aria-label="Cerrar menú">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Desktop sidebar header */}
         <div className="kcv-sidebar-header">
           <KaiAvatarSvg size={32} />
           <div className="kcv-sidebar-brand">
@@ -1638,7 +1947,7 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
               <button
                 key={item.id}
                 className={`kcv-nav-item${active ? ' active' : ''}`}
-                onClick={() => setActiveSection(item.id)}
+                onClick={() => { setActiveSection(item.id); setDrawerOpen(false); }}
               >
                 <item.icon size={15} />
                 <span style={{ flex: 1 }}>{item.label}</span>
@@ -1683,12 +1992,38 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
                 currentArea={currentArea}
                 areaStatuses={areaStatuses}
                 onSessionUpdate={handleSessionUpdate}
+                onMenuOpen={() => setDrawerOpen(true)}
               />
         )}
 
         {/* Other sections */}
         {activeSection !== 'chat' && (
           <>
+            {/* Mobile topbar — only visible on small screens */}
+            <div className="kcv-mobile-topbar">
+              <button className="kcv-mobile-hamburger" onClick={() => setDrawerOpen(true)} aria-label="Abrir menú">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+              </button>
+              <span className="kcv-mobile-topbar-title">{sectionTitles[activeSection]}</span>
+              {activeSection === 'aprendizajes' && learningCount > 0 && (
+                <span className="kcv-mobile-topbar-badge">{learningCount}</span>
+              )}
+              {activeSection === 'resumen' && (
+                <button
+                  onClick={() => setActiveSection('ejecutivo')}
+                  style={{ background: 'none', border: 'none', color: 'var(--kai-text-muted)', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
+                  title="Resumen ejecutivo"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                </button>
+              )}
+            </div>
             <div className="kcv-section-header">
               <h1 className="kcv-section-title">{sectionTitles[activeSection]}</h1>
             </div>

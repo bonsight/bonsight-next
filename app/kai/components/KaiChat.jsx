@@ -23,8 +23,12 @@ export default function KaiChat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
 
   useEffect(() => {
     async function init() {
@@ -53,6 +57,38 @@ export default function KaiChat() {
     setInput('');
     localStorage.removeItem(CONV_ID_KEY);
     setTimeout(() => inputRef.current?.focus(), 50);
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        setTranscribing(true);
+        try {
+          const form = new FormData();
+          form.append('audio', blob);
+          const res = await fetch('/api/kai/transcribe', { method: 'POST', body: form });
+          const data = await res.json();
+          if (data.text) setInput((prev) => (prev ? prev + ' ' + data.text : data.text));
+        } catch { /* silently ignore */ }
+        setTranscribing(false);
+        inputRef.current?.focus();
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setRecording(true);
+    } catch { /* mic permission denied */ }
+  }
+
+  function stopRecording() {
+    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current = null;
+    setRecording(false);
   }
 
   async function handleSend() {
@@ -148,11 +184,29 @@ export default function KaiChat() {
 
       <div className="kai-input-wrap">
         <div className="kai-input-bar">
-          <button className="kai-input-attach" title="Adjuntar">+</button>
+          <button
+            className={`kai-input-mic${recording ? ' kai-input-mic--recording' : ''}`}
+            title={recording ? 'Detener grabación' : 'Grabar voz'}
+            onClick={recording ? stopRecording : startRecording}
+            disabled={transcribing || loading}
+          >
+            {transcribing ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            ) : recording ? (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2" /></svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            )}
+          </button>
           <textarea
             ref={inputRef}
             className="kai-input"
-            placeholder="Pregunta algo a Kai..."
+            placeholder={transcribing ? 'Transcribiendo…' : recording ? 'Grabando… (click para detener)' : 'Pregunta algo a Kai...'}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}

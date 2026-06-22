@@ -48,12 +48,23 @@ const ContextSub = ({ tenantName, knowledgeScore }) => (
   </span>
 );
 
-function SessionHeader({ currentArea, areaStatuses, tenantName, knowledgeScore }) {
+const HamburgerIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+  </svg>
+);
+
+function SessionHeader({ currentArea, areaStatuses, tenantName, knowledgeScore, onMenuOpen }) {
   const completedCount = Object.values(areaStatuses).filter((s) => s === 'completa').length;
 
   if (!currentArea) {
     return (
       <div className="kcv-session-header">
+        {onMenuOpen && (
+          <button className="kcv-mobile-hamburger" onClick={onMenuOpen} aria-label="Abrir menú">
+            <HamburgerIcon />
+          </button>
+        )}
         <div className="kcv-session-header-left">
           <span className="kcv-session-exploring-label">Sesión</span>
           <span className="kcv-session-area-label" style={{ color: 'var(--kai-text-muted)' }}>En espera</span>
@@ -69,6 +80,11 @@ function SessionHeader({ currentArea, areaStatuses, tenantName, knowledgeScore }
 
   return (
     <div className="kcv-session-header">
+      {onMenuOpen && (
+        <button className="kcv-mobile-hamburger" onClick={onMenuOpen} aria-label="Abrir menú">
+          <HamburgerIcon />
+        </button>
+      )}
       <div className="kcv-session-header-left">
         <span className="kcv-session-exploring-label">Explorando</span>
         <span className="kcv-session-area-label">{currentArea.label}</span>
@@ -425,15 +441,23 @@ function ProfileUpdateCard({ proposal, stateKey, proposalStates, onAccept, onRej
   );
 }
 
-export default function KaiClientChat({ tenant, tenantName, knowledgeScore, currentArea, areaStatuses = {}, onSessionUpdate }) {
+export default function KaiClientChat({ tenant, tenantName, knowledgeScore, currentArea, areaStatuses = {}, onSessionUpdate, onMenuOpen }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [proposalStates, setProposalStates] = useState({});
   const [confirmationResolved, setConfirmationResolved] = useState({});
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const greetingFired = useRef(false);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const analyserRef = useRef(null);
+  const animFrameRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const waveformRef = useRef(null);
   // Server assigns conversationId on the first message; all subsequent messages use it.
   const activeConvIdRef = useRef(null);
 
@@ -558,15 +582,86 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
     }
   };
 
-  const send = async () => {
-    const question = input.trim();
-    if (!question || loading) return;
+  function drawWaveform() {
+    const canvas = waveformRef.current;
+    const analyser = analyserRef.current;
+    if (!canvas || !analyser) return;
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    const ctx = canvas.getContext('2d');
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(data);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const bars = 28;
+    const step = Math.floor(data.length / bars);
+    const barW = Math.floor((canvas.width - bars * 2) / bars);
+    for (let i = 0; i < bars; i++) {
+      const value = data[i * step] / 255;
+      const minH = 3;
+      const barH = Math.max(minH, value * canvas.height * 0.85);
+      const y = (canvas.height - barH) / 2;
+      ctx.fillStyle = '#20C997';
+      ctx.beginPath();
+      ctx.roundRect(i * (barW + 2), y, barW, barH, 2);
+      ctx.fill();
+    }
+    animFrameRef.current = requestAnimationFrame(drawWaveform);
+  }
 
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioCtx = new AudioContext();
+      audioCtxRef.current = audioCtx;
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      audioCtx.createMediaStreamSource(stream).connect(analyser);
+      analyserRef.current = analyser;
+
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      chunksRef.current = [];
+      const startedAt = Date.now();
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        cancelAnimationFrame(animFrameRef.current);
+        audioCtxRef.current?.close();
+        stream.getTracks().forEach((t) => t.stop());
+        if (Date.now() - startedAt < 1500) return;
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        setTranscribing(true);
+        try {
+          const form = new FormData();
+          form.append('audio', blob);
+          const res = await fetch(`/api/kai/${tenant}/transcribe`, { method: 'POST', body: form });
+          const data = await res.json();
+          if (data.text) {
+            setTranscribing(false);
+            sendText(data.text);
+            return;
+          }
+        } catch { /* silently ignore */ }
+        setTranscribing(false);
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setRecording(true);
+      requestAnimationFrame(drawWaveform);
+    } catch { /* mic permission denied */ }
+  }
+
+  function stopRecording() {
+    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current = null;
+    setRecording(false);
+  }
+
+  const sendText = async (text) => {
+    const question = text.trim();
+    if (!question || loading) return;
     const newMessages = [...messages, { role: 'user', content: question }];
     setMessages(newMessages);
     setInput('');
     setLoading(true);
-
     try {
       const res = await fetch(`/api/kai/${tenant}`, {
         method: 'POST',
@@ -594,21 +689,19 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
         participantConfirmation: data.participantConfirmation ?? null,
       }]);
     } catch {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: 'Error de conexión. Inténtalo de nuevo.',
-        components: [],
-      }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Error de conexión. Inténtalo de nuevo.', components: [] }]);
     } finally {
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   };
 
+  const send = () => sendText(input);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       {/* Session header */}
-      <SessionHeader currentArea={currentArea} areaStatuses={areaStatuses} tenantName={tenantName} knowledgeScore={knowledgeScore} />
+      <SessionHeader currentArea={currentArea} areaStatuses={areaStatuses} tenantName={tenantName} knowledgeScore={knowledgeScore} onMenuOpen={onMenuOpen} />
 
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -718,53 +811,98 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
       </div>
 
       {/* Input */}
-      <div style={{
-        padding: '12px 20px 20px',
-        borderTop: '1px solid var(--kai-border)',
-        display: 'flex',
-        gap: 8,
-        alignItems: 'center',
-        background: 'var(--kai-bg)',
-      }}>
-        <input
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && send()}
-          placeholder="Escribe algo a Kai…"
-          disabled={loading}
+      <div style={{ padding: '12px 20px 20px', borderTop: '1px solid var(--kai-border)', background: 'var(--kai-bg)' }}>
+        <div
+          onClick={recording ? stopRecording : undefined}
           style={{
-            flex: 1,
+            display: 'flex', alignItems: 'center', gap: 10,
             background: '#1F2937',
-            border: '1px solid #374151',
-            borderRadius: 24,
-            padding: '9px 16px',
-            color: '#E5E7EB',
-            fontSize: 13.5,
-            outline: 'none',
-            fontFamily: 'inherit',
-          }}
-        />
-        <button
-          onClick={send}
-          disabled={loading || !input.trim()}
-          style={{
-            width: 36, height: 36, borderRadius: '50%',
-            background: input.trim() ? '#20C997' : '#1F2937',
-            border: '1px solid',
-            borderColor: input.trim() ? '#20C997' : '#374151',
-            color: input.trim() ? '#0D1117' : '#374151',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: input.trim() ? 'pointer' : 'default',
-            transition: 'all 0.15s',
-            flexShrink: 0,
+            border: `1.5px solid ${recording ? '#20C997' : '#374151'}`,
+            borderRadius: 28, padding: '0 6px 0 16px', height: 48,
+            transition: 'border-color 0.2s',
+            cursor: recording ? 'pointer' : 'default',
+            boxShadow: recording ? '0 0 0 3px rgba(32,201,151,0.15)' : 'none',
           }}
         >
-          <IconSend />
-        </button>
+          {/* Waveform canvas (recording) OR text input */}
+          {recording ? (
+            <canvas
+              ref={waveformRef}
+              style={{ flex: 1, height: 32, display: 'block' }}
+            />
+          ) : transcribing ? (
+            <span style={{ flex: 1, fontSize: 13.5, color: '#6B7280' }}>Transcribiendo…</span>
+          ) : (
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
+              placeholder="Escribe algo a Kai…"
+              disabled={loading}
+              style={{
+                flex: 1, background: 'transparent', border: 'none',
+                color: '#E5E7EB', fontSize: 13.5, outline: 'none', fontFamily: 'inherit',
+              }}
+            />
+          )}
+
+          {/* Right action button */}
+          {recording ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); stopRecording(); }}
+              style={{
+                width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                background: 'rgba(32,201,151,0.12)', border: '1.5px solid #20C997',
+                color: '#20C997', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', animation: 'kaiMicPulse 1.2s ease-in-out infinite',
+              }}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            </button>
+          ) : input.trim() ? (
+            <button
+              onClick={send}
+              disabled={loading}
+              style={{
+                width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                background: '#20C997', border: 'none',
+                color: '#0D1117', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1,
+                transition: 'background 0.15s',
+              }}
+            >
+              <IconSend />
+            </button>
+          ) : (
+            <button
+              onClick={startRecording}
+              disabled={loading || transcribing}
+              title="Grabar voz"
+              style={{
+                width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                background: 'transparent', border: '1px solid #374151',
+                color: '#6B7280', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: loading || transcribing ? 'not-allowed' : 'pointer',
+                opacity: loading || transcribing ? 0.4 : 1,
+                transition: 'all 0.15s',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       <style>{`
+        @keyframes kaiMicPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+          50%       { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+        }
         @keyframes kaiDot {
           0%, 60%, 100% { opacity: 0.2; transform: scale(1); }
           30% { opacity: 1; transform: scale(1.2); }
