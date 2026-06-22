@@ -7,6 +7,7 @@ import {
   getConversation,
   appendMessages,
   updateConversationTitle,
+  updateConversationMeta,
   listConversations,
   saveConversationCheckpoint,
 } from '@/lib/kai/memory';
@@ -14,6 +15,7 @@ import { listAriaSuggestions, updateSuggestionStatus, applySuggestionToProfile }
 import { addLearning } from '@/lib/kai/learnings';
 import { regenerateAllArtifacts } from '@/lib/kai/artifacts';
 import { trackUsage } from '@/lib/kai/usage';
+import { getKnownParticipants, findParticipantMatches, extractNameFromMessage } from '@/lib/kai/participants';
 
 const MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 1000;
@@ -816,6 +818,10 @@ export async function POST(req, { params }) {
       return Response.json({ reply: 'Cliente no encontrado.' }, { status: 404 });
     }
 
+    if (meta.isDemo) {
+      return Response.json({ reply: 'Esta es una cuenta de demostración.', isDemo: true }, { status: 403 });
+    }
+
     let conversationId = incomingId;
     if (!conversationId) {
       const created = await createConversation(tenant);
@@ -824,6 +830,44 @@ export async function POST(req, { params }) {
 
     const userMessage = messages[messages.length - 1];
     const isGreeting = messages.length === 1 && userMessage?.content === '__greeting__';
+
+    // ── Participant recognition (2nd message = name response after greeting) ──
+    const isNameMessage =
+      messages.length === 2 &&
+      messages[0].role === 'assistant' &&
+      messages[1].role === 'user' &&
+      !isGreeting;
+
+    if (isNameMessage) {
+      const inputName = extractNameFromMessage(userMessage.content);
+      if (inputName) {
+        const known = await getKnownParticipants(tenant);
+        const matches = findParticipantMatches(known, inputName);
+        if (matches.length > 0) {
+          const matchNames = matches.map((m) => `**${m.name}**`).join(' o ');
+          const reply = matches.length === 1
+            ? `Encontré a alguien llamado ${matchNames} que ya ha participado anteriormente en ${meta.name}. ¿Eres la misma persona?`
+            : `Hay ${matches.length} personas con ese nombre en ${meta.name}: ${matchNames}. ¿Cuál de ellas eres?`;
+
+          await appendMessages(tenant, conversationId, [
+            { role: 'user', content: userMessage.content },
+            { role: 'assistant', content: reply, participantConfirmation: matches },
+          ]);
+
+          return Response.json({
+            reply,
+            participantConfirmation: matches,
+            conversationId,
+            newLearnings: [],
+            sessionUpdates: [],
+            sessionStart: null,
+            currentArea: null,
+            checkpoint: null,
+          });
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 

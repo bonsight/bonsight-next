@@ -1,4 +1,4 @@
-import { getAllTenantsMeta, createTenant } from '@/lib/kai/tenants';
+import { getAllTenantsMeta, createTenant, updateTenantMeta } from '@/lib/kai/tenants';
 
 export async function GET() {
   try {
@@ -32,5 +32,18 @@ export async function POST(req) {
     const msg = err?.message ?? 'Error creando tenant';
     const status = msg.includes('ya existe') ? 409 : 500;
     return Response.json({ error: msg }, { status });
+  }
+}
+
+export async function PATCH(req) {
+  try {
+    const { slug, updates } = await req.json();
+    if (!slug || !updates || typeof updates !== 'object') {
+      return Response.json({ error: 'slug y updates son requeridos' }, { status: 400 });
+    }
+    await updateTenantMeta(slug, updates);
+    return Response.json({ ok: true });
+  } catch (err) {
+    return Response.json({ error: err?.message ?? 'Error actualizando tenant' }, { status: 500 });
   }
 }

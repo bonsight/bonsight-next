@@ -1,8 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import KaiClientChat from './KaiClientChat';
+import DemoChatPlayer from './DemoChatPlayer';
+import { getDemoProgression } from '@/lib/kai/demoScripts';
 import '../kai.css';
+
+function mergeProfile(base, patch) {
+  const result = { ...base };
+  for (const [key, val] of Object.entries(patch)) {
+    if (val && typeof val === 'object' && !Array.isArray(val) && result[key] && typeof result[key] === 'object' && !Array.isArray(result[key])) {
+      result[key] = { ...result[key], ...val };
+    } else {
+      result[key] = val;
+    }
+  }
+  return result;
+}
 
 // ── Tabler-style outline icons (inline SVG) ────────────────────────────────
 
@@ -877,7 +891,7 @@ function buildPlainText(sections, generatedAt) {
   ].filter(Boolean).join('\n\n');
 }
 
-function EjecutivoSection({ tenant }) {
+function EjecutivoSection({ tenant, isDemo = false }) {
   const [data, setData]         = useState(null);
   const [loading, setLoading]   = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -950,9 +964,9 @@ function EjecutivoSection({ tenant }) {
       <div className="kcv-exec-actions">
         <span className="kcv-exec-date">Generado el {genDate}</span>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={downloadPdf} className="kcv-exec-btn">Descargar PDF</button>
-          <button onClick={copyText} className="kcv-exec-btn">{copied ? '¡Copiado!' : 'Copiar texto'}</button>
-          <button onClick={generate} disabled={generating} className="kcv-exec-btn kcv-exec-btn-primary">
+          <button onClick={downloadPdf} className="kcv-exec-btn" disabled={isDemo}>Descargar PDF</button>
+          <button onClick={copyText} className="kcv-exec-btn" disabled={isDemo}>{copied ? '¡Copiado!' : 'Copiar texto'}</button>
+          <button onClick={generate} disabled={generating || isDemo} className="kcv-exec-btn kcv-exec-btn-primary">
             {generating ? 'Generando…' : 'Regenerar'}
           </button>
         </div>
@@ -1443,15 +1457,31 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
   const [activeSection, setActiveSection] = useState('resumen');
   const [learnings, setLearnings]         = useState([]);
   const [transversals, setTransversals]   = useState([]);
+  const [isDemoMode, setIsDemoMode]       = useState(!!tenantMeta.isDemo);
+
+  // Demo-specific: animated profile (starts empty, fills as demo plays)
+  const [demoProfile, setDemoProfile]     = useState({});
+  const demoStepRef                       = useRef({ sepCount: 0 });
+  const progression                       = isDemoMode ? getDemoProgression(tenant) : null;
+
+  // Sidebar flash on each separator reveal
+  const [flashSeq,  setFlashSeq]  = useState(0);
+  const [flashGlow, setFlashGlow] = useState(false);
+  const flashTimer = useRef(null);
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
 
   // Session state — lifted so it persists across section switches
   const [currentArea, setCurrentArea]     = useState(null);
   const [areaStatuses, setAreaStatuses]   = useState({});
   const [sessionDiscoveries, setSessionDiscoveries] = useState(0);
 
-  const score = overallScore(profile, learnings);
+  // In demo mode use demoProfile for the sidebar/score; the real profile
+  // (from server props) is still passed to Resumen/Conocimiento sections.
+  const scoreProfile = isDemoMode ? demoProfile : profile;
+  const score = overallScore(scoreProfile, learnings);
 
   useEffect(() => {
+    if (isDemoMode) return; // learnings managed by demo player callbacks
     fetch(`/api/kai/${tenant}/learnings`)
       .then((r) => r.json())
       .then((d) => setLearnings(d.learnings ?? []))
@@ -1460,7 +1490,48 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
       .then((r) => r.json())
       .then((d) => setTransversals(d.transversals ?? []))
       .catch(() => {});
-  }, [tenant]);
+  }, [tenant, isDemoMode]);
+
+  const handleDemoStep = useCallback((type, stepData) => {
+    if (!progression) return;
+
+    if (type === 'reset') {
+      setDemoProfile({});
+      setLearnings([]);
+      setCurrentArea(null);
+      setAreaStatuses({});
+      setSessionDiscoveries(0);
+      demoStepRef.current.sepCount = 0;
+      return;
+    }
+
+    if (type === 'session_start') {
+      const entry = progression.find((e) => e.trigger === 'session_start');
+      if (entry?.patch) setDemoProfile((prev) => mergeProfile(prev, entry.patch));
+      // Activate "En curso" with the area from the plan card
+      const areaId = stepData?.label?.toLowerCase() ?? 'operaciones';
+      const areaLabel = stepData?.label ?? 'Operaciones';
+      setCurrentArea({ area: areaId, label: areaLabel });
+      setAreaStatuses((prev) => ({ ...prev, [areaId]: 'explorando' }));
+      return;
+    }
+
+    if (type === 'separator') {
+      const seps = progression.filter((e) => e.trigger === 'separator');
+      const entry = seps[demoStepRef.current.sepCount++] ?? null;
+      if (!entry) return;
+      if (entry.patch) setDemoProfile((prev) => mergeProfile(prev, entry.patch));
+      if (entry.learning) {
+        setLearnings((prev) => [...prev, { ...entry.learning, createdAt: new Date().toISOString() }]);
+        setSessionDiscoveries((prev) => prev + 1);
+      }
+      // Trigger synchronized sidebar flash
+      setFlashSeq((n) => n + 1);
+      clearTimeout(flashTimer.current);
+      setFlashGlow(true);
+      flashTimer.current = setTimeout(() => setFlashGlow(false), 1300);
+    }
+  }, [progression]);
 
   // Persist discovery status to KV whenever session state changes
   useEffect(() => {
@@ -1530,20 +1601,23 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
         <div className="kcv-sidebar-header">
           <KaiAvatarSvg size={32} />
           <div className="kcv-sidebar-brand">
-            <span className="kcv-sidebar-name">Kai</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="kcv-sidebar-name">Kai</span>
+              {tenantMeta.isDemo && <span className="kcv-demo-badge">DEMO</span>}
+            </div>
             <span className="kcv-sidebar-company">{tenantMeta.name}</span>
           </div>
         </div>
 
         {/* Knowledge indicator */}
-        <div className="kcv-knowledge-block">
+        <div className={`kcv-knowledge-block${isDemoMode && flashGlow ? ' kcv-knowledge-block--glow' : ''}`}>
           <div className="kcv-knowledge-label">Conocimiento global</div>
-          <div className="kcv-knowledge-pct">{score}%</div>
+          <div key={isDemoMode ? (flashSeq || 'init') : undefined} className={`kcv-knowledge-pct${isDemoMode && flashSeq > 0 ? ' kcv-pct-pop' : ''}`}>{score}%</div>
           <div className="kcv-knowledge-bar-track">
             <div className="kcv-knowledge-bar-fill" style={{ width: `${score}%` }} />
           </div>
           {sessionDiscoveries > 0 ? (
-            <div className="kcv-knowledge-sub kcv-knowledge-session">
+            <div key={isDemoMode ? `disc-${sessionDiscoveries}` : undefined} className={`kcv-knowledge-sub kcv-knowledge-session${isDemoMode ? ' kcv-disc-in' : ''}`}>
               Esta sesión: <span>{sessionDiscoveries} descubrimiento{sessionDiscoveries !== 1 ? 's' : ''}</span>
             </div>
           ) : (
@@ -1569,7 +1643,7 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
                 <item.icon size={15} />
                 <span style={{ flex: 1 }}>{item.label}</span>
                 {badge ? (
-                  <span className={`kcv-nav-badge${item.id === 'riesgos' ? ' kcv-nav-badge-danger' : ''}`}>
+                  <span key={`${item.id}-${badge}`} className={`kcv-nav-badge${item.id === 'riesgos' ? ' kcv-nav-badge-danger' : ''}${item.id === 'aprendizajes' && flashSeq > 0 ? ' kcv-badge-pop' : ''}`}>
                     {badge}
                   </span>
                 ) : null}
@@ -1579,7 +1653,7 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
         </div>
 
         {/* Area coverage bars */}
-        <SidebarAreas profile={profile} learnings={learnings} />
+        <SidebarAreas profile={scoreProfile} learnings={learnings} />
 
         {/* Discovery progress */}
         <DiscoveryProgress areaStatuses={areaStatuses} currentArea={currentArea} score={score} />
@@ -1595,14 +1669,21 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
       <main className="kcv-main">
         {/* Chat — full height, no header */}
         {activeSection === 'chat' && (
-          <KaiClientChat
-            tenant={tenant}
-            tenantName={tenantMeta.name}
-            knowledgeScore={score}
-            currentArea={currentArea}
-            areaStatuses={areaStatuses}
-            onSessionUpdate={handleSessionUpdate}
-          />
+          isDemoMode
+            ? <DemoChatPlayer
+                tenant={tenant}
+                tenantName={tenantMeta.name}
+                knowledgeScore={score}
+                onStepRevealed={handleDemoStep}
+              />
+            : <KaiClientChat
+                tenant={tenant}
+                tenantName={tenantMeta.name}
+                knowledgeScore={score}
+                currentArea={currentArea}
+                areaStatuses={areaStatuses}
+                onSessionUpdate={handleSessionUpdate}
+              />
         )}
 
         {/* Other sections */}
@@ -1615,7 +1696,7 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
               {activeSection === 'resumen'       && <ResumenSection       profile={profile} tenantMeta={tenantMeta} learnings={learnings} transversals={transversals} onStartSession={(s) => setActiveSection('chat')} />}
               {activeSection === 'conocimiento'  && <ConocimientoSection  profile={profile} learnings={learnings} />}
               {activeSection === 'aprendizajes'  && <AprendizajesSection  tenant={tenant} />}
-              {activeSection === 'ejecutivo'     && <EjecutivoSection     tenant={tenant} />}
+              {activeSection === 'ejecutivo'     && <EjecutivoSection     tenant={tenant} isDemo={isDemoMode} />}
               {activeSection === 'participantes' && <ParticipantesSection tenant={tenant} profile={profile} learnings={learnings} />}
               {activeSection === 'historial'     && <HistorialSection     tenant={tenant} tenantMeta={tenantMeta} />}
             </div>

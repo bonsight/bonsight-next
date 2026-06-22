@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 
 const AREAS_CONFIG = [
   { id: 'negocio',     label: 'Negocio' },
@@ -85,12 +84,6 @@ function SessionHeader({ currentArea, areaStatuses, tenantName, knowledgeScore }
 
 // ── Insight separator ─────────────────────────────────────────────────────
 
-function toHeadline(text) {
-  if (!text || typeof text !== 'string') return '';
-  const first = text.split(/[.!?]/)[0].trim();
-  const words = first.split(/\s+/);
-  return words.length > 9 ? words.slice(0, 9).join(' ') + '…' : first;
-}
 
 const INSIGHT_TYPES = {
   dolor:       { icon: '⚠️', label: 'Dolor identificado',     color: '#E07B5A' },
@@ -99,44 +92,71 @@ const INSIGHT_TYPES = {
 };
 
 function InsightSeparator({ type, bullets }) {
-  const cfg     = INSIGHT_TYPES[type] ?? INSIGHT_TYPES.aprendizaje;
-  const labelRef = useRef(null);
-  const [pos, setPos] = useState(null);
-
-  const show = () => {
-    if (!labelRef.current || !bullets?.length) return;
-    const r = labelRef.current.getBoundingClientRect();
-    setPos({ x: r.left + r.width / 2, y: r.bottom + 8 });
-  };
-  const hide = () => setPos(null);
+  const cfg = INSIGHT_TYPES[type] ?? INSIGHT_TYPES.aprendizaje;
+  const [open, setOpen] = useState(false);
+  const hasBullets = bullets?.length > 0;
 
   return (
     <div className="kcv-insight-sep">
       <div className="kcv-sep-line" style={{ background: cfg.color }} />
-      <div
-        ref={labelRef}
-        className="kcv-sep-label"
+      <button
+        className={`kcv-sep-label${open ? ' kcv-sep-label--open' : ''}`}
         style={{ color: cfg.color }}
-        onMouseEnter={show}
-        onMouseLeave={hide}
+        onClick={() => hasBullets && setOpen((o) => !o)}
+        disabled={!hasBullets}
+        type="button"
       >
         <span>{cfg.icon}</span>
         <span>{cfg.label}</span>
-      </div>
+      </button>
       <div className="kcv-sep-line" style={{ background: cfg.color }} />
 
-      {pos && bullets?.length > 0 && createPortal(
-        <div
-          className="kcv-insight-tooltip"
-          style={{ position: 'fixed', left: pos.x, top: pos.y, transform: 'translateX(-50%)' }}
-        >
-          <div className="kcv-tooltip-type" style={{ color: cfg.color }}>{cfg.icon} {cfg.label}</div>
-          <ul className="kcv-tooltip-bullets">
-            {bullets.map((b, i) => <li key={i}>{b}</li>)}
+      {open && hasBullets && (
+        <div className="kcv-insight-card" style={{ borderColor: cfg.color + '33' }}>
+          <ul className="kcv-insight-card-bullets">
+            {bullets.map((b, i) => (
+              <li key={i}>
+                <span className="kcv-insight-card-dot" style={{ background: cfg.color }} />
+                {b}
+              </li>
+            ))}
           </ul>
-        </div>,
-        document.body
+        </div>
       )}
+    </div>
+  );
+}
+
+function ParticipantConfirmationCard({ matches, onConfirm, onDeny, resolved }) {
+  if (resolved) return null;
+  const single = matches.length === 1;
+  return (
+    <div className="kcv-participant-confirm-card">
+      {single && (
+        <div className="kcv-participant-confirm-info">
+          <div className="kcv-participant-confirm-avatar">
+            {matches[0].name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('')}
+          </div>
+          <div>
+            <div className="kcv-participant-confirm-name">{matches[0].name}</div>
+            {matches[0].role && <div className="kcv-participant-confirm-role">{matches[0].role}</div>}
+          </div>
+        </div>
+      )}
+      <div className="kcv-participant-confirm-actions">
+        {matches.map((p) => (
+          <button
+            key={p.id}
+            className="kcv-participant-confirm-btn kcv-participant-confirm-btn--yes"
+            onClick={() => onConfirm(p)}
+          >
+            {single ? `Sí, soy ${p.name.split(/\s+/)[0]}` : p.name}
+          </button>
+        ))}
+        <button className="kcv-participant-confirm-btn kcv-participant-confirm-btn--no" onClick={onDeny}>
+          No, soy otra persona
+        </button>
+      </div>
     </div>
   );
 }
@@ -147,12 +167,12 @@ function buildInsightSeparators(sessionUpdates, newLearnings) {
   for (const u of (sessionUpdates ?? [])) {
     const v = typeof u.value === 'object' ? [u.value.name, u.value.role].filter(Boolean).join(' · ') : String(u.value ?? '');
     if (!v) continue;
-    if (u.field === 'pains')        groups.dolor.push(toHeadline(v));
-    else if (u.field === 'opportunities') groups.oportunidad.push(toHeadline(v));
-    else                            groups.aprendizaje.push(toHeadline(v));
+    if (u.field === 'pains')             groups.dolor.push(v);
+    else if (u.field === 'opportunities') groups.oportunidad.push(v);
+    else                                  groups.aprendizaje.push(v);
   }
   for (const l of (newLearnings ?? [])) {
-    if (l.content) groups.aprendizaje.push(toHeadline(l.content));
+    if (l.content) groups.aprendizaje.push(l.content);
   }
 
   return Object.entries(groups)
@@ -410,6 +430,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [proposalStates, setProposalStates] = useState({});
+  const [confirmationResolved, setConfirmationResolved] = useState({});
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const greetingFired = useRef(false);
@@ -482,6 +503,61 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
     setProposalStates(prev => ({ ...prev, [stateKey]: 'rejected' }));
   };
 
+  const handleParticipantConfirm = async (msgIdx, participant) => {
+    setConfirmationResolved(prev => ({ ...prev, [msgIdx]: true }));
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/confirm-participant`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: activeConvIdRef.current,
+          participantName: participant.name,
+          participantRole: participant.role,
+          confirmed: true,
+        }),
+      });
+      const data = await res.json();
+      const firstName = participant.name.split(/\s+/)[0];
+      setMessages(prev => [
+        ...prev,
+        { role: 'user', content: `Sí, soy ${firstName}` },
+        { role: 'assistant', content: data.reply, components: [] },
+      ]);
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Error al confirmar. Intenta de nuevo.', components: [] }]);
+    } finally {
+      setLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  };
+
+  const handleParticipantDeny = async (msgIdx) => {
+    setConfirmationResolved(prev => ({ ...prev, [msgIdx]: true }));
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/confirm-participant`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: activeConvIdRef.current,
+          confirmed: false,
+        }),
+      });
+      const data = await res.json();
+      setMessages(prev => [
+        ...prev,
+        { role: 'user', content: 'No, soy otra persona' },
+        { role: 'assistant', content: data.reply, components: [] },
+      ]);
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Error. Intenta de nuevo.', components: [] }]);
+    } finally {
+      setLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  };
+
   const send = async () => {
     const question = input.trim();
     if (!question || loading) return;
@@ -515,6 +591,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
         sessionStart: data.sessionStart ?? null,
         checkpoint: data.checkpoint ?? null,
         areaStatusesSnapshot: snap,
+        participantConfirmation: data.participantConfirmation ?? null,
       }]);
     } catch {
       setMessages(prev => [...prev, {
@@ -549,7 +626,11 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
           </div>
         )}
 
-        {messages.map((m, msgIdx) => (
+        {(() => {
+          // Index of the first assistant message that has sessionStart — only that one renders the card
+          const firstSessionStartIdx = messages.findIndex((m) => m.role === 'assistant' && m.sessionStart);
+          return messages.map((m, msgIdx) => ({ m, msgIdx, firstSessionStartIdx }));
+        })().map(({ m, msgIdx, firstSessionStartIdx }) => (
           <div key={msgIdx}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexDirection: m.role === 'user' ? 'row-reverse' : 'row' }}>
               {m.role === 'assistant' && <KaiAvatar />}
@@ -583,8 +664,18 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
               </div>
             </div>
 
-            {/* Session start card */}
-            {m.role === 'assistant' && m.sessionStart && (
+            {/* Participant confirmation card */}
+            {m.role === 'assistant' && m.participantConfirmation?.length > 0 && (
+              <ParticipantConfirmationCard
+                matches={m.participantConfirmation}
+                resolved={!!confirmationResolved[msgIdx]}
+                onConfirm={(p) => handleParticipantConfirm(msgIdx, p)}
+                onDeny={() => handleParticipantDeny(msgIdx)}
+              />
+            )}
+
+            {/* Session start card — solo la primera vez */}
+            {m.role === 'assistant' && m.sessionStart && msgIdx === firstSessionStartIdx && (
               <SessionStartCard data={m.sessionStart} />
             )}
 

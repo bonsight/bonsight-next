@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { createHash } from 'crypto';
 import { getTenantMeta, getBusinessProfile } from '@/lib/kai/tenants';
+import { getDemoProfile } from '@/lib/kai/demoScripts';
 import KaiClientView from './KaiClientView';
 import KaiAvatar from '../components/KaiAvatar';
 
@@ -18,12 +19,14 @@ export default async function KaiTenantPage({ params, searchParams }) {
   const { tenant } = await params;
   const sp = await searchParams;
 
-  const [meta, profile] = await Promise.all([
+  const [meta, realProfile] = await Promise.all([
     getTenantMeta(tenant),
     getBusinessProfile(tenant),
   ]);
 
   if (!meta) notFound();
+
+  const profile = realProfile;
 
   const allowed = process.env.ALLOWED_TENANTS;
   if (allowed) {

@@ -40,6 +40,17 @@ function CopyButton({ text, label = 'Copiar' }) {
 function SuccessScreen({ meta, onView }) {
   const kaiUrl = `kai.bonsight.co/${meta.slug}`;
   const ariaUrl = `aria.bonsight.co/${meta.slug}`;
+  const [msgCopied, setMsgCopied] = useState(false);
+
+  const fullMessage = `Hola, aquí están tus accesos a Kai y Aria para ${meta.name}:\n\nKai (consultor estratégico)\nhttps://${kaiUrl}\n\nAria (analista de datos)\nhttps://${ariaUrl}\n\nCódigo de acceso: ${meta.accessCode}\nVálido para ambas plataformas.`;
+
+  const copyMessage = () => {
+    navigator.clipboard.writeText(fullMessage).then(() => {
+      setMsgCopied(true);
+      setTimeout(() => setMsgCopied(false), 2000);
+    });
+  };
+
   return (
     <div className="admin-modal-body admin-success-body">
       <div className="admin-success-check">✓</div>
@@ -68,7 +79,17 @@ function SuccessScreen({ meta, onView }) {
           <span className="admin-success-code">{meta.accessCode}</span>
           <CopyButton text={meta.accessCode} />
         </div>
-        <div className="admin-success-hint">Válido para Kai y Aria. Compártelo con el cliente.</div>
+      </div>
+
+      <div className="admin-success-full-msg">
+        <button
+          className={`admin-success-full-msg-btn${msgCopied ? ' admin-success-full-msg-btn--done' : ''}`}
+          onClick={copyMessage}
+          type="button"
+        >
+          {msgCopied ? '✓ Copiado' : '📋 Copiar mensaje completo'}
+        </button>
+        <span className="admin-success-full-msg-hint">Listo para enviar por WhatsApp o email</span>
       </div>
 
       <button className="admin-btn admin-btn--primary admin-success-view-btn" onClick={onView}>

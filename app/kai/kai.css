@@ -2349,84 +2349,99 @@
 
 /* ─── Insight separators (inline in chat) ────────────────────── */
 .kcv-insight-sep {
-  display:     flex;
-  align-items: center;
-  gap:         8px;
-  padding:     4px 0;
-  position:    relative;
-  cursor:      default;
+  display:        flex;
+  align-items:    center;
+  gap:            8px;
+  padding:        4px 0;
+  flex-wrap:      wrap;
 }
 
 .kcv-sep-line {
   flex:       1;
   height:     0.5px;
   opacity:    0.2;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s ease;
 }
-
-.kcv-insight-sep:hover .kcv-sep-line { opacity: 0.4; }
 
 .kcv-sep-label {
-  font-size:   10.5px;
-  white-space: nowrap;
-  display:     flex;
-  align-items: center;
-  gap:         4px;
-  padding:     2px 8px;
+  font-size:    10.5px;
+  font-family:  inherit;
+  white-space:  nowrap;
+  display:      flex;
+  align-items:  center;
+  gap:          4px;
+  padding:      3px 10px;
   border-radius: 10px;
-  border:      0.5px solid transparent;
-  opacity:     0.4;
-  transition:  opacity 0.2s, border-color 0.2s, background 0.2s;
-  position:    relative;
+  border:       0.5px solid transparent;
+  background:   transparent;
+  opacity:      0.4;
+  cursor:       default;
+  transition:   opacity 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
-.kcv-insight-sep:hover .kcv-sep-label {
+.kcv-sep-label:not(:disabled) {
+  cursor: pointer;
+}
+
+.kcv-sep-label:not(:disabled):hover,
+.kcv-sep-label--open {
   opacity:      1;
   border-color: currentColor;
-  background:   var(--kai-surface);
+  background:   transparent;
 }
 
-.kcv-insight-tooltip {
-  background:     var(--kai-surface);
-  border:         0.5px solid var(--kai-border);
-  border-radius:  8px;
-  padding:        10px 12px;
-  z-index:        9999;
-  width:          220px;
-  box-shadow:     0 4px 16px rgba(0,0,0,0.6);
-  pointer-events: none;
-  word-break:     break-word;
+.kcv-insight-sep:has(.kcv-sep-label:hover) .kcv-sep-line,
+.kcv-insight-sep:has(.kcv-sep-label--open) .kcv-sep-line {
+  opacity: 0.4;
 }
 
-.kcv-tooltip-type {
-  font-size:     10px;
-  font-weight:   600;
-  margin-bottom: 6px;
-  display:       block;
+/* Inline card — full width below the separator row */
+.kcv-insight-card {
+  width:         100%;
+  flex-basis:    100%;
+  background:    color-mix(in srgb, var(--kai-surface) 80%, transparent);
+  border:        0.5px solid;
+  border-radius: 8px;
+  padding:       10px 14px;
+  margin-top:    2px;
+  animation:     kcv-card-in 0.15s ease;
+  transition:    opacity 0.5s ease;
+  opacity:       1;
+}
+.kcv-insight-card--fading {
+  opacity: 0;
 }
 
-.kcv-tooltip-bullets {
+@keyframes kcv-card-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.kcv-insight-card-bullets {
   list-style:     none;
   margin:         0;
   padding:        0;
   display:        flex;
   flex-direction: column;
-  gap:            4px;
+  gap:            6px;
 }
 
-.kcv-tooltip-bullets li {
-  font-size:    11px;
-  color:        #D1D5DB;
-  line-height:  1.4;
-  padding-left: 12px;
-  position:     relative;
+.kcv-insight-card-bullets li {
+  display:     flex;
+  align-items: flex-start;
+  gap:         8px;
+  font-size:   12px;
+  color:       #D1D5DB;
+  line-height: 1.5;
 }
 
-.kcv-tooltip-bullets li::before {
-  content:  '·';
-  position: absolute;
-  left:     2px;
-  color:    #9CA3AF;
+.kcv-insight-card-dot {
+  width:       5px;
+  height:      5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top:  5px;
+  opacity:     0.8;
 }
 
 /* ─── Session header ─────────────────────────────────────────── */
@@ -2471,10 +2486,10 @@
 }
 
 .kcv-session-header-right {
-  display:        flex;
-  flex-direction: column;
-  align-items:    flex-end;
-  gap:            4px;
+  display:     flex;
+  align-items: center;
+  gap:         6px;
+  flex-shrink: 0;
 }
 
 .kcv-session-dots {
@@ -3105,3 +3120,230 @@
   .kcv-session-areas { display: none; }
   .kcv-session-stats { margin-left: auto; }
 }
+
+/* ─── Participant Confirmation Card ──────────────────────────── */
+.kcv-participant-confirm-card {
+  background:    #1a2535;
+  border:        0.5px solid #374151;
+  border-radius: 10px;
+  padding:       14px 16px;
+  margin-top:    8px;
+  display:       flex;
+  flex-direction: column;
+  gap:           12px;
+  animation:     kcv-card-in 0.15s ease;
+}
+
+.kcv-participant-confirm-info {
+  display:     flex;
+  align-items: center;
+  gap:         10px;
+}
+
+.kcv-participant-confirm-avatar {
+  width:         34px;
+  height:        34px;
+  border-radius: 8px;
+  background:    #20C997;
+  color:         #0D1117;
+  font-size:     12px;
+  font-weight:   700;
+  display:       flex;
+  align-items:   center;
+  justify-content: center;
+  flex-shrink:   0;
+  letter-spacing: -0.02em;
+}
+
+.kcv-participant-confirm-name {
+  font-size:   13px;
+  font-weight: 600;
+  color:       #F9FAFB;
+}
+
+.kcv-participant-confirm-role {
+  font-size:  11px;
+  color:      #9CA3AF;
+  margin-top: 1px;
+}
+
+.kcv-participant-confirm-actions {
+  display: flex;
+  gap:     8px;
+}
+
+.kcv-participant-confirm-btn {
+  flex:          1;
+  padding:       8px 12px;
+  border-radius: 7px;
+  font-size:     12px;
+  font-weight:   500;
+  font-family:   inherit;
+  cursor:        pointer;
+  border:        0.5px solid transparent;
+  transition:    background 0.15s, border-color 0.15s;
+}
+
+.kcv-participant-confirm-btn--yes {
+  background:   #20C997;
+  color:        #0D1117;
+  border-color: #20C997;
+}
+.kcv-participant-confirm-btn--yes:hover {
+  background: #1aad84;
+}
+
+.kcv-participant-confirm-btn--no {
+  background:   transparent;
+  color:        #9CA3AF;
+  border-color: #374151;
+}
+.kcv-participant-confirm-btn--no:hover {
+  background:   #1F2937;
+  border-color: #6B7280;
+  color:        #D1D5DB;
+}
+
+/* ─── Demo badge (sidebar) ────────────────────────────────────── */
+.kcv-demo-badge {
+  font-size:      9px;
+  font-weight:    700;
+  letter-spacing: 0.1em;
+  color:          #20C997;
+  background:     #20C99720;
+  border:         0.5px solid #20C99740;
+  padding:        1px 6px;
+  border-radius:  4px;
+}
+
+/* ─── DemoChatPlayer ──────────────────────────────────────────── */
+.kdp-controls {
+  display:       flex;
+  align-items:   center;
+  gap:           8px;
+  padding:       10px 20px;
+  border-bottom: 1px solid var(--kai-border);
+  background:    var(--kai-bg);
+  flex-shrink:   0;
+}
+
+.kdp-demo-badge {
+  font-size:      9px;
+  font-weight:    700;
+  letter-spacing: 0.1em;
+  color:          #20C997;
+  background:     #20C99720;
+  border:         0.5px solid #20C99740;
+  padding:        2px 7px;
+  border-radius:  4px;
+  margin-right:   4px;
+}
+
+.kdp-btn {
+  padding:        5px 12px;
+  border-radius:  7px;
+  border:         0.5px solid var(--kai-border);
+  background:     transparent;
+  color:          var(--kai-text-muted);
+  font-size:      12px;
+  cursor:         pointer;
+  font-family:    inherit;
+  transition:     all 0.15s;
+  white-space:    nowrap;
+}
+.kdp-btn:hover:not(:disabled) {
+  border-color: #20C997;
+  color:        #20C997;
+}
+.kdp-btn:disabled {
+  opacity:       0.3;
+  cursor:        default;
+}
+.kdp-btn--active {
+  border-color: #20C997;
+  color:        #20C997;
+}
+.kdp-btn--reset {
+  color: var(--kai-text-faint);
+}
+
+.kdp-progress {
+  margin-left: auto;
+  font-size:   11px;
+  color:       var(--kai-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.kdp-start-hint {
+  text-align:  center;
+  color:       var(--kai-text-faint);
+  font-size:   13px;
+  padding:     60px 20px;
+  line-height: 1.7;
+}
+.kdp-start-hint strong {
+  color: var(--kai-text-muted);
+}
+
+.kdp-done {
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  gap:             12px;
+  padding:         20px;
+  border:          0.5px solid var(--kai-border);
+  border-radius:   10px;
+  margin-top:      8px;
+}
+.kdp-done-label {
+  font-size: 12px;
+  color:     var(--kai-text-faint);
+}
+.kdp-done-reset {
+  font-size:    12px;
+  color:        #20C997;
+  background:   transparent;
+  border:       0.5px solid #20C99740;
+  border-radius: 6px;
+  padding:      4px 12px;
+  cursor:       pointer;
+  font-family:  inherit;
+  transition:   all 0.15s;
+}
+.kdp-done-reset:hover {
+  background: #20C99715;
+}
+
+/* ─── Admin — demo toggle button ──────────────────────────────── */
+.admin-demo-btn--active {
+  color:        #20C997 !important;
+  border-color: #20C99750 !important;
+  background:   #20C99712 !important;
+}
+
+/* ─── Sidebar flash — sincronizado con separadores de demo ───── */
+@keyframes kcv-block-glow {
+  0%   { background: transparent; }
+  20%  { background: #20C99710; box-shadow: inset 0 0 0 1px #20C99730; }
+  100% { background: transparent; box-shadow: none; }
+}
+@keyframes kcv-pct-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.22); color: #6EE7B7; }
+  100% { transform: scale(1); }
+}
+@keyframes kcv-disc-in {
+  0%   { opacity: 0; transform: translateX(-8px); }
+  60%  { opacity: 1; transform: translateX(2px); }
+  100% { transform: translateX(0); }
+}
+@keyframes kcv-badge-pop {
+  0%   { transform: scale(0.65); background: #20C997; color: #0D1117; }
+  55%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.kcv-knowledge-block--glow { animation: kcv-block-glow 1.3s ease-out; }
+.kcv-pct-pop               { animation: kcv-pct-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.kcv-disc-in               { animation: kcv-disc-in 0.45s ease-out; }
+.kcv-badge-pop             { animation: kcv-badge-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1); }

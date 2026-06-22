@@ -1322,8 +1322,41 @@
   margin-top: 5px;
 }
 
+.admin-success-full-msg {
+  display:        flex;
+  flex-direction: column;
+  align-items:    center;
+  gap:            5px;
+  margin-top:     4px;
+}
+
+.admin-success-full-msg-btn {
+  width:         100%;
+  padding:       10px 16px;
+  background:    #f0faf5;
+  border:        0.5px solid #b3e8d6;
+  border-radius: 8px;
+  font-size:     13px;
+  font-weight:   500;
+  color:         #085041;
+  cursor:        pointer;
+  font-family:   inherit;
+  transition:    background 0.15s, color 0.15s;
+}
+.admin-success-full-msg-btn:hover { background: #d9f5eb; }
+.admin-success-full-msg-btn--done {
+  background: #1D9E75;
+  color:      #fff;
+  border-color: #1D9E75;
+}
+
+.admin-success-full-msg-hint {
+  font-size: 11px;
+  color:     #aaa;
+}
+
 .admin-success-view-btn {
-  margin-top: 8px;
+  margin-top: 4px;
   width: 100%;
   justify-content: center;
 }

@@ -1331,6 +1331,8 @@ function CostsTab({ usage, events }) {
 export default function TenantDetail({ meta, profile, conversations, allLearnings = [], participantMap = {}, knowledgeQuality = {}, recentSession = null, changeCounts = {}, recentLearnings = [], ariaInvestigations = [], tenantUsage = null, usageEvents = [] }) {
   const [activeTab, setActiveTab] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [isDemo, setIsDemo] = useState(!!meta.isDemo);
+  const [demoLoading, setDemoLoading] = useState(false);
 
   const clientUrl = `https://kai.bonsight.co/${meta.slug}`;
 
@@ -1341,6 +1343,19 @@ export default function TenantDetail({ meta, profile, conversations, allLearning
   };
 
   const handleExport = () => exportProfile(meta, profile, conversations);
+
+  const toggleDemo = async () => {
+    setDemoLoading(true);
+    try {
+      await fetch('/api/kai/tenants', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: meta.slug, updates: { isDemo: !isDemo } }),
+      });
+      setIsDemo((v) => !v);
+    } catch { /* ignore */ }
+    finally { setDemoLoading(false); }
+  };
 
   return (
     <>
@@ -1399,6 +1414,15 @@ export default function TenantDetail({ meta, profile, conversations, allLearning
               <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
             Exportar perfil
+          </button>
+
+          <button
+            className={`admin-btn${isDemo ? ' admin-demo-btn--active' : ''}`}
+            onClick={toggleDemo}
+            disabled={demoLoading}
+            title={isDemo ? 'Desactivar modo demo' : 'Activar modo demo'}
+          >
+            {isDemo ? '◈ Demo activo' : '◈ Activar demo'}
           </button>
         </div>
       </div>
