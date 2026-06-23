@@ -701,12 +701,12 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
   const send = () => sendText(input);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+    <div style={{ display: 'grid', gridTemplateRows: 'auto 1fr auto', flex: 1, minHeight: 0, overflow: 'hidden' }}>
       {/* Session header */}
       <SessionHeader currentArea={currentArea} areaStatuses={areaStatuses} tenantName={tenantName} knowledgeScore={knowledgeScore} onMenuOpen={onMenuOpen} />
 
       {/* Messages */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 'clamp(12px, 4vw, 24px) clamp(14px, 5vw, 28px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ minHeight: 0, overflowY: 'auto', padding: 'clamp(12px, 4vw, 24px) clamp(14px, 5vw, 28px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {loading && messages.length === 0 && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             <KaiAvatar />

@@ -1743,8 +1743,7 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
   const [isDemoMode, setIsDemoMode]       = useState(!!tenantMeta.isDemo);
   const [drawerOpen, setDrawerOpen]       = useState(false);
 
-  // Lock body scroll + sync visual viewport height so kcv-root never goes
-  // behind Chrome iOS address bar or nav bar (layout viewport ≠ visual viewport)
+  // Lock body scroll + prevent white overscroll flash on iOS
   useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
@@ -1753,19 +1752,11 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
     body.style.overflow = 'hidden';
     body.style.background = '#0D1117';
 
-    function syncVp() {
-      const h = window.visualViewport?.height ?? window.innerHeight;
-      html.style.setProperty('--kai-vp-h', `${h}px`);
-    }
-    syncVp();
-    window.visualViewport?.addEventListener('resize', syncVp);
-
     return () => {
       html.style.overflow = '';
       html.style.background = '';
       body.style.overflow = '';
       body.style.background = '';
-      window.visualViewport?.removeEventListener('resize', syncVp);
     };
   }, []);
 

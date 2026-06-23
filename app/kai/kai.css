@@ -3492,15 +3492,14 @@
 /* ─── Mobile layout (≤ 768px) ────────────────────────────────── */
 @media (max-width: 768px) {
 
-  /* Root anchored to visual viewport — visualViewport.height (set via JS as
-     --kai-vp-h) excludes Chrome address bar AND nav bar on iOS, unlike
-     100dvh or bottom:0 which extend behind the nav bar */
+  /* 100svh = small viewport height: size when ALL browser chrome is visible.
+     This is the minimum guaranteed height, so header + input always fit. */
   .kcv-root {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    height: var(--kai-vp-h, 100dvh);
+    height: 100svh;
     flex-direction: column;
     overflow: hidden;
   }
@@ -3512,7 +3511,7 @@
     left: -100%;
     width: 100%;
     max-width: 320px;
-    height: 100dvh;
+    height: 100svh;
     z-index: 200;
     overflow-y: auto;
     transition: left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
