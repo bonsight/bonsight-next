@@ -3492,15 +3492,15 @@
 /* ─── Mobile layout (≤ 768px) ────────────────────────────────── */
 @media (max-width: 768px) {
 
-  /* Root becomes a single column — fixed anchors it to visual viewport,
-     prevents iOS rubber-band scrolling from revealing the body background */
+  /* Root anchored to visual viewport — visualViewport.height (set via JS as
+     --kai-vp-h) excludes Chrome address bar AND nav bar on iOS, unlike
+     100dvh or bottom:0 which extend behind the nav bar */
   .kcv-root {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    bottom: 0;
-    height: auto;
+    height: var(--kai-vp-h, 100dvh);
     flex-direction: column;
     overflow: hidden;
   }
