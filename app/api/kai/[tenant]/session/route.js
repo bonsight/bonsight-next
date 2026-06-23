@@ -1,4 +1,4 @@
-import { isKaiAuthorized } from '@/lib/kai/auth';
+import { isAuthorizedForTenant } from '@/lib/kai/auth';
 import { Redis } from '@upstash/redis';
 
 const kv = new Redis({
@@ -7,15 +7,15 @@ const kv = new Redis({
 });
 
 export async function GET(req, { params }) {
-  if (!(await isKaiAuthorized())) return Response.json({ error: 'No autorizado.' }, { status: 401 });
   const { tenant } = await params;
+  if (!(await isAuthorizedForTenant(tenant))) return Response.json({ error: 'No autorizado.' }, { status: 401 });
   const status = await kv.get(`kai:${tenant}:discovery_status`);
   return Response.json({ status });
 }
 
 export async function POST(req, { params }) {
-  if (!(await isKaiAuthorized())) return Response.json({ error: 'No autorizado.' }, { status: 401 });
   const { tenant } = await params;
+  if (!(await isAuthorizedForTenant(tenant))) return Response.json({ error: 'No autorizado.' }, { status: 401 });
   const body = await req.json();
   await kv.set(`kai:${tenant}:discovery_status`, body);
   return Response.json({ ok: true });

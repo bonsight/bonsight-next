@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { after } from 'next/server';
-import { isKaiAuthorized } from '@/lib/kai/auth';
+import { isKaiOrTenantAuthorized } from '@/lib/kai/auth';
 import { getTenantMeta, getBusinessProfile, updateBusinessProfile } from '@/lib/kai/tenants';
 import {
   createConversation,
@@ -794,10 +794,6 @@ Tu trabajo es entender profundamente el negocio.${buildSuggestionsBlock(pendingS
 // ── Route handlers ─────────────────────────────────────────────────────────
 
 export async function POST(req, { params }) {
-  if (!(await isKaiAuthorized())) {
-    return Response.json({ reply: 'No autorizado.' }, { status: 401 });
-  }
-
   const { tenant } = await params;
 
   try {
@@ -816,6 +812,10 @@ export async function POST(req, { params }) {
 
     if (!meta) {
       return Response.json({ reply: 'Cliente no encontrado.' }, { status: 404 });
+    }
+
+    if (!(await isKaiOrTenantAuthorized(tenant, meta.accessCode))) {
+      return Response.json({ reply: 'No autorizado.' }, { status: 401 });
     }
 
     if (meta.isDemo) {
@@ -988,11 +988,11 @@ export async function POST(req, { params }) {
 }
 
 export async function PATCH(req, { params }) {
-  if (!(await isKaiAuthorized())) {
+  const { tenant } = await params;
+  const meta = await getTenantMeta(tenant);
+  if (!(await isKaiOrTenantAuthorized(tenant, meta?.accessCode))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
-
-  const { tenant } = await params;
   const { field, action, proposedValue } = await req.json();
 
   if (!field || !action || proposedValue === undefined) {
@@ -1031,11 +1031,11 @@ export async function PATCH(req, { params }) {
 }
 
 export async function GET(req, { params }) {
-  if (!(await isKaiAuthorized())) {
+  const { tenant } = await params;
+  const meta = await getTenantMeta(tenant);
+  if (!(await isKaiOrTenantAuthorized(tenant, meta?.accessCode))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
-
-  const { tenant } = await params;
   const { searchParams } = new URL(req.url);
   const conversationId = searchParams.get('id');
 

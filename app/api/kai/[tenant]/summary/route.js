@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Redis } from '@upstash/redis';
-import { isKaiAuthorized } from '@/lib/kai/auth';
+import { isAuthorizedForTenant } from '@/lib/kai/auth';
 import { getTenantMeta, getBusinessProfile } from '@/lib/kai/tenants';
 import { listLearnings } from '@/lib/kai/learnings';
 import { trackUsage } from '@/lib/kai/usage';
@@ -19,8 +19,8 @@ export async function GET(req, { params }) {
 
 // POST — generates + caches summary (admin auth required)
 export async function POST(req, { params }) {
-  if (!(await isKaiAuthorized())) return Response.json({ error: 'No autorizado.' }, { status: 401 });
   const { tenant } = await params;
+  if (!(await isAuthorizedForTenant(tenant))) return Response.json({ error: 'No autorizado.' }, { status: 401 });
 
   const [meta, profile, learnings] = await Promise.all([
     getTenantMeta(tenant),

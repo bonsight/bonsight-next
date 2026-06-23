@@ -1,13 +1,12 @@
-import { isKaiAuthorized } from '@/lib/kai/auth';
+import { isAuthorizedForTenant } from '@/lib/kai/auth';
 import { appendMessages, updateConversationMeta } from '@/lib/kai/memory';
 import { addOrUpdateKnownParticipant } from '@/lib/kai/participants';
 
 export async function POST(req, { params }) {
-  if (!(await isKaiAuthorized())) {
+  const { tenant } = await params;
+  if (!(await isAuthorizedForTenant(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
-
-  const { tenant } = await params;
   const { conversationId, participantName, participantRole, confirmed } = await req.json();
 
   if (!conversationId) {
