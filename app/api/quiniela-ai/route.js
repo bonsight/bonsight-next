@@ -23,6 +23,9 @@ async function callClaude(system, userMessage, maxTokens = 1500) {
     }),
   })
   const data = await res.json()
+  if (!res.ok || data.error) {
+    console.error('[callClaude] API error status=%s body=%s', res.status, JSON.stringify(data))
+  }
   return data.content?.[0]?.text ?? ''
 }
 
@@ -431,8 +434,15 @@ REGLAS:
 
       try {
         const text = await callClaude(KAI_SYSTEM, userMessage, 800)
+        if (!text) {
+          console.error('[generateOneJornada] empty text from Claude groupId=%s', groupId)
+          return NextResponse.json({ ok: false, status: 'error', groupId, reason: 'empty_claude' })
+        }
         const parsed = parseJSONObject(text)
-        if (!parsed) return NextResponse.json({ ok: false, status: 'error', groupId })
+        if (!parsed) {
+          console.error('[generateOneJornada] parse failed groupId=%s text=%s', groupId, text.slice(0, 200))
+          return NextResponse.json({ ok: false, status: 'error', groupId, reason: 'parse_fail' })
+        }
         const result = {
           summary: parsed.summary ?? '',
           insights: Array.isArray(parsed.insights) ? parsed.insights : [],
@@ -442,8 +452,9 @@ REGLAS:
           kv.set(`quiniela:${groupId}:ai:jornada:${phase}`, result.summary),
         ])
         return NextResponse.json({ ok: true, status: 'done', groupId })
-      } catch {
-        return NextResponse.json({ ok: false, status: 'error', groupId })
+      } catch (err) {
+        console.error('[generateOneJornada] catch groupId=%s err=%s', groupId, String(err))
+        return NextResponse.json({ ok: false, status: 'error', groupId, reason: String(err) })
       }
     }
 
