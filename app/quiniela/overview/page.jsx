@@ -329,52 +329,32 @@ function KaiTools({ phase, globalConfidenceGenerated, quinielas, onRefresh }) {
 
   async function generateJornadas() {
     if (selectedIds.size === 0) return
+    const ids = [...selectedIds]
     setJornadaStatus('generating')
-    setJornadaGroupStatus({})
+    setJornadaGroupStatus(Object.fromEntries(ids.map(id => [id, 'pending'])))
     setJornadaDone(0)
-    setJornadaTotal(0)
+    setJornadaTotal(ids.length)
 
-    try {
-      const res = await fetch('/api/quiniela-ai', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generateAllJornadas', payload: { phase, groupIds: [...selectedIds] } }),
-      })
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const parts = buffer.split('\n\n')
-        buffer = parts.pop()
-        for (const part of parts) {
-          const line = part.trim()
-          if (!line.startsWith('data: ')) continue
-          try {
-            const ev = JSON.parse(line.slice(6))
-            if (ev.type === 'start') {
-              setJornadaTotal(ev.total)
-              setJornadaGroupStatus(Object.fromEntries(ev.groups.map(g => [g.id, 'pending'])))
-            } else if (ev.type === 'active') {
-              setJornadaGroupStatus(prev => ({ ...prev, [ev.id]: 'active' }))
-            } else if (ev.type === 'progress') {
-              setJornadaDone(ev.count)
-              setJornadaGroupStatus(prev => ({ ...prev, [ev.id]: ev.status }))
-            } else if (ev.type === 'complete') {
-              setJornadaStatus('done')
-              setJornadaDone(ev.generated)
-              onRefresh()
-            }
-          } catch {}
-        }
+    let generated = 0
+    for (const gid of ids) {
+      setJornadaGroupStatus(prev => ({ ...prev, [gid]: 'active' }))
+      try {
+        const res = await fetch('/api/quiniela-ai', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'generateOneJornada', payload: { phase, groupId: gid } }),
+        })
+        const d = await res.json()
+        const status = d.status ?? (d.ok ? 'done' : 'error')
+        setJornadaGroupStatus(prev => ({ ...prev, [gid]: status }))
+        if (status === 'done') generated++
+        setJornadaDone(generated)
+      } catch {
+        setJornadaGroupStatus(prev => ({ ...prev, [gid]: 'error' }))
       }
-    } catch {
-      setJornadaStatus('idle')
-      showToast('Error de conexión')
     }
+
+    setJornadaStatus('done')
+    onRefresh()
   }
 
   const quinielasWithJornada = quinielas.filter(q => q.kai.jornada).length

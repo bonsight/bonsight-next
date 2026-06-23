@@ -365,6 +365,88 @@ Si todos ya tienen pick, devuelve: []`
       return NextResponse.json({ ok: true, suggestion })
     }
 
+    // ── 5b. Generar análisis para UNA quiniela — sin SSE, para evitar timeout en Vercel ──
+    if (action === 'generateOneJornada') {
+      const { phase, groupId } = payload
+      const phaseLabel = PHASES[phase]?.label ?? phase
+      const globalAdmin = (await kv.get('quiniela:global:admin')) ?? {}
+
+      const [participants, quinielasData, perAdmin] = await Promise.all([
+        kv.get(`quiniela:${groupId}:participants`),
+        kv.get(`quiniela:${groupId}:quinielas`),
+        kv.get(`quiniela:${groupId}:admin`),
+      ])
+      const partList = participants ?? []
+
+      if (partList.length === 0) {
+        return NextResponse.json({ ok: true, status: 'skipped', groupId })
+      }
+
+      const adminData = {
+        unlockedPhases: perAdmin?.unlockedPhases ?? ['grupos'],
+        results: globalAdmin?.results ?? perAdmin?.results ?? {},
+        realCampeon: globalAdmin?.realCampeon ?? perAdmin?.realCampeon ?? '',
+        realGoleador: globalAdmin?.realGoleador ?? perAdmin?.realGoleador ?? '',
+      }
+      const scores = calcularPuntajes(partList, quinielasData ?? {}, adminData)
+      const sortedScores = [...scores].sort((a, b) => b.pts - a.pts)
+      const rankingCtx = sortedScores.map((s, i) => {
+        const p = partList.find(x => x.id === s.participantId)
+        const bd = s.breakdown
+        return `${i + 1}. ${p?.nombre ?? '?'} — ${s.pts} pts (exactos: ${bd.exacto}, ganadores: ${bd.ganador})`
+      }).join('\n')
+      const matrixText = buildMatchMatrix(phase, adminData.results, quinielasData ?? {}, partList)
+
+      const KAI_SYSTEM = `Eres Kai, el narrador de una quiniela del Mundial 2026 entre amigos.
+Tono: humano, entusiasta, competitivo, ligero. Como un amigo comentando, no un locutor.
+Responde ÚNICAMENTE con JSON válido. Sin texto adicional, sin markdown, sin bloques de código.`
+
+      const userMessage = `Analiza esta quiniela de ${phaseLabel} del Mundial 2026.
+
+RANKING ACTUAL:
+${rankingCtx}
+
+PARTIDOS Y PICKS:
+${matrixText}
+
+Genera un JSON con exactamente esta estructura:
+{
+  "summary": "máximo 4 líneas, narrativa de la jornada basada en hechos reales, no inventes ni asumas partidos no jugados",
+  "insights": [
+    {
+      "tipo": "pick_unico | fallo_total | remontada | caida | patron | exacto_clave",
+      "titular": "máximo 8 palabras",
+      "descripcion": "1-2 líneas con contexto específico basado en los datos reales",
+      "protagonista": "nombre del participante o null",
+      "prioridad": 1
+    }
+  ]
+}
+
+REGLAS:
+- Summary: si solo se jugaron X de Y partidos, no digas que terminó la fase.
+- Insights: entre 3 y 5. prioridad 1 = más impactante, 5 = menos relevante.
+- Diversidad: evitar repetir al mismo protagonista salvo que protagonice múltiples eventos únicos.
+- Basar TODO en los datos proporcionados. No inventar picks ni resultados.`
+
+      try {
+        const text = await callClaude(KAI_SYSTEM, userMessage, 800)
+        const parsed = parseJSONObject(text)
+        if (!parsed) return NextResponse.json({ ok: false, status: 'error', groupId })
+        const result = {
+          summary: parsed.summary ?? '',
+          insights: Array.isArray(parsed.insights) ? parsed.insights : [],
+        }
+        await Promise.all([
+          kv.set(`quiniela:${groupId}:ai:content:${phase}`, result),
+          kv.set(`quiniela:${groupId}:ai:jornada:${phase}`, result.summary),
+        ])
+        return NextResponse.json({ ok: true, status: 'done', groupId })
+      } catch {
+        return NextResponse.json({ ok: false, status: 'error', groupId })
+      }
+    }
+
     // ── 5. Generar análisis de jornada (SSE streaming, opcionalmente filtrado) ──
     if (action === 'generateAllJornadas') {
       const { phase, groupIds } = payload
