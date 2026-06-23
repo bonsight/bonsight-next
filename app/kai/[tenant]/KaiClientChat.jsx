@@ -704,7 +704,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
       <SessionHeader currentArea={currentArea} areaStatuses={areaStatuses} tenantName={tenantName} knowledgeScore={knowledgeScore} onMenuOpen={onMenuOpen} />
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 'clamp(12px, 4vw, 24px) clamp(14px, 5vw, 28px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {loading && messages.length === 0 && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             <KaiAvatar />
@@ -728,7 +728,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexDirection: m.role === 'user' ? 'row-reverse' : 'row' }}>
               {m.role === 'assistant' && <KaiAvatar />}
               <div style={{
-                maxWidth: '72%',
+                maxWidth: 'min(72%, calc(100vw - 80px))',
                 background: m.role === 'user' ? '#1E3A2F' : 'transparent',
                 border: m.role === 'user' ? '1px solid #2D5A42' : 'none',
                 borderRadius: m.role === 'user' ? '14px 4px 14px 14px' : 0,

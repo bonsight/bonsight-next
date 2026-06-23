@@ -560,13 +560,13 @@ function ResumenSection({ profile, tenantMeta, learnings = [], transversals = []
             {stakeholders.map((s, i) => {
               const name     = typeof s === 'string' ? s : (s.name ?? '');
               const roles    = typeof s === 'string' ? [] : (s.roles ?? []);
-              const initials = name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+              const initials = name.split(' ').filter(Boolean).filter(w => /^[a-zA-ZÀ-ÿ]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
               return (
                 <div key={i} className="kcv-stakeholder-card">
                   <div className="kcv-stakeholder-avatar">{initials}</div>
                   <div className="kcv-stakeholder-info">
                     <span className="kcv-stakeholder-name">{name}</span>
-                    {roles.length > 0 && <span className="kcv-stakeholder-role-inline">· {roles[0]}</span>}
+                    {roles.length > 0 && <span className="kcv-stakeholder-role-inline">{roles[0]}</span>}
                   </div>
                 </div>
               );
@@ -1185,7 +1185,7 @@ function EjecutivoSection({ tenant, isDemo = false }) {
 }
 
 function ParticipantCard({ p, profile, learnings, isTop, idx = 0 }) {
-  const initials    = p.participant.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  const initials    = p.participant.split(' ').filter(Boolean).filter(w => /^[a-zA-ZÀ-ÿ]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
   const avatarColor = PARTICIPANT_AVATAR_COLORS[idx % PARTICIPANT_AVATAR_COLORS.length];
 
   const areaScoresMap = Object.fromEntries(
