@@ -1,6 +1,5 @@
 import { isKaiAuthorized } from '@/lib/kai/auth';
 import { isAuthorized as isAriaAuthorized } from '@/lib/aria/auth';
-import { validateSearchConsoleAccess } from '@/lib/aria/searchConsole';
 import { updateIntelligenceSource } from '@/lib/kai/intelligenceSources';
 
 async function isAllowed() {
@@ -20,31 +19,15 @@ export async function POST(req, { params }) {
   const url = siteUrl.trim();
   const now = new Date().toISOString();
 
-  const validation = await validateSearchConsoleAccess(url);
-
-  if (!validation.ok) {
-    await updateIntelligenceSource(tenant, 'search_console', {
-      enabled: false,
-      config: {
-        siteUrl: url,
-        permissionStatus: 'access_error',
-        lastValidatedAt: now,
-        lastError: validation.error,
-      },
-    });
-    return Response.json({ ok: false, error: validation.error });
-  }
-
-  const resolvedUrl = validation.resolvedUrl;
   await updateIntelligenceSource(tenant, 'search_console', {
     enabled: true,
     config: {
-      siteUrl: resolvedUrl,
-      permissionStatus: 'validated',
+      siteUrl: url,
+      permissionStatus: 'pending_verification',
       lastValidatedAt: now,
       lastError: null,
     },
   });
 
-  return Response.json({ ok: true, siteUrl: resolvedUrl, lastValidatedAt: now });
+  return Response.json({ ok: true, siteUrl: url, lastValidatedAt: now });
 }
