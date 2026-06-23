@@ -3529,17 +3529,25 @@
     pointer-events: all;
   }
 
-  /* Main expands to full width */
+  /* Main expands to full width — keep flex so children can use flex:1 */
   .kcv-main {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     background: var(--kai-bg);
   }
 
   /* Topbar replaces the desktop section-header on mobile */
   .kcv-section-header { display: none; }
-  .kcv-section-body   { padding: 16px; min-height: 100%; }
+  /* Section body scrolls itself; parent no longer scrolls */
+  .kcv-section-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px;
+  }
 
   /* Mobile-only header inside sidebar (company initial + name + ×) */
   .kcv-mobile-header {

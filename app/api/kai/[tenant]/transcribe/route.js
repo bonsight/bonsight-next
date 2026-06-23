@@ -18,12 +18,18 @@ export async function POST(req, { params }) {
 
   const file = new File([audio], 'audio.webm', { type: audio.type || 'audio/webm' });
 
-  const transcription = await openai.audio.transcriptions.create({
-    file,
-    model: 'whisper-1',
-    language: 'es',
-    prompt: 'Conversación de negocios en español.',
-  });
+  let transcription;
+  try {
+    transcription = await openai.audio.transcriptions.create({
+      file,
+      model: 'whisper-1',
+      language: 'es',
+      prompt: 'Conversación de negocios en español.',
+    });
+  } catch (err) {
+    console.error(`[kai/${tenant}/transcribe] OpenAI error:`, err?.message || err);
+    return Response.json({ error: err?.message || 'Transcription failed' }, { status: 500 });
+  }
 
   const text = transcription.text?.trim() ?? '';
   const HALLUCINATIONS = [

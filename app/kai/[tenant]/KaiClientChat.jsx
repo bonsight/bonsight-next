@@ -618,7 +618,9 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
       audioCtx.createMediaStreamSource(stream).connect(analyser);
       analyserRef.current = analyser;
 
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
+        .find(t => MediaRecorder.isTypeSupported(t)) || '';
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       chunksRef.current = [];
       const startedAt = Date.now();
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
@@ -627,7 +629,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
         audioCtxRef.current?.close();
         stream.getTracks().forEach((t) => t.stop());
         if (Date.now() - startedAt < 1500) return;
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || mimeType || 'audio/webm' });
         setTranscribing(true);
         try {
           const form = new FormData();
@@ -704,7 +706,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
       <SessionHeader currentArea={currentArea} areaStatuses={areaStatuses} tenantName={tenantName} knowledgeScore={knowledgeScore} onMenuOpen={onMenuOpen} />
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 'clamp(12px, 4vw, 24px) clamp(14px, 5vw, 28px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 'clamp(12px, 4vw, 24px) clamp(14px, 5vw, 28px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {loading && messages.length === 0 && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             <KaiAvatar />
@@ -811,7 +813,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
       </div>
 
       {/* Input */}
-      <div style={{ padding: '12px 20px 20px', borderTop: '1px solid var(--kai-border)', background: 'var(--kai-bg)' }}>
+      <div style={{ padding: `12px 20px max(env(safe-area-inset-bottom, 0px), 20px)`, borderTop: '1px solid var(--kai-border)', background: 'var(--kai-bg)', flexShrink: 0 }}>
         <div
           onClick={recording ? stopRecording : undefined}
           style={{
