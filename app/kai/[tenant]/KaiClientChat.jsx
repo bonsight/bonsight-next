@@ -844,7 +844,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
               disabled={loading}
               style={{
                 flex: 1, background: 'transparent', border: 'none',
-                color: '#E5E7EB', fontSize: 13.5, outline: 'none', fontFamily: 'inherit',
+                color: '#E5E7EB', fontSize: 16, outline: 'none', fontFamily: 'inherit',
               }}
             />
           )}

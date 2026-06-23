@@ -1743,6 +1743,23 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
   const [isDemoMode, setIsDemoMode]       = useState(!!tenantMeta.isDemo);
   const [drawerOpen, setDrawerOpen]       = useState(false);
 
+  // Lock body scroll on mobile so iOS can't rubber-band beyond kcv-root
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = { htmlOv: html.style.overflow, htmlBg: html.style.background, bodyOv: body.style.overflow, bodyBg: body.style.background };
+    html.style.overflow = 'hidden';
+    html.style.background = '#0D1117';
+    body.style.overflow = 'hidden';
+    body.style.background = '#0D1117';
+    return () => {
+      html.style.overflow = prev.htmlOv;
+      html.style.background = prev.htmlBg;
+      body.style.overflow = prev.bodyOv;
+      body.style.background = prev.bodyBg;
+    };
+  }, []);
+
   // Demo-specific: animated profile (starts empty, fills as demo plays)
   const [demoProfile, setDemoProfile]     = useState({});
   const demoStepRef                       = useRef({ sepCount: 0 });
