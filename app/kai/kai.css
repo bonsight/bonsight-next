@@ -3493,7 +3493,8 @@
 @media (max-width: 768px) {
 
   /* 100svh = small viewport height: size when ALL browser chrome is visible.
-     This is the minimum guaranteed height, so header + input always fit. */
+     --kai-bottom-offset (set via JS) compensates for the browser nav bar
+     overlay that 100svh cannot account for purely in CSS. */
   .kcv-root {
     position: fixed;
     top: 0;
@@ -3502,6 +3503,11 @@
     height: 100svh;
     flex-direction: column;
     overflow: hidden;
+  }
+
+  /* Prevent .kai-root min-height:100vh from creating document scroll on iOS */
+  .kai-root {
+    min-height: 0;
   }
 
   /* Sidebar slides in from left as full-width drawer */

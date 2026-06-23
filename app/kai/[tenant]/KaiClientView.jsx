@@ -1743,7 +1743,8 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
   const [isDemoMode, setIsDemoMode]       = useState(!!tenantMeta.isDemo);
   const [drawerOpen, setDrawerOpen]       = useState(false);
 
-  // Lock body scroll + prevent white overscroll flash on iOS
+  // Lock body scroll + prevent white overscroll flash on iOS +
+  // compute browser toolbar height at bottom for input padding
   useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
@@ -1752,11 +1753,23 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
     body.style.overflow = 'hidden';
     body.style.background = '#0D1117';
 
+    function updateBottomOffset() {
+      const vv = window.visualViewport;
+      if (!vv) return;
+      const offset = Math.max(0, window.innerHeight - vv.offsetTop - vv.height);
+      html.style.setProperty('--kai-bottom-offset', `${offset}px`);
+    }
+    updateBottomOffset();
+    window.visualViewport?.addEventListener('resize', updateBottomOffset);
+    window.visualViewport?.addEventListener('scroll', updateBottomOffset);
+
     return () => {
       html.style.overflow = '';
       html.style.background = '';
       body.style.overflow = '';
       body.style.background = '';
+      window.visualViewport?.removeEventListener('resize', updateBottomOffset);
+      window.visualViewport?.removeEventListener('scroll', updateBottomOffset);
     };
   }, []);
 

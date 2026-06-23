@@ -813,7 +813,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
       </div>
 
       {/* Input */}
-      <div style={{ padding: `12px 20px max(env(safe-area-inset-bottom, 0px), 20px)`, borderTop: '1px solid var(--kai-border)', background: 'var(--kai-bg)', flexShrink: 0 }}>
+      <div style={{ padding: `12px 20px calc(max(env(safe-area-inset-bottom, 0px), 20px) + var(--kai-bottom-offset, 0px))`, borderTop: '1px solid var(--kai-border)', background: 'var(--kai-bg)' }}>
         <div
           onClick={recording ? stopRecording : undefined}
           style={{
