@@ -1264,3 +1264,553 @@
 .aria-advisory-plan .aria-card-title {
   margin-bottom: 6px;
 }
+
+/* =====================================================
+   Archive Context Card
+   ===================================================== */
+
+.aria-archive-card {
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 10px;
+  background: rgba(139, 92, 246, 0.06);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.aria-archive-card-hdr {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px 8px;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.aria-archive-card-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.aria-archive-card-label {
+  font-size: 0.71rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #A78BFA;
+  flex: 1;
+}
+
+.aria-archive-card-relevance {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--aria-text-dim, #6B7280);
+  white-space: nowrap;
+}
+
+.aria-archive-card-match {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 7px 14px;
+  background: rgba(59, 130, 246, 0.06);
+  border-bottom: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.aria-archive-card-match-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--aria-text-dim, #6B7280);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 2px;
+}
+
+.aria-archive-card-match-entity {
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #93C5FD;
+}
+
+.aria-archive-card-body {
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.aria-archive-card-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--aria-text, #E5E7EB);
+  margin: 0;
+}
+
+.aria-archive-card-meta {
+  font-size: 0.73rem;
+  color: var(--aria-text-dim, #6B7280);
+  margin: 0;
+}
+
+.aria-archive-card-summary {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--aria-text, #E5E7EB);
+  margin: 4px 0 0;
+  opacity: 0.85;
+}
+
+.aria-archive-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.aria-archive-card-tag {
+  font-size: 0.66rem;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #A78BFA;
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.aria-archive-card-tag--entity {
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #93C5FD;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.aria-archive-card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+.aria-archive-btn {
+  font-size: 0.76rem;
+  font-weight: 500;
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.aria-archive-btn--accept {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.5);
+  color: #C4B5FD;
+}
+
+.aria-archive-btn--accept:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.25);
+  border-color: #8B5CF6;
+  color: #E9D5FF;
+}
+
+.aria-archive-btn--ignore {
+  background: transparent;
+  border-color: var(--aria-border, #2D3748);
+  color: var(--aria-text-dim, #6B7280);
+}
+
+.aria-archive-btn--ignore:hover:not(:disabled) {
+  border-color: var(--aria-text-dim, #6B7280);
+  color: var(--aria-text, #E5E7EB);
+}
+
+.aria-archive-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* =====================================================
+   Intelligence Panel (3-column layout)
+   ===================================================== */
+
+.aria-layout--panel .aria-page {
+  min-width: 0;
+}
+
+/* Intelligence Panel */
+
+.aria-intel-panel {
+  width: 280px;
+  flex-shrink: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--aria-surface, #161B22);
+  border-left: 1px solid var(--aria-border, #2D3748);
+  overflow: hidden;
+}
+
+.aria-intel-panel-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--aria-border, #2D3748);
+  flex-shrink: 0;
+}
+
+.aria-intel-panel-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--aria-text-dim, #6B7280);
+}
+
+.aria-intel-close {
+  background: none;
+  border: none;
+  color: var(--aria-text-dim, #6B7280);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.aria-intel-close:hover {
+  color: var(--aria-text, #E5E7EB);
+}
+
+.aria-intel-filter-clear {
+  font-size: 0.67rem;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--aria-border, #2D3748);
+  background: transparent;
+  color: var(--aria-text-dim, #6B7280);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.aria-intel-filter-clear:hover {
+  border-color: var(--aria-text-dim, #6B7280);
+  color: var(--aria-text, #E5E7EB);
+}
+
+/* Main insight card */
+
+.aria-intel-main {
+  margin: 12px 12px 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  flex-shrink: 0;
+}
+
+.aria-intel-main-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8B5CF6;
+  margin-bottom: 6px;
+}
+
+.aria-intel-main-text {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--aria-text, #E5E7EB);
+  margin: 0;
+}
+
+/* Executive summary bar */
+
+.aria-intel-exec {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--aria-border, #2D3748);
+  flex-shrink: 0;
+}
+
+.aria-intel-exec-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.aria-intel-exec-val {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--aria-text, #E5E7EB);
+  line-height: 1;
+}
+
+.aria-intel-exec-label {
+  font-size: 0.66rem;
+  color: var(--aria-text-dim, #6B7280);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.aria-intel-exec-sep {
+  width: 1px;
+  height: 28px;
+  background: var(--aria-border, #2D3748);
+}
+
+/* Scrollable cards area */
+
+.aria-intel-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.aria-intel-group {
+  margin-top: 12px;
+}
+
+.aria-intel-group-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--aria-text-dim, #6B7280);
+  margin: 0 0 6px;
+}
+
+.aria-intel-empty {
+  font-size: 0.8rem;
+  color: var(--aria-text-dim, #6B7280);
+  text-align: center;
+  padding: 24px 0;
+  margin: 0;
+}
+
+/* Intelligence cards */
+
+.aria-intel-card {
+  border-left: 3px solid;
+  border-radius: 8px;
+  padding: 10px 10px 8px;
+  margin-bottom: 8px;
+}
+
+.aria-intel-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.aria-intel-card-type {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.aria-intel-card-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.aria-intel-priority {
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+.aria-intel-new-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(139, 92, 246, 0.2);
+  color: #A78BFA;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(139, 92, 246, 0.4);
+}
+
+.aria-intel-card-text {
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--aria-text, #E5E7EB);
+  margin: 0 0 8px;
+}
+
+.aria-intel-card-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.aria-intel-action {
+  font-size: 0.66rem;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--aria-border, #2D3748);
+  background: transparent;
+  color: var(--aria-text-dim, #6B7280);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.aria-intel-action:hover {
+  border-color: var(--aria-accent, #7C3AED);
+  color: var(--aria-text, #E5E7EB);
+}
+
+.aria-intel-action--discard:hover {
+  border-color: #EF4444;
+  color: #EF4444;
+}
+
+/* Chat insight separators */
+
+.aria-chat-sep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 4px;
+  padding: 0 var(--aria-msg-padding, 0);
+}
+
+.aria-chat-sep-line {
+  flex: 1;
+  height: 1px;
+  opacity: 0.3;
+}
+
+.aria-chat-sep-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid;
+  opacity: 0.9;
+}
+
+/* Sidebar Inteligencia block */
+
+.aria-sidebar-section-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--aria-text-dim, #6B7280);
+  margin: 0 0 8px;
+  padding: 0 4px;
+}
+
+.aria-sidebar-intel-block {
+  margin-top: 20px;
+  padding: 0 4px;
+}
+
+.aria-sidebar-intel-counters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.aria-sidebar-intel-counter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--aria-border, #2D3748);
+  font-family: inherit;
+  cursor: default;
+}
+
+.aria-sidebar-intel-counter--clickable {
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.aria-sidebar-intel-counter--clickable:hover {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(139, 92, 246, 0.06);
+}
+
+.aria-sidebar-intel-val {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--aria-text, #E5E7EB);
+  line-height: 1;
+  transition: transform 0.15s;
+}
+
+@keyframes aria-counter-pulse {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.45); }
+  70%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+.aria-sidebar-intel-val--pulse {
+  animation: aria-counter-pulse 0.6s ease-out forwards;
+}
+
+.aria-sidebar-intel-key {
+  font-size: 0.63rem;
+  color: var(--aria-text-dim, #6B7280);
+  text-align: center;
+}
+
+/* Sidebar Fuentes block */
+
+.aria-sidebar-sources-block {
+  margin-top: 16px;
+  padding: 0 4px;
+  padding-bottom: 16px;
+}
+
+.aria-sidebar-source {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.78rem;
+  color: var(--aria-text-dim, #6B7280);
+  padding: 5px 2px;
+}
+
+.aria-sidebar-source--active {
+  color: var(--aria-text, #E5E7EB);
+}
+
+.aria-sidebar-source-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--aria-text-dim, #6B7280);
+  flex-shrink: 0;
+}
+
+.aria-sidebar-source--active .aria-sidebar-source-dot {
+  background: #10B981;
+}

@@ -6,6 +6,9 @@ import AriaAvatar from '@/lib/aria/AriaAvatar';
 import AnalysisPresentation from '../components/AnalysisPresentation';
 import AdvisoryPresentation from '../components/AdvisoryPresentation';
 import Sidebar from '../components/Sidebar';
+import IntelligencePanel from '../components/IntelligencePanel';
+import ChatInsightSeparator from '../components/ChatInsightSeparator';
+import ArchiveContextCard from '../components/ArchiveContextCard';
 
 const ACTIVE_ID_KEY = (tenant) => `ariaTenant_${tenant}_activeInvestigationId`;
 
@@ -87,6 +90,71 @@ function buildChips(tenantName, profile) {
   return chips.slice(0, 4);
 }
 
+function mapCategory(category) {
+  if (!category) return 'hallazgo';
+  const c = category.toLowerCase();
+  if (c.includes('riesgo') || c.includes('risk')) return 'riesgo';
+  if (c.includes('recomend') || c.includes('accion') || c.includes('acción')) return 'recomendacion';
+  if (c.includes('oportunidad') || c.includes('opportunity')) return 'oportunidad';
+  return 'hallazgo';
+}
+
+function extractIntelligence(presentation, advisory) {
+  const items = [];
+  let main = null;
+
+  if (presentation) {
+    if (presentation.headline?.title) main = presentation.headline.title;
+
+    for (const insight of presentation.insights ?? []) {
+      items.push({
+        id: `intel-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        type: mapCategory(insight.category),
+        text: insight.text,
+        priority: 'media',
+        isNew: true,
+      });
+    }
+
+    for (const action of presentation.actionItems ?? []) {
+      items.push({
+        id: `intel-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'recomendacion',
+        text: action.text,
+        priority: action.priority || 'media',
+        isNew: true,
+      });
+    }
+  }
+
+  if (advisory) {
+    if (!main && advisory.risk?.title) main = advisory.risk.title;
+
+    if (advisory.risk?.description) {
+      items.push({
+        id: `intel-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'riesgo',
+        text: advisory.risk.description,
+        priority: advisory.risk.status === 'crítico' ? 'alta' : 'media',
+        isNew: true,
+      });
+    }
+
+    for (const dec of advisory.decisions ?? []) {
+      const text = typeof dec === 'string' ? dec : (dec.text || dec.description || JSON.stringify(dec));
+      items.push({
+        id: `intel-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'recomendacion',
+        text,
+        priority: dec.priority || 'media',
+        isNew: true,
+      });
+    }
+  }
+
+  return { items, main };
+}
+
 export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
   const tenantName = tenantMeta?.name ?? tenant;
   const industry = tenantMeta?.industry ?? '';
@@ -101,12 +169,29 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [intelligenceItems, setIntelligenceItems] = useState([]);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [panelFilter, setPanelFilter] = useState(null);
+  const [mainInsight, setMainInsight] = useState(null);
+  const [sources, setSources] = useState([]);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
     async function init() {
-      const res = await fetch(`/api/aria/${tenant}/investigations`);
-      const data = await res.json();
+      const [invRes, srcRes] = await Promise.all([
+        fetch(`/api/aria/${tenant}/investigations`),
+        fetch(`/api/kai/${tenant}/intelligence-sources`).catch(() => null),
+      ]);
+      const data = await invRes.json();
+      if (srcRes?.ok) {
+        const srcData = await srcRes.json().catch(() => ({}));
+        const cfg = srcData.sources ?? {};
+        setSources(
+          Object.entries(cfg)
+            .filter(([, v]) => v?.enabled || v?.propertyId || v?.viewId)
+            .map(([id, v]) => ({ id, name: v.label ?? id, active: true }))
+        );
+      }
       const list = data.investigations ?? [];
 
       const storedId = localStorage.getItem(ACTIVE_ID_KEY(tenant));
@@ -226,10 +311,40 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
           presentation: data.presentation ?? null,
           advisory: data.advisory ?? null,
           topics: data.topics ?? [],
+          archiveMatch: data.archiveMatch ?? null,
+          intelligence: data.intelligence ?? [],
         },
       ]);
       if (data.investigationMeta) {
         setInvestigations((prev) => upsertInvestigation(prev, data.investigationMeta));
+      }
+      const newItems = [];
+
+      if (data.presentation || data.advisory) {
+        const { items, main } = extractIntelligence(data.presentation, data.advisory);
+        newItems.push(...items);
+        if (main) setMainInsight(main);
+      }
+
+      if (Array.isArray(data.intelligence) && data.intelligence.length > 0) {
+        for (const item of data.intelligence) {
+          if (item.type === 'insight_principal') {
+            setMainInsight(item.text);
+          } else {
+            newItems.push({
+              id: `intel-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              type: item.type,
+              text: item.text,
+              priority: item.priority || 'media',
+              isNew: true,
+            });
+          }
+        }
+      }
+
+      if (newItems.length > 0) {
+        setIntelligenceItems((prev) => [...newItems, ...prev]);
+        setPanelOpen(true);
       }
     } catch {
       setMessages([
@@ -248,8 +363,32 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
     }
   }
 
+  function dismissArchiveCard(msgIndex) {
+    setMessages((prev) =>
+      prev.map((m, i) => (i === msgIndex ? { ...m, archiveMatch: null } : m))
+    );
+  }
+
+  async function handleAcceptArchiveContext(match, msgIndex) {
+    dismissArchiveCard(msgIndex);
+    let contextBlock = `[Contexto recuperado de investigación archivada]\n\nInvestigación: "${match.title}" (${match.date})\nÁrea: ${match.area}`;
+    if (match.summary) contextBlock += `\nResumen: ${match.summary}`;
+    if (match.insights?.length) contextBlock += `\nInsights clave: ${match.insights.slice(0, 3).join('; ')}`;
+    if (match.decisions?.length) contextBlock += `\nDecisiones tomadas: ${match.decisions.slice(0, 3).join('; ')}`;
+    contextBlock += `\n\nIncorpora este contexto y continúa el análisis.`;
+
+    await send(contextBlock);
+  }
+
+  const counters = {
+    hallazgos: intelligenceItems.filter((i) => i.type === 'hallazgo').length,
+    riesgos: intelligenceItems.filter((i) => i.type === 'riesgo').length,
+    recomendaciones: intelligenceItems.filter((i) => i.type === 'recomendacion').length,
+    oportunidades: intelligenceItems.filter((i) => i.type === 'oportunidad').length,
+  };
+
   return (
-    <div className="aria-layout">
+    <div className={`aria-layout${panelOpen ? ' aria-layout--panel' : ''}`}>
       <Sidebar
         investigations={investigations}
         activeId={investigationId}
@@ -258,6 +397,9 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
         onArchive={handleArchiveInvestigation}
         onRestore={handleRestoreInvestigation}
         onDelete={handleDeleteInvestigation}
+        counters={counters}
+        sources={sources}
+        onIntelFilter={(type) => { setPanelFilter(type); setPanelOpen(true); }}
       />
       <div className="aria-page">
         <header className="aria-header">
@@ -326,8 +468,20 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
           {messages.map((m, i) => {
             const isLastAssistant = m.role === 'assistant' && i === messages.length - 1;
             const showTopics = isLastAssistant && !loading && !m.presentation && !m.advisory && m.topics?.length > 0;
-            return m.role === 'assistant' ? (
+            const hasIntelligence = m.role === 'assistant' && (m.presentation || m.advisory || m.intelligence?.length > 0);
+            const dominantIntelType = m.intelligence?.find((i) => i.type !== 'insight_principal')?.type ?? 'analisis';
+            const sepType = m.advisory?.risk ? 'riesgo' : m.presentation ? 'analisis' : dominantIntelType;
+            return m.role === 'assistant' ? [
+              hasIntelligence ? <ChatInsightSeparator key={`sep-${i}`} type={sepType} /> : null,
               <div key={i} className="aria-msg aria-msg-assistant">
+                {m.archiveMatch && (
+                  <ArchiveContextCard
+                    match={m.archiveMatch}
+                    loading={loading}
+                    onAccept={(match) => handleAcceptArchiveContext(match, i)}
+                    onIgnore={() => dismissArchiveCard(i)}
+                  />
+                )}
                 <div className={`aria-msg-assistant-inner${m.presentation || m.advisory ? ' aria-msg-assistant-inner-wide' : ''}`}>
                   <div className="aria-msg-label">
                     <AriaAvatar size={20} />
@@ -373,8 +527,8 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
                     </div>
                   )}
                 </div>
-              </div>
-            ) : (
+              </div>,
+            ] : (
               <div key={i} className="aria-msg aria-msg-user">
                 <div className="aria-msg-content">{renderMessage(m.content)}</div>
               </div>
@@ -410,6 +564,16 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
         </div>
         <p className="aria-disclaimer">Aria puede cometer errores. Verifica siempre la información crítica.</p>
       </div>
+      {panelOpen && (
+        <IntelligencePanel
+          items={intelligenceItems}
+          mainInsight={mainInsight}
+          counters={counters}
+          filter={panelFilter}
+          onClearFilter={() => setPanelFilter(null)}
+          onClose={() => { setPanelOpen(false); setPanelFilter(null); }}
+        />
+      )}
     </div>
   );
 }

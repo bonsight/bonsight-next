@@ -389,9 +389,401 @@ function PlaceholderTab({ icon, label, description }) {
   );
 }
 
+// ── Intelligence Sources Tab ───────────────────────────────────────────────
+
+const LEVEL_LABELS = { 1: 'Nivel 1', 2: 'Nivel 2', 3: 'Nivel 3' };
+const LEVEL_DESC   = { 1: 'Datos observados', 2: 'Conocimiento validado', 3: 'Historial' };
+
+const statusColor = { active: '#10B981', inactive: '#D1D5DB', soon: '#F59E0B' };
+
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); }}
+      style={{
+        fontSize: 10.5, padding: '2px 8px', borderRadius: 4, cursor: 'pointer',
+        fontFamily: 'inherit', border: '0.5px solid #ddd', background: '#fff', color: '#888',
+        flexShrink: 0,
+      }}
+    >
+      {copied ? '✓' : 'Copiar'}
+    </button>
+  );
+}
+
+const SA_PERMISSION = {
+  ga4:            'Viewer / Lector en tu propiedad GA4',
+  search_console: 'Full User en Google Search Console',
+};
+
+function SourceCard({ source, onToggle, onValidate, onSaveConfig, loading, saEmail }) {
+  const isAlways    = source.alwaysActive;
+  const isSoon      = source.status === 'soon';
+  const isActive    = source.status === 'active';
+  const primaryKey  = source.fields?.[0]?.key;
+  const hasConfig   = primaryKey ? !!source.config?.[primaryKey] : Object.keys(source.config ?? {}).length > 0;
+  const needsValidation = !!onValidate;
+
+  const [configuring,     setConfiguring]     = useState(false);
+  const [validating,      setValidating]      = useState(false);
+  const [validationError, setValidationError] = useState(null);
+  const [fieldValues,     setFieldValues]     = useState(
+    () => Object.fromEntries((source.fields ?? []).map((f) => [f.key, source.config?.[f.key] ?? '']))
+  );
+
+  const handleValidate = async () => {
+    setValidating(true);
+    setValidationError(null);
+    const result = await onValidate(source.id, fieldValues);
+    setValidating(false);
+    if (result.ok) setConfiguring(false);
+    else setValidationError(result.error);
+  };
+
+  const canSubmit = Object.values(fieldValues).some((v) => String(v).trim());
+
+  return (
+    <div style={{
+      background: isActive ? '#faf8ff' : '#fff',
+      border: `0.5px solid ${isActive ? '#c4b5fd' : configuring ? '#6B4FE8' : '#e0e0dc'}`,
+      borderRadius: 10, padding: '14px 16px', marginBottom: 10,
+      opacity: isSoon ? 0.6 : 1, transition: 'border-color 0.15s',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: statusColor[source.status] ?? '#D1D5DB' }} />
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: '#111', whiteSpace: 'nowrap' }}>{source.label}</span>
+          <span style={{ fontSize: 10.5, color: '#aaa', background: '#f5f5f3', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>
+            {LEVEL_LABELS[source.evidenceLevel]} — {LEVEL_DESC[source.evidenceLevel]}
+          </span>
+        </div>
+        {!isAlways && !isSoon && !configuring && (() => {
+          if (!hasConfig) return (
+            <button onClick={() => setConfiguring(true)} style={{ fontSize: 11.5, fontWeight: 600, padding: '4px 13px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', border: '0.5px solid #6B4FE8', background: '#fff', color: '#6B4FE8' }}>Configurar</button>
+          );
+          return (
+            <button onClick={onToggle} disabled={loading} style={{ fontSize: 11.5, fontWeight: 600, padding: '4px 13px', borderRadius: 6, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: isActive ? 'none' : '0.5px solid #6B4FE8', background: isActive ? '#6B4FE8' : '#fff', color: isActive ? '#fff' : '#6B4FE8', opacity: loading ? 0.5 : 1 }}>
+              {loading ? '…' : isActive ? 'Desactivar' : 'Activar'}
+            </button>
+          );
+        })()}
+        {isAlways && <span style={{ fontSize: 10.5, fontWeight: 600, background: '#e0f2fe', color: '#0369a1', borderRadius: 5, padding: '2px 8px', whiteSpace: 'nowrap' }}>Siempre activo</span>}
+        {isSoon   && <span style={{ fontSize: 10.5, fontWeight: 600, background: '#fef3c7', color: '#92400e', borderRadius: 5, padding: '2px 8px', whiteSpace: 'nowrap' }}>Próximamente</span>}
+      </div>
+
+      <p style={{ fontSize: 12.5, color: '#6B7280', margin: '0 0 8px', lineHeight: 1.5 }}>{source.description}</p>
+
+      {/* Active metadata — GA4 */}
+      {source.id === 'ga4' && hasConfig && !configuring && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8 }}>
+          {source.config.propertyName && (
+            <span style={{ fontSize: 12, color: '#444' }}>
+              <span style={{ color: '#aaa' }}>Propiedad: </span>{source.config.propertyName}
+              {source.config.accountName && <span style={{ color: '#aaa' }}> · {source.config.accountName}</span>}
+            </span>
+          )}
+          <span style={{ fontSize: 12, color: '#aaa' }}>
+            Property ID: {source.config.propertyId}
+            {source.config.lastValidatedAt && <span> · Validado {relativeTime(source.config.lastValidatedAt)}</span>}
+          </span>
+          {source.config.permissionStatus === 'access_error' && source.config.lastError && (
+            <span style={{ fontSize: 11.5, color: '#EF4444', marginTop: 2 }}>⚠ {source.config.lastError}</span>
+          )}
+        </div>
+      )}
+
+      {/* Active metadata — Google Ads */}
+      {source.id === 'google_ads' && hasConfig && !configuring && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8 }}>
+          {source.config.customerName && (
+            <span style={{ fontSize: 12, color: '#444' }}>
+              <span style={{ color: '#aaa' }}>Cuenta: </span>{source.config.customerName}
+            </span>
+          )}
+          <span style={{ fontSize: 12, color: '#aaa' }}>
+            Customer ID: {source.config.customerId}
+            {source.config.lastValidatedAt && <span> · Validado {relativeTime(source.config.lastValidatedAt)}</span>}
+          </span>
+          {source.config.permissionStatus === 'access_error' && source.config.lastError && (
+            <span style={{ fontSize: 11.5, color: '#EF4444', marginTop: 2 }}>⚠ {source.config.lastError}</span>
+          )}
+        </div>
+      )}
+
+      {/* Active metadata — Search Console */}
+      {source.id === 'search_console' && hasConfig && !configuring && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8 }}>
+          <span style={{ fontSize: 12, color: '#444', fontFamily: 'monospace' }}>{source.config.siteUrl}</span>
+          {source.config.lastValidatedAt && (
+            <span style={{ fontSize: 12, color: '#aaa' }}>Validado {relativeTime(source.config.lastValidatedAt)}</span>
+          )}
+          {source.config.permissionStatus === 'access_error' && source.config.lastError && (
+            <span style={{ fontSize: 11.5, color: '#EF4444', marginTop: 2 }}>⚠ {source.config.lastError}</span>
+          )}
+        </div>
+      )}
+
+      {/* Capabilities */}
+      {source.capabilities?.length > 0 && !configuring && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          {source.capabilities.map((c, i) => (
+            <span key={i} style={{ fontSize: 11, borderRadius: 4, padding: '2px 7px', background: isActive ? '#ede9fe' : '#f5f5f3', color: isActive ? '#4B2FBE' : '#555' }}>{c}</span>
+          ))}
+        </div>
+      )}
+
+      {/* Validation form (shared: GA4, Search Console, future connectors) */}
+      {needsValidation && configuring && (
+        <div style={{ marginTop: 12, padding: '16px', background: '#f9f8ff', border: '0.5px solid #e0d8ff', borderRadius: 8 }}>
+          {saEmail && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: '#555', marginBottom: 6 }}>
+                1. Agrega este email como {SA_PERMISSION[source.id] ?? 'usuario'} de esta propiedad
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '0.5px solid #e0d8ff', borderRadius: 6, padding: '8px 10px' }}>
+                <span style={{ fontSize: 12, color: '#4B2FBE', fontFamily: 'monospace', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{saEmail}</span>
+                <CopyButton text={saEmail} />
+              </div>
+            </div>
+          )}
+          {(source.fields ?? []).map((f, idx) => (
+            <div key={f.key} style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: '#555', marginBottom: 5 }}>
+                {saEmail ? `${idx + 2}. ` : ''}{f.label}
+              </label>
+              <input
+                type={f.type ?? 'text'}
+                value={fieldValues[f.key] ?? ''}
+                placeholder={f.placeholder}
+                onChange={(e) => setFieldValues((p) => ({ ...p, [f.key]: e.target.value }))}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: 6, fontSize: 13, border: '0.5px solid #c4b5fd', outline: 'none', fontFamily: 'inherit', color: '#111', background: '#fff' }}
+              />
+            </div>
+          ))}
+          {validationError && (
+            <div style={{ fontSize: 12, color: '#EF4444', background: '#FEF2F2', border: '0.5px solid #FECACA', borderRadius: 6, padding: '8px 10px', marginBottom: 12 }}>
+              ⚠ {validationError}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={() => { setConfiguring(false); setValidationError(null); }} style={{ fontSize: 12, padding: '5px 14px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', border: '0.5px solid #ddd', background: '#fff', color: '#888' }}>Cancelar</button>
+            <button onClick={handleValidate} disabled={validating || !canSubmit} style={{ fontSize: 12, fontWeight: 600, padding: '5px 16px', borderRadius: 6, cursor: validating || !canSubmit ? 'not-allowed' : 'pointer', fontFamily: 'inherit', background: '#6B4FE8', color: '#fff', border: 'none', opacity: validating || !canSubmit ? 0.6 : 1 }}>
+              {validating ? 'Validando…' : validationError ? 'Reintentar' : 'Guardar y validar'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit config link */}
+      {!configuring && hasConfig && (needsValidation || source.fields?.length > 0) && (
+        <div style={{ marginTop: 8, textAlign: 'right' }}>
+          <button onClick={() => { setConfiguring(true); setValidationError(null); }} style={{ fontSize: 11, color: '#bbb', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>Editar configuración</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IntelligenceSourcesTab({ slug }) {
+  const [sources, setSources] = useState(null);
+  const [saving,  setSaving]  = useState({});
+  const [saEmail, setSaEmail] = useState(null);
+
+  useEffect(() => {
+    fetch(`/api/kai/${slug}/intelligence-sources`)
+      .then((r) => r.json())
+      .then((d) => { setSources(d.sources ?? []); setSaEmail(d.saEmail ?? null); })
+      .catch(() => setSources([]));
+  }, [slug]);
+
+  const patch = async (sourceId, body, optimistic) => {
+    setSaving((p) => ({ ...p, [sourceId]: true }));
+    try {
+      await fetch(`/api/kai/${slug}/intelligence-sources`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId, ...body }),
+      });
+      setSources((prev) => prev.map((s) => s.id === sourceId ? { ...s, ...optimistic } : s));
+    } catch { /* ignore */ }
+    finally { setSaving((p) => ({ ...p, [sourceId]: false })); }
+  };
+
+  const toggle = (sourceId, currentStatus) =>
+    patch(sourceId, { enabled: currentStatus !== 'active' }, { status: currentStatus !== 'active' ? 'active' : 'inactive' });
+
+  const saveConfig = (sourceId, config) =>
+    patch(sourceId, { enabled: true, config }, { status: 'active', config });
+
+  const validateGA4 = async (_sourceId, { propertyId }) => {
+    setSaving((p) => ({ ...p, ga4: true }));
+    try {
+      const res = await fetch(`/api/kai/${slug}/intelligence-sources/ga4/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propertyId }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setSources((prev) => prev.map((s) => s.id === 'ga4' ? {
+          ...s, status: 'active',
+          config: {
+            ...s.config,
+            propertyId: data.propertyId,
+            propertyName: data.propertyName,
+            accountName: data.accountName,
+            permissionStatus: 'validated',
+            lastValidatedAt: data.lastValidatedAt,
+            lastError: null,
+          },
+        } : s));
+        return { ok: true };
+      }
+      return { ok: false, error: data.error };
+    } catch {
+      return { ok: false, error: 'Error de conexión. Intenta de nuevo.' };
+    } finally {
+      setSaving((p) => ({ ...p, ga4: false }));
+    }
+  };
+
+  const validateGoogleAds = async (_sourceId, { customerId }) => {
+    setSaving((p) => ({ ...p, google_ads: true }));
+    try {
+      const res = await fetch(`/api/kai/${slug}/intelligence-sources/google-ads/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setSources((prev) => prev.map((s) => s.id === 'google_ads' ? {
+          ...s, status: 'active',
+          config: {
+            ...s.config,
+            customerId: data.customerId,
+            customerName: data.customerName,
+            permissionStatus: 'validated',
+            lastValidatedAt: data.lastValidatedAt,
+            lastError: null,
+          },
+        } : s));
+        return { ok: true };
+      }
+      return { ok: false, error: data.error };
+    } catch {
+      return { ok: false, error: 'Error de conexión. Intenta de nuevo.' };
+    } finally {
+      setSaving((p) => ({ ...p, google_ads: false }));
+    }
+  };
+
+  const validateSearchConsole = async (_sourceId, { siteUrl }) => {
+    setSaving((p) => ({ ...p, search_console: true }));
+    try {
+      const res = await fetch(`/api/kai/${slug}/intelligence-sources/search-console/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteUrl }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setSources((prev) => prev.map((s) => s.id === 'search_console' ? {
+          ...s, status: 'active',
+          config: {
+            ...s.config,
+            siteUrl: data.siteUrl,
+            permissionStatus: 'validated',
+            lastValidatedAt: data.lastValidatedAt,
+            lastError: null,
+          },
+        } : s));
+        return { ok: true };
+      }
+      return { ok: false, error: data.error };
+    } catch {
+      return { ok: false, error: 'Error de conexión. Intenta de nuevo.' };
+    } finally {
+      setSaving((p) => ({ ...p, search_console: false }));
+    }
+  };
+
+  if (!sources) {
+    return <div style={{ fontSize: 13, color: '#bbb', padding: '32px 0' }}>Cargando…</div>;
+  }
+
+  const always      = sources.filter((s) => s.alwaysActive);
+  const configurable = sources.filter((s) => !s.alwaysActive && !s.comingSoon);
+  const soon        = sources.filter((s) => s.comingSoon);
+  const activeCount = sources.filter((s) => s.status === 'active').length;
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#111', letterSpacing: '-0.02em', marginBottom: 3 }}>
+            Intelligence Sources
+          </div>
+          <div style={{ fontSize: 12.5, color: '#aaa' }}>
+            ¿Con qué evidencia está razonando Aria hoy?
+          </div>
+        </div>
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          background: '#f5f2ff', border: '0.5px solid #e0d8ff',
+          borderRadius: 10, padding: '10px 20px', minWidth: 76,
+        }}>
+          <span style={{ fontSize: 26, fontWeight: 700, color: '#6B4FE8', lineHeight: 1 }}>{activeCount}</span>
+          <span style={{ fontSize: 10.5, color: '#aaa', marginTop: 2 }}>fuentes activas</span>
+        </div>
+      </div>
+
+      {/* Group: Siempre disponibles */}
+      <div style={{ marginBottom: 28 }}>
+        <SectionLabel>Siempre disponibles</SectionLabel>
+        <div style={{ fontSize: 12, color: '#bbb', marginBottom: 10 }}>
+          No requieren configuración. Aria las usa en todos los análisis.
+        </div>
+        {always.map((s) => <SourceCard key={s.id} source={s} />)}
+      </div>
+
+      {/* Group: Conectores */}
+      <div style={{ marginBottom: 28 }}>
+        <SectionLabel>Conectores</SectionLabel>
+        <div style={{ fontSize: 12, color: '#bbb', marginBottom: 10 }}>
+          Fuentes de datos externas. Actívalas para ampliar la evidencia disponible.
+        </div>
+        {configurable.map((s) => (
+          <SourceCard
+            key={s.id}
+            source={s}
+            onToggle={() => toggle(s.id, s.status)}
+            onSaveConfig={(sourceId, config) => saveConfig(sourceId, config)}
+            onValidate={s.id === 'ga4' ? validateGA4 : s.id === 'search_console' ? validateSearchConsole : s.id === 'google_ads' ? validateGoogleAds : undefined}
+            saEmail={s.id === 'ga4' || s.id === 'search_console' ? saEmail : undefined}
+            loading={!!saving[s.id]}
+          />
+        ))}
+      </div>
+
+      {/* Group: Próximamente */}
+      <div>
+        <SectionLabel>Próximamente</SectionLabel>
+        <div style={{ fontSize: 12, color: '#bbb', marginBottom: 10 }}>
+          Conectores en desarrollo. Estarán disponibles en futuras versiones.
+        </div>
+        {soon.map((s) => <SourceCard key={s.id} source={s} />)}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────
 
-const TABS = ['Context', 'Analysis', 'Data Sources', 'Insights', 'Recommendations'];
+const TABS = ['Context', 'Analysis', 'Intelligence Sources', 'Insights', 'Recommendations'];
 
 export default function AriaAdminDetail({ meta, profile, conversations, ariaInvestigations, ariaLastMessages }) {
   const [activeTab, setActiveTab] = useState(0);
@@ -470,9 +862,7 @@ export default function AriaAdminDetail({ meta, profile, conversations, ariaInve
             slug={meta.slug}
           />
         )}
-        {activeTab === 2 && (
-          <PlaceholderTab icon="🔌" label="Data Sources" description="Conectores a GA4, BigQuery, HubSpot y más — próximamente en V2." />
-        )}
+        {activeTab === 2 && <IntelligenceSourcesTab slug={meta.slug} />}
         {activeTab === 3 && (
           <PlaceholderTab icon="💡" label="Insights" description="Hallazgos relevantes generados por Aria — próximamente en V2." />
         )}
