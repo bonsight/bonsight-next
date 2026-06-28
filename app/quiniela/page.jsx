@@ -564,6 +564,16 @@ export default function QuinielaLanding() {
           </div>
         </div>
 
+        {/* ── TOP GLOBAL ── */}
+        <a href="/quiniela/top" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: '#f0fdf8', border: '1.5px solid #1D9E75', borderRadius: 12, textDecoration: 'none', marginBottom: 16 }}>
+          <span style={{ fontSize: 26 }}>🏆</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#0F6E56' }}>Top 10 Global — Fase de grupos</div>
+            <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>Los mejores puntuados entre todas las quinielas</div>
+          </div>
+          <span style={{ marginLeft: 'auto', color: '#1D9E75', fontSize: 18 }}>→</span>
+        </a>
+
         {/* ── FOOTER KAI ── */}
         <div style={{ marginTop: 8, paddingTop: 20, borderTop: '0.5px solid #eee' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>

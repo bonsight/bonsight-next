@@ -38,6 +38,7 @@ function BottomNav({ groupId, active, isAdmin }) {
       <div style={{ display: 'flex', width: '100%', maxWidth: 720 }}>
         {item(`/quiniela/${groupId}/picks`,       '📋 Mis picks',   'picks')}
         {item(`/quiniela/${groupId}/seguimiento`, '📊 Seguimiento', 'seguimiento')}
+        {item(`/quiniela/top`,                    '🏆 Global',      'top')}
         {isAdmin && item(`/quiniela/${groupId}/admin`, '⚙️ Admin', 'admin')}
       </div>
     </div>
@@ -202,6 +203,7 @@ export default function SeguimientoPage() {
     const token = localStorage.getItem(`quiniela_token_${groupId}`)
     if (!token) { setAuth('denied'); router.replace(`/quiniela/${groupId}`); return }
     setIsAdmin(!!localStorage.getItem(`quiniela_admin_${groupId}`))
+    localStorage.setItem('quiniela_last_group', groupId)
 
     Promise.all([
       fetch(`/api/quiniela?action=participante&token=${token}`).then(r => r.json()),

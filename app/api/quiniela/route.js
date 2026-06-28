@@ -124,6 +124,50 @@ export async function GET(req) {
       return NextResponse.json({ quinielas: data, total: data.length, globalConfidenceGenerated, pendingMatchesCount, lideres })
     }
 
+    if (action === 'globalTop') {
+      const cached = await kv.get('quiniela:global:top:grupos')
+      if (cached) return NextResponse.json({ top: cached, cached: true })
+
+      const [groups, globalAdmin] = await Promise.all([
+        kv.get('quiniela:groups'),
+        kv.get('quiniela:global:admin'),
+      ])
+      const gruposResults = globalAdmin?.results?.grupos ?? []
+      const adminForGrupos = { unlockedPhases: ['grupos'], results: { grupos: gruposResults }, realCampeon: '', realGoleador: '' }
+
+      const EXCLUDED_GROUP_IDS = ['P2-JAY3']
+      const allEntries = (await Promise.all(
+        (groups ?? []).filter(g => !EXCLUDED_GROUP_IDS.includes(g.id)).map(async ({ id, nombre: gNombre }) => {
+          const [participants, quinielas, groupData] = await Promise.all([
+            kv.get(`quiniela:${id}:participants`),
+            kv.get(`quiniela:${id}:quinielas`),
+            kv.get(`quiniela:group:${id}`),
+          ])
+          if (groupData?.isDemo) return []
+          const scores = calcularPuntajes(participants ?? [], quinielas ?? {}, adminForGrupos)
+          return (participants ?? []).map(p => {
+            const s = scores.find(x => x.participantId === p.id)
+            return {
+              nombre: p.nombre,
+              pais: p.pais ?? null,
+              quinielaNombre: gNombre,
+              quinielaId: id,
+              pts: s?.pts ?? 0,
+              exactos: s?.breakdown?.exacto ?? 0,
+              ganadores: s?.breakdown?.ganador ?? 0,
+            }
+          })
+        })
+      )).flat()
+
+      const top = allEntries
+        .sort((a, b) => b.pts - a.pts || b.exactos - a.exactos || b.ganadores - a.ganadores)
+        .slice(0, 10)
+
+      await kv.set('quiniela:global:top:grupos', top, { ex: 600 })
+      return NextResponse.json({ top })
+    }
+
     if (action === 'group' && groupId) {
       const group = await kv.get(`quiniela:group:${groupId}`)
       if (!group) return NextResponse.json({ error: 'not_found' }, { status: 404 })

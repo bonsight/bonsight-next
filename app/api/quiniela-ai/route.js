@@ -94,6 +94,11 @@ export async function GET(req) {
   const participantId = searchParams.get('participantId')
 
   try {
+    if (action === 'getGlobalTopComment') {
+      const cached = await kv.get('quiniela:global:top:comentario')
+      return NextResponse.json({ comentario: cached ?? null })
+    }
+
     if (action === 'getConfidence' && phase) {
       const global = await kv.get(`quiniela:global:confidence:${phase}`)
       if (global) return NextResponse.json({ confidence: global })
@@ -583,6 +588,38 @@ REGLAS:
           'X-Accel-Buffering': 'no',
         },
       })
+    }
+
+    if (action === 'generateGlobalTopComment') {
+      const top = await kv.get('quiniela:global:top:grupos')
+      if (!top || top.length === 0) return NextResponse.json({ error: 'no_data' }, { status: 400 })
+
+      const topText = top.map((e, i) =>
+        `${i + 1}. ${e.nombre} (${e.quinielaNombre}) — ${e.pts} pts, ${e.exactos} exactos, ${e.ganadores} ganadores`
+      ).join('\n')
+
+      const system = `Eres Kai, el analista de una quiniela del Mundial 2026.
+Tono: directo, humano, competitivo, con algo de humor. Como un amigo que sabe de fútbol.
+Responde ÚNICAMENTE con JSON válido. Sin texto adicional, sin markdown, sin bloques de código.`
+
+      const prompt = `Top 10 global de la fase de grupos (todas las quinielas):
+
+${topText}
+
+Genera exactamente 3 comentarios cortos sobre estos resultados.
+Pueden ser sobre el líder, empates interesantes, diferencias entre quinielas, rachas, etc.
+Devuelve un array JSON con exactamente 3 objetos:
+[
+  { "titular": "texto corto (4-6 palabras)", "descripcion": "1-2 oraciones directas y específicas" },
+  ...
+]`
+
+      const raw = await callClaude(system, prompt, 600, 'claude-haiku-4-5-20251001')
+      const comentario = parseJSON(raw)
+      if (!comentario || comentario.length === 0) return NextResponse.json({ error: 'parse_failed' }, { status: 500 })
+
+      await kv.set('quiniela:global:top:comentario', comentario, { ex: 3600 })
+      return NextResponse.json({ comentario })
     }
 
     return NextResponse.json({ error: 'Unknown POST action' }, { status: 400 })
