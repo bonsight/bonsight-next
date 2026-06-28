@@ -7,7 +7,7 @@ const kv = new Redis({
   token: process.env.KV_REST_API_TOKEN,
 })
 
-async function callClaude(system, userMessage, maxTokens = 1500) {
+async function callClaude(system, userMessage, maxTokens = 1500, model = 'claude-sonnet-4-6') {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -16,7 +16,7 @@ async function callClaude(system, userMessage, maxTokens = 1500) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+      model,
       max_tokens: maxTokens,
       system,
       messages: [{ role: 'user', content: userMessage }],
@@ -46,17 +46,26 @@ function parseJSONObject(text) {
 }
 
 // Builds a compact match matrix string for the AI prompt (only played matches)
+// Capped at MAX_MATRIX_MATCHES most-recent played matches to stay within Vercel timeout
+const MAX_MATRIX_MATCHES = 35
 function buildMatchMatrix(phase, adminResults, quinielas, participants) {
   const phaseMatches = PHASES[phase]?.matches ?? []
   const phaseResults = (adminResults ?? {})[phase] ?? []
   const totalMatches = phaseMatches.length
-  const lines = []
-  let playedCount = 0
 
+  // Collect all played matches first, then take the last MAX_MATRIX_MATCHES
+  const played = []
   phaseMatches.forEach((m, i) => {
     const real = phaseResults[i]
     if (!real || real.l === '' || real.v === '') return
-    playedCount++
+    played.push({ m, i, real })
+  })
+
+  if (!played.length) return 'Sin partidos con resultado confirmado aún.'
+
+  const slice = played.length > MAX_MATRIX_MATCHES ? played.slice(played.length - MAX_MATRIX_MATCHES) : played
+  const lines = []
+  slice.forEach(({ m, i, real }) => {
     const golesL = Number(real.l)
     const golesV = Number(real.v)
     const realWin = golesL > golesV ? m.local : golesL < golesV ? m.visitante : 'Empate'
@@ -70,8 +79,10 @@ function buildMatchMatrix(phase, adminResults, quinielas, participants) {
     })
   })
 
-  if (!playedCount) return 'Sin partidos con resultado confirmado aún.'
-  return `Partidos jugados: ${playedCount} de ${totalMatches}\n\n${lines.join('\n')}`
+  const header = slice.length < played.length
+    ? `Partidos jugados: ${played.length} de ${totalMatches} (mostrando los últimos ${slice.length})\n\n`
+    : `Partidos jugados: ${played.length} de ${totalMatches}\n\n`
+  return header + lines.join('\n')
 }
 
 // ── GET: leer datos IA cacheados ─────────────────────────────────────────────
@@ -433,7 +444,7 @@ REGLAS:
 - Basar TODO en los datos proporcionados. No inventar picks ni resultados.`
 
       try {
-        const text = await callClaude(KAI_SYSTEM, userMessage, 800)
+        const text = await callClaude(KAI_SYSTEM, userMessage, 1200, 'claude-haiku-4-5-20251001')
         if (!text) {
           console.error('[generateOneJornada] empty text from Claude groupId=%s', groupId)
           return NextResponse.json({ ok: false, status: 'error', groupId, reason: 'empty_claude' })

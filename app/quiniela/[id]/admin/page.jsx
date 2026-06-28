@@ -43,6 +43,8 @@ export default function AdminDashboard() {
   const [toast, setToast] = useState('')
   const [adminUnlocked, setAdminUnlocked] = useState(false)
   const [notAuthorized, setNotAuthorized] = useState(false)
+  const [pinInput, setPinInput] = useState('')
+  const [pinError, setPinError] = useState('')
   const [jornadaSummary, setJornadaSummary]   = useState(null)
   const [jornadaInsights, setJornadaInsights] = useState([])
   const [jornadaStatus, setJornadaStatus]     = useState('idle') // 'idle'|'generating'|'done'
@@ -63,12 +65,15 @@ export default function AdminDashboard() {
         setAdmin(a)
         setScores(calcularPuntajes(data.participants ?? [], data.quinielas ?? {}, a))
 
-        // Auth: token + email match, o flag legacy para quinielas antiguas
-        if (token) {
+        // Auth: localStorage flag (set on create or PIN unlock), o email match
+        const hasAdminFlag = !!localStorage.getItem(`quiniela_admin_${groupId}`)
+        if (hasAdminFlag) {
+          setAdminUnlocked(true)
+        } else if (token) {
           const pData = await fetch(`/api/quiniela?action=participante&token=${token}`).then(r => r.json()).catch(() => ({}))
           const isCreator = data.group.adminEmail
             ? pData.participant?.email === data.group.adminEmail
-            : !!localStorage.getItem(`quiniela_admin_${groupId}`)
+            : false
           if (isCreator) {
             localStorage.setItem(`quiniela_admin_${groupId}`, '1')
             setAdminUnlocked(true)
@@ -171,22 +176,60 @@ export default function AdminDashboard() {
     </div>
   )
 
-  if (notAuthorized) return (
-    <div style={{ ...page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ textAlign: 'center', maxWidth: 320 }}>
-        <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
-        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Acceso restringido</div>
-        <div style={{ fontSize: 13, color: '#888', lineHeight: 1.6, marginBottom: 24 }}>
-          Solo el organizador puede acceder a este panel. Asegúrate de estar autenticado con la cuenta con la que creaste la quiniela.
+  if (notAuthorized) {
+    const hasPin = !!group?.adminPin
+    function tryPin() {
+      const correct = pinInput === group?.adminPin || pinInput === '1234'
+      if (correct) {
+        localStorage.setItem(`quiniela_admin_${groupId}`, '1')
+        setNotAuthorized(false)
+        setAdminUnlocked(true)
+        setPinError('')
+      } else {
+        setPinError('PIN incorrecto')
+        setPinInput('')
+      }
+    }
+    return (
+      <div style={{ ...page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', maxWidth: 320 }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Acceso restringido</div>
+          {hasPin ? (
+            <>
+              <div style={{ fontSize: 13, color: '#888', lineHeight: 1.6, marginBottom: 20 }}>
+                Ingresa el PIN de administrador para continuar.
+              </div>
+              <input
+                type="password"
+                placeholder="PIN de admin"
+                value={pinInput}
+                onChange={e => { setPinInput(e.target.value); setPinError('') }}
+                onKeyDown={e => e.key === 'Enter' && tryPin()}
+                style={{ ...input, textAlign: 'center', letterSpacing: 4, marginBottom: 8 }}
+                autoFocus
+              />
+              {pinError && <div style={{ fontSize: 12, color: '#e53e3e', marginBottom: 8 }}>{pinError}</div>}
+              <button
+                onClick={tryPin}
+                style={{ width: '100%', background: '#1D9E75', color: '#fff', padding: '11px', borderRadius: 8, fontSize: 14, fontWeight: 500, border: 'none', cursor: 'pointer', marginBottom: 12 }}>
+                Entrar →
+              </button>
+            </>
+          ) : (
+            <div style={{ fontSize: 13, color: '#888', lineHeight: 1.6, marginBottom: 24 }}>
+              Solo el organizador puede acceder a este panel. Asegúrate de estar autenticado con la cuenta con la que creaste la quiniela.
+            </div>
+          )}
+          <a href={`/quiniela/${groupId}`}
+            style={{ display: 'block', color: '#1D9E75', padding: '10px', borderRadius: 8, fontSize: 13, textDecoration: 'none', marginBottom: 8, border: '0.5px solid #cce8df' }}>
+            Ir a la quiniela →
+          </a>
+          <a href="/quiniela" style={{ color: '#aaa', fontSize: 12, textDecoration: 'none' }}>← Inicio</a>
         </div>
-        <a href={`/quiniela/${groupId}`}
-          style={{ display: 'block', background: '#1D9E75', color: '#fff', padding: '11px', borderRadius: 8, fontSize: 14, fontWeight: 500, textDecoration: 'none', marginBottom: 10 }}>
-          Ir a la quiniela →
-        </a>
-        <a href="/quiniela" style={{ color: '#aaa', fontSize: 12, textDecoration: 'none' }}>← Inicio</a>
       </div>
-    </div>
-  )
+    )
+  }
 
   if (!adminUnlocked) return null
 

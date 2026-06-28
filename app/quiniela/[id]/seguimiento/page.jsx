@@ -301,15 +301,19 @@ export default function SeguimientoPage() {
 
   const posLabel = myPosition === 0 ? '🥇 Líder' : myPosition === 1 ? '🥈 2° lugar' : myPosition === 2 ? '🥉 3° lugar' : myPosition !== null ? `${myPosition + 1}° lugar` : '—'
 
-  // ── Jornada en curso (partidos de grupos programados hoy) ──
+  // ── Jornada en curso (partidos de cualquier fase activa programados hoy) ──
   const today = new Date(now).toLocaleDateString('en-CA')
-  const todayMatches = PHASES.grupos.matches
-    .map((m, i) => ({ ...m, idx: i }))
-    .filter(m => new Date(m.kickoff).toLocaleDateString('en-CA') === today)
+  const todayMatches = PHASE_ORDER
+    .filter(ph => admin?.unlockedPhases?.includes(ph))
+    .flatMap(ph =>
+      (PHASES[ph]?.matches ?? [])
+        .map((m, i) => ({ ...m, idx: i, phase: ph }))
+        .filter(m => m.kickoff && new Date(m.kickoff).toLocaleDateString('en-CA') === today)
+    )
     .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff))
 
-  const activeTodayMatches = todayMatches.filter(({ kickoff, idx }) => {
-    const real = admin?.results?.grupos?.[idx]
+  const activeTodayMatches = todayMatches.filter(({ kickoff, idx, phase }) => {
+    const real = admin?.results?.[phase]?.[idx]
     const { confirmed, live, upcoming } = getMatchTimeState(kickoff, now, real)
     return live || upcoming || (!confirmed && !!real && (real.l !== '' || real.v !== ''))
   })
@@ -325,23 +329,23 @@ export default function SeguimientoPage() {
     <div style={st.page}>
       {/* ── Jornada en curso ── */}
       {activeTodayMatches.length > 0 && (() => {
-        const finalizedIdxs = todayMatches.filter(({ kickoff, idx }) => {
-          const real = admin?.results?.grupos?.[idx]
+        const finalizedKeys = todayMatches.filter(({ kickoff, idx, phase }) => {
+          const real = admin?.results?.[phase]?.[idx]
           if (!real || real.l === '' || real.v === '') return false
           const { confirmed, live, upcoming } = getMatchTimeState(kickoff, now, real)
           return confirmed || (!live && !upcoming)
-        }).map(m => m.idx)
-        const allExpanded = finalizedIdxs.length > 0 && finalizedIdxs.every(i => expandedMatchIds.has(i))
+        }).map(m => `${m.phase}-${m.idx}`)
+        const allExpanded = finalizedKeys.length > 0 && finalizedKeys.every(k => expandedMatchIds.has(k))
 
         return (
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: .5 }}>⚡ Jornada en curso</div>
-              {finalizedIdxs.length > 0 && (
+              {finalizedKeys.length > 0 && (
                 <button
                   onClick={() => allExpanded
-                    ? setExpandedMatchIds(prev => { const n = new Set(prev); finalizedIdxs.forEach(i => n.delete(i)); return n })
-                    : setExpandedMatchIds(prev => new Set([...prev, ...finalizedIdxs]))
+                    ? setExpandedMatchIds(prev => { const n = new Set(prev); finalizedKeys.forEach(k => n.delete(k)); return n })
+                    : setExpandedMatchIds(prev => new Set([...prev, ...finalizedKeys]))
                   }
                   style={{ background: 'none', border: 'none', fontSize: 11, color: '#1D9E75', cursor: 'pointer', padding: 0 }}
                 >
@@ -350,8 +354,8 @@ export default function SeguimientoPage() {
               )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {todayMatches.map(({ local, visitante, idx, kickoff, ciudad }) => {
-                const real  = admin?.results?.grupos?.[idx]
+              {todayMatches.map(({ local, visitante, idx, kickoff, ciudad, phase }) => {
+                const real  = admin?.results?.[phase]?.[idx]
                 const hasScore = !!real && real.l !== '' && real.v !== ''
                 const { live, upcoming, kickoffTime } = getMatchTimeState(kickoff, now, real)
                 const confirmed = isMatchFinal(real)
@@ -359,9 +363,9 @@ export default function SeguimientoPage() {
                 const statusFinal = hasScore && matchFinished
                 const statusPending = !hasScore && matchFinished
                 const isCollapsible = (confirmed || statusFinal) && !live
-                const isExpanded = expandedMatchIds.has(idx)
+                const isExpanded = expandedMatchIds.has(`${phase}-${idx}`)
 
-                const pick = myQ?.phases?.grupos?.[idx]
+                const pick = myQ?.phases?.[phase]?.[idx]
                 const hasPick = pick && (pick.l !== '' || pick.v !== '')
                 const pickResult = hasScore && hasPick ? evaluatePick(pick, real, { local, visitante }) : null
 
@@ -373,7 +377,7 @@ export default function SeguimientoPage() {
                   return (
                     <div
                       key={idx}
-                      onClick={() => toggleMatchExpand(idx)}
+                      onClick={() => toggleMatchExpand(`${phase}-${idx}`)}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, border: '0.5px solid #eee', borderRadius: 10, padding: '9px 14px', background: '#fff', cursor: 'pointer' }}
                     >
                       <span style={{ color: '#1D9E75', fontSize: 12, flexShrink: 0 }}>✓</span>
@@ -417,7 +421,7 @@ export default function SeguimientoPage() {
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: statusColor }}>{statusLabel}</div>
                       {isCollapsible && (
-                        <button onClick={() => toggleMatchExpand(idx)} style={{ background: 'none', border: 'none', fontSize: 10, color: '#ccc', cursor: 'pointer', padding: 0, lineHeight: 1 }}>▲</button>
+                        <button onClick={() => toggleMatchExpand(`${phase}-${idx}`)} style={{ background: 'none', border: 'none', fontSize: 10, color: '#ccc', cursor: 'pointer', padding: 0, lineHeight: 1 }}>▲</button>
                       )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>

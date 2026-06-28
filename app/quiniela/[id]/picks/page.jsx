@@ -8,18 +8,45 @@ import { KaiLabel, KaiAvatar } from '@/components/KaiAvatar'
 const GRUPO_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L']
 const TORNEO_INICIO = new Date('2026-06-11T16:00:00Z')
 
+const PHASE_FALLBACK_CUTOFF = {
+  ronda32: new Date('2026-07-04T06:00:00Z'),
+  octavos: new Date('2026-07-08T13:00:00Z'),
+  cuartos: new Date('2026-07-12T13:00:00Z'),
+  semis:   new Date('2026-07-16T13:00:00Z'),
+  final:   new Date('2026-07-19T15:00:00Z'),
+}
+
 function getMatchCutoff(phase, globalIndex) {
-  if (phase === 'grupos') {
-    const match = PHASES.grupos.matches[globalIndex]
-    return match?.kickoff ? new Date(match.kickoff) : TORNEO_INICIO
-  }
-  return {
-    ronda32: new Date('2026-06-28T13:00:00Z'),
-    octavos: new Date('2026-07-04T13:00:00Z'),
-    cuartos: new Date('2026-07-09T13:00:00Z'),
-    semis:   new Date('2026-07-14T13:00:00Z'),
-    final:   new Date('2026-07-19T15:00:00Z'),
-  }[phase] ?? new Date('2099-01-01')
+  const match = PHASES[phase]?.matches?.[globalIndex]
+  if (match?.kickoff) return new Date(match.kickoff)
+  if (phase === 'grupos') return TORNEO_INICIO
+  return PHASE_FALLBACK_CUTOFF[phase] ?? new Date('2099-01-01')
+}
+
+// Resuelve placeholders "1A", "2C" al equipo real usando resultados de grupos
+function resolveTeamName(placeholder, gruposResults) {
+  const m = placeholder?.match(/^([12])([A-L])$/)
+  if (!m) return placeholder
+  const pos = parseInt(m[1])
+  const gi = 'ABCDEFGHIJKL'.indexOf(m[2])
+  if (gi === -1) return placeholder
+  const gMatches = PHASES.grupos.matches.slice(gi * 6, gi * 6 + 6)
+  const pts = {}, gf = {}, ga = {}
+  gMatches.forEach(({ local, visitante }) => { pts[local] = pts[local] ?? 0; pts[visitante] = pts[visitante] ?? 0; gf[local] = gf[local] ?? 0; ga[local] = ga[local] ?? 0; gf[visitante] = gf[visitante] ?? 0; ga[visitante] = ga[visitante] ?? 0 })
+  gMatches.forEach(({ local, visitante }, i) => {
+    const r = gruposResults?.[gi * 6 + i]
+    if (!r || r.l === '' || r.v === '') return
+    const [gL, gV] = [Number(r.l), Number(r.v)]
+    gf[local] += gL; ga[local] += gV; gf[visitante] += gV; ga[visitante] += gL
+    if (gL > gV) pts[local] += 3; else if (gL === gV) { pts[local] += 1; pts[visitante] += 1 } else pts[visitante] += 3
+  })
+  const sorted = Object.keys(pts).sort((a, b) => {
+    if (pts[b] !== pts[a]) return pts[b] - pts[a]
+    const gdA = gf[a] - ga[a], gdB = gf[b] - ga[b]
+    if (gdB !== gdA) return gdB - gdA
+    return gf[b] - gf[a]
+  })
+  return sorted[pos - 1] ?? placeholder
 }
 
 function formatCountdown(ms) {
@@ -601,12 +628,25 @@ export default function PicksPage() {
     acc + (picks[ph] ?? []).filter(p => p.l !== '' || p.v !== '').length, 0)
   const progressPct = totalSlots > 0 ? Math.round((filledSlots / totalSlots) * 100) : 0
 
+  const gruposResults = admin?.results?.grupos ?? []
   const visibleMatches = currentPhase === 'grupos'
     ? (() => {
         const gi = GRUPO_LETTERS.indexOf(selectedGrupo)
         return PHASES.grupos.matches.slice(gi * 6, gi * 6 + 6).map((m, i) => ({ ...m, globalIndex: gi * 6 + i }))
       })()
-    : PHASES[currentPhase].matches.map((m, i) => ({ ...m, globalIndex: i }))
+    : PHASES[currentPhase].matches.map((m, i) => {
+        const displayLocal = resolveTeamName(m.local, gruposResults)
+        const displayVisitante = resolveTeamName(m.visitante, gruposResults)
+        return {
+          ...m,
+          local: displayLocal,
+          visitante: displayVisitante,
+          // origLocal/origVisitante usados para evaluar picks guardados con placeholder
+          origLocal: m.local,
+          origVisitante: m.visitante,
+          globalIndex: i,
+        }
+      })
 
   const firstPendingIndex = visibleMatches.find(({ globalIndex }) => {
     const p = picks[currentPhase][globalIndex] ?? { l: '', v: '', w: '' }
@@ -802,20 +842,24 @@ export default function PicksPage() {
 
       {/* ── partidos — layout vertical estilo Google/SofaScore ── */}
       <div style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {visibleMatches.map(({ local, visitante, globalIndex }) => {
+        {visibleMatches.map(({ local, visitante, origLocal, origVisitante, globalIndex }) => {
           const cutoff = getMatchCutoff(currentPhase, globalIndex)
           const locked = now >= cutoff.getTime()
           const pick   = picks[currentPhase][globalIndex] ?? { l: '', v: '', w: '' }
 
-          const localWins     = pick.w === local
-          const visitanteWins = pick.w === visitante
+          // pick.w puede ser el nombre resuelto ("México") o el placeholder ("1A") según cuándo se guardó
+          const evalLocal = origLocal ?? local
+          const evalVisitante = origVisitante ?? visitante
+          const localWins     = pick.w === local || pick.w === evalLocal
+          const visitanteWins = pick.w === visitante || pick.w === evalVisitante
           const isEmpate      = pick.w === 'Empate'
           const isPending     = pick.l === '' && pick.v === '' && !locked
 
           // Resultado real (si ya se jugó) + evaluación del pick
           const real      = admin?.results?.[currentPhase]?.[globalIndex]
           const matchFinal = isMatchFinal(real)
-          const result    = matchFinal ? evaluatePick(pick, real, { local, visitante }) : null
+          // evaluatePick compara pick.w contra match.local — si el pick tenía el placeholder, usar origLocal
+          const result    = matchFinal ? evaluatePick(pick, real, { local: evalLocal, visitante: evalVisitante }) : null
 
           // Colores exclusivamente para Kai — partidos siempre neutros
           const rowBg  = locked ? '#fafafa' : '#fff'
@@ -834,9 +878,9 @@ export default function PicksPage() {
             WebkitAppearance: 'none', MozAppearance: 'textfield',
           }
 
-          // Kai module
+          // Kai module — consenso compara contra nombres originales (pueden ser placeholders como "1A")
           const conf = confidence.find(c => c.matchIndex === globalIndex)
-          const cs   = getConsensus(currentPhase, globalIndex, local, visitante)
+          const cs   = getConsensus(currentPhase, globalIndex, evalLocal, evalVisitante)
           const cat  = getCategory(conf?.confidencePct)
           const hasPick  = !!pick.w
           const aligned  = hasPick && cs && pick.w === cs.leader
