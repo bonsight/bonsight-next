@@ -144,8 +144,9 @@ export async function GET(req) {
             kv.get(`quiniela:group:${id}`),
           ])
           if (groupData?.isDemo) return []
-          const scores = calcularPuntajes(participants ?? [], quinielas ?? {}, adminForGrupos)
-          return (participants ?? []).map(p => {
+          const filteredParticipants = (participants ?? []).filter(p => !p.excludeFromGlobal)
+          const scores = calcularPuntajes(filteredParticipants, quinielas ?? {}, adminForGrupos)
+          return filteredParticipants.map(p => {
             const s = scores.find(x => x.participantId === p.id)
             return {
               nombre: p.nombre,
