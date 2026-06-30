@@ -507,7 +507,7 @@ function KaiSection({ quinielas, globalConfidenceGenerated, onRefresh }) {
 
   return (
     <div>
-      <KaiTools phase="grupos" globalConfidenceGenerated={globalConfidenceGenerated} quinielas={quinielas} onRefresh={onRefresh} />
+      <KaiTools phase="ronda32" globalConfidenceGenerated={globalConfidenceGenerated} quinielas={quinielas} onRefresh={onRefresh} />
       {all.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '2rem 0', color: '#aaa' }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
@@ -793,18 +793,20 @@ function PartidosHoyOperativo({ now }) {
   }
 
   const today = new Date(now).toLocaleDateString('en-CA')
-  const todayMatches = PHASES.grupos.matches
-    .map((m, i) => ({ ...m, idx: i }))
-    .filter(m => new Date(m.kickoff).toLocaleDateString('en-CA') === today)
+  const todayMatches = PHASE_ORDER
+    .flatMap(ph => PHASES[ph].matches.map((m, i) => ({ ...m, phase: ph, idx: i })))
+    .filter(m => m.kickoff && new Date(m.kickoff).toLocaleDateString('en-CA') === today)
     .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff))
 
-  const confirmedCount = todayMatches.filter(m => (results.grupos[m.idx] ?? {}).final).length
+  const confirmedCount = todayMatches.filter(m => (results[m.phase]?.[m.idx] ?? {}).final).length
   const liveList = todayMatches.filter(m => {
     const elapsed = now - new Date(m.kickoff).getTime()
     return elapsed >= 0 && elapsed < MATCH_DURATION_MS
   })
   const pendingCount = todayMatches.length - confirmedCount
   const formatTime = (iso) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+
+  const PHASE_LABEL = { grupos: 'Grupos', ronda32: 'R32', octavos: 'Octavos', cuartos: 'Cuartos', semis: 'Semis', final: 'Final' }
 
   if (todayMatches.length === 0) return (
     <div style={{ border: '0.5px solid #e0e0de', borderRadius: 12, padding: '14px 16px', marginBottom: 20, background: '#fafaf8' }}>
@@ -828,21 +830,25 @@ function PartidosHoyOperativo({ now }) {
       </div>
 
       {todayMatches.map((m) => {
-        const r = results.grupos[m.idx] ?? { l: '', v: '', final: false }
+        const key = `${m.phase}-${m.idx}`
+        const r = results[m.phase]?.[m.idx] ?? { l: '', v: '', final: false }
         const { live, confirmed } = getMatchTimeState(m.kickoff, now, r)
-        const isExpanded = expanded === m.idx
+        const isExpanded = expanded === key
         const borderColor = live ? '#c0392b44' : confirmed ? '#4ade8066' : '#e0e0de'
         const bgColor     = live ? '#fef9f9'    : confirmed ? '#f0fdf6'   : '#fff'
 
         return (
-          <div key={m.idx} style={{ border: `0.5px solid ${borderColor}`, borderRadius: 12, marginBottom: 8, overflow: 'hidden', background: bgColor }}>
-            <div onClick={() => setExpanded(isExpanded ? null : m.idx)}
+          <div key={key} style={{ border: `0.5px solid ${borderColor}`, borderRadius: 12, marginBottom: 8, overflow: 'hidden', background: bgColor }}>
+            <div onClick={() => setExpanded(isExpanded ? null : key)}
               style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', cursor: 'pointer' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>
                   {f(m.local)}{m.local} <span style={{ color: '#aaa', fontWeight: 400 }}>vs</span> {f(m.visitante)}{m.visitante}
                 </div>
-                {m.ciudad && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>📍 {m.ciudad} · {formatTime(m.kickoff)}</div>}
+                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                  <span style={{ background: '#E1F5EE', color: '#0F6E56', borderRadius: 4, padding: '1px 5px', fontWeight: 600, marginRight: 5 }}>{PHASE_LABEL[m.phase] ?? m.phase}</span>
+                  {m.ciudad && `📍 ${m.ciudad} · `}{formatTime(m.kickoff)}
+                </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                 {confirmed && r.l !== '' && (
@@ -861,15 +867,15 @@ function PartidosHoyOperativo({ now }) {
                   <div style={{ flex: 1, fontSize: 14, fontWeight: 500, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {f(m.local)}{m.local}
                   </div>
-                  <ScoreStepper value={r.l} onChange={v => updateScore('grupos', m.idx, 'l', v)} />
+                  <ScoreStepper value={r.l} onChange={v => updateScore(m.phase, m.idx, 'l', v)} />
                   <span style={{ color: '#ccc' }}>–</span>
-                  <ScoreStepper value={r.v} onChange={v => updateScore('grupos', m.idx, 'v', v)} />
+                  <ScoreStepper value={r.v} onChange={v => updateScore(m.phase, m.idx, 'v', v)} />
                   <div style={{ flex: 1, fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {f(m.visitante)}{m.visitante}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => updateScore('grupos', m.idx, 'final', !r.final)}
+                  <button onClick={() => updateScore(m.phase, m.idx, 'final', !r.final)}
                     style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
                       background: r.final ? '#fff3f3' : '#E1F5EE', color: r.final ? '#c0392b' : '#0F6E56' }}>
                     {r.final ? 'Desconfirmar' : '✅ Marcar confirmado'}
@@ -1105,7 +1111,8 @@ export default function OverviewPage() {
   const quinielas = data.quinielas ?? []
   const totalParticipants = quinielas.reduce((a, q) => a + q.participants.length, 0)
   const today = new Date(now).toLocaleDateString('en-CA')
-  const todayMatches = PHASES.grupos.matches.filter(m => new Date(m.kickoff).toLocaleDateString('en-CA') === today)
+  const todayMatches = PHASE_ORDER
+    .flatMap(ph => PHASES[ph].matches.filter(m => m.kickoff && new Date(m.kickoff).toLocaleDateString('en-CA') === today))
   const liveCount = todayMatches.filter(m => {
     const elapsed = now - new Date(m.kickoff).getTime()
     return elapsed >= 0 && elapsed < MATCH_DURATION_MS
@@ -1148,7 +1155,7 @@ export default function OverviewPage() {
       {/* Kai */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 10 }}>Kai · Herramientas globales</div>
-        <KaiTools phase="grupos" globalConfidenceGenerated={data.globalConfidenceGenerated} quinielas={quinielas} onRefresh={loadData} />
+        <KaiTools phase="ronda32" globalConfidenceGenerated={data.globalConfidenceGenerated} quinielas={quinielas} onRefresh={loadData} />
       </div>
 
       {/* Líderes */}
