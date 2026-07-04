@@ -591,23 +591,28 @@ REGLAS:
     }
 
     if (action === 'generateGlobalTopComment') {
-      const top = await kv.get('quiniela:global:top:grupos')
-      if (!top || top.length === 0) return NextResponse.json({ error: 'no_data' }, { status: 400 })
+      // Prefer top10 passed from client; fall back to Redis cache
+      const top10 = payload?.top?.slice(0, 10) ?? (await kv.get('quiniela:global:table'))?.slice(0, 10)
+      if (!top10 || top10.length === 0) return NextResponse.json({ error: 'no_data' }, { status: 400 })
 
-      const topText = top.map((e, i) =>
-        `${i + 1}. ${e.nombre} (${e.quinielaNombre}) — ${e.pts} pts, ${e.exactos} exactos, ${e.ganadores} ganadores`
-      ).join('\n')
+      const phaseKeys = Object.keys(top10[0]?.byPhase ?? {}).filter(ph => top10.some(e => (e.byPhase?.[ph] ?? 0) > 0))
+      const PHASE_LABEL = { grupos: 'Grupos', ronda32: 'R32', octavos: 'Octavos', cuartos: 'Cuartos', semis: 'Semis', final: 'Final' }
+
+      const topText = top10.map((e, i) => {
+        const phaseBreakdown = phaseKeys.map(ph => `${PHASE_LABEL[ph] ?? ph}: ${e.byPhase?.[ph] ?? 0}`).join(', ')
+        return `${i + 1}. ${e.nombre} (${e.quinielaNombre}) — ${e.pts} pts total [${phaseBreakdown}], ${e.exactos} exactos`
+      }).join('\n')
 
       const system = `Eres Kai, el analista de una quiniela del Mundial 2026.
 Tono: directo, humano, competitivo, con algo de humor. Como un amigo que sabe de fútbol.
 Responde ÚNICAMENTE con JSON válido. Sin texto adicional, sin markdown, sin bloques de código.`
 
-      const prompt = `Top 10 global de la fase de grupos (todas las quinielas):
+      const prompt = `Top 10 global del Mundial 2026 (todas las quinielas, todas las fases jugadas):
 
 ${topText}
 
 Genera exactamente 3 comentarios cortos sobre estos resultados.
-Pueden ser sobre el líder, empates interesantes, diferencias entre quinielas, rachas, etc.
+Pueden ser sobre el líder, diferencias por fase, patrones entre quinielas, exactos vs ganadores, etc.
 Devuelve un array JSON con exactamente 3 objetos:
 [
   { "titular": "texto corto (4-6 palabras)", "descripcion": "1-2 oraciones directas y específicas" },

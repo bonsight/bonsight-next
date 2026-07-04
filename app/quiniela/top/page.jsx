@@ -1,27 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { FLAGS } from '@/lib/quiniela'
+import { FLAGS, PHASE_ORDER } from '@/lib/quiniela'
 import { KaiLabel } from '@/components/KaiAvatar'
 
 const MEDALS = ['🥇', '🥈', '🥉']
+const PHASE_LABEL = { grupos: 'Grupos', ronda32: 'R32', octavos: 'Octavos', cuartos: 'Cuartos', semis: 'Semis', final: 'Final' }
 
-function initials(name) {
-  return name.split(' ').slice(0, 2).map(w => w[0] ?? '').join('').toUpperCase()
-}
-
-function Avatar({ name, size = 38, rank }) {
-  const bg = rank === 0 ? '#C9A227' : rank === 1 ? '#9BA3A8' : rank === 2 ? '#A0522D' : '#E1F5EE'
-  const color = rank <= 2 ? '#fff' : '#0F6E56'
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: '50%', flexShrink: 0,
-      background: bg, color,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: Math.round(size * 0.33), fontWeight: 600,
-    }}>{initials(name)}</div>
-  )
-}
 
 function BottomNav({ groupId }) {
   const item = (href, label, active) => (
@@ -45,7 +30,7 @@ function BottomNav({ groupId }) {
   )
 }
 
-function KaiBlock({ top }) {
+function KaiBlock({ tableData }) {
   const [comentario, setComentario] = useState(null)
   const [generating, setGenerating] = useState(false)
 
@@ -55,26 +40,26 @@ function KaiBlock({ top }) {
       .then(d => {
         if (d.comentario) {
           setComentario(d.comentario)
-        } else {
+        } else if (tableData?.length > 0) {
           setGenerating(true)
           fetch('/api/quiniela-ai', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'generateGlobalTopComment', payload: {} }),
+            body: JSON.stringify({ action: 'generateGlobalTopComment', payload: { top: tableData } }),
           })
             .then(r => r.json())
             .then(d2 => { if (d2.comentario) setComentario(d2.comentario) })
             .finally(() => setGenerating(false))
         }
       })
-  }, [])
+  }, [tableData])
 
   return (
     <div style={{ background: 'linear-gradient(135deg, #f0faf6 0%, #fff 100%)', border: '0.5px solid #1D9E75', borderRadius: 12, padding: '14px 16px', marginBottom: 20 }}>
       <div style={{ marginBottom: 10 }}>
         <KaiLabel
           title="Kai analiza el Top 10"
-          subtitle="Cruce de todas las quinielas · Fase de grupos"
+          subtitle="Cruce de todas las quinielas · Mundial 2026"
           state={generating ? 'thinking' : 'ready'}
           size={20}
         />
@@ -98,22 +83,108 @@ function KaiBlock({ top }) {
   )
 }
 
+function TablaView({ tableData, loading }) {
+  const [filter, setFilter] = useState('__global__')
+
+  if (loading) return <div style={{ textAlign: 'center', padding: '3rem 0', color: '#aaa' }}>Cargando tabla…</div>
+  if (!tableData) return <div style={{ textAlign: 'center', padding: '3rem 0', color: '#c0392b' }}>Error al cargar.</div>
+
+  // Phases with at least 1 point scored
+  const activePhases = PHASE_ORDER.filter(ph => tableData.some(e => (e.byPhase?.[ph] ?? 0) > 0))
+
+  // Unique quinielas
+  const quinielasMap = {}
+  tableData.forEach(e => { quinielasMap[e.quinielaId] = e.quinielaNombre })
+  const quinielaList = Object.entries(quinielasMap).map(([id, nombre]) => ({ id, nombre }))
+
+  const filtered = filter === '__global__' ? tableData : tableData.filter(e => e.quinielaId === filter)
+  const ranked   = [...filtered].sort((a, b) => b.pts - a.pts || b.exactos - a.exactos)
+
+  const isGlobal = filter === '__global__'
+  const cellSty = { padding: '9px 10px', textAlign: 'center', fontSize: 13, borderBottom: '0.5px solid #f0f0f0' }
+  const headSty = { padding: '7px 10px', textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: .5, borderBottom: '1.5px solid #eee' }
+
+  return (
+    <div>
+      {/* Filter pills */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+        {[{ id: '__global__', nombre: '🌍 Global' }, ...quinielaList].map(q => (
+          <button key={q.id} onClick={() => setFilter(q.id)}
+            style={{ padding: '5px 12px', fontSize: 12, borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 600,
+              background: filter === q.id ? '#1D9E75' : '#f0f0f0',
+              color: filter === q.id ? '#fff' : '#555',
+            }}>
+            {q.nombre}
+          </button>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div style={{ overflowX: 'auto', borderRadius: 12, border: '0.5px solid #eee' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isGlobal ? 420 + activePhases.length * 70 : 320 + activePhases.length * 70 }}>
+          <thead style={{ background: '#fafaf8' }}>
+            <tr>
+              <th style={{ ...headSty, width: 32 }}>#</th>
+              <th style={{ ...headSty, textAlign: 'left', paddingLeft: 12 }}>Nombre</th>
+              {isGlobal && <th style={{ ...headSty, textAlign: 'left' }}>Quiniela</th>}
+              {activePhases.map(ph => (
+                <th key={ph} style={headSty}>{PHASE_LABEL[ph] ?? ph}</th>
+              ))}
+              <th style={{ ...headSty, color: '#1D9E75' }}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ranked.map((entry, i) => {
+              const rowBg = i < 3 ? (i === 0 ? '#fffdf0' : '#fafafa') : '#fff'
+              return (
+                <tr key={`${entry.quinielaId}-${entry.nombre}-${i}`} style={{ background: rowBg }}>
+                  <td style={{ ...cellSty, fontWeight: 600, color: '#aaa', fontSize: 12 }}>
+                    {i < 3 ? MEDALS[i] : i + 1}
+                  </td>
+                  <td style={{ ...cellSty, textAlign: 'left', paddingLeft: 12, fontWeight: 600, color: '#111', whiteSpace: 'nowrap' }}>
+                    {entry.pais ? `${FLAGS[entry.pais] ?? ''} ` : ''}{entry.nombre}
+                  </td>
+                  {isGlobal && (
+                    <td style={{ ...cellSty, textAlign: 'left', fontSize: 11, color: '#888', whiteSpace: 'nowrap' }}>
+                      {entry.quinielaNombre}
+                    </td>
+                  )}
+                  {activePhases.map(ph => {
+                    const v = entry.byPhase?.[ph] ?? 0
+                    return (
+                      <td key={ph} style={{ ...cellSty, color: v > 0 ? '#222' : '#ccc', fontWeight: v > 0 ? 600 : 400 }}>
+                        {v > 0 ? v : '—'}
+                      </td>
+                    )
+                  })}
+                  <td style={{ ...cellSty, fontWeight: 800, fontSize: 16, color: i < 3 ? '#1D9E75' : '#111' }}>
+                    {entry.pts}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: 11, color: '#ccc' }}>
+        Se actualiza cada 5 min
+      </div>
+    </div>
+  )
+}
+
 export default function GlobalTopPage() {
-  const [top, setTop] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [lastGroup, setLastGroup] = useState(null)
+  const [lastGroup, setLastGroup]   = useState(null)
+  const [tableData, setTableData]   = useState(null)
+  const [tableLoading, setTableLoading] = useState(true)
 
   useEffect(() => {
     setLastGroup(localStorage.getItem('quiniela_last_group'))
-    fetch('/api/quiniela?action=globalTop')
+    fetch('/api/quiniela?action=globalTable')
       .then(r => r.json())
-      .then(d => {
-        if (d.top) setTop(d.top)
-        else setError('No se pudo cargar el ranking.')
-      })
-      .catch(() => setError('Error de conexión.'))
-      .finally(() => setLoading(false))
+      .then(d => { if (d.table) setTableData(d.table) })
+      .finally(() => setTableLoading(false))
   }, [])
 
   return (
@@ -122,69 +193,14 @@ export default function GlobalTopPage() {
         <a href="/quiniela" style={{ color: '#1D9E75', textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>← Inicio</a>
       </div>
 
-      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+      <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
         <div style={{ fontSize: 40, marginBottom: 8 }}>🏆</div>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#111' }}>Top 10 Global</h1>
-        <p style={{ margin: '6px 0 0', fontSize: 14, color: '#888' }}>Fase de grupos · Todas las quinielas</p>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#111' }}>Ranking Global</h1>
+        <p style={{ margin: '6px 0 0', fontSize: 14, color: '#888' }}>Todas las quinielas · Mundial 2026</p>
       </div>
 
-      {loading && (
-        <div style={{ textAlign: 'center', padding: '3rem 0', color: '#aaa' }}>Cargando ranking…</div>
-      )}
-
-      {error && (
-        <div style={{ textAlign: 'center', padding: '3rem 0', color: '#c0392b' }}>{error}</div>
-      )}
-
-      {top && top.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '3rem 0', color: '#aaa' }}>Aún no hay datos suficientes.</div>
-      )}
-
-      {top && top.length > 0 && (
-        <>
-          <KaiBlock top={top} />
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {top.map((entry, i) => (
-              <div key={`${entry.quinielaId}-${entry.nombre}-${i}`} style={{
-                display: 'flex', alignItems: 'center', gap: 14,
-                background: i < 3 ? '#f0fdf8' : '#fff',
-                border: `1.5px solid ${i < 3 ? '#1D9E75' : '#eee'}`,
-                borderRadius: 12,
-                padding: '12px 16px',
-                boxShadow: i === 0 ? '0 2px 8px rgba(29,158,117,0.13)' : 'none',
-              }}>
-                <div style={{ width: 28, textAlign: 'center', fontSize: i < 3 ? 22 : 15, fontWeight: 600, color: '#888', flexShrink: 0 }}>
-                  {i < 3 ? MEDALS[i] : `${i + 1}`}
-                </div>
-
-                <Avatar name={entry.nombre} rank={i} />
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 15, color: '#111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {entry.pais ? `${FLAGS[entry.pais] ?? ''} ` : ''}{entry.nombre}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#888', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {entry.quinielaNombre}
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: i < 3 ? '#1D9E75' : '#333' }}>{entry.pts}</div>
-                  <div style={{ fontSize: 11, color: '#aaa', display: 'flex', gap: 6 }}>
-                    <span title="Exactos">✅ {entry.exactos}</span>
-                    <span title="Ganadores">🎯 {entry.ganadores}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: 12, color: '#ccc' }}>
-            Puntuación final de la fase de grupos · Se actualiza cada 10 min
-          </div>
-        </>
-      )}
+      <KaiBlock tableData={tableData} />
+      <TablaView tableData={tableData} loading={tableLoading} />
 
       <BottomNav groupId={lastGroup} />
     </div>

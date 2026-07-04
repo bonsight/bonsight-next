@@ -168,6 +168,7 @@ export default function SeguimientoPage() {
   const [detailParticipant, setDetailParticipant] = useState(null)
   const [showFullHistory, setShowFullHistory] = useState(false)
   const [expandedMatchIds, setExpandedMatchIds] = useState(new Set())
+  const [tablaVista, setTablaVista] = useState('posiciones')
   const [now, setNow] = useState(() => Date.now())
 
   const toggleMatchExpand = (idx) => setExpandedMatchIds(prev => {
@@ -768,59 +769,119 @@ export default function SeguimientoPage() {
       })()}
 
       {/* ── TABLA ── */}
-      <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 12, textTransform: 'uppercase', letterSpacing: .5 }}>Tabla de posiciones</div>
-      {(
-        <div>
-          {scores.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '2rem', color: '#aaa', fontSize: 13 }}>
-              Aún no hay puntos. Los resultados se calculan desde el panel admin.
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {scores.map((s, idx) => {
-                const p = participants.find(x => x.id === s.participantId)
-                const isMe = s.participantId === participant?.id
-                const bd = s.breakdown
-                const bonus = (bd.campeon > 0 ? 5 : 0) + (bd.goleador > 0 ? 3 : 0)
-                const isTop3 = idx < 3
-                const nextPts = idx < scores.length - 1 ? scores[idx + 1].pts : null
-                const gap = nextPts !== null ? s.pts - nextPts : null
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: .5 }}>Tabla de posiciones</div>
+        {scores.length > 0 && (
+          <div style={{ display: 'flex', background: '#f5f5f3', borderRadius: 8, padding: 3, gap: 2 }}>
+            {[['posiciones', 'Posiciones'], ['por_fase', 'Por fase']].map(([v, label]) => (
+              <button key={v} onClick={() => setTablaVista(v)}
+                style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6, border: 'none', cursor: 'pointer',
+                  background: tablaVista === v ? '#fff' : 'transparent',
+                  color: tablaVista === v ? '#1D9E75' : '#aaa',
+                  boxShadow: tablaVista === v ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
-                return (
-                  <div key={s.participantId} onClick={!isMe ? () => openDetail(s.participantId) : undefined} style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: isTop3 ? '12px 14px' : '9px 12px',
-                    borderRadius: isTop3 ? 12 : 8,
-                    background: isMe ? '#E1F5EE' : isTop3 ? '#fafafa' : 'transparent',
-                    border: isMe ? '1px solid #1D9E75' : isTop3 ? '0.5px solid #eee' : '0.5px solid #f5f5f3',
-                    cursor: !isMe ? 'pointer' : 'default',
-                  }}>
-                    <div style={{ fontSize: isTop3 ? 20 : 14, width: 28, textAlign: 'center', flexShrink: 0 }}>
-                      {MEDALS[idx] ?? idx + 1}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Avatar name={p?.nombre ?? '?'} size={isTop3 ? 32 : 26} highlight={isMe} />
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: isTop3 ? 14 : 13, fontWeight: isMe || isTop3 ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {p?.nombre}{isMe ? ' 👈' : ''}
-                          </div>
-                          {p?.pais && <div style={{ fontSize: 10, color: '#aaa' }}>{FLAGS[p.pais] ? `${FLAGS[p.pais]} ` : ''}{p.pais}</div>}
-                        </div>
+      {scores.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '2rem', color: '#aaa', fontSize: 13 }}>
+          Aún no hay puntos. Los resultados se calculan desde el panel admin.
+        </div>
+      ) : tablaVista === 'posiciones' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {scores.map((s, idx) => {
+            const p = participants.find(x => x.id === s.participantId)
+            const isMe = s.participantId === participant?.id
+            const bd = s.breakdown
+            const bonus = (bd.campeon > 0 ? 5 : 0) + (bd.goleador > 0 ? 3 : 0)
+            const isTop3 = idx < 3
+            const nextPts = idx < scores.length - 1 ? scores[idx + 1].pts : null
+            const gap = nextPts !== null ? s.pts - nextPts : null
+
+            return (
+              <div key={s.participantId} onClick={!isMe ? () => openDetail(s.participantId) : undefined} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: isTop3 ? '12px 14px' : '9px 12px',
+                borderRadius: isTop3 ? 12 : 8,
+                background: isMe ? '#E1F5EE' : isTop3 ? '#fafafa' : 'transparent',
+                border: isMe ? '1px solid #1D9E75' : isTop3 ? '0.5px solid #eee' : '0.5px solid #f5f5f3',
+                cursor: !isMe ? 'pointer' : 'default',
+              }}>
+                <div style={{ fontSize: isTop3 ? 20 : 14, width: 28, textAlign: 'center', flexShrink: 0 }}>
+                  {MEDALS[idx] ?? idx + 1}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Avatar name={p?.nombre ?? '?'} size={isTop3 ? 32 : 26} highlight={isMe} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: isTop3 ? 14 : 13, fontWeight: isMe || isTop3 ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p?.nombre}{isMe ? ' 👈' : ''}
                       </div>
-                    </div>
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ fontSize: isTop3 ? 20 : 15, fontWeight: 700, color: isMe ? '#0F6E56' : '#333' }}>{s.pts}</div>
-                      {bonus > 0 && <div style={{ fontSize: 10, color: '#BA7517' }}>+{bonus} bonus</div>}
-                      {gap !== null && gap > 0 && <div style={{ fontSize: 10, color: '#aaa' }}>+{gap} al sig.</div>}
+                      {p?.pais && <div style={{ fontSize: 10, color: '#aaa' }}>{FLAGS[p.pais] ? `${FLAGS[p.pais]} ` : ''}{p.pais}</div>}
                     </div>
                   </div>
-                )
-              })}
-            </div>
-          )}
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: isTop3 ? 20 : 15, fontWeight: 700, color: isMe ? '#0F6E56' : '#333' }}>{s.pts}</div>
+                  {bonus > 0 && <div style={{ fontSize: 10, color: '#BA7517' }}>+{bonus} bonus</div>}
+                  {gap !== null && gap > 0 && <div style={{ fontSize: 10, color: '#aaa' }}>+{gap} al sig.</div>}
+                </div>
+              </div>
+            )
+          })}
         </div>
-      )}
+      ) : (() => {
+        const activePhases = PHASE_ORDER.filter(ph => scores.some(s => (s.byPhase?.[ph] ?? 0) > 0))
+        const PHASE_LABEL = { grupos: 'Grupos', ronda32: 'R32', octavos: 'Octavos', cuartos: 'Cuartos', semis: 'Semis', final: 'Final' }
+        const cellSty = { padding: '8px 8px', textAlign: 'center', fontSize: 13, borderBottom: '0.5px solid #f0f0f0' }
+        const headSty = { padding: '6px 8px', textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: .5, borderBottom: '1.5px solid #eee' }
+        return (
+          <div style={{ overflowX: 'auto', borderRadius: 12, border: '0.5px solid #eee' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 200 + activePhases.length * 70 }}>
+              <thead style={{ background: '#fafaf8' }}>
+                <tr>
+                  <th style={{ ...headSty, width: 32 }}>#</th>
+                  <th style={{ ...headSty, textAlign: 'left', paddingLeft: 12 }}>Nombre</th>
+                  {activePhases.map(ph => <th key={ph} style={headSty}>{PHASE_LABEL[ph] ?? ph}</th>)}
+                  <th style={{ ...headSty, color: '#1D9E75' }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scores.map((s, idx) => {
+                  const p = participants.find(x => x.id === s.participantId)
+                  const isMe = s.participantId === participant?.id
+                  const isTop3 = idx < 3
+                  return (
+                    <tr key={s.participantId} style={{ background: isMe ? '#f0fdf8' : isTop3 ? '#fffdf0' : '#fff' }}>
+                      <td style={{ ...cellSty, fontWeight: 600, color: '#aaa', fontSize: 12 }}>
+                        {idx < 3 ? MEDALS[idx] : idx + 1}
+                      </td>
+                      <td style={{ ...cellSty, textAlign: 'left', paddingLeft: 12, fontWeight: isMe || isTop3 ? 600 : 400, color: '#111', whiteSpace: 'nowrap' }}>
+                        {p?.nombre}{isMe ? ' 👈' : ''}
+                      </td>
+                      {activePhases.map(ph => {
+                        const v = s.byPhase?.[ph] ?? 0
+                        return (
+                          <td key={ph} style={{ ...cellSty, color: v > 0 ? '#222' : '#ccc', fontWeight: v > 0 ? 600 : 400 }}>
+                            {v > 0 ? v : '—'}
+                          </td>
+                        )
+                      })}
+                      <td style={{ ...cellSty, fontWeight: 800, fontSize: 16, color: isMe ? '#1D9E75' : isTop3 ? '#333' : '#111' }}>
+                        {s.pts}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      })()}
 
       {/* ── Proyección en vivo ── */}
       {anyLiveResult && anyProjectionMovement && (
