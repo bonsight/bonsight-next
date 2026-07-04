@@ -586,7 +586,13 @@ function ResultsSection() {
   function updateScore(ph, idx, field, val) {
     setResults(prev => {
       const next = { ...prev, [ph]: [...prev[ph]] }
-      next[ph][idx] = { ...next[ph][idx], [field]: val }
+      const cur = { ...next[ph][idx] }
+      if (field === 'etL') cur.et = { ...(cur.et ?? {}), l: val }
+      else if (field === 'etV') cur.et = { ...(cur.et ?? {}), v: val }
+      else if (field === 'penL') cur.penales = { ...(cur.penales ?? {}), l: val }
+      else if (field === 'penV') cur.penales = { ...(cur.penales ?? {}), v: val }
+      else cur[field] = val
+      next[ph][idx] = cur
       return next
     })
   }
@@ -690,31 +696,68 @@ function ResultsSection() {
         {visibleMatches.map(({ local, visitante, idx }) => {
           const r = results[phase][idx] ?? { l: '', v: '' }
           const filled = r.l !== '' && r.v !== ''
+          const isTied = filled && r.l === r.v
+          const isKnockout = phase !== 'grupos'
           return (
-            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: filled ? '#f0fdf6' : '#fff', border: `0.5px solid ${filled ? '#4ade80' : '#e8e6e0'}`, borderRadius: 10 }}>
-              <div style={{ flex: 1, fontSize: 13, fontWeight: 500, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {f(local)}{local}
+            <div key={idx} style={{ borderRadius: 10, overflow: 'hidden', border: `0.5px solid ${filled ? '#4ade80' : '#e8e6e0'}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: filled ? '#f0fdf6' : '#fff' }}>
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 500, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {f(local)}{local}
+                </div>
+                <input style={filled ? filledInp : inpSty} type="number" min={0} max={20} placeholder="—"
+                  value={r.l} onChange={e => updateScore(phase, idx, 'l', e.target.value)} />
+                <span style={{ fontSize: 14, color: '#ccc', fontWeight: 300 }}>–</span>
+                <input style={filled ? filledInp : inpSty} type="number" min={0} max={20} placeholder="—"
+                  value={r.v} onChange={e => updateScore(phase, idx, 'v', e.target.value)} />
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {f(visitante)}{visitante}
+                </div>
+                <button onClick={() => updateScore(phase, idx, 'final', !r.final)}
+                  style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 99, cursor: 'pointer',
+                    border: `0.5px solid ${r.final ? '#1D9E75' : '#ddd'}`,
+                    background: r.final ? '#1D9E75' : '#fff', color: r.final ? '#fff' : '#aaa' }}>
+                  {r.final ? '✓ Conf.' : '⏳'}
+                </button>
               </div>
-              <input style={filled ? filledInp : inpSty} type="number" min={0} max={20} placeholder="—"
-                value={r.l}
-                onChange={e => updateScore(phase, idx, 'l', e.target.value)} />
-              <span style={{ fontSize: 14, color: '#ccc', fontWeight: 300 }}>–</span>
-              <input style={filled ? filledInp : inpSty} type="number" min={0} max={20} placeholder="—"
-                value={r.v}
-                onChange={e => updateScore(phase, idx, 'v', e.target.value)} />
-              <div style={{ flex: 1, fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {f(visitante)}{visitante}
-              </div>
-              <button onClick={() => updateScore(phase, idx, 'final', !r.final)}
-                title={r.final ? 'Resultado confirmado — clic para marcar como no confirmado' : 'Confirmar como resultado oficial'}
-                style={{
-                  flexShrink: 0, fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 99, cursor: 'pointer',
-                  border: `0.5px solid ${r.final ? '#1D9E75' : '#ddd'}`,
-                  background: r.final ? '#1D9E75' : '#fff',
-                  color: r.final ? '#fff' : '#aaa',
-                }}>
-                {r.final ? '✓ Confirmado' : '⏳ Sin confirmar'}
-              </button>
+
+              {/* Ganador en knockout cuando hay empate */}
+              {isKnockout && isTied && (
+                <div style={{ padding: '8px 12px', background: '#FEF9EC', borderTop: '0.5px solid #F5C842' }}>
+                  <div style={{ fontSize: 10, color: '#854F0B', marginBottom: 6 }}>⚡ ¿Quién ganó?</div>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                    {[['local', local], ['visitante', visitante]].map(([side, team]) => (
+                      <button key={side} onClick={() => updateScore(phase, idx, 'ganador', r.ganador === side ? '' : side)}
+                        style={{ flex: 1, padding: '5px 8px', borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          border: `1.5px solid ${r.ganador === side ? '#1D9E75' : '#ddd'}`,
+                          background: r.ganador === side ? '#1D9E75' : '#fff', color: r.ganador === side ? '#fff' : '#555' }}>
+                        {f(team)}{team}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 10, color: '#888', width: 60 }}>T. extra</span>
+                    <input type="number" min={0} max={20} placeholder="—" value={r.et?.l ?? ''}
+                      onChange={e => updateScore(phase, idx, 'etL', e.target.value)}
+                      style={{ width: 36, textAlign: 'center', border: '0.5px solid #ddd', borderRadius: 6, fontSize: 13, fontWeight: 600, padding: '3px 0', background: r.et?.l !== undefined && r.et?.l !== '' ? '#FEF9EC' : '#fff' }} />
+                    <span style={{ color: '#ccc' }}>–</span>
+                    <input type="number" min={0} max={20} placeholder="—" value={r.et?.v ?? ''}
+                      onChange={e => updateScore(phase, idx, 'etV', e.target.value)}
+                      style={{ width: 36, textAlign: 'center', border: '0.5px solid #ddd', borderRadius: 6, fontSize: 13, fontWeight: 600, padding: '3px 0', background: r.et?.v !== undefined && r.et?.v !== '' ? '#FEF9EC' : '#fff' }} />
+                    {r.et?.l !== undefined && r.et?.l !== '' && r.et?.l === r.et?.v && (
+                      <>
+                        <span style={{ fontSize: 10, color: '#888', marginLeft: 8, width: 44 }}>Penales</span>
+                        <input type="number" min={0} max={20} placeholder="—" value={r.penales?.l ?? ''}
+                          onChange={e => updateScore(phase, idx, 'penL', e.target.value)}
+                          style={{ width: 36, textAlign: 'center', border: '0.5px solid #ddd', borderRadius: 6, fontSize: 13, fontWeight: 600, padding: '3px 0' }} />
+                        <span style={{ color: '#ccc' }}>–</span>
+                        <input type="number" min={0} max={20} placeholder="—" value={r.penales?.v ?? ''}
+                          onChange={e => updateScore(phase, idx, 'penV', e.target.value)}
+                          style={{ width: 36, textAlign: 'center', border: '0.5px solid #ddd', borderRadius: 6, fontSize: 13, fontWeight: 600, padding: '3px 0' }} />
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )
         })}
@@ -772,7 +815,13 @@ function PartidosHoyOperativo({ now }) {
   function updateScore(ph, idx, field, val) {
     setResults(prev => {
       const next = { ...prev, [ph]: [...prev[ph]] }
-      next[ph][idx] = { ...next[ph][idx], [field]: val }
+      const cur = { ...next[ph][idx] }
+      if (field === 'etL') cur.et = { ...(cur.et ?? {}), l: val }
+      else if (field === 'etV') cur.et = { ...(cur.et ?? {}), v: val }
+      else if (field === 'penL') cur.penales = { ...(cur.penales ?? {}), l: val }
+      else if (field === 'penV') cur.penales = { ...(cur.penales ?? {}), v: val }
+      else cur[field] = val
+      next[ph][idx] = cur
       return next
     })
   }
@@ -863,17 +912,53 @@ function PartidosHoyOperativo({ now }) {
 
             {isExpanded && (
               <div style={{ padding: '14px 16px', borderTop: '0.5px solid #f0f0f0', background: '#fafaf8' }}>
+                {/* Marcador 90' */}
+                <div style={{ fontSize: 10, color: '#aaa', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 6 }}>Resultado 90'</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                  <div style={{ flex: 1, fontSize: 14, fontWeight: 500, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {f(m.local)}{m.local}
-                  </div>
+                  <div style={{ flex: 1, fontSize: 13, fontWeight: 500, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f(m.local)}{m.local}</div>
                   <ScoreStepper value={r.l} onChange={v => updateScore(m.phase, m.idx, 'l', v)} />
                   <span style={{ color: '#ccc' }}>–</span>
                   <ScoreStepper value={r.v} onChange={v => updateScore(m.phase, m.idx, 'v', v)} />
-                  <div style={{ flex: 1, fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {f(m.visitante)}{m.visitante}
-                  </div>
+                  <div style={{ flex: 1, fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f(m.visitante)}{m.visitante}</div>
                 </div>
+
+                {/* Ganador — solo en knockout cuando hay empate */}
+                {m.phase !== 'grupos' && r.l !== '' && r.v !== '' && r.l === r.v && (
+                  <div style={{ background: '#FEF9EC', border: '0.5px solid #F5C842', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
+                    <div style={{ fontSize: 10, color: '#854F0B', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 8 }}>⚡ Empate — ¿quién ganó?</div>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                      {[['local', m.local], ['visitante', m.visitante]].map(([side, team]) => (
+                        <button key={side} onClick={() => updateScore(m.phase, m.idx, 'ganador', r.ganador === side ? '' : side)}
+                          style={{ flex: 1, padding: '8px', borderRadius: 8, border: `1.5px solid ${r.ganador === side ? '#1D9E75' : '#ddd'}`,
+                            background: r.ganador === side ? '#1D9E75' : '#fff', color: r.ganador === side ? '#fff' : '#555',
+                            fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                          {f(team)}{team}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* ET score */}
+                    <div style={{ fontSize: 10, color: '#888', marginBottom: 4 }}>T. extra (opcional)</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <ScoreStepper value={r.et?.l ?? ''} onChange={v => updateScore(m.phase, m.idx, 'etL', v)} />
+                      <span style={{ color: '#ccc', fontSize: 13 }}>–</span>
+                      <ScoreStepper value={r.et?.v ?? ''} onChange={v => updateScore(m.phase, m.idx, 'etV', v)} />
+                    </div>
+
+                    {/* Penales — solo si ET también empata */}
+                    {r.et?.l !== undefined && r.et?.l !== '' && r.et?.l === r.et?.v && (
+                      <>
+                        <div style={{ fontSize: 10, color: '#888', marginBottom: 4 }}>Penales</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <ScoreStepper value={r.penales?.l ?? ''} onChange={v => updateScore(m.phase, m.idx, 'penL', v)} />
+                          <span style={{ color: '#ccc', fontSize: 13 }}>–</span>
+                          <ScoreStepper value={r.penales?.v ?? ''} onChange={v => updateScore(m.phase, m.idx, 'penV', v)} />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => updateScore(m.phase, m.idx, 'final', !r.final)}
                     style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',

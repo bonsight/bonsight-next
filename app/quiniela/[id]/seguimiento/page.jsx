@@ -385,7 +385,7 @@ export default function SeguimientoPage() {
                       <span style={{ color: '#1D9E75', fontSize: 12, flexShrink: 0 }}>✓</span>
                       <span style={{ fontSize: 11, color: '#aaa', flexShrink: 0 }}>{formatKickoffLocal(kickoff)}</span>
                       <span style={{ flex: 1, fontSize: 13, color: '#444', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {FLAGS[local] || ''} {local} <strong style={{ fontWeight: 700, color: '#222' }}>{real.l}–{real.v}</strong> {visitante} {FLAGS[visitante] || ''}
+                        {FLAGS[local] || ''} {local} <strong style={{ fontWeight: 700, color: '#222' }}>{real.l}–{real.v}</strong>{real.ganador && real.penales ? <span style={{ fontSize: 9, color: '#888', marginLeft: 3 }}>pen</span> : real.ganador && real.et ? <span style={{ fontSize: 9, color: '#888', marginLeft: 3 }}>aet</span> : null} {visitante} {FLAGS[visitante] || ''}
                       </span>
                       {hasPick && (
                         <span style={{
@@ -428,9 +428,16 @@ export default function SeguimientoPage() {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
                       <span style={{ flex: 1, textAlign: 'right', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{FLAGS[local] || ''} {local}</span>
-                      <span style={{ background: '#f5f5f3', color: '#333', fontWeight: 700, padding: '3px 10px', borderRadius: 6, fontSize: 15, flexShrink: 0 }}>
-                        {hasScore ? `${real.l}–${real.v}` : 'vs'}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                        <span style={{ background: '#f5f5f3', color: '#333', fontWeight: 700, padding: '3px 10px', borderRadius: 6, fontSize: 15 }}>
+                          {hasScore ? `${real.l}–${real.v}` : 'vs'}
+                        </span>
+                        {hasScore && real.ganador && (
+                          <span style={{ fontSize: 9, color: '#888', fontWeight: 500 }}>
+                            {real.penales ? `pen ${real.penales.l}–${real.penales.v}` : real.et ? `aet ${real.et.l}–${real.et.v}` : ''}
+                          </span>
+                        )}
+                      </div>
                       <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{visitante} {FLAGS[visitante] || ''}</span>
                     </div>
                     <div style={{ marginTop: 6, fontSize: 12, color: '#aaa' }}>
