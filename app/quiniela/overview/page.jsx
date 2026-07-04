@@ -291,7 +291,12 @@ function SpinnerIcon() {
   )
 }
 
-function KaiTools({ phase, globalConfidenceGenerated, quinielas, onRefresh }) {
+const PHASE_SHORT = { grupos: 'Grupos', ronda32: 'R32', octavos: 'Octavos', cuartos: 'Cuartos', semis: 'Semis', final: 'Final' }
+
+function KaiTools({ activePhase, confidenceByPhase, quinielas, onRefresh }) {
+  const availablePhases = PHASE_ORDER.filter(ph => (PHASES[ph]?.matches?.length ?? 0) > 0)
+  const [selectedPhase, setSelectedPhase] = useState(activePhase ?? availablePhases[availablePhases.length - 1] ?? 'grupos')
+  const globalConfidenceGenerated = confidenceByPhase?.[selectedPhase] ?? false
   const [confStatus, setConfStatus]       = useState('idle')
   const [jornadaStatus, setJornadaStatus] = useState('idle')
   const [jornadaGroupStatus, setJornadaGroupStatus] = useState({}) // id → 'pending'|'active'|'done'|'error'|'skipped'
@@ -319,7 +324,7 @@ function KaiTools({ phase, globalConfidenceGenerated, quinielas, onRefresh }) {
     try {
       const res = await fetch('/api/quiniela-ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generateConfidence', payload: { phase } }),
+        body: JSON.stringify({ action: 'generateConfidence', payload: { phase: selectedPhase } }),
       })
       const d = await res.json()
       if (d.ok) { setConfStatus('done'); showToast(`✓ Confianza generada — ${d.count} partidos`); onRefresh() }
@@ -341,7 +346,7 @@ function KaiTools({ phase, globalConfidenceGenerated, quinielas, onRefresh }) {
       try {
         const res = await fetch('/api/quiniela-ai', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'generateOneJornada', payload: { phase, groupId: gid } }),
+          body: JSON.stringify({ action: 'generateOneJornada', payload: { phase: selectedPhase, groupId: gid } }),
         })
         const d = await res.json()
         const status = d.status ?? (d.ok ? 'done' : 'error')
@@ -379,9 +384,25 @@ function KaiTools({ phase, globalConfidenceGenerated, quinielas, onRefresh }) {
 
       {/* Confianza global */}
       <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '12px 14px', marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        {/* Phase selector */}
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 10 }}>
+          {availablePhases.map(ph => {
+            const done = confidenceByPhase?.[ph] ?? false
+            const isSel = selectedPhase === ph
+            return (
+              <button key={ph} onClick={() => setSelectedPhase(ph)}
+                style={{ padding: '3px 9px', fontSize: 10, borderRadius: 6, border: 'none', cursor: 'pointer', fontWeight: 600,
+                  background: isSel ? '#34D399' : 'rgba(255,255,255,0.1)',
+                  color: isSel ? '#0a1f12' : done ? 'rgba(52,211,153,0.7)' : 'rgba(255,255,255,0.45)',
+                }}>
+                {PHASE_SHORT[ph] ?? ph}{done ? ' ✓' : ''}
+              </button>
+            )
+          })}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 2 }}>Confianza por partido</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 2 }}>Confianza por partido · {PHASE_SHORT[selectedPhase] ?? selectedPhase}</div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>
               {globalConfidenceGenerated || confStatus === 'done'
                 ? '✓ Generada — todas las quinielas la consumen automáticamente'
@@ -1240,7 +1261,7 @@ export default function OverviewPage() {
       {/* Kai */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 10 }}>Kai · Herramientas globales</div>
-        <KaiTools phase="ronda32" globalConfidenceGenerated={data.globalConfidenceGenerated} quinielas={quinielas} onRefresh={loadData} />
+        <KaiTools activePhase={data.activePhase} confidenceByPhase={data.confidenceByPhase ?? {}} quinielas={quinielas} onRefresh={loadData} />
       </div>
 
       {/* Líderes */}

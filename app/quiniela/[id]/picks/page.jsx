@@ -817,21 +817,24 @@ export default function PicksPage() {
         )
       })()}
 
-      {/* ── Radar Kai por grupo ── */}
-      {currentPhase === 'grupos' && confidence.length > 0 && (() => {
-        const gi = GRUPO_LETTERS.indexOf(selectedGrupo)
-        const groupConf = confidence.filter(c => c.matchIndex >= gi * 6 && c.matchIndex < (gi + 1) * 6 && c.confidencePct)
-        if (groupConf.length < 2) return null
-        const sorted = [...groupConf].sort((a, b) => (b.confidencePct ?? 0) - (a.confidencePct ?? 0))
+      {/* ── Radar Kai ── */}
+      {confidence.length > 0 && (() => {
+        const phaseMatches = PHASES[currentPhase]?.matches ?? []
+        const relevantConf = currentPhase === 'grupos'
+          ? confidence.filter(c => { const gi = GRUPO_LETTERS.indexOf(selectedGrupo); return c.matchIndex >= gi * 6 && c.matchIndex < (gi + 1) * 6 && c.confidencePct })
+          : confidence.filter(c => c.confidencePct)
+        if (relevantConf.length < 2) return null
+        const sorted = [...relevantConf].sort((a, b) => (b.confidencePct ?? 0) - (a.confidencePct ?? 0))
         const top    = sorted[0]
-        const even   = groupConf.reduce((best, c) => Math.abs((c.confidencePct ?? 50) - 50) < Math.abs((best.confidencePct ?? 50) - 50) ? c : best)
+        const even   = relevantConf.reduce((best, c) => Math.abs((c.confidencePct ?? 50) - 50) < Math.abs((best.confidencePct ?? 50) - 50) ? c : best)
         const bottom = sorted[sorted.length - 1]
-        const nm = (c) => { const m = PHASES.grupos.matches[c.matchIndex]; return m ? `${f(m.local)}${m.local} vs ${f(m.visitante)}${m.visitante}` : '' }
+        const nm = (c) => { const m = phaseMatches[c.matchIndex]; return m ? `${f(m.local)}${m.local} vs ${f(m.visitante)}${m.visitante}` : '' }
+        const radarLabel = currentPhase === 'grupos' ? `Grupo ${selectedGrupo}` : (PHASES[currentPhase]?.label ?? currentPhase)
         return (
           <div style={{ background: 'rgba(52,211,153,0.04)', border: '0.5px solid rgba(52,211,153,0.2)', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
               <KaiAvatar size={14} state="ready" />
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#34D399', letterSpacing: 1, textTransform: 'uppercase' }}>Radar Kai — Grupo {selectedGrupo}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#34D399', letterSpacing: 1, textTransform: 'uppercase' }}>Radar Kai — {radarLabel}</span>
             </div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 14, color: '#444' }}>🔥 {nm(top)} <span style={{ color: '#15803d', fontWeight: 600 }}>{top.confidencePct}%</span></span>

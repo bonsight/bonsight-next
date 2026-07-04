@@ -48,23 +48,33 @@ export async function GET(req) {
     }
 
     if (action === 'overview') {
-      const [groups, globalConfidence, globalAdmin] = await Promise.all([
+      const phasesWithMatches = PHASE_ORDER.filter(ph => (PHASES[ph]?.matches?.length ?? 0) > 0)
+      const [groups, globalAdmin, ...confResults] = await Promise.all([
         kv.get('quiniela:groups'),
-        kv.get('quiniela:global:confidence:grupos'),
         kv.get('quiniela:global:admin'),
+        ...phasesWithMatches.map(ph => kv.get(`quiniela:global:confidence:${ph}`)),
       ])
       const groupList = groups ?? []
-      const globalConfidenceGenerated = Array.isArray(globalConfidence) && globalConfidence.length > 0
+      const confidenceByPhase = Object.fromEntries(
+        phasesWithMatches.map((ph, i) => [ph, Array.isArray(confResults[i]) && confResults[i].length > 0])
+      )
+      const nowMsForPhase = Date.now()
+      const activePhase = [...phasesWithMatches].reverse().find(ph =>
+        PHASES[ph].matches.some(m => m.kickoff && new Date(m.kickoff).getTime() <= nowMsForPhase)
+      ) ?? 'grupos'
+      const globalConfidenceGenerated = confidenceByPhase[activePhase] ?? false
       const admin = { results: {}, realCampeon: '', realGoleador: '', ...(globalAdmin ?? {}) }
 
-      // Count matches that have elapsed but have no confirmed result
+      // Count matches that have elapsed but have no confirmed result (all phases)
       const nowMs = Date.now()
       const MATCH_DURATION_MS = 2 * 60 * 60 * 1000
-      const pendingMatchesCount = PHASES.grupos.matches.filter((m, i) => {
-        const result = admin.results?.grupos?.[i]
-        const elapsed = nowMs - new Date(m.kickoff).getTime()
-        return !isMatchFinal(result) && elapsed >= MATCH_DURATION_MS
-      }).length
+      const pendingMatchesCount = PHASE_ORDER.reduce((acc, ph) => {
+        return acc + PHASES[ph].matches.filter((m, i) => {
+          const result = admin.results?.[ph]?.[i]
+          const elapsed = nowMs - new Date(m.kickoff).getTime()
+          return !isMatchFinal(result) && elapsed >= MATCH_DURATION_MS
+        }).length
+      }, 0)
 
       const data = await Promise.all(
         groupList.map(async ({ id }) => {
@@ -121,7 +131,7 @@ export async function GET(req) {
         masActiva:         byPart[0]   ? { nombre: byPart[0].nombre,   participantes: byPart[0].participants.length, id: byPart[0].id }        : null,
       }
 
-      return NextResponse.json({ quinielas: data, total: data.length, globalConfidenceGenerated, pendingMatchesCount, lideres })
+      return NextResponse.json({ quinielas: data, total: data.length, globalConfidenceGenerated, confidenceByPhase, activePhase, pendingMatchesCount, lideres })
     }
 
     if (action === 'globalTop') {
