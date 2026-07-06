@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { isAuthorized } from '@/lib/aria/auth';
+import { isAuthorizedForTenant } from '@/lib/aria/auth';
 import {
   listInvestigations,
   getInvestigationMeta,
@@ -1024,11 +1024,10 @@ async function executeTool(name, input, { tenant, investigationId, intelligenceS
 // ── Route handler ──────────────────────────────────────────────────────────
 
 export async function POST(req, { params }) {
-  if (!(await isAuthorized())) {
+  const { tenant } = await params;
+  if (!(await isAuthorizedForTenant(tenant))) {
     return Response.json({ reply: 'No autorizado.' }, { status: 401 });
   }
-
-  const { tenant } = await params;
   const requestStart = Date.now();
   let investigationIdForLog;
 

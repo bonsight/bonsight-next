@@ -41,13 +41,16 @@ export default async function AriaTenantPage({ params, searchParams }) {
           redirect(`/aria/${tenant}?error=1`);
         }
         const hash = createHash('sha256').update(tenantMeta.accessCode).digest('hex');
-        (await cookies()).set(`aria_auth_${tenant}`, hash, {
+        const cookieOpts = {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
           maxAge: 60 * 60 * 24 * 30,
           path: '/',
-        });
+        };
+        const cookieStore = await cookies();
+        cookieStore.set(`aria_auth_${tenant}`, hash, cookieOpts);
+        cookieStore.set(`kai_auth_${tenant}`, hash, cookieOpts);
         redirect(`/aria/${tenant}`);
       }
 
