@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { isAuthorized } from '@/lib/aria/auth';
+import { isAuthorizedForTenant } from '@/lib/aria/auth';
 import { getInvestigation, updateInvestigationMeta, deleteInvestigation } from '@/lib/aria/memory';
 
 async function buildArchiveIndex(meta, messages) {
@@ -65,11 +65,11 @@ ${transcript}`;
 }
 
 export async function GET(req, { params }) {
-  if (!(await isAuthorized())) {
+  const { tenant, id } = await params;
+  if (!(await isAuthorizedForTenant(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
 
-  const { tenant, id } = await params;
   const investigation = await getInvestigation(tenant, id);
   if (!investigation) {
     return Response.json({ error: 'No encontrada.' }, { status: 404 });
@@ -79,11 +79,11 @@ export async function GET(req, { params }) {
 }
 
 export async function PATCH(req, { params }) {
-  if (!(await isAuthorized())) {
+  const { tenant, id } = await params;
+  if (!(await isAuthorizedForTenant(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
 
-  const { tenant, id } = await params;
   const updates = await req.json();
 
   if (updates.estado === 'archivada') {
@@ -100,11 +100,11 @@ export async function PATCH(req, { params }) {
 }
 
 export async function DELETE(req, { params }) {
-  if (!(await isAuthorized())) {
+  const { tenant, id } = await params;
+  if (!(await isAuthorizedForTenant(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
 
-  const { tenant, id } = await params;
   await deleteInvestigation(tenant, id);
   return Response.json({ ok: true });
 }
