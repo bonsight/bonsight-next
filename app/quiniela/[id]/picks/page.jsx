@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { PHASES, PHASE_ORDER, TEAMS, SCORERS, FLAGS, calcularPuntajes, isMatchFinal, evaluatePick } from '@/lib/quiniela'
+import { PHASES, PHASE_ORDER, TEAMS, SCORERS, FLAGS, calcularPuntajes, isMatchFinal, evaluatePick, resolveKnockoutName } from '@/lib/quiniela'
 import { KaiLabel, KaiAvatar } from '@/components/KaiAvatar'
 
 const GRUPO_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L']
@@ -49,6 +49,7 @@ function resolveTeamName(placeholder, gruposResults) {
   return sorted[pos - 1] ?? placeholder
 }
 
+// Resuelve "G{n} Oct." / "G{n} Cuar." / "G{n} Semi" al equipo real usando resultados ya confirmados
 function formatCountdown(ms) {
   if (ms <= 0) return null
   const d = Math.floor(ms / 86400000)
@@ -637,8 +638,10 @@ export default function PicksPage() {
         return PHASES.grupos.matches.slice(gi * 6, gi * 6 + 6).map((m, i) => ({ ...m, globalIndex: gi * 6 + i }))
       })()
     : PHASES[currentPhase].matches.map((m, i) => {
-        const displayLocal = resolveTeamName(m.local, gruposResults)
-        const displayVisitante = resolveTeamName(m.visitante, gruposResults)
+        const resolved = resolveTeamName(m.local, gruposResults)
+        const resolvedV = resolveTeamName(m.visitante, gruposResults)
+        const displayLocal = resolveKnockoutName(resolved, admin?.results)
+        const displayVisitante = resolveKnockoutName(resolvedV, admin?.results)
         return {
           ...m,
           local: displayLocal,

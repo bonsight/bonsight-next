@@ -297,6 +297,21 @@ function KaiTools({ activePhase, confidenceByPhase, quinielas, onRefresh }) {
   const availablePhases = PHASE_ORDER.filter(ph => (PHASES[ph]?.matches?.length ?? 0) > 0)
   const [selectedPhase, setSelectedPhase] = useState(activePhase ?? availablePhases[availablePhases.length - 1] ?? 'grupos')
   const globalConfidenceGenerated = confidenceByPhase?.[selectedPhase] ?? false
+  const [phaseStatus, setPhaseStatus] = useState('idle') // 'idle' | 'loading' | 'done'
+  const [phaseResult, setPhaseResult] = useState(null)
+
+  async function activateNextPhase() {
+    setPhaseStatus('loading')
+    try {
+      const res = await fetch('/api/quiniela', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'unlockNextPhaseGlobal', payload: {} }),
+      })
+      const d = await res.json()
+      if (d.ok) { setPhaseResult(d); setPhaseStatus('done'); onRefresh() }
+      else { setPhaseStatus('idle'); showToast('Error al activar fase') }
+    } catch { setPhaseStatus('idle'); showToast('Error de conexión') }
+  }
   const [confStatus, setConfStatus]       = useState('idle')
   const [jornadaStatus, setJornadaStatus] = useState('idle')
   const [jornadaGroupStatus, setJornadaGroupStatus] = useState({}) // id → 'pending'|'active'|'done'|'error'|'skipped'
@@ -506,6 +521,31 @@ function KaiTools({ activePhase, confidenceByPhase, quinielas, onRefresh }) {
               </div>
             )
           })}
+        </div>
+      </div>
+
+      {/* Activar siguiente fase */}
+      <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '12px 14px', marginTop: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 2 }}>Activar siguiente fase</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>
+              {phaseStatus === 'done' && phaseResult
+                ? `✓ ${phaseResult.unlockedCount} quiniela${phaseResult.unlockedCount !== 1 ? 's' : ''} avanzaron a ${PHASE_SHORT[phaseResult.nextPhase] ?? phaseResult.nextPhase}${phaseResult.report.filter(r => r.status === 'complete').length > 0 ? ` · ${phaseResult.report.filter(r => r.status === 'complete').length} ya en fase final` : ''}`
+                : 'Desbloquea la siguiente fase del torneo en todas las quinielas activas'}
+            </div>
+          </div>
+          <button
+            onClick={phaseStatus === 'done' ? () => { setPhaseStatus('idle'); setPhaseResult(null) } : activateNextPhase}
+            disabled={phaseStatus === 'loading'}
+            style={{
+              padding: '6px 14px', fontSize: 12, borderRadius: 8, border: 'none', cursor: phaseStatus === 'loading' ? 'default' : 'pointer',
+              fontWeight: 600, flexShrink: 0, marginLeft: 12,
+              background: phaseStatus === 'loading' ? '#555' : phaseStatus === 'done' ? 'rgba(52,211,153,0.2)' : '#34D399',
+              color: phaseStatus === 'loading' ? '#aaa' : phaseStatus === 'done' ? '#34D399' : '#0a1f12',
+            }}>
+            {phaseStatus === 'loading' ? 'Activando…' : phaseStatus === 'done' ? '↻ Repetir' : '→ Activar'}
+          </button>
         </div>
       </div>
 

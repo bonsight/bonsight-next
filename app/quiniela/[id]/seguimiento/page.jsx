@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { PHASES, PHASE_ORDER, calcularPuntajes, calcularPuntajesProyectados, buildHistory, isMatchFinal, isMatchLive, evaluatePick, FLAGS } from '@/lib/quiniela'
+import { PHASES, PHASE_ORDER, calcularPuntajes, calcularPuntajesProyectados, buildHistory, isMatchFinal, isMatchLive, evaluatePick, FLAGS, resolveKnockoutName } from '@/lib/quiniela'
 import { KaiLabel } from '@/components/KaiAvatar'
 
 function initials(name) {
@@ -992,7 +992,14 @@ export default function SeguimientoPage() {
               </div>
             )
 
-            const history = buildHistory(myQ, admin, unlockedFases)
+            const history = buildHistory(myQ, admin, unlockedFases).map(group => ({
+              ...group,
+              matches: group.matches.map(entry => ({
+                ...entry,
+                local: resolveKnockoutName(entry.local, admin?.results),
+                visitante: resolveKnockoutName(entry.visitante, admin?.results),
+              })),
+            }))
             const dateGroups  = history.filter(g => g.date)
             const otherGroups = history.filter(g => !g.date)
             const todayKey = new Date(now).toISOString().slice(0, 10)

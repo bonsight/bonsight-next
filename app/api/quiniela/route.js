@@ -536,6 +536,28 @@ export async function POST(req) {
       return NextResponse.json({ ok: true })
     }
 
+    if (action === 'unlockNextPhaseGlobal') {
+      const groups = (await kv.get('quiniela:groups')) ?? []
+      const report = []
+      for (const { id: gid } of groups) {
+        if (EXCLUDED_GROUP_IDS.includes(gid)) continue
+        const [groupData, adminRaw] = await Promise.all([
+          kv.get(`quiniela:group:${gid}`),
+          kv.get(`quiniela:${gid}:admin`),
+        ])
+        if (groupData?.isDemo) continue
+        const cur = adminRaw ?? { unlockedPhases: ['grupos'], results: {}, realCampeon: '', realGoleador: '' }
+        const unlocked = cur.unlockedPhases ?? ['grupos']
+        const nextPhase = PHASE_ORDER.find(ph => !unlocked.includes(ph)) ?? null
+        if (!nextPhase) { report.push({ id: gid, nombre: groupData?.nombre, status: 'complete' }); continue }
+        await kv.set(`quiniela:${gid}:admin`, { ...cur, unlockedPhases: [...unlocked, nextPhase] })
+        report.push({ id: gid, nombre: groupData?.nombre, nextPhase, status: 'unlocked' })
+      }
+      const unlockedItems = report.filter(r => r.status === 'unlocked')
+      const nextPhase = unlockedItems[0]?.nextPhase ?? null
+      return NextResponse.json({ ok: true, report, unlockedCount: unlockedItems.length, nextPhase })
+    }
+
     // One-time migration: swap grupos picks[2] ↔ picks[3] for all quinielas.
     // Needed because commit a1b15b2 reordered Group A matchday-2 pairs (índices 2 y 3).
     // Admin results were entered under the new order so they are NOT swapped.
