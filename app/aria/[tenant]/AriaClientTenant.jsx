@@ -172,6 +172,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
   const [intelligenceItems, setIntelligenceItems] = useState([]);
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelFilter, setPanelFilter] = useState(null);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mainInsight, setMainInsight] = useState(null);
   const [sources, setSources] = useState([]);
   const messagesEndRef = useRef(null);
@@ -389,21 +390,37 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
 
   return (
     <div className={`aria-layout${panelOpen ? ' aria-layout--panel' : ''}`}>
+      <div
+        className={`aria-mobile-backdrop${(mobileSidebarOpen || panelOpen) ? ' aria-mobile-backdrop--visible' : ''}`}
+        onClick={() => {
+          setMobileSidebarOpen(false);
+          if (panelOpen) { setPanelOpen(false); setPanelFilter(null); }
+        }}
+      />
       <Sidebar
         investigations={investigations}
         activeId={investigationId}
-        onSelect={handleSelectInvestigation}
-        onNew={handleNewInvestigation}
+        isOpen={mobileSidebarOpen}
+        onClose={() => setMobileSidebarOpen(false)}
+        onSelect={(id) => { handleSelectInvestigation(id); setMobileSidebarOpen(false); }}
+        onNew={() => { handleNewInvestigation(); setMobileSidebarOpen(false); }}
         onArchive={handleArchiveInvestigation}
         onRestore={handleRestoreInvestigation}
         onDelete={handleDeleteInvestigation}
         counters={counters}
         sources={sources}
-        onIntelFilter={(type) => { setPanelFilter(type); setPanelOpen(true); }}
+        onIntelFilter={(type) => { setPanelFilter(type); setPanelOpen(true); setMobileSidebarOpen(false); }}
       />
       <div className="aria-page">
         <header className="aria-header">
           <div className="aria-header-brand">
+            <button
+              className="aria-header-menu-btn"
+              onClick={() => setMobileSidebarOpen(true)}
+              aria-label="Abrir menú"
+            >
+              ☰
+            </button>
             <AriaAvatar size={36} />
             <div>
               <p className="aria-header-title">

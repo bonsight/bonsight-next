@@ -19,7 +19,7 @@ function formatRelativeTime(dateStr) {
   return `hace ${weeks}sem`;
 }
 
-export default function Sidebar({ investigations, activeId, onSelect, onNew, onArchive, onRestore, onDelete, counters = {}, sources = [], onIntelFilter }) {
+export default function Sidebar({ investigations, activeId, onSelect, onNew, onArchive, onRestore, onDelete, counters = {}, sources = [], onIntelFilter, isOpen = false, onClose }) {
   const [search, setSearch] = useState('');
   const [hoveredId, setHoveredId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -160,7 +160,12 @@ export default function Sidebar({ investigations, activeId, onSelect, onNew, onA
   const { hallazgos = 0, riesgos = 0, recomendaciones = 0, oportunidades = 0 } = counters;
 
   return (
-    <aside className="aria-sidebar">
+    <aside className={`aria-sidebar${isOpen ? ' aria-sidebar--open' : ''}`}>
+      {onClose && (
+        <button className="aria-sidebar-close-btn" onClick={onClose} type="button" aria-label="Cerrar menú">
+          ×
+        </button>
+      )}
       <p className="aria-sidebar-section-label">Análisis</p>
 
       <button className="aria-sidebar-new" onClick={onNew}>

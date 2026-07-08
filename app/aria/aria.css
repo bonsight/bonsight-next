@@ -1814,3 +1814,186 @@
 .aria-sidebar-source--active .aria-sidebar-source-dot {
   background: #10B981;
 }
+
+/* =====================================================
+   Mobile hamburger + close btn (base — hidden on desktop)
+   ===================================================== */
+
+.aria-header-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--aria-text-dim);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 4px 8px 4px 0;
+  border-radius: 6px;
+  line-height: 1;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+
+.aria-header-menu-btn:hover {
+  color: var(--aria-text);
+}
+
+.aria-sidebar-close-btn {
+  display: none;
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--aria-border);
+  color: var(--aria-text-dim);
+  font-size: 1.3rem;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  line-height: 1;
+  transition: color 0.15s, background 0.15s;
+}
+
+.aria-sidebar-close-btn:hover {
+  color: var(--aria-text);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.aria-mobile-backdrop {
+  display: none;
+}
+
+/* =====================================================
+   Mobile (≤768px)
+   ===================================================== */
+
+@media (max-width: 768px) {
+  .aria-layout {
+    height: 100dvh;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Sidebar → drawer desde la izquierda */
+  .aria-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100dvh;
+    width: 82vw;
+    max-width: 300px;
+    z-index: 300;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    background: var(--aria-bg);
+    border-right: 1px solid var(--aria-border);
+  }
+
+  .aria-sidebar--open {
+    transform: translateX(0);
+    box-shadow: 6px 0 40px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Intelligence panel → drawer desde la derecha */
+  .aria-intel-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100dvh;
+    width: 88vw;
+    max-width: 320px;
+    z-index: 300;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+  }
+
+  .aria-layout--panel .aria-intel-panel {
+    transform: translateX(0);
+    box-shadow: -6px 0 40px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Backdrop */
+  .aria-mobile-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 299;
+    background: rgba(0, 0, 0, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+
+  .aria-mobile-backdrop--visible {
+    display: block;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Main page ocupa ancho completo */
+  .aria-page {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Header */
+  .aria-header-menu-btn {
+    display: flex;
+  }
+
+  .aria-header {
+    padding: 12px 16px;
+  }
+
+  /* Mensajes */
+  .aria-messages {
+    padding: 14px 12px;
+    gap: 12px;
+  }
+
+  .aria-msg-assistant-inner {
+    max-width: 94%;
+  }
+
+  .aria-msg-user .aria-msg-content {
+    max-width: 88%;
+  }
+
+  /* Input bar con safe area para iOS */
+  .aria-input-bar {
+    padding: 12px 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+  }
+
+  /* Hero vacío */
+  .aria-empty-hero {
+    max-width: 100%;
+    padding: 0 4px;
+  }
+
+  /* Grids más compactos */
+  .aria-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .aria-kpi-primary {
+    grid-column: 1 / -1;
+  }
+
+  .aria-insights-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Sidebar close button visible en mobile */
+  .aria-sidebar-close-btn {
+    display: flex;
+  }
+
+  /* Sidebar necesita position relative para el botón absoluto */
+  .aria-sidebar {
+    position: fixed; /* ya definido arriba, solo aseguramos */
+  }
+}
