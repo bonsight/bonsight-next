@@ -13,6 +13,7 @@ import {
 } from '@/lib/kai/memory';
 import { listAriaSuggestions, updateSuggestionStatus, applySuggestionToProfile } from '@/lib/kai/suggestions';
 import { addLearning } from '@/lib/kai/learnings';
+import { getKnowledgeDigest } from '@/lib/kai/knowledgeSources';
 import { regenerateAllArtifacts } from '@/lib/kai/artifacts';
 import { trackUsage } from '@/lib/kai/usage';
 import { getKnownParticipants, findParticipantMatches, extractNameFromMessage } from '@/lib/kai/participants';
@@ -254,7 +255,7 @@ No menciones estas sugerencias directamente al usuario.
 Incorpóralas de forma natural si la conversación lo confirma.`;
 }
 
-function buildSystemPrompt(tenantName, businessProfile, previousConvs = [], pendingSuggestions = []) {
+function buildSystemPrompt(tenantName, businessProfile, previousConvs = [], pendingSuggestions = [], knowledgeDigest = null) {
   const profileJson = JSON.stringify(businessProfile ?? {}, null, 2);
 
   const historial =
@@ -794,7 +795,20 @@ Debes transmitir criterio, curiosidad genuina y capacidad de observación.
 
 Tu trabajo no es hablar mucho.
 
-Tu trabajo es entender profundamente el negocio.${buildSuggestionsBlock(pendingSuggestions)}`.trim();
+Tu trabajo es entender profundamente el negocio.${buildSuggestionsBlock(pendingSuggestions)}${knowledgeDigest ? `
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONOCIMIENTO ORGANIZACIONAL EXISTENTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Este conocimiento proviene de fuentes cargadas por el administrador (documentos, URLs, textos).
+Úsalo como contexto inicial, no como verdad absoluta.
+Si encuentras diferencias con lo que el usuario dice en la conversación, no sobrescribas el conocimiento. Pregunta o señala la contradicción con respeto.
+Cuando uses este conocimiento, puedes referenciarlo: "Según la información existente, entiendo que…"
+
+Knowledge Sources no reemplaza las conversaciones. Solo alimenta el contexto inicial de Kai.
+
+${knowledgeDigest}` : ''}`.trim();
 }
 
 // ── Route handlers ─────────────────────────────────────────────────────────
@@ -809,11 +823,12 @@ export async function POST(req, { params }) {
       return Response.json({ reply: 'Falta el mensaje.' }, { status: 400 });
     }
 
-    const [meta, businessProfile, previousConvs, pendingSuggestions] = await Promise.all([
+    const [meta, businessProfile, previousConvs, pendingSuggestions, knowledgeDigest] = await Promise.all([
       getTenantMeta(tenant),
       getBusinessProfile(tenant),
       listConversations(tenant),
       listAriaSuggestions(tenant, 'pending'),
+      getKnowledgeDigest(tenant),
     ]);
 
     if (!meta) {
@@ -885,7 +900,7 @@ export async function POST(req, { params }) {
     const response = await anthropic.messages.create({
       model: MODEL,
       max_tokens: MAX_TOKENS,
-      system: buildSystemPrompt(meta.name, businessProfile, previousConvs, pendingSuggestions),
+      system: buildSystemPrompt(meta.name, businessProfile, previousConvs, pendingSuggestions, knowledgeDigest),
       messages: cleanMessages,
     });
 

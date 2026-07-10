@@ -182,7 +182,22 @@ export default function SeguimientoPage() {
     const token = localStorage.getItem(`quiniela_token_${groupId}`)
     fetch(`/api/quiniela?action=participantDetail&groupId=${groupId}&participantId=${pid}&token=${token}`)
       .then(r => r.json())
-      .then(d => setDetailParticipant(d.error ? { error: true } : d))
+      .then(d => {
+        if (d.error) return setDetailParticipant({ error: true })
+        // Resolver nombres placeholder (G1 Oct., G2 Cuar., etc.) en el historial
+        const processed = {
+          ...d,
+          history: (d.history || []).map(group => ({
+            ...group,
+            matches: (group.matches || []).map(entry => ({
+              ...entry,
+              local: resolveKnockoutName(entry.local, admin?.results),
+              visitante: resolveKnockoutName(entry.visitante, admin?.results),
+            })),
+          })),
+        }
+        setDetailParticipant(processed)
+      })
       .catch(() => setDetailParticipant({ error: true }))
   }
 

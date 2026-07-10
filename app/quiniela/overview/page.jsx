@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { PHASES, PHASE_ORDER, FLAGS, TEAMS, SCORERS, isMatchFinal } from '@/lib/quiniela'
+import { PHASES, PHASE_ORDER, FLAGS, TEAMS, SCORERS, isMatchFinal, resolveKnockoutName } from '@/lib/quiniela'
 
 const KEY = '1234'
 const GRUPO_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L']
@@ -17,6 +17,10 @@ function fmt(iso) {
 }
 
 const MATCH_DURATION_MS = 2 * 60 * 60 * 1000
+
+function getDisplayTeamName(team, phase, results) {
+  return resolveKnockoutName(team, results) ?? team
+}
 
 function getMatchTimeState(kickoff, now, real) {
   const kickoffTime = new Date(kickoff).getTime()
@@ -759,11 +763,13 @@ function ResultsSection() {
           const filled = r.l !== '' && r.v !== ''
           const isTied = filled && r.l === r.v
           const isKnockout = phase !== 'grupos'
+          const displayLocal = getDisplayTeamName(local, phase, results)
+          const displayVisitante = getDisplayTeamName(visitante, phase, results)
           return (
             <div key={idx} style={{ borderRadius: 10, overflow: 'hidden', border: `0.5px solid ${filled ? '#4ade80' : '#e8e6e0'}` }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: filled ? '#f0fdf6' : '#fff' }}>
                 <div style={{ flex: 1, fontSize: 13, fontWeight: 500, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {f(local)}{local}
+                  {f(displayLocal)}{displayLocal}
                 </div>
                 <input style={filled ? filledInp : inpSty} type="number" min={0} max={20} placeholder="—"
                   value={r.l} onChange={e => updateScore(phase, idx, 'l', e.target.value)} />
@@ -771,7 +777,7 @@ function ResultsSection() {
                 <input style={filled ? filledInp : inpSty} type="number" min={0} max={20} placeholder="—"
                   value={r.v} onChange={e => updateScore(phase, idx, 'v', e.target.value)} />
                 <div style={{ flex: 1, fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {f(visitante)}{visitante}
+                  {f(displayVisitante)}{displayVisitante}
                 </div>
                 <button onClick={() => updateScore(phase, idx, 'final', !r.final)}
                   style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 99, cursor: 'pointer',
@@ -786,7 +792,7 @@ function ResultsSection() {
                 <div style={{ padding: '8px 12px', background: '#FEF9EC', borderTop: '0.5px solid #F5C842' }}>
                   <div style={{ fontSize: 10, color: '#854F0B', marginBottom: 6 }}>⚡ ¿Quién ganó?</div>
                   <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-                    {[['local', local], ['visitante', visitante]].map(([side, team]) => (
+                    {[['local', displayLocal], ['visitante', displayVisitante]].map(([side, team]) => (
                       <button key={side} onClick={() => updateScore(phase, idx, 'ganador', r.ganador === side ? '' : side)}
                         style={{ flex: 1, padding: '5px 8px', borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: 'pointer',
                           border: `1.5px solid ${r.ganador === side ? '#1D9E75' : '#ddd'}`,
@@ -942,6 +948,8 @@ function PartidosHoyOperativo({ now }) {
       {todayMatches.map((m) => {
         const key = `${m.phase}-${m.idx}`
         const r = results[m.phase]?.[m.idx] ?? { l: '', v: '', final: false }
+        const displayLocal = getDisplayTeamName(m.local, m.phase, results)
+        const displayVisitante = getDisplayTeamName(m.visitante, m.phase, results)
         const { live, confirmed } = getMatchTimeState(m.kickoff, now, r)
         const isExpanded = expanded === key
         const borderColor = live ? '#c0392b44' : confirmed ? '#4ade8066' : '#e0e0de'
@@ -953,7 +961,7 @@ function PartidosHoyOperativo({ now }) {
               style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', cursor: 'pointer' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>
-                  {f(m.local)}{m.local} <span style={{ color: '#aaa', fontWeight: 400 }}>vs</span> {f(m.visitante)}{m.visitante}
+                  {f(displayLocal)}{displayLocal} <span style={{ color: '#aaa', fontWeight: 400 }}>vs</span> {f(displayVisitante)}{displayVisitante}
                 </div>
                 <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
                   <span style={{ background: '#E1F5EE', color: '#0F6E56', borderRadius: 4, padding: '1px 5px', fontWeight: 600, marginRight: 5 }}>{PHASE_LABEL[m.phase] ?? m.phase}</span>
@@ -976,11 +984,11 @@ function PartidosHoyOperativo({ now }) {
                 {/* Marcador 90' */}
                 <div style={{ fontSize: 10, color: '#aaa', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 6 }}>Resultado 90'</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                  <div style={{ flex: 1, fontSize: 13, fontWeight: 500, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f(m.local)}{m.local}</div>
+                  <div style={{ flex: 1, fontSize: 13, fontWeight: 500, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f(displayLocal)}{displayLocal}</div>
                   <ScoreStepper value={r.l} onChange={v => updateScore(m.phase, m.idx, 'l', v)} />
                   <span style={{ color: '#ccc' }}>–</span>
                   <ScoreStepper value={r.v} onChange={v => updateScore(m.phase, m.idx, 'v', v)} />
-                  <div style={{ flex: 1, fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f(m.visitante)}{m.visitante}</div>
+                  <div style={{ flex: 1, fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f(displayVisitante)}{displayVisitante}</div>
                 </div>
 
                 {/* Ganador — solo en knockout cuando hay empate */}
@@ -988,7 +996,7 @@ function PartidosHoyOperativo({ now }) {
                   <div style={{ background: '#FEF9EC', border: '0.5px solid #F5C842', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
                     <div style={{ fontSize: 10, color: '#854F0B', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 8 }}>⚡ Empate — ¿quién ganó?</div>
                     <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                      {[['local', m.local], ['visitante', m.visitante]].map(([side, team]) => (
+                      {[['local', displayLocal], ['visitante', displayVisitante]].map(([side, team]) => (
                         <button key={side} onClick={() => updateScore(m.phase, m.idx, 'ganador', r.ganador === side ? '' : side)}
                           style={{ flex: 1, padding: '8px', borderRadius: 8, border: `1.5px solid ${r.ganador === side ? '#1D9E75' : '#ddd'}`,
                             background: r.ganador === side ? '#1D9E75' : '#fff', color: r.ganador === side ? '#fff' : '#555',

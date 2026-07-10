@@ -4048,3 +4048,194 @@
 }
 
 .kcv-badge-pop             { animation: kcv-badge-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* ── Knowledge Sources Tab ───────────────────────────────────────────────── */
+
+.ks-btn-primary {
+  padding: 7px 14px; font-size: 13px; font-weight: 600; border: none;
+  border-radius: 8px; cursor: pointer; background: #20C997; color: #fff;
+  transition: background 0.15s;
+}
+.ks-btn-primary:hover:not(:disabled) { background: #148F6A; }
+.ks-btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.ks-btn-secondary {
+  padding: 5px 12px; font-size: 12px; font-weight: 600; border: 1.5px solid #e5e7eb;
+  border-radius: 6px; cursor: pointer; background: #fff; color: #555;
+  transition: border-color 0.15s;
+}
+.ks-btn-secondary:hover:not(:disabled) { border-color: #20C997; color: #20C997; }
+.ks-btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ks-btn-danger {
+  padding: 5px 12px; font-size: 12px; font-weight: 600; border: 1.5px solid #fee2e2;
+  border-radius: 6px; cursor: pointer; background: #fff; color: #DC2626;
+  transition: background 0.15s;
+}
+.ks-btn-danger:hover:not(:disabled) { background: #fef2f2; }
+.ks-btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ks-form {
+  display: flex; flex-direction: column; gap: 10px;
+  background: #fafafa; border: 1px solid #eee; border-radius: 12px;
+  padding: 16px; margin-bottom: 20px;
+}
+
+.ks-type-btn {
+  padding: 6px 14px; font-size: 13px; font-weight: 600; border: 1.5px solid #e5e7eb;
+  border-radius: 20px; cursor: pointer; background: #fff; color: #555;
+}
+.ks-type-btn--active { border-color: #20C997; color: #20C997; background: #f0fdf9; }
+
+.ks-input {
+  width: 100%; padding: 9px 12px; font-size: 13px; border: 1.5px solid #e5e7eb;
+  border-radius: 8px; outline: none; font-family: inherit; box-sizing: border-box;
+}
+.ks-input:focus { border-color: #20C997; }
+
+.ks-textarea {
+  width: 100%; padding: 9px 12px; font-size: 13px; border: 1.5px solid #e5e7eb;
+  border-radius: 8px; outline: none; font-family: inherit; resize: vertical; box-sizing: border-box;
+}
+.ks-textarea:focus { border-color: #20C997; }
+
+.ks-source-row {
+  display: flex; align-items: center; gap: 12px;
+  background: #fff; border: 1px solid #f0f0f0; border-radius: 10px; padding: 12px 14px;
+}
+
+.ks-file-drop {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 20px; border: 2px dashed #e5e7eb; border-radius: 10px;
+  background: #fafafa; text-align: center;
+}
+
+.ks-file-label {
+  cursor: pointer; font-size: 13px; font-weight: 600; color: #20C997;
+  padding: 8px 16px; border: 1.5px solid #20C997; border-radius: 8px;
+  transition: background 0.15s;
+}
+.ks-file-label:hover { background: #f0fdf9; }
+
+/* ── Google Drive Panel ──────────────────────────────────────────────────── */
+
+.ks-drive-panel {
+  background: #F8FAFF;
+  border: 1px solid #DBEAFE;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.ks-drive-panel--connected {
+  background: #F0FDF4;
+  border-color: #BBF7D0;
+}
+
+.ks-drive-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ks-drive-icon { color: #2563EB; display: flex; align-items: center; }
+.ks-drive-panel-title { font-size: 13.5px; font-weight: 600; color: #1e3a5f; }
+.ks-drive-panel--connected .ks-drive-panel-title { color: #14532d; }
+
+.ks-drive-connected-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #22C55E; flex-shrink: 0;
+}
+
+.ks-drive-connected-label {
+  font-size: 11px; font-weight: 600;
+  color: #15803D; background: #DCFCE7;
+  border-radius: 20px; padding: 2px 8px;
+}
+
+.ks-drive-instructions {
+  font-size: 12.5px; color: #555; margin: 0 0 12px; line-height: 1.55;
+}
+
+.ks-drive-sa-email {
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 11.5px; background: #EFF6FF;
+  color: #1D4ED8; padding: 1px 6px; border-radius: 4px;
+  user-select: all;
+}
+
+.ks-drive-connect-form {
+  display: flex; gap: 8px; align-items: center;
+}
+
+.ks-drive-connect-form .ks-input { flex: 1; margin-bottom: 0; }
+
+.ks-drive-explorer {
+  margin-top: 12px;
+  border-top: 1px solid #BBF7D0;
+  padding-top: 12px;
+}
+
+.ks-drive-file-list {
+  display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;
+}
+
+.ks-drive-file-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 8px;
+  cursor: pointer; border: 1px solid transparent;
+  transition: background 0.1s;
+  font-size: 13px; color: #222;
+}
+
+.ks-drive-file-row:hover { background: #F0FDF4; }
+.ks-drive-file-row--selected { background: #DCFCE7; border-color: #86EFAC; }
+
+.ks-drive-checkbox { accent-color: #22C55E; flex-shrink: 0; }
+.ks-drive-file-icon { font-size: 14px; flex-shrink: 0; }
+.ks-drive-file-name { flex: 1; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ks-drive-file-type { font-size: 11px; color: #888; flex-shrink: 0; width: 80px; text-align: right; }
+.ks-drive-file-date { font-size: 11px; color: #aaa; flex-shrink: 0; width: 90px; text-align: right; }
+
+.ks-drive-import-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #F0FDF4; border: 1px solid #86EFAC;
+  border-radius: 8px; padding: 8px 14px;
+}
+
+.ks-drive-explorer-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.ks-drive-refresh-btn {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 500; color: #555;
+  background: none; border: 1px solid #ddd; border-radius: 6px;
+  padding: 4px 10px; cursor: pointer; font-family: inherit;
+  transition: border-color 0.15s, color 0.15s;
+}
+.ks-drive-refresh-btn:hover:not(:disabled) { border-color: #20C997; color: #20C997; }
+.ks-drive-refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.ks-drive-file-row--imported {
+  opacity: 0.65;
+}
+
+.ks-drive-imported-check {
+  width: 14px; height: 14px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: #15803D; font-size: 12px; font-weight: 700;
+}
+
+.ks-drive-file-badge {
+  font-size: 10px; font-weight: 600; padding: 1px 7px;
+  border-radius: 20px; flex-shrink: 0;
+}
+.ks-drive-file-badge--imported {
+  background: #DCFCE7; color: #15803D;
+}
+.ks-drive-file-badge--stale {
+  background: #FEF3C7; color: #D97706;
+}

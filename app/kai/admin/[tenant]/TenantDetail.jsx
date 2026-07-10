@@ -83,6 +83,98 @@ function SectionTitle({ children }) {
   );
 }
 
+// ── Active Priorities ─────────────────────────────────────────────────────
+
+function ActivePrioritiesEditor({ slug }) {
+  const [priorities, setPriorities] = useState([]);
+  const [input, setInput]           = useState('');
+  const [saving, setSaving]         = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/kai/${slug}/active-priorities`)
+      .then(r => r.json())
+      .then(d => setPriorities(d.priorities ?? []))
+      .catch(() => {});
+  }, [slug]);
+
+  const save = async (next) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/kai/${slug}/active-priorities`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priorities: next }),
+      });
+      const data = await res.json();
+      setPriorities(data.priorities ?? next);
+    } catch {}
+    setSaving(false);
+  };
+
+  const add = () => {
+    const trimmed = input.trim();
+    if (!trimmed || priorities.includes(trimmed)) return;
+    const next = [...priorities, trimmed];
+    setInput('');
+    save(next);
+  };
+
+  const remove = (i) => {
+    const next = priorities.filter((_, idx) => idx !== i);
+    save(next);
+  };
+
+  const handleKey = (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
+
+  return (
+    <div style={{ background: '#fff', border: '0.5px solid #e0e0dc', borderRadius: 12, padding: '18px 22px', marginBottom: 16 }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: '#bbb', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+        Prioridades activas — lo que importa esta semana
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: priorities.length ? 12 : 0 }}>
+        {priorities.map((p, i) => (
+          <span key={i} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: '#F0FDF4', border: '0.5px solid #86EFAC',
+            borderRadius: 20, padding: '4px 12px',
+            fontSize: 12.5, fontWeight: 500, color: '#15803D',
+          }}>
+            {p}
+            <button
+              onClick={() => remove(i)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#86EFAC', padding: 0, lineHeight: 1, fontSize: 14 }}
+            >×</button>
+          </span>
+        ))}
+        {priorities.length === 0 && (
+          <span style={{ fontSize: 12, color: '#bbb', fontStyle: 'italic' }}>Sin prioridades definidas</span>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <input
+          style={{ flex: 1, padding: '7px 12px', border: '0.5px solid #ddd', borderRadius: 8, fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}
+          placeholder="Nueva prioridad…"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={handleKey}
+        />
+        <button
+          onClick={add}
+          disabled={!input.trim() || saving}
+          style={{
+            padding: '7px 16px', borderRadius: 8, fontSize: 12.5, fontWeight: 600,
+            background: '#20C997', color: '#fff', border: 'none',
+            cursor: !input.trim() || saving ? 'not-allowed' : 'pointer',
+            opacity: !input.trim() || saving ? 0.5 : 1, fontFamily: 'inherit',
+          }}
+        >
+          + Agregar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Highlight Cards ────────────────────────────────────────────────────────
 
 const PROFILE_SECTIONS_V2 = [
@@ -1005,6 +1097,467 @@ function ConversationsTab({ conversations, slug }) {
   );
 }
 
+// ── Knowledge Sources Tab ─────────────────────────────────────────────────
+
+const STATUS_CHIP = {
+  pending:    { label: 'Pendiente',    bg: '#F3F4F6', color: '#6B7280' },
+  processing: { label: 'Procesando…', bg: '#EFF6FF', color: '#1D4ED8' },
+  ready:      { label: 'Listo',        bg: '#F0FDF4', color: '#15803D' },
+  error:      { label: 'Error',        bg: '#FEF2F2', color: '#DC2626' },
+  stale:      { label: 'Desactualizado', bg: '#FFFBEB', color: '#D97706' },
+};
+
+const DRIVE_MIME_LABEL = {
+  'application/pdf': 'PDF',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel',
+  'application/vnd.ms-excel': 'Excel',
+  'text/csv': 'CSV',
+  'application/vnd.google-apps.document': 'Google Doc',
+  'application/vnd.google-apps.spreadsheet': 'Google Sheet',
+};
+const DRIVE_MIME_ICON = {
+  'application/pdf': '📄',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '📝',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '📊',
+  'application/vnd.ms-excel': '📊',
+  'text/csv': '📊',
+  'application/vnd.google-apps.document': '📝',
+  'application/vnd.google-apps.spreadsheet': '📊',
+};
+
+const SA_EMAIL = 'id-aria-platform@bonsight-web.iam.gserviceaccount.com';
+
+function DriveConnectPanel({ slug, driveConfig, setDriveConfig, onImported, sources }) {
+  const [folderInput, setFolderInput]   = useState('');
+  const [connecting, setConnecting]     = useState(false);
+  const [connErr, setConnErr]           = useState('');
+  const [showExplorer, setShowExplorer] = useState(false);
+  const [files, setFiles]               = useState([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [selected, setSelected]         = useState({});
+  const [importing, setImporting]       = useState(false);
+  const [checking, setChecking]         = useState(false);
+  const [checkResult, setCheckResult]   = useState(null);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const connect = async (e) => {
+    e.preventDefault();
+    setConnecting(true); setConnErr('');
+    const res  = await fetch(`/api/kai/${slug}/drive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderId: folderInput }),
+    });
+    const data = await res.json();
+    if (!res.ok) { setConnErr(data.error ?? 'Error al conectar.'); setConnecting(false); return; }
+    setDriveConfig(data.config);
+    setFolderInput('');
+    setConnecting(false);
+  };
+
+  const disconnect = async () => {
+    setDisconnecting(true);
+    await fetch(`/api/kai/${slug}/drive`, { method: 'DELETE' });
+    setDriveConfig(null);
+    setShowExplorer(false);
+    setFiles([]);
+    setSelected({});
+    setDisconnecting(false);
+  };
+
+  const fetchFiles = async () => {
+    setLoadingFiles(true);
+    const res  = await fetch(`/api/kai/${slug}/drive/files`);
+    const data = await res.json();
+    setFiles(data.files ?? []);
+    setSelected({});
+    setLoadingFiles(false);
+  };
+
+  const loadFiles = async () => {
+    setShowExplorer(true);
+    await fetchFiles();
+  };
+
+  const checkUpdates = async () => {
+    setChecking(true); setCheckResult(null);
+    const res  = await fetch(`/api/kai/${slug}/drive/check-updates`, { method: 'POST' });
+    const data = await res.json();
+    setCheckResult(data.updatedCount ?? 0);
+    setChecking(false);
+    onImported?.(); // reload sources list so stale badges update
+  };
+
+  // Build a map: driveFileId → source (for status display in explorer)
+  const importedMap = {};
+  for (const s of (sources ?? [])) {
+    if (s.driveFileId) importedMap[s.driveFileId] = s;
+  }
+
+  const toggleFile = (id, disabled) => {
+    if (disabled) return;
+    setSelected(s => ({ ...s, [id]: !s[id] }));
+  };
+
+  const importSelected = async () => {
+    const toImport = files.filter(f => selected[f.id]);
+    if (!toImport.length) return;
+    setImporting(true);
+    for (const f of toImport) {
+      await fetch(`/api/kai/${slug}/knowledge-sources`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceType: 'drive',
+          name: f.name,
+          driveFileId: f.id,
+          driveMimeType: f.mimeType,
+          driveModifiedTime: f.modifiedTime,
+        }),
+      });
+    }
+    setSelected({});
+    setImporting(false);
+    onImported?.();
+  };
+
+  if (!driveConfig) {
+    return (
+      <div className="ks-drive-panel">
+        <div className="ks-drive-panel-header">
+          <span className="ks-drive-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          </span>
+          <span className="ks-drive-panel-title">Conectar Google Drive</span>
+        </div>
+        <p className="ks-drive-instructions">
+          Compartí tu carpeta de Drive con <code className="ks-drive-sa-email">{SA_EMAIL}</code> (solo lectura) y pegá el link o ID de la carpeta.
+        </p>
+        <form onSubmit={connect} className="ks-drive-connect-form">
+          <input
+            className="ks-input"
+            placeholder="Link o ID de la carpeta de Drive"
+            value={folderInput}
+            onChange={e => setFolderInput(e.target.value)}
+            required
+          />
+          <button type="submit" className="ks-btn-primary" disabled={connecting}>
+            {connecting ? 'Conectando…' : 'Conectar'}
+          </button>
+        </form>
+        {connErr && <div style={{ fontSize: 12, color: '#DC2626', marginTop: 6 }}>{connErr}</div>}
+      </div>
+    );
+  }
+
+  const selectedCount = Object.values(selected).filter(Boolean).length;
+
+  return (
+    <div className="ks-drive-panel ks-drive-panel--connected">
+      <div className="ks-drive-panel-header">
+        <span className="ks-drive-connected-dot" />
+        <span className="ks-drive-panel-title">{driveConfig.folderName}</span>
+        <span className="ks-drive-connected-label">Conectado</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button className="ks-btn-secondary" onClick={checkUpdates} disabled={checking} style={{ fontSize: 11 }}>
+            {checking ? 'Verificando…' : 'Verificar actualizaciones'}
+          </button>
+          <button
+            className="ks-btn-secondary"
+            onClick={showExplorer ? () => setShowExplorer(false) : loadFiles}
+            style={{ fontSize: 11 }}
+          >
+            {showExplorer ? 'Ocultar archivos' : 'Explorar archivos'}
+          </button>
+          <button className="ks-btn-danger" onClick={disconnect} disabled={disconnecting} style={{ fontSize: 11 }}>
+            {disconnecting ? '…' : 'Desconectar'}
+          </button>
+        </div>
+      </div>
+
+      {checkResult !== null && (
+        <div style={{ fontSize: 12, color: checkResult > 0 ? '#D97706' : '#15803D', marginTop: 4 }}>
+          {checkResult > 0
+            ? `${checkResult} archivo${checkResult !== 1 ? 's' : ''} desactualizado${checkResult !== 1 ? 's' : ''}. Reprocesalos para actualizar.`
+            : 'Todo está actualizado.'}
+        </div>
+      )}
+
+      {showExplorer && (
+        <div className="ks-drive-explorer">
+          <div className="ks-drive-explorer-toolbar">
+            <span style={{ fontSize: 11.5, color: '#666', fontWeight: 500 }}>
+              {loadingFiles ? 'Cargando…' : `${files.length} archivo${files.length !== 1 ? 's' : ''}`}
+            </span>
+            <button
+              className="ks-drive-refresh-btn"
+              onClick={fetchFiles}
+              disabled={loadingFiles}
+              title="Refrescar lista"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              Refrescar
+            </button>
+          </div>
+
+          {loadingFiles ? null : files.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#aaa', padding: '8px 0' }}>
+              No se encontraron archivos compatibles (PDF, DOCX, XLSX, Google Docs, Google Sheets).
+            </div>
+          ) : (
+            <>
+              <div className="ks-drive-file-list">
+                {files.map(f => {
+                  const existing = importedMap[f.id];
+                  const isStale  = existing && existing.driveModifiedTime && f.modifiedTime && existing.driveModifiedTime !== f.modifiedTime;
+                  const isImported = existing && !isStale;
+                  const disabled = isImported;
+
+                  return (
+                    <label
+                      key={f.id}
+                      className={`ks-drive-file-row${selected[f.id] ? ' ks-drive-file-row--selected' : ''}${isImported ? ' ks-drive-file-row--imported' : ''}`}
+                      style={{ cursor: disabled ? 'default' : 'pointer' }}
+                      onClick={e => { e.preventDefault(); toggleFile(f.id, disabled); }}
+                    >
+                      {isImported ? (
+                        <span className="ks-drive-imported-check">✓</span>
+                      ) : (
+                        <input
+                          type="checkbox"
+                          checked={!!selected[f.id]}
+                          onChange={() => toggleFile(f.id, disabled)}
+                          className="ks-drive-checkbox"
+                          disabled={disabled}
+                        />
+                      )}
+                      <span className="ks-drive-file-icon">{DRIVE_MIME_ICON[f.mimeType] ?? '📄'}</span>
+                      <span className="ks-drive-file-name">{f.name}</span>
+                      {isImported && (
+                        <span className="ks-drive-file-badge ks-drive-file-badge--imported">Importado</span>
+                      )}
+                      {isStale && (
+                        <span className="ks-drive-file-badge ks-drive-file-badge--stale">Actualizar</span>
+                      )}
+                      <span className="ks-drive-file-type">{DRIVE_MIME_LABEL[f.mimeType] ?? f.mimeType}</span>
+                      <span className="ks-drive-file-date">
+                        {f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              {selectedCount > 0 && (
+                <div className="ks-drive-import-bar">
+                  <span style={{ fontSize: 12, color: '#555' }}>
+                    {selectedCount} archivo{selectedCount !== 1 ? 's' : ''} seleccionado{selectedCount !== 1 ? 's' : ''}
+                  </span>
+                  <button className="ks-btn-primary" disabled={importing} onClick={importSelected}>
+                    {importing ? 'Importando…' : `Importar ${selectedCount}`}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KnowledgeSourcesTab({ slug }) {
+  const [sources, setSources]       = useState([]);
+  const [digest, setDigest]         = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [processing, setProcessing] = useState(null);
+  const [deleting, setDeleting]     = useState(null);
+  const [form, setForm]             = useState({ open: false, sourceType: 'url', name: '', url: '', text: '', file: null });
+  const [saving, setSaving]         = useState(false);
+  const [err, setErr]               = useState('');
+  const [driveConfig, setDriveConfig] = useState(null);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`/api/kai/${slug}/knowledge-sources`).then(r => r.json()),
+      fetch(`/api/kai/${slug}/drive`).then(r => r.json()),
+    ]).then(([ksData, driveData]) => {
+      setSources(ksData.sources ?? []);
+      setDigest(ksData.digest ?? null);
+      setDriveConfig(driveData.config ?? null);
+    }).finally(() => setLoading(false));
+  }, [slug]);
+
+  async function handleAdd(e) {
+    e.preventDefault();
+    setSaving(true); setErr('');
+
+    let res, data;
+
+    if (form.sourceType === 'file') {
+      if (!form.file) { setErr('Seleccioná un archivo.'); setSaving(false); return; }
+      const fd = new FormData();
+      fd.append('file', form.file);
+      fd.append('name', form.name || form.file.name);
+      res = await fetch(`/api/kai/${slug}/knowledge-sources/upload`, { method: 'POST', body: fd });
+    } else {
+      const body = { sourceType: form.sourceType, name: form.name };
+      if (form.sourceType === 'url') body.url = form.url;
+      if (form.sourceType === 'text') body.text = form.text;
+      res = await fetch(`/api/kai/${slug}/knowledge-sources`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+    }
+
+    data = await res.json();
+    if (!res.ok) { setErr(data.error ?? 'Error al guardar.'); setSaving(false); return; }
+    setSources(prev => [data.source, ...prev]);
+    setForm({ open: false, sourceType: 'url', name: '', url: '', text: '', file: null });
+    setSaving(false);
+  }
+
+  async function handleProcess(id) {
+    setProcessing(id);
+    await fetch(`/api/kai/${slug}/knowledge-sources/${id}/process`, { method: 'POST' });
+    const res = await fetch(`/api/kai/${slug}/knowledge-sources`);
+    const data = await res.json();
+    setSources(data.sources ?? []);
+    setDigest(data.digest ?? null);
+    setProcessing(null);
+  }
+
+  async function handleDelete(id) {
+    setDeleting(id);
+    await fetch(`/api/kai/${slug}/knowledge-sources/${id}`, { method: 'DELETE' });
+    setSources(prev => prev.filter(s => s.id !== id));
+    setDeleting(null);
+  }
+
+  const reloadSources = () => {
+    fetch(`/api/kai/${slug}/knowledge-sources`)
+      .then(r => r.json())
+      .then(d => { setSources(d.sources ?? []); setDigest(d.digest ?? null); });
+  };
+
+  if (loading) return <div className="admin-conv-empty">Cargando…</div>;
+
+  const chip = (status) => {
+    const s = STATUS_CHIP[status] ?? STATUS_CHIP.pending;
+    return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: s.bg, color: s.color }}>{s.label}</span>;
+  };
+
+  return (
+    <div>
+      <DriveConnectPanel slug={slug} driveConfig={driveConfig} setDriveConfig={setDriveConfig} onImported={reloadSources} sources={sources} />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#111' }}>Fuentes de conocimiento</div>
+          <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>URLs y textos que Kai usa como contexto inicial · No reemplazan conversaciones</div>
+        </div>
+        <button className="ks-btn-primary" onClick={() => setForm(f => ({ ...f, open: !f.open }))}>
+          {form.open ? 'Cancelar' : '+ Agregar fuente'}
+        </button>
+      </div>
+
+      {form.open && (
+        <form onSubmit={handleAdd} className="ks-form">
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+            {[['url', '🔗 URL'], ['text', '📝 Texto'], ['file', '📄 Archivo']].map(([t, label]) => (
+              <button key={t} type="button"
+                className={`ks-type-btn${form.sourceType === t ? ' ks-type-btn--active' : ''}`}
+                onClick={() => setForm(f => ({ ...f, sourceType: t, file: null }))}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {form.sourceType !== 'file' && (
+            <input className="ks-input" placeholder="Nombre de la fuente" value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+          )}
+          {form.sourceType === 'url' && (
+            <input className="ks-input" placeholder="https://…" value={form.url}
+              onChange={e => setForm(f => ({ ...f, url: e.target.value }))} required />
+          )}
+          {form.sourceType === 'text' && (
+            <textarea className="ks-textarea" placeholder="Pega el contenido aquí…" value={form.text}
+              onChange={e => setForm(f => ({ ...f, text: e.target.value }))} rows={6} required />
+          )}
+          {form.sourceType === 'file' && (
+            <div className="ks-file-drop">
+              <input type="file" accept=".pdf,.docx,.doc,.xlsx,.xls,.csv" id="ks-file-input"
+                style={{ display: 'none' }}
+                onChange={e => setForm(f => ({ ...f, file: e.target.files[0] ?? null }))} />
+              <label htmlFor="ks-file-input" className="ks-file-label">
+                {form.file ? `📄 ${form.file.name}` : '+ Seleccionar archivo'}
+              </label>
+              <div style={{ fontSize: 11, color: '#aaa', marginTop: 6 }}>PDF, DOCX, XLSX · máx. 10 MB</div>
+            </div>
+          )}
+          {err && <div style={{ color: '#DC2626', fontSize: 12 }}>{err}</div>}
+          <button type="submit" className="ks-btn-primary" disabled={saving}>
+            {saving ? 'Guardando…' : 'Guardar fuente'}
+          </button>
+        </form>
+      )}
+
+      {sources.length === 0 && !form.open && (
+        <div className="admin-conv-empty">
+          <div style={{ fontSize: 28, opacity: 0.2, marginBottom: 10 }}>📚</div>
+          Sin fuentes todavía. Agregá una URL o texto para que Kai llegue mejor preparado a cada conversación.
+        </div>
+      )}
+
+      {sources.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
+          {sources.map(s => (
+            <div key={s.id} className="ks-source-row">
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#111', marginBottom: 3 }}>{s.name}</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {chip(s.status)}
+                  <span style={{ fontSize: 11, color: '#aaa' }}>
+                    {s.sourceType === 'url' ? '🔗 URL' : s.sourceType === 'file' ? '📄 Archivo' : s.sourceType === 'drive' ? `🗂 Drive · ${DRIVE_MIME_LABEL[s.driveMimeType] ?? ''}` : '📝 Texto'}
+                    {s.processedAt ? ` · ${new Date(s.processedAt).toLocaleDateString('es', { day: 'numeric', month: 'short' })}` : ''}
+                    {s.tokenEstimate ? ` · ~${s.tokenEstimate} tokens` : ''}
+                  </span>
+                </div>
+                {s.lastError && <div style={{ fontSize: 11, color: '#DC2626', marginTop: 4 }}>{s.lastError}</div>}
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                {s.status !== 'processing' && (
+                  <button className="ks-btn-secondary"
+                    disabled={processing === s.id}
+                    onClick={() => handleProcess(s.id)}>
+                    {processing === s.id ? '…' : s.status === 'ready' ? 'Reprocesar' : 'Procesar'}
+                  </button>
+                )}
+                <button className="ks-btn-danger"
+                  disabled={deleting === s.id}
+                  onClick={() => handleDelete(s.id)}>
+                  {deleting === s.id ? '…' : 'Eliminar'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {digest && (
+        <details style={{ marginTop: 8 }}>
+          <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#555', userSelect: 'none' }}>
+            Ver digest consolidado ({Math.round(digest.length / 4)} tokens est.)
+          </summary>
+          <pre style={{ marginTop: 10, fontSize: 11, color: '#555', background: '#fafafa', border: '0.5px solid #eee', borderRadius: 8, padding: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 300, overflow: 'auto' }}>{digest}</pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
 // ── Learnings Tab ─────────────────────────────────────────────────────────
 
 const IMPACT_STYLE = {
@@ -1207,7 +1760,7 @@ function SummaryTab({ slug }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────
 
-const TABS = ['Business Profile', 'Conversaciones', 'Documentos', 'Stakeholders', 'Intelligence', 'Aprendizajes', 'Resumen', 'Costos IA'];
+const TABS = ['Business Profile', 'Conversaciones', 'Conocimiento', 'Stakeholders', 'Intelligence', 'Aprendizajes', 'Resumen', 'Costos IA'];
 
 // ── Costs Tab ──────────────────────────────────────────────────────────────
 
@@ -1453,6 +2006,9 @@ export default function TenantDetail({ meta, profile, conversations, allLearning
               <CambiosRecientesCard changeCounts={changeCounts} />
             </div>
 
+            {/* Active priorities */}
+            <ActivePrioritiesEditor slug={meta.slug} />
+
             {/* Diagnosis */}
             <DiagnosisBlock slug={meta.slug} />
 
@@ -1470,13 +2026,8 @@ export default function TenantDetail({ meta, profile, conversations, allLearning
           <ConversationsTab conversations={conversations} slug={meta.slug} />
         )}
 
-        {/* Documentos Tab */}
-        {activeTab === 2 && (
-          <div className="admin-conv-empty">
-            <div style={{ fontSize: 28, opacity: 0.2, marginBottom: 10 }}>📄</div>
-            Documentos — Próximamente en V2
-          </div>
-        )}
+        {/* Conocimiento Tab */}
+        {activeTab === 2 && <KnowledgeSourcesTab slug={meta.slug} />}
 
         {/* Stakeholders Tab */}
         {activeTab === 3 && (

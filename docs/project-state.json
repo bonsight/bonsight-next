@@ -1,0 +1,59 @@
+{
+  "current_epic": "Kai / Aria / Quiniela — snapshot local 2026-07-10",
+  "current_goal": "Mantener el contexto del proyecto actualizado en docs y continuar con los cambios locales en Kai, Aria y Quiniela",
+  "completed": [
+    "Bonsight Advisor: rebrand completo + tema claro + widget FAB (en producción, commit c8a4e5e)",
+    "lib/businessMemory.js: capa compartida Kai↔Aria con Redis",
+    "app/kai/: UI completa del Kai interno (dark theme, componentes ricos, auth)",
+    "app/api/kai/route.js: API interna Kai con Business Memory y kai-component blocks",
+    "lib/kai/tenants.js: data layer multi-tenant (CRUD de tenants y perfiles)",
+    "app/api/kai/tenants/route.js: GET lista de tenants + POST crear tenant",
+    "app/kai/admin/: panel admin completo (layout, sidebar, dashboard, detalle por tenant)",
+    "app/kai/[tenant]/: interfaz cliente (page.jsx + KaiClientChat.jsx)",
+    "app/api/kai/[tenant]/route.js: endpoint de chat por tenant (auth + OpenAI + memory + sync business profile)",
+    "docs/: sistema de continuidad AI (architecture-decisions.md, ai-handoff.md, project-state.json, ai-workflow.md)"
+  ],
+  "in_progress": [
+    "Kai: refinamiento del detalle de tenant y del panel admin",
+    "Aria: ajustes en rutas/tenant y autenticación",
+    "Quiniela: overview, seguimiento y proyección de resultados"
+  ],
+  "next_steps": [
+    "Prueba end-to-end local: crear tenant → admin detail → chat en /kai/{slug}",
+    "Confirmar con usuario qué commits incluir antes de deploy a producción",
+    "Mantener docs/ai-handoff.md, docs/project-state.json y docs/current-context.md alineados con el worktree local",
+    "Configurar KAI_ACCESS_CODE en Vercel + dominio kai.bonsight.co si no están activos",
+    "Definir/ajustar system prompt de Kai por tenant si el usuario lo requiere",
+    "Aria multi-tenant: parametrizar BUSINESS_ID (paso posterior)"
+  ],
+  "tenants_in_redis": [
+    {"slug": "sesuveca", "name": "Sesuveca / Labinorte", "country": "Perú", "industry": "Insumos industriales"},
+    {"slug": "afsolutions", "name": "AF Solutions", "country": "Chile", "industry": "Tecnología / Catálogo de productos"},
+    {"slug": "olaclick", "name": "OlaClick", "country": "LatAm", "industry": "Restaurantes / Food tech"},
+    {"slug": "activos100", "name": "Activos 100x100", "country": "España", "industry": "Food delivery / Operaciones"}
+  ],
+  "blockers": [
+    "Ningún cambio de Kai está en producción todavía — todo es trabajo local",
+    "Deploy requiere confirmación del usuario sobre qué commits incluir"
+  ],
+  "reserved_slugs": ["admin", "login", "components"],
+  "env_required": [
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "KV_REST_API_URL",
+    "KV_REST_API_TOKEN",
+    "ARIA_ACCESS_CODE",
+    "KAI_ACCESS_CODE"
+  ],
+  "routes": {
+    "bonsight.co/consulta": "Bonsight Advisor (producción)",
+    "bonsight.co (widget)": "ChatWidget.jsx flotante — llama /api/advisor",
+    "kai.bonsight.co/": "Kai interno Bonsight (requiere KAI_ACCESS_CODE)",
+    "kai.bonsight.co/admin": "Admin panel multi-tenant",
+    "kai.bonsight.co/admin/{slug}": "Detalle del tenant en admin",
+    "kai.bonsight.co/{slug}": "Interfaz de chat del cliente externo",
+    "aria.bonsight.co/": "Aria — Business Intelligence (requiere ARIA_ACCESS_CODE)"
+  },
+  "last_updated_by": "local workspace snapshot",
+  "last_updated_at": "2026-07-10T00:00:00Z"
+}

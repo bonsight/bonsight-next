@@ -8,12 +8,13 @@ import {
   recordAriaMetrics,
   searchArchivedInvestigations,
 } from '@/lib/aria/memory';
-import { getTenantMeta, getBusinessProfile } from '@/lib/kai/tenants';
+import { getTenantMeta } from '@/lib/kai/tenants';
 import { trackUsage } from '@/lib/kai/usage';
 import { listConversations } from '@/lib/kai/memory';
 import { summarizeIfNeeded } from '@/lib/aria/summarize';
 import { addAriaSuggestion } from '@/lib/kai/suggestions';
 import { getIntelligenceSources, buildSourcesContext } from '@/lib/kai/intelligenceSources';
+import { buildBIC, formatBICForPrompt } from '@/lib/kai/bic';
 import { runGa4Query } from '@/lib/aria/ga4';
 import { runSearchConsoleQuery } from '@/lib/aria/searchConsole';
 import { runGoogleAdsQuery } from '@/lib/aria/googleAds';
@@ -95,9 +96,7 @@ function buildAriaHistory(invs = [], currentId) {
 
 // ── System prompt ──────────────────────────────────────────────────────────
 
-function buildSystemPrompt({ tenantName, kaiProfile, kaiHistory, ariaHistory, investigationContext, currentDate, sourcesContext }) {
-  const profileJson = JSON.stringify(kaiProfile ?? {}, null, 2);
-
+function buildSystemPrompt({ tenantName, bicText, kaiHistory, ariaHistory, investigationContext, currentDate, sourcesContext }) {
   return `Eres Aria, la analista estratégica asignada a ${tenantName}.
 
 Tu misión es transformar conocimiento, datos y contexto empresarial en inteligencia accionable.
@@ -146,7 +145,7 @@ CONTEXTO DEL CLIENTE
 
 Lo que sabes sobre ${tenantName}:
 
-${profileJson}
+${bicText}
 
 Historial generado por Kai:
 
@@ -1039,9 +1038,9 @@ export async function POST(req, { params }) {
       return Response.json({ reply: 'Falta el mensaje.' }, { status: 400 });
     }
 
-    const [tenantMeta, kaiProfile, investigationContext, kaiConvs, ariaInvList, intelligenceSources] = await Promise.all([
+    const [tenantMeta, bic, investigationContext, kaiConvs, ariaInvList, intelligenceSources] = await Promise.all([
       getTenantMeta(tenant),
-      getBusinessProfile(tenant),
+      buildBIC(tenant),
       getInvestigationMeta(tenant, investigationId),
       listConversations(tenant),
       listInvestigations(tenant),
@@ -1055,7 +1054,7 @@ export async function POST(req, { params }) {
     const currentDate = new Date().toISOString().slice(0, 10);
     const system = buildSystemPrompt({
       tenantName: tenantMeta.name,
-      kaiProfile,
+      bicText: formatBICForPrompt(bic),
       kaiHistory: buildKaiHistory(kaiConvs),
       ariaHistory: buildAriaHistory(ariaInvList, investigationId),
       investigationContext,
