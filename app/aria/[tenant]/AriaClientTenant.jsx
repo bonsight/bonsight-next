@@ -175,7 +175,32 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mainInsight, setMainInsight] = useState(null);
   const [sources, setSources] = useState([]);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const messagesEndRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const waveformRef = useRef(null);
+  const animFrameRef = useRef(null);
+  const analyserRef = useRef(null);
+  const audioCtxRef = useRef(null);
+
+  useEffect(() => {
+    const html = document.documentElement;
+    function updateBottomOffset() {
+      const vv = window.visualViewport;
+      if (!vv) return;
+      const offset = Math.max(0, window.innerHeight - vv.offsetTop - vv.height);
+      html.style.setProperty('--aria-bottom-offset', `${offset}px`);
+    }
+    updateBottomOffset();
+    window.visualViewport?.addEventListener('resize', updateBottomOffset);
+    window.visualViewport?.addEventListener('scroll', updateBottomOffset);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', updateBottomOffset);
+      window.visualViewport?.removeEventListener('scroll', updateBottomOffset);
+    };
+  }, []);
 
   useEffect(() => {
     async function init() {
@@ -362,6 +387,79 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
       e.preventDefault();
       send();
     }
+  }
+
+  function drawWaveform() {
+    const canvas = waveformRef.current;
+    const analyser = analyserRef.current;
+    if (!canvas || !analyser) return;
+    const ctx = canvas.getContext('2d');
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(data);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const barCount = Math.min(data.length, 20);
+    const barW = (canvas.width - (barCount - 1) * 2) / barCount;
+    for (let i = 0; i < barCount; i++) {
+      const value = data[i * Math.floor(data.length / barCount)] / 255;
+      const barH = Math.max(3, value * canvas.height * 0.85);
+      const y = (canvas.height - barH) / 2;
+      ctx.fillStyle = '#06b6d4';
+      ctx.beginPath();
+      ctx.roundRect(i * (barW + 2), y, barW, barH, 2);
+      ctx.fill();
+    }
+    animFrameRef.current = requestAnimationFrame(drawWaveform);
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioCtx = new AudioContext();
+      audioCtxRef.current = audioCtx;
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      audioCtx.createMediaStreamSource(stream).connect(analyser);
+      analyserRef.current = analyser;
+
+      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
+        .find((t) => MediaRecorder.isTypeSupported(t)) || '';
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      chunksRef.current = [];
+      const startedAt = Date.now();
+
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        cancelAnimationFrame(animFrameRef.current);
+        audioCtxRef.current?.close();
+        stream.getTracks().forEach((t) => t.stop());
+        if (Date.now() - startedAt < 1500) return;
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || mimeType || 'audio/webm' });
+        setTranscribing(true);
+        try {
+          const form = new FormData();
+          form.append('audio', blob);
+          const res = await fetch(`/api/aria/${tenant}/transcribe`, { method: 'POST', body: form });
+          const data = await res.json();
+          if (data.text) {
+            setTranscribing(false);
+            send(data.text);
+            return;
+          }
+        } catch { /* silently ignore */ }
+        setTranscribing(false);
+      };
+
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setRecording(true);
+      requestAnimationFrame(drawWaveform);
+    } catch { /* mic permission denied */ }
+  }
+
+  function stopRecording() {
+    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current = null;
+    setRecording(false);
   }
 
   function dismissArchiveCard(msgIndex) {
@@ -566,18 +664,45 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="aria-input-bar">
-          <textarea
-            className="aria-input"
-            rows={1}
-            placeholder={`Pregunta sobre ${tenantName}…`}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-          />
-          <button className="aria-send-btn" onClick={() => send()} disabled={loading || !input.trim()}>
-            →
-          </button>
+        <div className={`aria-input-bar${recording ? ' aria-input-bar--recording' : ''}`}>
+          {recording ? (
+            <canvas ref={waveformRef} className="aria-input-waveform" width={200} height={32} />
+          ) : transcribing ? (
+            <span className="aria-input-transcribing">Transcribiendo…</span>
+          ) : (
+            <textarea
+              className="aria-input"
+              rows={1}
+              placeholder={`Pregunta sobre ${tenantName}…`}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+            />
+          )}
+
+          {recording ? (
+            <button className="aria-send-btn aria-send-btn--stop" onClick={stopRecording}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            </button>
+          ) : input.trim() ? (
+            <button className="aria-send-btn" onClick={() => send()} disabled={loading || !input.trim()}>
+              →
+            </button>
+          ) : (
+            <button
+              className="aria-mic-btn"
+              onClick={startRecording}
+              disabled={loading || transcribing}
+              title="Grabar voz"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
+          )}
         </div>
         <p className="aria-disclaimer">Aria puede cometer errores. Verifica siempre la información crítica.</p>
       </div>
