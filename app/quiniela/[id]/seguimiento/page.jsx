@@ -325,7 +325,13 @@ export default function SeguimientoPage() {
     .filter(ph => admin?.unlockedPhases?.includes(ph))
     .flatMap(ph =>
       (PHASES[ph]?.matches ?? [])
-        .map((m, i) => ({ ...m, idx: i, phase: ph }))
+        .map((m, i) => ({
+          ...m,
+          idx: i,
+          phase: ph,
+          displayLocal: resolveKnockoutName(m.local, admin?.results) ?? m.local,
+          displayVisitante: resolveKnockoutName(m.visitante, admin?.results) ?? m.visitante,
+        }))
         .filter(m => m.kickoff && new Date(m.kickoff).toLocaleDateString('en-CA') === today)
     )
     .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff))
@@ -372,7 +378,7 @@ export default function SeguimientoPage() {
               )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {todayMatches.map(({ local, visitante, idx, kickoff, ciudad, phase }) => {
+              {todayMatches.map(({ local, visitante, displayLocal, displayVisitante, idx, kickoff, ciudad, phase }) => {
                 const real  = admin?.results?.[phase]?.[idx]
                 const hasScore = !!real && real.l !== '' && real.v !== ''
                 const { live, upcoming, kickoffTime } = getMatchTimeState(kickoff, now, real)
@@ -401,7 +407,7 @@ export default function SeguimientoPage() {
                       <span style={{ color: '#1D9E75', fontSize: 12, flexShrink: 0 }}>✓</span>
                       <span style={{ fontSize: 11, color: '#aaa', flexShrink: 0 }}>{formatKickoffLocal(kickoff)}</span>
                       <span style={{ flex: 1, fontSize: 13, color: '#444', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {FLAGS[local] || ''} {local} <strong style={{ fontWeight: 700, color: '#222' }}>{real.l}–{real.v}</strong>{real.ganador && real.penales ? <span style={{ fontSize: 9, color: '#888', marginLeft: 3 }}>pen</span> : real.ganador && real.et ? <span style={{ fontSize: 9, color: '#888', marginLeft: 3 }}>aet</span> : null} {visitante} {FLAGS[visitante] || ''}
+                        {FLAGS[displayLocal] || ''} {displayLocal} <strong style={{ fontWeight: 700, color: '#222' }}>{real.l}–{real.v}</strong>{real.ganador && real.penales ? <span style={{ fontSize: 9, color: '#888', marginLeft: 3 }}>pen</span> : real.ganador && real.et ? <span style={{ fontSize: 9, color: '#888', marginLeft: 3 }}>aet</span> : null} {displayVisitante} {FLAGS[displayVisitante] || ''}
                       </span>
                       {hasPick && (
                         <span style={{
@@ -443,7 +449,7 @@ export default function SeguimientoPage() {
                       )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
-                      <span style={{ flex: 1, textAlign: 'right', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{FLAGS[local] || ''} {local}</span>
+                      <span style={{ flex: 1, textAlign: 'right', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{FLAGS[displayLocal] || ''} {displayLocal}</span>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
                         <span style={{ background: '#f5f5f3', color: '#333', fontWeight: 700, padding: '3px 10px', borderRadius: 6, fontSize: 15 }}>
                           {hasScore ? `${real.l}–${real.v}` : 'vs'}
@@ -454,7 +460,7 @@ export default function SeguimientoPage() {
                           </span>
                         )}
                       </div>
-                      <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{visitante} {FLAGS[visitante] || ''}</span>
+                      <span style={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayVisitante} {FLAGS[displayVisitante] || ''}</span>
                     </div>
                     <div style={{ marginTop: 6, fontSize: 12, color: '#aaa' }}>
                       {formatKickoffDayLabel(kickoff, now)} · {formatKickoffLocal(kickoff)}
@@ -465,7 +471,7 @@ export default function SeguimientoPage() {
                     {hasPick && (
                       <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
                         <span style={{ color: '#888' }}>
-                          Tu pick: {pick.l}–{pick.v}{pick.w && ` · ${pick.w === 'Empate' ? 'Empate' : pick.w}`}
+                          Tu pick: {pick.l}–{pick.v}{pick.w && ` · ${pick.w === 'Empate' ? 'Empate' : (resolveKnockoutName(pick.w, admin?.results) ?? pick.w)}`}
                         </span>
                         <span style={{ fontWeight: 700, color: pickResult?.status === 'fallo' ? '#c0392b' : '#1D9E75' }}>
                           {pickResult ? (

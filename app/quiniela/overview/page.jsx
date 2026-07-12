@@ -635,7 +635,7 @@ function ResultsSection() {
             PHASE_ORDER.forEach(ph => {
               if (d.admin.results[ph]) {
                 d.admin.results[ph].forEach((r, i) => {
-                  if (r) next[ph][i] = { l: r.l, v: r.v, final: r.final ?? (r.l !== '' && r.v !== '') }
+                  if (r) next[ph][i] = { l: r.l, v: r.v, final: r.final ?? (r.l !== '' && r.v !== ''), ...(r.ganador ? { ganador: r.ganador } : {}), ...(r.et ? { et: r.et } : {}), ...(r.penales ? { penales: r.penales } : {}) }
                 })
               }
             })
@@ -866,7 +866,7 @@ function PartidosHoyOperativo({ now }) {
             PHASE_ORDER.forEach(ph => {
               if (d.admin.results[ph]) {
                 d.admin.results[ph].forEach((r, i) => {
-                  if (r) next[ph][i] = { l: r.l, v: r.v, final: r.final ?? (r.l !== '' && r.v !== '') }
+                  if (r) next[ph][i] = { l: r.l, v: r.v, final: r.final ?? (r.l !== '' && r.v !== ''), ...(r.ganador ? { ganador: r.ganador } : {}), ...(r.et ? { et: r.et } : {}), ...(r.penales ? { penales: r.penales } : {}) }
                 })
               }
             })
