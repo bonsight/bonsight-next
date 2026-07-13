@@ -301,6 +301,9 @@ const CSS = `
     scroll-snap-align: none; scroll-margin-top: 0;
   }
   .pr section:last-child { page-break-after: avoid; break-after: avoid; }
+  .pr .cap-grid { grid-template-columns: repeat(3, 1fr) !important; }
+  .pr .invest-grid { grid-template-columns: 1.1fr 0.9fr !important; }
+  .pr .cap-card { page-break-inside: avoid; break-inside: avoid; }
   .pr .cap-card:hover { transform: none; }
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }
