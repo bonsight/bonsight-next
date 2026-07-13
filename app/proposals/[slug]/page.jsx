@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation'
 import { getProposal } from '@/lib/proposals'
 import InvestmentToggle from './InvestmentToggle'
+import ProposalNav from './ProposalNav'
+import PrintButton from './PrintButton'
 
 export async function generateMetadata({ params }) {
   const { slug } = await params
@@ -41,6 +43,7 @@ const CSS = `
 .pr nav {
   position: sticky; top: 0; z-index: 50;
   display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap;
   padding: 18px 8vw;
   background: rgba(11,16,32,0.72);
   backdrop-filter: blur(10px);
@@ -241,9 +244,65 @@ const CSS = `
   .pr section { padding: 10vh 6vw; }
   .pr .flow-step { font-size: 0.72rem; padding: 9px 12px; }
 }
+/* HAMBURGER */
+.pr .hamburger {
+  display: none; flex-direction: column; justify-content: center; gap: 5px;
+  background: none; border: none; cursor: pointer; padding: 6px; z-index: 60;
+}
+.pr .hamburger span {
+  display: block; width: 22px; height: 1.5px;
+  background: var(--cream); border-radius: 2px;
+  transition: opacity .2s ease;
+}
+.pr .mobile-menu {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 55;
+  background: rgba(11,16,32,0.97); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+  display: flex; flex-direction: column; padding: 12px 8vw 20px;
+}
+.pr .mobile-menu a {
+  font-family: 'DM Mono', monospace; font-size: 13px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--cream-dim); text-decoration: none;
+  padding: 14px 0; border-bottom: 1px solid var(--line);
+  transition: color .15s ease;
+}
+.pr .mobile-menu a:last-child { border-bottom: none; }
+.pr .mobile-menu a:hover { color: var(--pale); }
+
+/* PRINT BUTTON */
+.pr .print-btn {
+  position: fixed; bottom: 24px; right: 24px; z-index: 100;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--pale); color: var(--deep); border: none; border-radius: 2px;
+  padding: 12px 20px;
+  font-family: 'DM Sans', sans-serif; font-size: 0.84rem; font-weight: 600;
+  letter-spacing: 0.02em; cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  transition: opacity .2s ease;
+}
+.pr .print-btn:hover { opacity: 0.88; }
+
 @media (max-width: 760px) {
   .pr nav ul { display: none; }
+  .pr .hamburger { display: flex; }
   .pr .sec-illus { display: none; }
+  .pr .print-btn { bottom: 16px; right: 16px; padding: 10px 16px; font-size: 0.8rem; }
+}
+
+@media print {
+  .pr {
+    position: static !important; overflow: visible !important;
+    scroll-snap-type: none !important;
+  }
+  html, body { overflow: visible !important; }
+  .pr nav, .pr .print-btn, .pr .hamburger, .pr .mobile-menu { display: none !important; }
+  .pr section {
+    min-height: 100vh; page-break-after: always; break-after: page;
+    scroll-snap-align: none; scroll-margin-top: 0;
+  }
+  .pr section:last-child { page-break-after: avoid; break-after: avoid; }
+  .pr .cap-card:hover { transform: none; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }
 `
 
@@ -267,20 +326,7 @@ export default async function ProposalPage({ params }) {
       <style>{CSS}</style>
 
       {/* NAV */}
-      <nav>
-        <div className="logo">
-          <BonsightLogo />
-          <span>bonsight</span>
-        </div>
-        <ul>
-          <li><a href="#desafio">Desafío</a></li>
-          <li><a href="#capacidades">Capacidades</a></li>
-          <li><a href="#cambio">El cambio</a></li>
-          <li><a href="#inversion">Inversión</a></li>
-          <li><a href="#secundario">Adicional</a></li>
-          <li><a href="#cierre">Contacto</a></li>
-        </ul>
-      </nav>
+      <ProposalNav />
 
       {/* COVER */}
       <section id="cover">
@@ -454,6 +500,8 @@ export default async function ProposalPage({ params }) {
           </div>
         </div>
       </section>
+
+      <PrintButton />
 
       {/* CIERRE */}
       <section id="cierre">
