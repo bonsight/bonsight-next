@@ -794,13 +794,13 @@ export default function PicksPage() {
                   return (
                     <div key={s.matchIndex} style={{ fontSize: 14 }}>
                       <div style={{ fontWeight: 500, marginBottom: 2 }}>
-                        {f(s.local)}{s.local} vs {f(s.visitante)}{s.visitante}
+                        {(() => { const l = resolveKnockoutName(s.local, admin?.results) ?? s.local; const v = resolveKnockoutName(s.visitante, admin?.results) ?? s.visitante; return <>{f(l)}{l} vs {f(v)}{v}</> })()}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
                         <span style={{ background: '#E1F5EE', color: '#0F6E56', fontSize: 11, fontWeight: 600, padding: '1px 8px', borderRadius: 6 }}>
                           {s.suggestedL}–{s.suggestedV}
                         </span>
-                        <span style={{ fontSize: 11, color: '#0F6E56' }}>→ {s.suggestedW}</span>
+                        <span style={{ fontSize: 11, color: '#0F6E56' }}>→ {resolveKnockoutName(s.suggestedW, admin?.results) ?? s.suggestedW}</span>
                       </div>
                       <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic' }}>{s.reason}</div>
                     </div>
@@ -831,7 +831,7 @@ export default function PicksPage() {
         const top    = sorted[0]
         const even   = relevantConf.reduce((best, c) => Math.abs((c.confidencePct ?? 50) - 50) < Math.abs((best.confidencePct ?? 50) - 50) ? c : best)
         const bottom = sorted[sorted.length - 1]
-        const nm = (c) => { const m = phaseMatches[c.matchIndex]; return m ? `${f(m.local)}${m.local} vs ${f(m.visitante)}${m.visitante}` : '' }
+        const nm = (c) => { const m = phaseMatches[c.matchIndex]; if (!m) return ''; const l = resolveKnockoutName(m.local, admin?.results) ?? m.local; const v = resolveKnockoutName(m.visitante, admin?.results) ?? m.visitante; return `${f(l)}${l} vs ${f(v)}${v}` }
         const radarLabel = currentPhase === 'grupos' ? `Grupo ${selectedGrupo}` : (PHASES[currentPhase]?.label ?? currentPhase)
         return (
           <div style={{ background: 'rgba(52,211,153,0.04)', border: '0.5px solid rgba(52,211,153,0.2)', borderRadius: 10, padding: '10px 14px', marginBottom: 12 }}>
