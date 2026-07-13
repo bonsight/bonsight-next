@@ -6,7 +6,7 @@ export default function robots() {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/es/consulta', '/en/consulta'],
+        disallow: ['/es/consulta', '/en/consulta', '/proposals/'],
       },
     ],
     sitemap: `${BASE}/sitemap.xml`,
