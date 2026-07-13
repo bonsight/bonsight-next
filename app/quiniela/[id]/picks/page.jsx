@@ -898,7 +898,8 @@ export default function PicksPage() {
           const hasPick  = !!pick.w
           const aligned  = hasPick && cs && pick.w === cs.leader
           const against  = hasPick && cs && pick.w !== cs.leader
-          const leaderLbl = cs ? (cs.leader === 'Empate' ? 'empate' : `${f(cs.leader)}${cs.leader}`) : null
+          const leaderResolved = cs?.leader === 'Empate' ? 'Empate' : (resolveKnockoutName(cs?.leader, admin?.results) ?? cs?.leader)
+          const leaderLbl = cs ? (leaderResolved === 'Empate' ? 'empate' : `${f(leaderResolved)}${leaderResolved}`) : null
           const opp      = getOpportunity(cs, pick.w)
           const expanded = expandedMatches.has(globalIndex)
 
