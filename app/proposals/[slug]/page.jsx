@@ -302,7 +302,12 @@ const CSS = `
   }
   .pr section:last-child { page-break-after: avoid; break-after: avoid; }
   .pr .cap-grid { grid-template-columns: repeat(3, 1fr) !important; }
-  .pr .invest-grid { grid-template-columns: 1.1fr 0.9fr !important; }
+  .pr .invest-grid { grid-template-columns: 1fr 1fr !important; break-inside: avoid; }
+  .pr .invest-card { padding: 22px 18px !important; }
+  .pr .invest-amount { font-size: 1.75rem !important; margin-bottom: 2px !important; }
+  .pr .invest-sub { margin-bottom: 12px !important; }
+  .pr .term-toggle { margin-bottom: 8px !important; }
+  .pr .phase-note { margin-top: 12px !important; padding: 10px 12px !important; font-size: 0.78rem !important; }
   .pr .cap-card { page-break-inside: avoid; break-inside: avoid; }
   .pr .cap-card:hover { transform: none; }
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
