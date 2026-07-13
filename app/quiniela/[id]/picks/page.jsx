@@ -791,16 +791,21 @@ export default function PicksPage() {
                 {filteredSuggestions.map(s => {
                   const match = PHASES[currentPhase].matches[s.matchIndex]
                   if (!match) return null
+                  const dispL = resolveKnockoutName(match.local, admin?.results) ?? match.local
+                  const dispV = resolveKnockoutName(match.visitante, admin?.results) ?? match.visitante
+                  const wIsLocal = s.suggestedW === s.local || s.suggestedW === match.local || s.suggestedW === dispL
+                  const wIsVisit = s.suggestedW === s.visitante || s.suggestedW === match.visitante || s.suggestedW === dispV
+                  const dispW = wIsLocal ? dispL : wIsVisit ? dispV : (resolveKnockoutName(s.suggestedW, admin?.results) ?? s.suggestedW)
                   return (
                     <div key={s.matchIndex} style={{ fontSize: 14 }}>
                       <div style={{ fontWeight: 500, marginBottom: 2 }}>
-                        {(() => { const l = resolveKnockoutName(s.local, admin?.results) ?? s.local; const v = resolveKnockoutName(s.visitante, admin?.results) ?? s.visitante; return <>{f(l)}{l} vs {f(v)}{v}</> })()}
+                        {f(dispL)}{dispL} vs {f(dispV)}{dispV}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
                         <span style={{ background: '#E1F5EE', color: '#0F6E56', fontSize: 11, fontWeight: 600, padding: '1px 8px', borderRadius: 6 }}>
                           {s.suggestedL}–{s.suggestedV}
                         </span>
-                        <span style={{ fontSize: 11, color: '#0F6E56' }}>→ {resolveKnockoutName(s.suggestedW, admin?.results) ?? s.suggestedW}</span>
+                        <span style={{ fontSize: 11, color: '#0F6E56' }}>→ {dispW}</span>
                       </div>
                       <div style={{ fontSize: 11, color: '#888', fontStyle: 'italic' }}>{s.reason}</div>
                     </div>
