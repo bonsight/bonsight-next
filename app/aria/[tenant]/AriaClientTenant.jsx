@@ -12,6 +12,42 @@ import ArchiveContextCard from '../components/ArchiveContextCard';
 
 const ACTIVE_ID_KEY = (tenant) => `ariaTenant_${tenant}_activeInvestigationId`;
 
+const TOOL_SOURCE_MAP = {
+  query_ga4: ['ga4'],
+  query_search_console: ['search_console'],
+  query_google_ads: ['google_ads'],
+};
+
+function toolsToSourceIds(toolsUsed = [], sources = []) {
+  const ids = new Set();
+  for (const tool of toolsUsed) {
+    const mapped = TOOL_SOURCE_MAP[tool];
+    if (mapped) mapped.forEach((id) => ids.add(id));
+    if (tool === 'query_database') {
+      sources.filter((s) => s.isDb).forEach((s) => ids.add(s.id));
+    }
+  }
+  return ids;
+}
+
+const ANALYZING_PHASES = ['Consultando fuentes…', 'Procesando datos…', 'Elaborando respuesta…'];
+
+function AnalyzingIndicator() {
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setPhase((p) => (p + 1) % ANALYZING_PHASES.length), 2200);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="aria-analyzing">
+      <div className="aria-analyzing-dots">
+        <span /><span /><span />
+      </div>
+      <span key={phase} className="aria-analyzing-phase">{ANALYZING_PHASES[phase]}</span>
+    </div>
+  );
+}
+
 function mapStoredMessages(messages) {
   return (messages ?? []).map((m) =>
     m.role === 'assistant'
@@ -178,6 +214,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [attachments, setAttachments] = useState([]);
+  const [activeSources, setActiveSources] = useState(new Set());
   const messagesEndRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -206,20 +243,27 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
 
   useEffect(() => {
     async function init() {
-      const [invRes, srcRes] = await Promise.all([
+      const [invRes, srcRes, dbRes] = await Promise.all([
         fetch(`/api/aria/${tenant}/investigations`),
         fetch(`/api/kai/${tenant}/intelligence-sources`).catch(() => null),
+        fetch(`/api/aria/${tenant}/databases`).catch(() => null),
       ]);
       const data = await invRes.json();
+      const combined = [];
       if (srcRes?.ok) {
         const srcData = await srcRes.json().catch(() => ({}));
         const cfg = srcData.sources ?? {};
-        setSources(
-          Object.entries(cfg)
-            .filter(([, v]) => v?.enabled || v?.propertyId || v?.viewId)
-            .map(([id, v]) => ({ id, name: v.label ?? id, active: true }))
-        );
+        Object.entries(cfg)
+          .filter(([, v]) => v?.enabled || v?.propertyId || v?.viewId)
+          .forEach(([id, v]) => combined.push({ id, name: v.label ?? id, active: true, isDb: false }));
       }
+      if (dbRes?.ok) {
+        const dbData = await dbRes.json().catch(() => ({}));
+        (dbData.sources ?? [])
+          .filter((s) => s.status === 'active')
+          .forEach((s) => combined.push({ id: s.id, name: s.label, active: true, isDb: true, type: s.type }));
+      }
+      if (combined.length > 0) setSources(combined);
       const list = data.investigations ?? [];
 
       const storedId = localStorage.getItem(ACTIVE_ID_KEY(tenant));
@@ -383,6 +427,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
     const nextMessages = [...messages, displayMsg];
     setMessages(nextMessages);
     if (overrideText === undefined) { setInput(''); setAttachments([]); }
+    setActiveSources(new Set());
     setLoading(true);
 
     try {
@@ -410,6 +455,9 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
       ]);
       if (data.investigationMeta) {
         setInvestigations((prev) => upsertInvestigation(prev, data.investigationMeta));
+      }
+      if (data.toolsUsed?.length) {
+        setActiveSources(toolsToSourceIds(data.toolsUsed, sources));
       }
       const newItems = [];
 
@@ -574,6 +622,8 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
         onDelete={handleDeleteInvestigation}
         counters={counters}
         sources={sources}
+        loading={loading}
+        activeSources={activeSources}
         onIntelFilter={(type) => { setPanelFilter(type); setPanelOpen(true); setMobileSidebarOpen(false); }}
       />
       <div className="aria-page">
@@ -735,7 +785,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
                   <AriaAvatar size={20} animate />
                   <span>Aria</span>
                 </div>
-                <div className="aria-msg-content">Analizando…</div>
+                <AnalyzingIndicator />
               </div>
             </div>
           )}

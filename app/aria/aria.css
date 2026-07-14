@@ -562,9 +562,48 @@
   flex-shrink: 0;
 }
 
-.aria-loading .aria-msg-content {
+/* ── Analyzing indicator (replaces "Analizando…" text) ──────────────────── */
+
+.aria-analyzing {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.aria-analyzing-dots {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  height: 18px;
+}
+
+.aria-analyzing-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--aria-accent, #7C3AED);
+  animation: aria-dot-bounce 1.4s ease-in-out infinite;
+  opacity: 0.35;
+}
+
+.aria-analyzing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.aria-analyzing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes aria-dot-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+  30%           { transform: translateY(-5px); opacity: 1; }
+}
+
+.aria-analyzing-phase {
+  font-size: 0.76rem;
   color: var(--aria-text-dim);
   font-style: italic;
+  animation: aria-phase-fade 0.4s ease;
+}
+
+@keyframes aria-phase-fade {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .aria-input-bar {
@@ -1985,6 +2024,47 @@
 
 .aria-sidebar-source--active .aria-sidebar-source-dot {
   background: #10B981;
+}
+
+.aria-sidebar-source--querying {
+  color: var(--aria-text, #E5E7EB);
+}
+
+.aria-sidebar-source--querying .aria-sidebar-source-dot {
+  background: #06B6D4;
+  animation: aria-source-query 1.2s ease-in-out infinite;
+}
+
+@keyframes aria-source-query {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.5); box-shadow: 0 0 5px #06B6D4; }
+}
+
+.aria-sidebar-source--used {
+  color: var(--aria-text, #E5E7EB);
+}
+
+.aria-sidebar-source--used .aria-sidebar-source-dot {
+  background: #06B6D4;
+  box-shadow: 0 0 4px rgba(6,182,212,0.6);
+}
+
+.aria-sidebar-source-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aria-sidebar-source-tag {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #06B6D4;
+  background: rgba(6,182,212,0.1);
+  border-radius: 3px;
+  padding: 1px 4px;
+  flex-shrink: 0;
 }
 
 /* =====================================================

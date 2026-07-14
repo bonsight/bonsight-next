@@ -19,7 +19,7 @@ function formatRelativeTime(dateStr) {
   return `hace ${weeks}sem`;
 }
 
-export default function Sidebar({ investigations, activeId, onSelect, onNew, onArchive, onRestore, onDelete, counters = {}, sources = [], onIntelFilter, isOpen = false, onClose }) {
+export default function Sidebar({ investigations, activeId, onSelect, onNew, onArchive, onRestore, onDelete, counters = {}, sources = [], onIntelFilter, isOpen = false, onClose, loading = false, activeSources = new Set() }) {
   const [search, setSearch] = useState('');
   const [hoveredId, setHoveredId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -238,28 +238,28 @@ export default function Sidebar({ investigations, activeId, onSelect, onNew, onA
       {/* Fuentes block */}
       <div className="aria-sidebar-sources-block">
         <p className="aria-sidebar-section-label">Fuentes</p>
+        {/* Kai always first */}
         <div className="aria-sidebar-source aria-sidebar-source--active">
           <span className="aria-sidebar-source-dot" />
-          Kai
+          <span className="aria-sidebar-source-label">Kai</span>
         </div>
-        {sources.map((src) => (
-          <div key={src.id} className={`aria-sidebar-source${src.active ? ' aria-sidebar-source--active' : ''}`}>
-            <span className="aria-sidebar-source-dot" />
-            {src.name}
-          </div>
-        ))}
-        {sources.length === 0 && (
-          <>
-            <div className="aria-sidebar-source">
+        {sources.map((src) => {
+          const isQuerying = loading && src.active;
+          const isUsed = !loading && activeSources.has(src.id);
+          const cls = [
+            'aria-sidebar-source',
+            src.active ? 'aria-sidebar-source--active' : '',
+            isQuerying ? 'aria-sidebar-source--querying' : '',
+            isUsed ? 'aria-sidebar-source--used' : '',
+          ].filter(Boolean).join(' ');
+          return (
+            <div key={src.id} className={cls}>
               <span className="aria-sidebar-source-dot" />
-              GA4
+              <span className="aria-sidebar-source-label">{src.name}</span>
+              {isUsed && <span className="aria-sidebar-source-tag">usada</span>}
             </div>
-            <div className="aria-sidebar-source">
-              <span className="aria-sidebar-source-dot" />
-              BigQuery
-            </div>
-          </>
-        )}
+          );
+        })}
       </div>
     </aside>
   );

@@ -1274,8 +1274,25 @@ export async function POST(req, { params }) {
       { role: 'assistant', content: finalText, presentation, advisory },
     ]);
 
+    // Auto-title on first message if title is still default
+    if (messages.length === 1 && investigationContext?.titulo === 'Nueva investigación') {
+      try {
+        const firstMsg = typeof lastUserMessage.content === 'string'
+          ? lastUserMessage.content
+          : lastUserMessage.content?.find?.((b) => b.type === 'text')?.text ?? '';
+        const titleRes = await anthropic.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 20,
+          messages: [{ role: 'user', content: `Máximo 5 palabras en español, título para esta investigación de negocio. Solo el título, sin comillas ni puntuación final: "${firstMsg.slice(0, 200)}"` }],
+        });
+        const titulo = titleRes.content[0]?.text?.trim().replace(/^["'""«»]+|["'""«»]+$/g, '').replace(/\.$/, '') ?? 'Nueva investigación';
+        if (titulo && titulo !== 'Nueva investigación') await updateInvestigationMeta(tenant, investigationId, { titulo });
+      } catch { /* non-critical */ }
+    }
+
+    const toolsUsed = [...new Set(callLogs.flatMap((l) => l.toolCalls ?? []))];
     const investigationMeta = await getInvestigationMeta(tenant, investigationId);
-    return Response.json({ reply: finalText, presentation, advisory, investigationMeta, topics: finalTopics, archiveMatch, intelligence: finalIntelligence });
+    return Response.json({ reply: finalText, presentation, advisory, investigationMeta, topics: finalTopics, archiveMatch, intelligence: finalIntelligence, toolsUsed });
   } catch (err) {
     console.error(`Aria tenant [${tenant}] error:`, err);
     await recordAriaMetrics(tenant, {
