@@ -974,7 +974,8 @@ async function executeTool(name, input, { tenant, investigationId, intelligenceS
         ...(result.rowCount === 0 ? { note: 'Sin datos para el período solicitado.' } : {}),
       };
     } catch (err) {
-      return { error: `Error consultando Search Console: ${err.message}` };
+      const detail = err?.response?.data?.error?.message ?? err?.message ?? String(err);
+      return { error: `Search Console error (${err?.code ?? err?.status ?? '?'}): ${detail}. Si es 403, agrega el Service Account como usuario en Search Console → Configuración → Usuarios y permisos.` };
     }
   }
   if (name === 'query_ga4') {
