@@ -769,6 +769,11 @@ function IntelligenceSourcesTab({ slug }) {
         ))}
       </div>
 
+      {/* Group: Bases de datos */}
+      <div style={{ marginBottom: 28 }}>
+        <DatabasesSection slug={slug} />
+      </div>
+
       {/* Group: Próximamente */}
       <div>
         <SectionLabel>Próximamente</SectionLabel>
@@ -777,6 +782,172 @@ function IntelligenceSourcesTab({ slug }) {
         </div>
         {soon.map((s) => <SourceCard key={s.id} source={s} />)}
       </div>
+    </div>
+  );
+}
+
+// ── Databases Section ─────────────────────────────────────────────────────
+
+const DB_TYPES = [
+  { value: 'postgres',  label: 'PostgreSQL' },
+  { value: 'mysql',     label: 'MySQL' },
+  { value: 'mariadb',   label: 'MariaDB' },
+  { value: 'redis',     label: 'Redis' },
+];
+
+const DB_PLACEHOLDERS = {
+  postgres: 'postgresql://user:pass@host:5432/db',
+  mysql:    'mysql://user:pass@host:3306/db',
+  mariadb:  'mysql://user:pass@host:3306/db',
+  redis:    'redis://:password@host:6379',
+};
+
+function DatabasesSection({ slug }) {
+  const [sources,    setSources]    = useState(null);
+  const [adding,     setAdding]     = useState(false);
+  const [form,       setForm]       = useState({ type: 'postgres', label: '', connectionString: '' });
+  const [testing,    setTesting]    = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const [saving,     setSaving]     = useState(false);
+  const [busy,       setBusy]       = useState({});
+
+  useEffect(() => {
+    fetch(`/api/aria/${slug}/databases`)
+      .then((r) => r.json())
+      .then((d) => setSources(d.sources ?? []))
+      .catch(() => setSources([]));
+  }, [slug]);
+
+  const apiPost = async (body) => {
+    const r = await fetch(`/api/aria/${slug}/databases`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return r.json();
+  };
+
+  const handleTest = async () => {
+    setTesting(true); setTestResult(null);
+    const d = await apiPost({ action: 'test', source: form });
+    setTesting(false);
+    setTestResult(d);
+  };
+
+  const handleAdd = async () => {
+    setSaving(true);
+    const d = await apiPost({ action: 'add', source: form });
+    setSaving(false);
+    if (d.ok) {
+      setSources((p) => [...(p ?? []), d.source]);
+      setAdding(false); setForm({ type: 'postgres', label: '', connectionString: '' }); setTestResult(null);
+    }
+  };
+
+  const handleToggle = async (id) => {
+    setBusy((p) => ({ ...p, [id]: true }));
+    await apiPost({ action: 'toggle', source: { id } });
+    setSources((p) => p.map((s) => s.id === id ? { ...s, status: s.status === 'active' ? 'inactive' : 'active' } : s));
+    setBusy((p) => ({ ...p, [id]: false }));
+  };
+
+  const handleRefresh = async (id) => {
+    setBusy((p) => ({ ...p, [id]: true }));
+    const d = await apiPost({ action: 'refresh', source: { id } });
+    if (d.ok) setSources((p) => p.map((s) => s.id === id ? d.source : s));
+    setBusy((p) => ({ ...p, [id]: false }));
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('¿Eliminar esta conexión?')) return;
+    setBusy((p) => ({ ...p, [id]: true }));
+    await apiPost({ action: 'delete', source: { id } });
+    setSources((p) => p.filter((s) => s.id !== id));
+  };
+
+  const inputStyle = {
+    width: '100%', fontSize: 12.5, padding: '7px 10px', borderRadius: 6,
+    border: '0.5px solid #ddd', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+  };
+  const selectStyle = { ...inputStyle, background: '#fff', cursor: 'pointer' };
+  const statusDot = (s) => ({ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: s === 'active' ? '#10B981' : s === 'error' ? '#EF4444' : '#D1D5DB' });
+
+  if (!sources) return <div style={{ fontSize: 12, color: '#ccc', padding: '16px 0' }}>Cargando…</div>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <SectionLabel>Bases de datos</SectionLabel>
+        {!adding && (
+          <button
+            onClick={() => setAdding(true)}
+            style={{ fontSize: 11.5, fontWeight: 600, padding: '4px 13px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', border: '0.5px solid #6B4FE8', background: '#fff', color: '#6B4FE8' }}
+          >
+            + Conectar BD
+          </button>
+        )}
+      </div>
+
+      {/* Form */}
+      {adding && (
+        <div style={{ background: '#faf8ff', border: '0.5px solid #c4b5fd', borderRadius: 10, padding: '14px 16px', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: '#111' }}>Nueva conexión</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value, connectionString: '' }))} style={{ ...selectStyle, flex: '0 0 140px' }}>
+                {DB_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+              <input
+                placeholder="Nombre de referencia (ej: CRM Producción)"
+                value={form.label}
+                onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+                style={{ ...inputStyle, flex: 1 }}
+              />
+            </div>
+            <input
+              placeholder={DB_PLACEHOLDERS[form.type]}
+              value={form.connectionString}
+              onChange={(e) => setForm((f) => ({ ...f, connectionString: e.target.value }))}
+              style={inputStyle}
+              type="password"
+              autoComplete="off"
+            />
+            {testResult && (
+              <div style={{ fontSize: 12, padding: '6px 10px', borderRadius: 6, background: testResult.ok ? '#f0fdf4' : '#fef2f2', color: testResult.ok ? '#166534' : '#991b1b', border: `0.5px solid ${testResult.ok ? '#bbf7d0' : '#fecaca'}` }}>
+                {testResult.ok ? `✓ ${testResult.message}` : `✗ ${testResult.error}`}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 2 }}>
+              <button onClick={() => { setAdding(false); setTestResult(null); }} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', border: '0.5px solid #ddd', background: '#fff', color: '#888' }}>Cancelar</button>
+              <button onClick={handleTest} disabled={testing || !form.connectionString} style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 6, cursor: testing ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: '0.5px solid #9ca3af', background: '#fff', color: '#374151', opacity: testing ? 0.6 : 1 }}>{testing ? 'Probando…' : 'Probar'}</button>
+              <button onClick={handleAdd} disabled={saving || !form.connectionString || !form.label} style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 6, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: 'none', background: '#6B4FE8', color: '#fff', opacity: saving || !form.connectionString || !form.label ? 0.5 : 1 }}>{saving ? 'Guardando…' : 'Guardar'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* List */}
+      {sources.length === 0 && !adding && (
+        <div style={{ fontSize: 12.5, color: '#bbb', padding: '12px 0' }}>Sin bases de datos conectadas.</div>
+      )}
+      {sources.map((s) => {
+        const tableCount = s.schema?.tables?.length ?? 0;
+        const meta = s.type === 'redis'
+          ? `${s.schema?.redisInfo?.totalKeys ?? '?'} keys`
+          : `${tableCount} tabla${tableCount !== 1 ? 's' : ''}`;
+        return (
+          <div key={s.id} style={{ background: s.status === 'active' ? '#faf8ff' : '#fff', border: `0.5px solid ${s.status === 'active' ? '#c4b5fd' : '#e0e0dc'}`, borderRadius: 10, padding: '12px 16px', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={statusDot(s.status)} />
+              <span style={{ fontSize: 13.5, fontWeight: 600, color: '#111', flex: 1 }}>{s.label}</span>
+              <span style={{ fontSize: 10.5, color: '#aaa', background: '#f5f5f3', borderRadius: 4, padding: '1px 6px' }}>{DB_TYPES.find((t) => t.value === s.type)?.label ?? s.type}</span>
+              {s.schema && <span style={{ fontSize: 10.5, color: '#9ca3af' }}>{meta}</span>}
+              <button onClick={() => handleRefresh(s.id)} disabled={!!busy[s.id]} title="Actualizar schema" style={{ fontSize: 11, color: '#6B4FE8', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', opacity: busy[s.id] ? 0.4 : 1 }}>{busy[s.id] ? '…' : '↺'}</button>
+              <button onClick={() => handleToggle(s.id)} disabled={!!busy[s.id]} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 5, cursor: 'pointer', fontFamily: 'inherit', border: s.status === 'active' ? 'none' : '0.5px solid #6B4FE8', background: s.status === 'active' ? '#6B4FE8' : '#fff', color: s.status === 'active' ? '#fff' : '#6B4FE8', opacity: busy[s.id] ? 0.5 : 1 }}>{s.status === 'active' ? 'Desactivar' : 'Activar'}</button>
+              <button onClick={() => handleDelete(s.id)} disabled={!!busy[s.id]} title="Eliminar" style={{ fontSize: 12, color: '#d1d5db', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>✕</button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

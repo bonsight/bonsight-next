@@ -18,6 +18,7 @@ import { buildBIC, formatBICForPrompt } from '@/lib/kai/bic';
 import { runGa4Query } from '@/lib/aria/ga4';
 import { runSearchConsoleQuery } from '@/lib/aria/searchConsole';
 import { runGoogleAdsQuery } from '@/lib/aria/googleAds';
+import { getDbSources, queryDatabase, buildDbSourcesContext } from '@/lib/aria/databases';
 
 const MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 8000;
@@ -96,7 +97,7 @@ function buildAriaHistory(invs = [], currentId) {
 
 // ── System prompt ──────────────────────────────────────────────────────────
 
-function buildSystemPrompt({ tenantName, bicText, kaiHistory, ariaHistory, investigationContext, currentDate, sourcesContext }) {
+function buildSystemPrompt({ tenantName, bicText, kaiHistory, ariaHistory, investigationContext, currentDate, sourcesContext, dbSourcesContext }) {
   return `Eres Aria, la analista estratégica asignada a ${tenantName}.
 
 Tu misión es transformar conocimiento, datos y contexto empresarial en inteligencia accionable.
@@ -172,6 +173,7 @@ FUENTES DE INTELIGENCIA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${sourcesContext ?? ''}
+${dbSourcesContext ? `\nBASES DE DATOS CONECTADAS:\n${dbSourcesContext}` : ''}
 
 Cuando uses datos de un conector (Nivel 1), indica implícitamente que es evidencia directa — no una hipótesis.
 Cuando uses Business Profile o historial (Nivel 2-3), es conocimiento validado — úsalo con confianza pero sin presentarlo como dato en tiempo real.
@@ -204,6 +206,11 @@ Cuándo consultar Google Ads (query_google_ads):
 - Preguntas sobre ROI de pauta, costo por conversión, CTR de anuncios.
 - Preguntas sobre rendimiento por dispositivo, país o audiencia en campañas pagadas.
 - Análisis multi-fuente: Paid Social mal engagement → cruzar con Google Ads para ver si el problema es pre o post clic.
+
+Cuándo consultar Bases de Datos (query_database):
+- Preguntas sobre datos internos: pedidos, clientes, ventas, inventario, transacciones.
+- Preguntas que requieren cruzar datos propios del negocio que no están en GA4/Ads.
+- Usar el id de la BD indicado en BASES DE DATOS CONECTADAS y escribir SQL apropiado (o comando Redis).
 
 Cuándo NO consultar datos observados:
 - Preguntas sobre riesgos operativos, procesos internos, stakeholders o estrategia.
@@ -916,12 +923,24 @@ No describas el contenido del archivo en detalle — la card lo hace.`,
         required: ['risk', 'decisions', 'justification', 'immediatePlan', 'followUps'],
       },
     },
+    {
+      name: 'query_database',
+      description: 'Ejecuta una consulta SQL (o comando Redis) contra una base de datos conectada del cliente. Usa solo SELECT para SQL. Para Redis, usa comandos como GET, HGETALL, LRANGE, SMEMBERS, KEYS.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          db_id: { type: 'string', description: 'ID de la base de datos (ver BASES DE DATOS CONECTADAS en el contexto)' },
+          query: { type: 'string', description: 'Consulta SQL o comando Redis a ejecutar' },
+        },
+        required: ['db_id', 'query'],
+      },
+    },
   ];
 }
 
 // ── Tool execution ─────────────────────────────────────────────────────────
 
-async function executeTool(name, input, { tenant, investigationId, intelligenceSources }) {
+async function executeTool(name, input, { tenant, investigationId, intelligenceSources, dbSources }) {
   if (name === 'save_session_memory') {
     return updateInvestigationMeta(tenant, investigationId, input);
   }
@@ -1017,6 +1036,17 @@ async function executeTool(name, input, { tenant, investigationId, intelligenceS
       return { error: `Error consultando Google Ads: ${err.message}` };
     }
   }
+  if (name === 'query_database') {
+    const source = (dbSources ?? []).find((s) => s.id === input.db_id);
+    if (!source) return { error: `Base de datos '${input.db_id}' no encontrada. Verifica el id en BASES DE DATOS CONECTADAS.` };
+    if (source.status !== 'active') return { error: `La base de datos '${source.label}' está inactiva.` };
+    try {
+      const result = await queryDatabase(source, input.query);
+      return { db: source.label, type: source.type, query: input.query, ...result };
+    } catch (err) {
+      return { error: `Error ejecutando query en '${source.label}': ${err.message}` };
+    }
+  }
   return { error: `Unknown tool: ${name}` };
 }
 
@@ -1038,13 +1068,14 @@ export async function POST(req, { params }) {
       return Response.json({ reply: 'Falta el mensaje.' }, { status: 400 });
     }
 
-    const [tenantMeta, bic, investigationContext, kaiConvs, ariaInvList, intelligenceSources] = await Promise.all([
+    const [tenantMeta, bic, investigationContext, kaiConvs, ariaInvList, intelligenceSources, dbSources] = await Promise.all([
       getTenantMeta(tenant),
       buildBIC(tenant),
       getInvestigationMeta(tenant, investigationId),
       listConversations(tenant),
       listInvestigations(tenant),
       getIntelligenceSources(tenant),
+      getDbSources(tenant),
     ]);
 
     if (!tenantMeta) {
@@ -1052,6 +1083,7 @@ export async function POST(req, { params }) {
     }
 
     const currentDate = new Date().toISOString().slice(0, 10);
+    const dbSourcesContext = buildDbSourcesContext(dbSources);
     const system = buildSystemPrompt({
       tenantName: tenantMeta.name,
       bicText: formatBICForPrompt(bic),
@@ -1060,6 +1092,7 @@ export async function POST(req, { params }) {
       investigationContext,
       currentDate,
       sourcesContext: buildSourcesContext(intelligenceSources),
+      dbSourcesContext,
     });
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -1131,7 +1164,7 @@ export async function POST(req, { params }) {
         let content;
         let isError = false;
         try {
-          content = JSON.stringify(await executeTool(block.name, block.input, { tenant, investigationId, intelligenceSources }));
+          content = JSON.stringify(await executeTool(block.name, block.input, { tenant, investigationId, intelligenceSources, dbSources }));
         } catch (err) {
           content = JSON.stringify({ error: err.message });
           isError = true;
