@@ -237,19 +237,20 @@ export default function Sidebar({ investigations, activeId, onSelect, onNew, onA
 
       {/* Fuentes block */}
       <div className="aria-sidebar-sources-block">
-        <p className="aria-sidebar-section-label">Fuentes</p>
+        <p className="aria-sidebar-section-label">
+          Fuentes
+          {loading && <span className="aria-sidebar-sources-spinner" />}
+        </p>
         {/* Kai always first */}
         <div className="aria-sidebar-source aria-sidebar-source--active">
           <span className="aria-sidebar-source-dot" />
           <span className="aria-sidebar-source-label">Kai</span>
         </div>
         {sources.map((src) => {
-          const isQuerying = loading && src.active;
           const isUsed = !loading && activeSources.has(src.id);
           const cls = [
             'aria-sidebar-source',
             src.active ? 'aria-sidebar-source--active' : '',
-            isQuerying ? 'aria-sidebar-source--querying' : '',
             isUsed ? 'aria-sidebar-source--used' : '',
           ].filter(Boolean).join(' ');
           return (
