@@ -1061,7 +1061,7 @@ export async function POST(req, { params }) {
   let investigationIdForLog;
 
   try {
-    const { messages, investigationId } = await req.json();
+    const { messages, investigationId, attachments } = await req.json();
     investigationIdForLog = investigationId;
 
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -1098,10 +1098,22 @@ export async function POST(req, { params }) {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const tools = buildTools();
 
-    const cleanMessages = messages.map(({ role, content }) => ({
-      role,
-      content: String(content ?? '') || '…',
-    }));
+    const cleanMessages = messages.map(({ role, content }, idx) => {
+      const isLastUser = idx === messages.length - 1 && role === 'user' && attachments?.length > 0;
+      if (isLastUser) {
+        const blocks = [];
+        for (const att of attachments) {
+          if (att.mimeType?.startsWith('image/')) {
+            blocks.push({ type: 'image', source: { type: 'base64', media_type: att.mimeType, data: att.data } });
+          } else if (att.mimeType === 'application/pdf') {
+            blocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: att.data } });
+          }
+        }
+        if (content?.trim()) blocks.push({ type: 'text', text: String(content) });
+        return { role, content: blocks };
+      }
+      return { role, content: String(content ?? '') || '…' };
+    });
     const conversation = await summarizeIfNeeded(cleanMessages);
 
     let finalText = '';

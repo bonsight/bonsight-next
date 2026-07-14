@@ -669,6 +669,122 @@
   50%       { box-shadow: 0 0 0 6px rgba(6, 182, 212, 0); }
 }
 
+/* ── Attachment strip (above input bar) ─────────────────────────────────── */
+
+.aria-attach-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 20px 0;
+}
+
+.aria-attach-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--aria-bg-elevated);
+  border: 1px solid var(--aria-border);
+  border-radius: 8px;
+  padding: 3px 6px 3px 3px;
+  max-width: 160px;
+}
+
+.aria-attach-thumb {
+  width: 30px;
+  height: 30px;
+  object-fit: cover;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.aria-attach-icon {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  background: rgba(124, 58, 237, 0.15);
+}
+
+.aria-attach-name {
+  font-size: 11px;
+  color: var(--aria-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.aria-attach-remove {
+  background: none;
+  border: none;
+  color: var(--aria-text-faint);
+  cursor: pointer;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.aria-attach-remove:hover { opacity: 1; }
+
+/* ── Clip button ─────────────────────────────────────────────────────────── */
+
+.aria-clip-btn {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--aria-border);
+  background: transparent;
+  color: var(--aria-text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.aria-clip-btn:hover {
+  border-color: var(--aria-accent, #7C3AED);
+  color: var(--aria-accent, #7C3AED);
+}
+
+/* ── Attachments in message bubbles ─────────────────────────────────────── */
+
+.aria-msg-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+  justify-content: flex-end;
+}
+
+.aria-msg-thumb {
+  max-width: 220px;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 10px;
+  display: block;
+}
+
+.aria-msg-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--aria-text-muted);
+}
+
 .aria-disclaimer {
   text-align: center;
   font-size: 0.7rem;

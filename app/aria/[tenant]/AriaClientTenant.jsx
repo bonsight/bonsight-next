@@ -177,6 +177,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
   const [sources, setSources] = useState([]);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [attachments, setAttachments] = useState([]);
   const messagesEndRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -184,6 +185,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
   const animFrameRef = useRef(null);
   const analyserRef = useRef(null);
   const audioCtxRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -313,20 +315,85 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
     }
   }
 
+  async function compressImage(file) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const MAX = 1280;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
+      };
+      img.src = url;
+    });
+  }
+
+  async function readAsBase64(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result.split(',')[1]);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function processFile(file) {
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) { alert('Archivo demasiado grande (máx 4 MB).'); return; }
+    const id = Math.random().toString(36).slice(2);
+    if (file.type.startsWith('image/')) {
+      const data = await compressImage(file);
+      const previewUrl = `data:image/jpeg;base64,${data}`;
+      setAttachments((prev) => [...prev, { id, name: file.name || 'imagen.jpg', mimeType: 'image/jpeg', data, previewUrl }]);
+    } else if (file.type === 'application/pdf') {
+      const data = await readAsBase64(file);
+      setAttachments((prev) => [...prev, { id, name: file.name, mimeType: 'application/pdf', data, previewUrl: null }]);
+    }
+  }
+
+  function handlePaste(e) {
+    const items = Array.from(e.clipboardData?.items ?? []);
+    const imageItems = items.filter((it) => it.type.startsWith('image/'));
+    if (imageItems.length > 0) {
+      e.preventDefault();
+      imageItems.forEach((it) => processFile(it.getAsFile()));
+    }
+  }
+
   async function send(overrideText) {
     const text = (overrideText ?? input).trim();
-    if (!text || loading || !investigationId) return;
+    const currentAttachments = overrideText === undefined ? attachments : [];
+    if (!text && !currentAttachments.length || loading || !investigationId) return;
 
-    const nextMessages = [...messages, { role: 'user', content: text }];
+    const displayContent = text || `(${currentAttachments.length} archivo${currentAttachments.length !== 1 ? 's' : ''} adjunto${currentAttachments.length !== 1 ? 's' : ''})`;
+    const displayMsg = {
+      role: 'user',
+      content: displayContent,
+      _attachments: currentAttachments.length > 0
+        ? currentAttachments.map(({ id, name, mimeType, previewUrl }) => ({ id, name, mimeType, previewUrl }))
+        : undefined,
+    };
+    const apiMsg = { role: 'user', content: displayContent };
+    const apiHistory = messages.map(({ role, content }) => ({ role, content: content || '…' }));
+
+    const nextMessages = [...messages, displayMsg];
     setMessages(nextMessages);
-    if (overrideText === undefined) setInput('');
+    if (overrideText === undefined) { setInput(''); setAttachments([]); }
     setLoading(true);
 
     try {
       const res = await fetch(`/api/aria/${tenant}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: nextMessages, investigationId }),
+        body: JSON.stringify({
+          messages: [...apiHistory, apiMsg],
+          investigationId,
+          attachments: currentAttachments.map(({ mimeType, data, name }) => ({ mimeType, data, name })),
+        }),
       });
       const data = await res.json();
       setMessages([
@@ -645,7 +712,18 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
               </div>,
             ] : (
               <div key={i} className="aria-msg aria-msg-user">
-                <div className="aria-msg-content">{renderMessage(m.content)}</div>
+                {m._attachments?.length > 0 && (
+                  <div className="aria-msg-attachments">
+                    {m._attachments.map((att) =>
+                      att.previewUrl
+                        ? <img key={att.id} src={att.previewUrl} className="aria-msg-thumb" alt={att.name} />
+                        : <div key={att.id} className="aria-msg-file-chip"><span>📄</span>{att.name}</div>
+                    )}
+                  </div>
+                )}
+                {m.content && !/^\(.*adjunto/.test(m.content) && (
+                  <div className="aria-msg-content">{renderMessage(m.content)}</div>
+                )}
               </div>
             )
           })}
@@ -664,7 +742,44 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
           <div ref={messagesEndRef} />
         </div>
 
+        {attachments.length > 0 && (
+          <div className="aria-attach-strip">
+            {attachments.map((att) => (
+              <div key={att.id} className="aria-attach-chip">
+                {att.previewUrl
+                  ? <img src={att.previewUrl} className="aria-attach-thumb" alt={att.name} />
+                  : <div className="aria-attach-icon">📄</div>
+                }
+                <span className="aria-attach-name">{att.name}</span>
+                <button className="aria-attach-remove" onClick={() => setAttachments((p) => p.filter((a) => a.id !== att.id))}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className={`aria-input-bar${recording ? ' aria-input-bar--recording' : ''}`}>
+          {!recording && !transcribing && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.pdf"
+                multiple
+                style={{ display: 'none' }}
+                onChange={(e) => { Array.from(e.target.files).forEach(processFile); e.target.value = ''; }}
+              />
+              <button
+                className="aria-clip-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading}
+                title="Adjuntar imagen o PDF"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                </svg>
+              </button>
+            </>
+          )}
           {recording ? (
             <canvas ref={waveformRef} className="aria-input-waveform" width={200} height={32} />
           ) : transcribing ? (
@@ -677,6 +792,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
             />
           )}
 
@@ -684,8 +800,8 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
             <button className="aria-send-btn aria-send-btn--stop" onClick={stopRecording}>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
             </button>
-          ) : input.trim() ? (
-            <button className="aria-send-btn" onClick={() => send()} disabled={loading || !input.trim()}>
+          ) : (input.trim() || attachments.length > 0) ? (
+            <button className="aria-send-btn" onClick={() => send()} disabled={loading}>
               →
             </button>
           ) : (
