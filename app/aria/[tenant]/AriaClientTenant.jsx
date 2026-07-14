@@ -252,10 +252,10 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
       const combined = [];
       if (srcRes?.ok) {
         const srcData = await srcRes.json().catch(() => ({}));
-        const cfg = srcData.sources ?? {};
-        Object.entries(cfg)
-          .filter(([, v]) => v?.enabled || v?.propertyId || v?.viewId)
-          .forEach(([id, v]) => combined.push({ id, name: v.label ?? id, active: true, isDb: false }));
+        const srcList = Array.isArray(srcData.sources) ? srcData.sources : [];
+        srcList
+          .filter((s) => s.status === 'active' && !s.alwaysActive)
+          .forEach((s) => combined.push({ id: s.id, name: s.label, active: true, isDb: false }));
       }
       if (dbRes?.ok) {
         const dbData = await dbRes.json().catch(() => ({}));
