@@ -793,6 +793,7 @@ const DB_TYPES = [
   { value: 'mysql',     label: 'MySQL' },
   { value: 'mariadb',   label: 'MariaDB' },
   { value: 'redis',     label: 'Redis' },
+  { value: 'bigquery',  label: 'BigQuery' },
 ];
 
 const DB_PLACEHOLDERS = {
@@ -800,6 +801,7 @@ const DB_PLACEHOLDERS = {
   mysql:    'mysql://user:pass@host:3306/db',
   mariadb:  'mysql://user:pass@host:3306/db',
   redis:    'redis://:password@host:6379',
+  bigquery: '{ "type": "service_account", "project_id": "...", "private_key": "...", ... }',
 };
 
 function DatabasesSection({ slug }) {
@@ -903,14 +905,25 @@ function DatabasesSection({ slug }) {
                 style={{ ...inputStyle, flex: 1 }}
               />
             </div>
-            <input
-              placeholder={DB_PLACEHOLDERS[form.type]}
-              value={form.connectionString}
-              onChange={(e) => setForm((f) => ({ ...f, connectionString: e.target.value }))}
-              style={inputStyle}
-              type="password"
-              autoComplete="off"
-            />
+            {form.type === 'bigquery' ? (
+              <textarea
+                placeholder={DB_PLACEHOLDERS[form.type]}
+                value={form.connectionString}
+                onChange={(e) => setForm((f) => ({ ...f, connectionString: e.target.value }))}
+                style={{ ...inputStyle, height: 120, resize: 'vertical', fontFamily: 'monospace', fontSize: 11.5 }}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            ) : (
+              <input
+                placeholder={DB_PLACEHOLDERS[form.type]}
+                value={form.connectionString}
+                onChange={(e) => setForm((f) => ({ ...f, connectionString: e.target.value }))}
+                style={inputStyle}
+                type="password"
+                autoComplete="off"
+              />
+            )}
             {testResult && (
               <div style={{ fontSize: 12, padding: '6px 10px', borderRadius: 6, background: testResult.ok ? '#f0fdf4' : '#fef2f2', color: testResult.ok ? '#166534' : '#991b1b', border: `0.5px solid ${testResult.ok ? '#bbf7d0' : '#fecaca'}` }}>
                 {testResult.ok ? `✓ ${testResult.message}` : `✗ ${testResult.error}`}
@@ -933,7 +946,9 @@ function DatabasesSection({ slug }) {
         const tableCount = s.schema?.tables?.length ?? 0;
         const meta = s.type === 'redis'
           ? `${s.schema?.redisInfo?.totalKeys ?? '?'} keys`
-          : `${tableCount} tabla${tableCount !== 1 ? 's' : ''}`;
+          : s.type === 'bigquery'
+            ? `${tableCount} tabla${tableCount !== 1 ? 's' : ''} en ${new Set((s.schema?.tables ?? []).map((t) => t.name.split('.')[0])).size} dataset${new Set((s.schema?.tables ?? []).map((t) => t.name.split('.')[0])).size !== 1 ? 's' : ''}`
+            : `${tableCount} tabla${tableCount !== 1 ? 's' : ''}`;
         return (
           <div key={s.id} style={{ background: s.status === 'active' ? '#faf8ff' : '#fff', border: `0.5px solid ${s.status === 'active' ? '#c4b5fd' : '#e0e0dc'}`, borderRadius: 10, padding: '12px 16px', marginBottom: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
