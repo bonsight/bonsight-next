@@ -1043,8 +1043,10 @@ async function executeTool(name, input, { tenant, investigationId, intelligenceS
     if (source.status !== 'active') return { error: `La base de datos '${source.label}' está inactiva.` };
     try {
       const result = await queryDatabase(source, input.query);
+      console.log(`[aria-db:${tenant}] db=${source.id} type=${source.type} rows=${result.rowCount ?? result.rows?.length ?? '?'} query="${input.query.replace(/\s+/g, ' ').slice(0, 200)}"`);
       return { db: source.label, type: source.type, query: input.query, ...result };
     } catch (err) {
+      console.error(`[aria-db:${tenant}] db=${source.id} type=${source.type} error="${err.message}" query="${input.query.replace(/\s+/g, ' ').slice(0, 200)}"`);
       return { error: `Error ejecutando query en '${source.label}': ${err.message}` };
     }
   }
