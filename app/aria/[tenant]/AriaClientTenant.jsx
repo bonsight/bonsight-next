@@ -23,8 +23,9 @@ function toolsToSourceIds(toolsUsed = [], sources = []) {
   for (const tool of toolsUsed) {
     const mapped = TOOL_SOURCE_MAP[tool];
     if (mapped) mapped.forEach((id) => ids.add(id));
-    if (tool === 'query_database') {
-      sources.filter((s) => s.isDb).forEach((s) => ids.add(s.id));
+    if (tool.startsWith('query_database:')) {
+      const dbId = tool.slice('query_database:'.length);
+      ids.add(dbId);
     }
   }
   return ids;

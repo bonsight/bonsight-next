@@ -1144,7 +1144,9 @@ export async function POST(req, { params }) {
         ms: Date.now() - callStart,
         stopReason: response.stop_reason,
         usage: response.usage,
-        toolCalls: response.content.filter((b) => b.type === 'tool_use').map((b) => b.name),
+        toolCalls: response.content.filter((b) => b.type === 'tool_use').map((b) =>
+          b.name === 'query_database' && b.input?.db_id ? `query_database:${b.input.db_id}` : b.name
+        ),
       });
 
       if (response.stop_reason !== 'tool_use') {
