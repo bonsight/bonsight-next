@@ -487,6 +487,14 @@ present_advisory → Cuando la respuesta sea una recomendación ejecutiva con de
 
 Al cerrar una sesión de análisis importante, usa save_session_memory para persistir hallazgos, decisiones e insights.
 
+generate_gtm_container → Cuando el usuario solicite una configuración de Google Tag Manager exportable. Genera la estructura completa con tags (GA4_CONFIG, GA4_EVENT, CUSTOM_HTML), triggers (PAGEVIEW, CUSTOM_EVENT, CLICK) y variables (DATA_LAYER, CONSTANT). Los triggerNames de cada tag deben coincidir exactamente con los nombres de triggers definidos.
+
+generate_measurement_excel → Cuando el usuario solicite un plan de medición, matriz de eventos, auditoría de analytics, inventario de tags, backlog de implementación, o cualquier entregable tabular en Excel. Puede tener múltiples hojas.
+
+generate_measurement_pdf → Cuando el usuario solicite una guía de medición formal, manual de implementación, o documento entregable de analytics. Usa el schema completo — cuanto más detallado, mejor el documento generado. Si conoces los eventos GA4 del cliente desde el Business Profile o el historial, inclúyelos con sus parámetros.
+
+Regla de documentos: no combines generate_* con present_analysis en el mismo turno. El documento es el entregable; puedes acompañarlo con una breve explicación de qué contiene y qué cubre.
+
 No anuncies el uso de estas herramientas. Úsalas directamente.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -940,6 +948,166 @@ No describas el contenido del archivo en detalle — la card lo hace.`,
         required: ['db_id', 'query'],
       },
     },
+    {
+      name: 'generate_gtm_container',
+      description: 'Genera un contenedor de Google Tag Manager exportable e importable. Crea la estructura completa con tags, triggers y variables. Los triggerNames de cada tag deben coincidir EXACTAMENTE con los nombres de triggers definidos en el mismo schema.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Nombre del contenedor GTM' },
+          description: { type: 'string' },
+          filename: { type: 'string', description: 'Nombre del archivo, ej: gtm-topk9-ecommerce.json' },
+          tags: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                tagType: { type: 'string', enum: ['GA4_CONFIG', 'GA4_EVENT', 'CUSTOM_HTML'] },
+                triggerNames: { type: 'array', items: { type: 'string' }, description: 'Nombres exactos de triggers que disparan este tag' },
+                parameters: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      key: { type: 'string', description: 'measurementId (GA4_CONFIG), eventName + configTagName (GA4_EVENT), html (CUSTOM_HTML)' },
+                      value: { type: 'string' },
+                    },
+                    required: ['key', 'value'],
+                  },
+                },
+              },
+              required: ['name', 'tagType', 'triggerNames'],
+            },
+          },
+          triggers: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                triggerType: { type: 'string', enum: ['PAGEVIEW', 'DOM_READY', 'WINDOW_LOADED', 'CUSTOM_EVENT', 'CLICK', 'FORM_SUBMIT'] },
+                eventName: { type: 'string', description: 'Para CUSTOM_EVENT: nombre exacto del evento en dataLayer' },
+                filters: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      type: { type: 'string', enum: ['CONTAINS', 'EQUALS', 'STARTS_WITH', 'REGEX'] },
+                      parameter: { type: 'string', description: '{{Click URL}}, {{Page Path}}, etc.' },
+                      value: { type: 'string' },
+                    },
+                  },
+                },
+              },
+              required: ['name', 'triggerType'],
+            },
+          },
+          variables: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'Ej: DLV - ecommerce.transaction_id' },
+                varType: { type: 'string', enum: ['DATA_LAYER', 'CONSTANT', 'URL', 'JS_VAR'] },
+                parameter: { type: 'string', description: 'Ruta en dataLayer (DATA_LAYER), valor constante, componente URL, o código JS' },
+              },
+              required: ['name', 'varType'],
+            },
+          },
+        },
+        required: ['title', 'filename', 'tags', 'triggers'],
+      },
+    },
+    {
+      name: 'generate_measurement_excel',
+      description: 'Genera un archivo Excel con plan de medición, matriz de eventos, auditoría u otro entregable tabular. Puede tener múltiples hojas.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          filename: { type: 'string', description: 'Nombre del archivo, ej: plan-medicion-topk9.xlsx' },
+          description: { type: 'string' },
+          client: {
+            type: 'object',
+            properties: { name: { type: 'string' }, website: { type: 'string' } },
+          },
+          sheets: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'Nombre de la pestaña (máx 31 caracteres)' },
+                description: { type: 'string' },
+                headers: { type: 'array', items: { type: 'string' } },
+                rows: { type: 'array', items: { type: 'array' } },
+              },
+              required: ['name', 'headers', 'rows'],
+            },
+          },
+        },
+        required: ['title', 'filename', 'sheets'],
+      },
+    },
+    {
+      name: 'generate_measurement_pdf',
+      description: 'Genera una guía de medición PDF profesional con branding Bonsight: portada, resumen ejecutivo, tabla de eventos, parámetros, notas técnicas y checklist QA. Cuanto más completo el schema, mejor el documento. Úsalo cuando el usuario pida una guía, manual o documento entregable de analytics.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Título del documento, ej: Guía de Medición GA4 — TopK9' },
+          filename: { type: 'string', description: 'Nombre del archivo, ej: guia-medicion-topk9.pdf' },
+          description: { type: 'string' },
+          date: { type: 'string', description: 'Ej: Julio 2026' },
+          client: {
+            type: 'object',
+            properties: { name: { type: 'string' }, website: { type: 'string' }, industry: { type: 'string' } },
+          },
+          executiveSummary: { type: 'string' },
+          businessObjectives: { type: 'array', items: { type: 'string' } },
+          tools: { type: 'array', items: { type: 'string' }, description: 'Herramientas: GA4, GTM, Search Console, etc.' },
+          events: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                eventName: { type: 'string' },
+                description: { type: 'string' },
+                trigger: { type: 'string' },
+                parameters: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      name: { type: 'string' },
+                      description: { type: 'string' },
+                      example: { type: 'string' },
+                    },
+                    required: ['name', 'description'],
+                  },
+                },
+              },
+              required: ['eventName', 'description', 'trigger'],
+            },
+          },
+          dimensions: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                description: { type: 'string' },
+                possibleValues: { type: 'string' },
+              },
+              required: ['name', 'description'],
+            },
+          },
+          implementationNotes: { type: 'array', items: { type: 'string' } },
+          qaChecklist: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['title', 'filename', 'client'],
+      },
+    },
   ];
 }
 
@@ -951,6 +1119,9 @@ async function executeTool(name, input, { tenant, investigationId, intelligenceS
   }
   if (name === 'present_analysis' || name === 'present_advisory') {
     return { ok: true };
+  }
+  if (name === 'generate_gtm_container' || name === 'generate_measurement_excel' || name === 'generate_measurement_pdf') {
+    return { ok: true, message: 'Documento estructurado correctamente. El usuario podrá descargarlo desde la card.' };
   }
   if (name === 'search_archive') {
     const results = await searchArchivedInvestigations(tenant, input.query);
@@ -1130,6 +1301,7 @@ export async function POST(req, { params }) {
     let presentation = null;
     let advisory = null;
     let archiveMatch = null;
+    let documents = [];
     const callLogs = [];
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
@@ -1194,6 +1366,9 @@ export async function POST(req, { params }) {
 
         if (block.name === 'present_analysis') presentation = { ...block.input, dataSources: [] };
         if (block.name === 'present_advisory') advisory = { ...block.input };
+        if (block.name === 'generate_gtm_container') documents.push({ format: 'gtm_json', ...block.input });
+        if (block.name === 'generate_measurement_excel') documents.push({ format: 'excel', ...block.input });
+        if (block.name === 'generate_measurement_pdf') documents.push({ format: 'pdf', ...block.input });
         if (block.name === 'search_archive') {
           let parsed;
           try { parsed = JSON.parse(content); } catch {}
@@ -1302,7 +1477,7 @@ export async function POST(req, { params }) {
 
     const toolsUsed = [...new Set(callLogs.flatMap((l) => l.toolCalls ?? []))];
     const investigationMeta = await getInvestigationMeta(tenant, investigationId);
-    return Response.json({ reply: finalText, presentation, advisory, investigationMeta, topics: finalTopics, archiveMatch, intelligence: finalIntelligence, toolsUsed });
+    return Response.json({ reply: finalText, presentation, advisory, investigationMeta, topics: finalTopics, archiveMatch, intelligence: finalIntelligence, toolsUsed, documents });
   } catch (err) {
     console.error(`Aria tenant [${tenant}] error:`, err);
     await recordAriaMetrics(tenant, {

@@ -9,6 +9,7 @@ import Sidebar from '../components/Sidebar';
 import IntelligencePanel from '../components/IntelligencePanel';
 import ChatInsightSeparator from '../components/ChatInsightSeparator';
 import ArchiveContextCard from '../components/ArchiveContextCard';
+import AriaDocumentCard from './AriaDocumentCard';
 
 const ACTIVE_ID_KEY = (tenant) => `ariaTenant_${tenant}_activeInvestigationId`;
 
@@ -452,6 +453,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
           topics: data.topics ?? [],
           archiveMatch: data.archiveMatch ?? null,
           intelligence: data.intelligence ?? [],
+          documents: data.documents ?? [],
         },
       ]);
       if (data.investigationMeta) {
@@ -727,6 +729,9 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
                   ) : (
                     <div className="aria-msg-content">{renderMessage(m.content)}</div>
                   )}
+                  {m.documents?.map((doc, di) => (
+                    <AriaDocumentCard key={di} doc={doc} tenant={tenant} />
+                  ))}
                   {showTopics && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
                       {m.topics.map((chip, ci) => (
