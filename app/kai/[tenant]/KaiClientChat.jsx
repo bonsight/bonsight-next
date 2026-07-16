@@ -445,12 +445,14 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [attachments, setAttachments] = useState([]);
   const [proposalStates, setProposalStates] = useState({});
   const [confirmationResolved, setConfirmationResolved] = useState({});
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
   const greetingFired = useRef(false);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -460,6 +462,62 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
   const waveformRef = useRef(null);
   // Server assigns conversationId on the first message; all subsequent messages use it.
   const activeConvIdRef = useRef(null);
+
+  function compressImage(file) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX = 1280;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          if (width > height) { height = Math.round((height * MAX) / width); width = MAX; }
+          else { width = Math.round((width * MAX) / height); height = MAX; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve({ data: reader.result.split(',')[1], mimeType: 'image/jpeg', name: file.name, preview: canvas.toDataURL('image/jpeg', 0.85) });
+          reader.readAsDataURL(blob);
+        }, 'image/jpeg', 0.85);
+      };
+      img.src = url;
+    });
+  }
+
+  function readAsBase64(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve({ data: reader.result.split(',')[1], mimeType: file.type, name: file.name });
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function processFile(file) {
+    if (file.size > 4 * 1024 * 1024) { alert('El archivo es demasiado grande (máx. 4 MB).'); return null; }
+    if (file.type.startsWith('image/')) return compressImage(file);
+    if (file.type === 'application/pdf') return readAsBase64(file);
+    alert('Solo se aceptan imágenes y PDFs.');
+    return null;
+  }
+
+  async function handleFileSelect(e) {
+    const files = Array.from(e.target.files ?? []);
+    const processed = (await Promise.all(files.map(processFile))).filter(Boolean);
+    setAttachments((prev) => [...prev, ...processed].slice(0, 4));
+    e.target.value = '';
+  }
+
+  async function handlePaste(e) {
+    const imageItem = Array.from(e.clipboardData?.items ?? []).find((item) => item.type.startsWith('image/'));
+    if (!imageItem) return;
+    e.preventDefault();
+    const att = await processFile(imageItem.getAsFile());
+    if (att) setAttachments((prev) => [...prev, att].slice(0, 4));
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -659,10 +717,12 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
 
   const sendText = async (text) => {
     const question = text.trim();
-    if (!question || loading) return;
-    const newMessages = [...messages, { role: 'user', content: question }];
+    if ((!question && attachments.length === 0) || loading) return;
+    const atts = [...attachments];
+    const newMessages = [...messages, { role: 'user', content: question, _attachments: atts }];
     setMessages(newMessages);
     setInput('');
+    setAttachments([]);
     setLoading(true);
     try {
       const res = await fetch(`/api/kai/${tenant}`, {
@@ -671,6 +731,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
         body: JSON.stringify({
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
           conversationId: activeConvIdRef.current,
+          ...(atts.length ? { attachments: atts.map(({ data, mimeType, name }) => ({ data, mimeType, name })) } : {}),
         }),
       });
       const data = await res.json();
@@ -740,6 +801,16 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
                 lineHeight: 1.6,
               }}>
                 {m.role === 'assistant' ? renderMessage(m.content) : m.content}
+
+                {m._attachments?.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: m.content ? 6 : 0 }}>
+                    {m._attachments.map((att, i) => att.preview ? (
+                      <img key={i} src={att.preview} alt={att.name} style={{ maxWidth: 200, maxHeight: 140, borderRadius: 7, objectFit: 'cover', display: 'block' }} />
+                    ) : (
+                      <span key={i} style={{ fontSize: 11, background: 'rgba(32,201,151,0.1)', border: '1px solid rgba(32,201,151,0.25)', borderRadius: 6, padding: '3px 8px', color: '#20C997' }}>📄 {att.name}</span>
+                    ))}
+                  </div>
+                )}
 
                 {m.role === 'assistant' && m.components
                   ?.filter(c => c.type === 'profile_update_proposal')
@@ -814,18 +885,43 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
 
       {/* Input */}
       <div style={{ padding: `12px 20px calc(max(env(safe-area-inset-bottom, 0px), 20px) + var(--kai-bottom-offset, 0px))`, borderTop: '1px solid var(--kai-border)', background: 'var(--kai-bg)' }}>
+        <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*,.pdf" multiple onChange={handleFileSelect} />
+
+        {/* Attachment preview strip */}
+        {attachments.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+            {attachments.map((att, i) => (
+              <div key={i} style={{ position: 'relative', borderRadius: 8, overflow: 'visible' }}>
+                {att.preview ? (
+                  <img src={att.preview} alt={att.name} style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 7, display: 'block' }} />
+                ) : (
+                  <div style={{ fontSize: 11, background: '#1E3A2F', border: '1px solid #2D5A42', borderRadius: 7, padding: '5px 8px', color: '#A7F3D0', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📄 {att.name}</div>
+                )}
+                <button onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))} style={{ position: 'absolute', top: -5, right: -5, width: 16, height: 16, borderRadius: '50%', background: '#374151', border: 'none', color: '#9CA3AF', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 }}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div
           onClick={recording ? stopRecording : undefined}
           style={{
-            display: 'flex', alignItems: 'center', gap: 10,
+            display: 'flex', alignItems: 'center', gap: 8,
             background: '#1F2937',
             border: `1.5px solid ${recording ? '#20C997' : '#374151'}`,
-            borderRadius: 28, padding: '0 6px 0 16px', height: 48,
+            borderRadius: 28, padding: '0 6px 0 8px', height: 48,
             transition: 'border-color 0.2s',
             cursor: recording ? 'pointer' : 'default',
             boxShadow: recording ? '0 0 0 3px rgba(32,201,151,0.15)' : 'none',
           }}
         >
+          {/* Clip button */}
+          {!recording && (
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={loading} title="Adjuntar imagen o PDF" style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: 'transparent', border: 'none', color: '#6B7280', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.4 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, fontSize: 16 }}>
+              📎
+            </button>
+          )}
+
           {/* Waveform canvas (recording) OR text input */}
           {recording ? (
             <canvas
@@ -840,6 +936,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
+              onPaste={handlePaste}
               placeholder="Escribe algo a Kai…"
               disabled={loading}
               style={{
@@ -862,7 +959,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
             >
               <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
             </button>
-          ) : input.trim() ? (
+          ) : (input.trim() || attachments.length > 0) ? (
             <button
               onClick={send}
               disabled={loading}

@@ -817,7 +817,7 @@ export async function POST(req, { params }) {
   const { tenant } = await params;
 
   try {
-    const { messages, conversationId: incomingId } = await req.json();
+    const { messages, conversationId: incomingId, attachments } = await req.json();
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return Response.json({ reply: 'Falta el mensaje.' }, { status: 400 });
@@ -892,10 +892,22 @@ export async function POST(req, { params }) {
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    const cleanMessages = messages.map(({ role, content }) => ({
-      role,
-      content: String(content ?? '') || '…',
-    }));
+    const cleanMessages = messages.map(({ role, content }, idx) => {
+      const isLastUser = idx === messages.length - 1 && role === 'user' && attachments?.length > 0;
+      if (isLastUser) {
+        const blocks = [];
+        for (const att of attachments) {
+          if (att.mimeType?.startsWith('image/')) {
+            blocks.push({ type: 'image', source: { type: 'base64', media_type: att.mimeType, data: att.data } });
+          } else if (att.mimeType === 'application/pdf') {
+            blocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: att.data } });
+          }
+        }
+        if (content?.trim()) blocks.push({ type: 'text', text: String(content) });
+        return { role, content: blocks };
+      }
+      return { role, content: String(content ?? '') || '…' };
+    });
 
     const response = await anthropic.messages.create({
       model: MODEL,
