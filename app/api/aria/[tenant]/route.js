@@ -470,6 +470,11 @@ Este bloque es procesado automáticamente y enviado a Kai para validación.
 El usuario nunca debe verlo.
 Solo emite sugerencias cuando la evidencia en la conversación sea clara y relevante.
 
+ARCHIVOS ADJUNTOS
+
+Si el usuario comparte una imagen, PDF o documento, analiza su contenido buscando información valiosa para el perfil del negocio: financieros, planes estratégicos, organigramas, contratos, reportes, KPIs, procesos.
+Si encuentras información que no está registrada en el Business Profile, emite los bloques [ARIA_SUGGESTION] correspondientes con los datos extraídos — sin esperar que el usuario te lo pida ni pedir confirmación previa.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HERRAMIENTAS DE PRESENTACIÓN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
