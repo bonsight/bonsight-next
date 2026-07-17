@@ -17,7 +17,7 @@ export default async function RootLayout({ children }) {
   return (
     <html lang={locale}>
       <head>
-        <Script id="clarity" strategy="afterInteractive">{`
+        <Script id="ms-clarity" strategy="afterInteractive">{`
           (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
             t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
