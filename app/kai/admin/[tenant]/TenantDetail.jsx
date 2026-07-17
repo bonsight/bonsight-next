@@ -1868,9 +1868,7 @@ function CostsTab({ usage, events }) {
     return days;
   })();
 
-  // Auto-trim leading empty days (keep trailing zeros so "today" is visible)
-  const firstNonZero = allDailyData.findIndex((d) => d.cost > 0);
-  const dailyData = firstNonZero > 0 ? allDailyData.slice(firstNonZero) : allDailyData;
+  const dailyData = allDailyData;
 
   function applyPreset(days) {
     setFromDate(isoOffset(days - 1));
