@@ -653,6 +653,7 @@ function buildTools() {
             enum: ['🚨', '📈', '🎯', '🌎', '🏆', '🔍', '✅', '🟡', '💡', '📊'],
           },
           area: { type: 'string', enum: ['General', 'Estrategia', 'Operaciones', 'Tecnología', 'Crecimiento', 'Riesgo'] },
+          topic: { type: 'string', description: 'Categoría temática libre para agrupar investigaciones relacionadas, ej: "Análisis de datos", "Piloto & conversión", "Retención".' },
           estado: { type: 'string', enum: ['abierta', 'pendiente', 'resuelta', 'en_seguimiento'] },
           resumen_sesion: { type: 'string' },
           nuevos_insights: { type: 'array', items: { type: 'string' } },
@@ -1492,7 +1493,7 @@ export async function POST(req, { params }) {
       { role: 'assistant', content: finalText, presentation, advisory },
     ]);
 
-    // Auto-title on first message if title is still default
+    // Auto-title + topic on first message if title is still default
     if (messages.length === 1 && investigationContext?.titulo === 'Nueva investigación') {
       try {
         const firstMsg = typeof lastUserMessage.content === 'string'
@@ -1500,11 +1501,22 @@ export async function POST(req, { params }) {
           : lastUserMessage.content?.find?.((b) => b.type === 'text')?.text ?? '';
         const titleRes = await anthropic.messages.create({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 20,
-          messages: [{ role: 'user', content: `Máximo 5 palabras en español, título para esta investigación de negocio. Solo el título, sin comillas ni puntuación final: "${firstMsg.slice(0, 200)}"` }],
+          max_tokens: 60,
+          messages: [{ role: 'user', content: `Responde SOLO con JSON válido sin markdown: {"titulo":"máximo 5 palabras en español para el título de esta investigación de negocio","topic":"máximo 3 palabras en español para la categoría temática"} para este mensaje: "${firstMsg.slice(0, 200)}"` }],
         });
-        const titulo = titleRes.content[0]?.text?.trim().replace(/^["'""«»]+|["'""«»]+$/g, '').replace(/\.$/, '') ?? 'Nueva investigación';
-        if (titulo && titulo !== 'Nueva investigación') await updateInvestigationMeta(tenant, investigationId, { titulo });
+        const raw = titleRes.content[0]?.text?.trim() ?? '';
+        let titulo = '', topic = '';
+        try {
+          const parsed = JSON.parse(raw);
+          titulo = String(parsed.titulo ?? '').replace(/^["'""«»]+|["'""«»]+$/g, '').replace(/\.$/, '').trim();
+          topic  = String(parsed.topic  ?? '').replace(/^["'""«»]+|["'""«»]+$/g, '').replace(/\.$/, '').trim();
+        } catch {
+          titulo = raw.replace(/^["'""«»]+|["'""«»]+$/g, '').replace(/\.$/, '').trim();
+        }
+        const updates = {};
+        if (titulo && titulo !== 'Nueva investigación') updates.titulo = titulo;
+        if (topic) updates.topic = topic;
+        if (Object.keys(updates).length) await updateInvestigationMeta(tenant, investigationId, updates);
       } catch { /* non-critical */ }
     }
 

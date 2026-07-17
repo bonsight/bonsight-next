@@ -2,8 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-const AREA_ORDER = ['Bonsight Website', 'Kai', 'Quiniela', 'General'];
-
 function formatRelativeTime(dateStr) {
   if (!dateStr) return '';
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -19,12 +17,29 @@ function formatRelativeTime(dateStr) {
   return `hace ${weeks}sem`;
 }
 
-export default function Sidebar({ investigations, activeId, onSelect, onNew, onArchive, onRestore, onDelete, counters = {}, sources = [], onIntelFilter, isOpen = false, onClose, loading = false, activeSources = new Set() }) {
-  const [search, setSearch] = useState('');
-  const [hoveredId, setHoveredId] = useState(null);
+export default function Sidebar({
+  investigations,
+  activeId,
+  onSelect,
+  onNew,
+  onArchive,
+  onRestore,
+  onDelete,
+  counters = {},
+  sources = [],
+  onIntelFilter,
+  isOpen = false,
+  onClose,
+  loading = false,
+  activeSources = new Set(),
+}) {
+  const [search, setSearch]               = useState('');
+  const [hoveredId, setHoveredId]         = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [showArchived, setShowArchived] = useState(false);
-  const [pulsing, setPulsing] = useState({});
+  const [showArchived, setShowArchived]   = useState(false);
+  const [pulsing, setPulsing]             = useState({});
+  const [activeTab, setActiveTab]         = useState('investigaciones');
+  const [collapsedTopics, setCollapsedTopics] = useState({});
   const prevCounters = useRef(counters);
 
   useEffect(() => {
@@ -39,30 +54,37 @@ export default function Sidebar({ investigations, activeId, onSelect, onNew, onA
     prevCounters.current = counters;
   }, [counters]);
 
-  const q = search.toLowerCase().trim();
-  const active = investigations.filter((inv) => inv.estado !== 'archivada');
+  const q        = search.toLowerCase().trim();
+  const active   = investigations.filter((inv) => inv.estado !== 'archivada');
   const archived = investigations.filter((inv) => inv.estado === 'archivada');
 
   function matchesQuery(inv) {
     if (!q) return true;
     const fields = [
       inv.titulo,
+      inv.topic,
       inv.area,
       inv.resumen_sesion,
       ...(inv.tags ?? []),
       ...(inv.nuevos_insights ?? []),
-      ...(inv.decisiones_confirmadas ?? []),
-      ...(inv.preguntas_abiertas ?? []),
     ];
     return fields.some((f) => f && f.toLowerCase().includes(q));
   }
 
   const filtered = active.filter(matchesQuery);
 
-  const groups = AREA_ORDER.map((area) => ({
-    area,
-    items: filtered.filter((inv) => (inv.area || 'General') === area),
-  })).filter((g) => g.items.length > 0);
+  // Group by topic (free-form AI-generated), fallback to area, then 'General'
+  const topicMap = new Map();
+  for (const inv of filtered) {
+    const key = inv.topic || inv.area || 'General';
+    if (!topicMap.has(key)) topicMap.set(key, []);
+    topicMap.get(key).push(inv);
+  }
+  const groups = [...topicMap.entries()].map(([topic, items]) => ({ topic, items }));
+
+  function toggleTopic(topic) {
+    setCollapsedTopics((prev) => ({ ...prev, [topic]: !prev[topic] }));
+  }
 
   function handleDeleteClick(e, id) {
     e.stopPropagation();
@@ -85,11 +107,9 @@ export default function Sidebar({ investigations, activeId, onSelect, onNew, onA
   }
 
   function renderItem(inv, isArchived = false) {
-    const isActive = inv.id === activeId;
-    const isHovered = hoveredId === inv.id;
+    const isActive     = inv.id === activeId;
+    const isHovered    = hoveredId === inv.id;
     const isConfirming = confirmDeleteId === inv.id;
-
-    const tags = inv.tags ?? [];
 
     return (
       <div
@@ -107,18 +127,6 @@ export default function Sidebar({ investigations, activeId, onSelect, onNew, onA
         <span className="aria-sidebar-item-body">
           <span className="aria-sidebar-item-title">{inv.titulo}</span>
           <span className="aria-sidebar-item-time">{formatRelativeTime(inv.updatedAt)}</span>
-          {tags.length > 0 && (
-            <span className="aria-sidebar-item-tags">
-              {tags.slice(0, 4).map((tag) => (
-                <span
-                  key={tag}
-                  className={`aria-sidebar-tag${q && tag.toLowerCase().includes(q) ? ' aria-sidebar-tag-match' : ''}`}
-                >
-                  {tag}
-                </span>
-              ))}
-            </span>
-          )}
         </span>
         {isHovered ? (
           <span className="aria-sidebar-item-actions">
@@ -166,7 +174,6 @@ export default function Sidebar({ investigations, activeId, onSelect, onNew, onA
           ×
         </button>
       )}
-      <p className="aria-sidebar-section-label">Análisis</p>
 
       <button className="aria-sidebar-new" onClick={onNew}>
         + Nueva investigación
@@ -182,86 +189,124 @@ export default function Sidebar({ investigations, activeId, onSelect, onNew, onA
         />
       </div>
 
-      {groups.length === 0 && q && (
-        <p className="aria-sidebar-empty">Sin resultados para &ldquo;{search}&rdquo;</p>
-      )}
+      {/* Tab switcher */}
+      <div className="aria-sidebar-tabs">
+        <button
+          type="button"
+          className={`aria-sidebar-tab${activeTab === 'investigaciones' ? ' aria-sidebar-tab--active' : ''}`}
+          onClick={() => setActiveTab('investigaciones')}
+        >
+          Investigaciones
+        </button>
+        <button
+          type="button"
+          className={`aria-sidebar-tab${activeTab === 'contexto' ? ' aria-sidebar-tab--active' : ''}`}
+          onClick={() => setActiveTab('contexto')}
+        >
+          Contexto
+        </button>
+      </div>
 
-      {groups.map((group) => (
-        <div key={group.area}>
-          <p className="aria-sidebar-group-label">{group.area}</p>
-          {group.items.map((inv) => renderItem(inv))}
-        </div>
-      ))}
+      {/* ── Tab: Investigaciones ──────────────────────────────── */}
+      {activeTab === 'investigaciones' && (
+        <div className="aria-sidebar-tab-content">
+          {groups.length === 0 && q && (
+            <p className="aria-sidebar-empty">Sin resultados para &ldquo;{search}&rdquo;</p>
+          )}
 
-      {archived.length > 0 && (
-        <div className="aria-sidebar-archived-section">
-          <button
-            type="button"
-            className="aria-sidebar-archived-toggle"
-            onClick={() => setShowArchived((v) => !v)}
-          >
-            <span>{showArchived ? '▾' : '▸'}</span>
-            <span>Archivadas ({archived.length})</span>
-          </button>
-          {showArchived && archived.map((inv) => renderItem(inv, true))}
-        </div>
-      )}
-
-      {/* Inteligencia block */}
-      <div className="aria-sidebar-intel-block">
-        <p className="aria-sidebar-section-label">Inteligencia</p>
-        <div className="aria-sidebar-intel-counters">
-          {[
-            { key: 'hallazgos',      val: hallazgos,      color: '#3B82F6', icon: '💡', label: 'Hallazgos',      type: 'hallazgo' },
-            { key: 'riesgos',        val: riesgos,        color: '#EF4444', icon: '⚠️', label: 'Riesgos',        type: 'riesgo' },
-            { key: 'recomendaciones',val: recomendaciones,color: '#8B5CF6', icon: '🎯', label: 'Recomendaciones', type: 'recomendacion' },
-            { key: 'oportunidades',  val: oportunidades,  color: '#10B981', icon: '🚀', label: 'Oportunidades',   type: 'oportunidad' },
-          ].map(({ key, val, color, icon, label, type }) => (
-            <button
-              key={key}
-              className={`aria-sidebar-intel-counter${onIntelFilter ? ' aria-sidebar-intel-counter--clickable' : ''}`}
-              onClick={onIntelFilter ? () => onIntelFilter(type) : undefined}
-              type="button"
-            >
-              <span
-                className={`aria-sidebar-intel-val${pulsing[key] ? ' aria-sidebar-intel-val--pulse' : ''}`}
-                style={{ color: val > 0 ? color : undefined }}
+          {groups.map(({ topic, items }) => (
+            <div key={topic} className="aria-sidebar-topic-group">
+              <button
+                type="button"
+                className="aria-sidebar-topic-header"
+                onClick={() => toggleTopic(topic)}
               >
-                {val}
-              </span>
-              <span className="aria-sidebar-intel-key">{icon} {label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Fuentes block */}
-      <div className="aria-sidebar-sources-block">
-        <p className="aria-sidebar-section-label">
-          Fuentes
-          {loading && <span className="aria-sidebar-sources-spinner" />}
-        </p>
-        {/* Kai always first */}
-        <div className="aria-sidebar-source aria-sidebar-source--active">
-          <span className="aria-sidebar-source-dot" />
-          <span className="aria-sidebar-source-label">Kai</span>
-        </div>
-        {sources.map((src) => {
-          const isUsed = !loading && activeSources.has(src.id);
-          const cls = [
-            'aria-sidebar-source',
-            src.active ? 'aria-sidebar-source--active' : '',
-            isUsed ? 'aria-sidebar-source--used' : '',
-          ].filter(Boolean).join(' ');
-          return (
-            <div key={src.id} className={cls}>
-              <span className="aria-sidebar-source-dot" />
-              <span className="aria-sidebar-source-label">{src.name}</span>
-              {isUsed && <span className="aria-sidebar-source-tag">usada</span>}
+                <span className="aria-sidebar-topic-name">{topic}</span>
+                <span className="aria-sidebar-topic-count">{items.length}</span>
+                <span className={`aria-sidebar-topic-chevron${collapsedTopics[topic] ? ' collapsed' : ''}`}>
+                  ›
+                </span>
+              </button>
+              {!collapsedTopics[topic] && items.map((inv) => renderItem(inv))}
             </div>
-          );
-        })}
-      </div>
+          ))}
+
+          {archived.length > 0 && (
+            <div className="aria-sidebar-archived-section">
+              <button
+                type="button"
+                className="aria-sidebar-archived-toggle"
+                onClick={() => setShowArchived((v) => !v)}
+              >
+                <span>{showArchived ? '▾' : '▸'}</span>
+                <span>Archivadas ({archived.length})</span>
+              </button>
+              {showArchived && archived.map((inv) => renderItem(inv, true))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab: Contexto ─────────────────────────────────────── */}
+      {activeTab === 'contexto' && (
+        <div className="aria-sidebar-tab-content">
+          <div className="aria-sidebar-intel-block">
+            <div className="aria-sidebar-section-header">
+              <p className="aria-sidebar-section-label">Inteligencia</p>
+              <span className="aria-sidebar-scope-label">Cuenta completa</span>
+            </div>
+            <div className="aria-sidebar-intel-counters">
+              {[
+                { key: 'hallazgos',       val: hallazgos,       color: '#3B82F6', icon: '💡', label: 'Hallazgos',       type: 'hallazgo' },
+                { key: 'riesgos',         val: riesgos,         color: '#EF4444', icon: '⚠️', label: 'Riesgos',         type: 'riesgo' },
+                { key: 'recomendaciones', val: recomendaciones, color: '#8B5CF6', icon: '🎯', label: 'Recomendaciones',  type: 'recomendacion' },
+                { key: 'oportunidades',   val: oportunidades,   color: '#10B981', icon: '🚀', label: 'Oportunidades',    type: 'oportunidad' },
+              ].map(({ key, val, color, icon, label, type }) => (
+                <button
+                  key={key}
+                  className={`aria-sidebar-intel-counter${onIntelFilter ? ' aria-sidebar-intel-counter--clickable' : ''}`}
+                  onClick={onIntelFilter ? () => onIntelFilter(type) : undefined}
+                  type="button"
+                >
+                  <span
+                    className={`aria-sidebar-intel-val${pulsing[key] ? ' aria-sidebar-intel-val--pulse' : ''}`}
+                    style={{ color: val > 0 ? color : undefined }}
+                  >
+                    {val}
+                  </span>
+                  <span className="aria-sidebar-intel-key">{icon} {label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="aria-sidebar-sources-block">
+            <p className="aria-sidebar-section-label">
+              Fuentes
+              {loading && <span className="aria-sidebar-sources-spinner" />}
+            </p>
+            <div className="aria-sidebar-source aria-sidebar-source--active">
+              <span className="aria-sidebar-source-dot" />
+              <span className="aria-sidebar-source-label">Kai</span>
+            </div>
+            {sources.map((src) => {
+              const isUsed = !loading && activeSources.has(src.id);
+              const cls = [
+                'aria-sidebar-source',
+                src.active ? 'aria-sidebar-source--active' : '',
+                isUsed ? 'aria-sidebar-source--used' : '',
+              ].filter(Boolean).join(' ');
+              return (
+                <div key={src.id} className={cls}>
+                  <span className="aria-sidebar-source-dot" />
+                  <span className="aria-sidebar-source-label">{src.name}</span>
+                  {isUsed && <span className="aria-sidebar-source-tag">usada ahora</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

@@ -32,6 +32,44 @@ function toolsToSourceIds(toolsUsed = [], sources = []) {
   return ids;
 }
 
+const TOOL_LABEL_MAP = {
+  query_ga4:             'Google Analytics',
+  query_search_console:  'Search Console',
+  query_google_ads:      'Google Ads',
+  search_notion:         'Notion',
+  query_notion_database: 'Notion',
+};
+
+function toolsToSourceNames(toolsUsed = [], sources = []) {
+  const names = ['Kai'];
+  const seen  = new Set();
+  for (const tool of toolsUsed) {
+    let name = null;
+    if (tool.startsWith('query_database:')) {
+      const dbId = tool.slice('query_database:'.length);
+      const src  = sources.find((s) => s.id === dbId);
+      name = src?.name ?? null;
+    } else {
+      name = TOOL_LABEL_MAP[tool] ?? null;
+    }
+    if (name && !seen.has(name)) { seen.add(name); names.push(name); }
+  }
+  return names;
+}
+
+function SourcesFooter({ toolsUsed, sources }) {
+  if (!toolsUsed?.length) return null;
+  const names = toolsToSourceNames(toolsUsed, sources);
+  return (
+    <div className="aria-msg-sources-footer">
+      <span className="aria-msg-sources-label">Fuentes:</span>
+      {names.map((name) => (
+        <span key={name} className="aria-msg-source-chip">{name}</span>
+      ))}
+    </div>
+  );
+}
+
 const ANALYZING_PHASES = ['Consultando fuentes…', 'Procesando datos…', 'Elaborando respuesta…'];
 
 function AnalyzingIndicator() {
@@ -454,6 +492,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
           archiveMatch: data.archiveMatch ?? null,
           intelligence: data.intelligence ?? [],
           documents: data.documents ?? [],
+          toolsUsed: data.toolsUsed ?? [],
         },
       ]);
       if (data.investigationMeta) {
@@ -764,6 +803,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
                       ))}
                     </div>
                   )}
+                  <SourcesFooter toolsUsed={m.toolsUsed} sources={sources} />
                 </div>
               </div>,
             ] : (
