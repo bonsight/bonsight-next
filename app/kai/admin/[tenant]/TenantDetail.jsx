@@ -1772,6 +1772,48 @@ function fmtT(n) {
 }
 function fmtC(n) { return `USD ${Number(n ?? 0).toFixed(2)}`; }
 
+function SpendChart({ data, xLabel, selectedKey, onBarClick }) {
+  const [hoverIdx, setHoverIdx] = useState(null);
+  const maxCost = Math.max(...data.map((d) => d.cost), 0.001);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', height: 148, gap: 3 }}>
+        {data.map((d, i) => {
+          const pct = (d.cost / maxCost) * 100;
+          const isSelected = d.key === selectedKey;
+          const isHovered = hoverIdx === i;
+          return (
+            <div
+              key={d.key}
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end', cursor: onBarClick ? 'pointer' : 'default', position: 'relative' }}
+              onClick={() => onBarClick?.(d)}
+              onMouseEnter={() => setHoverIdx(i)}
+              onMouseLeave={() => setHoverIdx(null)}
+            >
+              {isHovered && (
+                <div style={{ position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)', background: '#111827', border: '1px solid #374151', borderRadius: 7, padding: '7px 11px', fontSize: 11, color: '#E5E7EB', zIndex: 100, whiteSpace: 'nowrap', pointerEvents: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.4)' }}>
+                  <div style={{ fontWeight: 700, marginBottom: 3, color: '#fff' }}>{d.label}</div>
+                  <div style={{ color: '#20C997', fontWeight: 600 }}>USD {d.cost.toFixed(3)}</div>
+                  <div style={{ color: '#9CA3AF', marginTop: 2 }}>{fmtT(d.tokens)} tokens · {d.calls} llamadas</div>
+                </div>
+              )}
+              <div style={{ width: '100%', height: `${Math.max(pct, pct > 0 ? 2 : 0)}%`, minHeight: pct > 0 ? 3 : 1, background: isSelected ? '#20C997' : isHovered ? '#2D7A5C' : '#1E3A2F', borderRadius: '3px 3px 0 0', transition: 'background 0.15s' }} />
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: 3, marginTop: 5 }}>
+        {data.map((d, i) => (
+          <div key={d.key} style={{ flex: 1, textAlign: 'center', fontSize: 9, color: '#6B7280', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+            {xLabel(d, i, data.length)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TokenBar({ input, output }) {
   const total = (input ?? 0) + (output ?? 0);
   if (!total) return null;
@@ -1784,38 +1826,85 @@ function TokenBar({ input, output }) {
   );
 }
 
+const FEAT_LABELS = { chat: 'Discovery Chat', executive_summary: 'Executive Summary', diagnosis: 'Diagnóstico', summary: 'Resumen', insights: 'Insights', transversals: 'Patrones Transversales' };
+
 function CostsTab({ usage, events }) {
+  const [dateRange, setDateRange] = useState(14);
+  const [selectedDay, setSelectedDay] = useState(null);
+
   const { total = {}, byFeature = [] } = usage ?? {};
   const maxCost = byFeature[0]?.cost ?? 1;
 
+  // ── Build daily chart data ──
+  const dailyMap = {};
+  for (const e of (events ?? [])) {
+    const day = e.createdAt?.slice(0, 10);
+    if (!day) continue;
+    if (!dailyMap[day]) dailyMap[day] = { cost: 0, tokens: 0, calls: 0 };
+    dailyMap[day].cost  += e.cost ?? 0;
+    dailyMap[day].tokens += (e.inputTokens ?? 0) + (e.outputTokens ?? 0);
+    dailyMap[day].calls++;
+  }
+
+  const dailyData = Array.from({ length: dateRange }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (dateRange - 1 - i));
+    const key = d.toISOString().slice(0, 10);
+    const label = d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+    return { key, label, ...(dailyMap[key] ?? { cost: 0, tokens: 0, calls: 0 }) };
+  });
+
+  // ── Build hourly chart data for selected day ──
+  const hourlyData = selectedDay
+    ? Array.from({ length: 24 }, (_, h) => ({ key: h, label: `${String(h).padStart(2, '0')}h`, cost: 0, tokens: 0, calls: 0 }))
+    : null;
+
+  if (selectedDay && hourlyData) {
+    for (const e of (events ?? [])) {
+      if (!e.createdAt?.startsWith(selectedDay)) continue;
+      const h = new Date(e.createdAt).getHours();
+      hourlyData[h].cost  += e.cost ?? 0;
+      hourlyData[h].tokens += (e.inputTokens ?? 0) + (e.outputTokens ?? 0);
+      hourlyData[h].calls++;
+    }
+  }
+
+  // ── X-axis label helpers ──
+  function dailyXLabel(d, i, total) {
+    if (total <= 10) return d.label;
+    if (total <= 21) return i % 2 === 0 ? d.label : '';
+    return i % 5 === 0 ? d.label : '';
+  }
+  function hourlyXLabel(d, i) {
+    return i % 6 === 0 ? d.label : '';
+  }
+
+  // ── Recent activity grouping ──
   const now = Date.now();
   const DAY = 86400000;
   const todayEvents = (events ?? []).filter((e) => now - new Date(e.createdAt).getTime() < DAY);
-  const weekEvents  = (events ?? []).filter((e) => now - new Date(e.createdAt).getTime() < 7 * DAY && now - new Date(e.createdAt).getTime() >= DAY);
+  const weekEvents  = (events ?? []).filter((e) => { const age = now - new Date(e.createdAt).getTime(); return age >= DAY && age < 7 * DAY; });
 
   function groupByFeature(evts) {
     const map = {};
     for (const e of evts) {
       const k = `${e.product}:${e.feature}`;
-      if (!map[k]) map[k] = { label: e.feature, product: e.product, calls: 0, cost: 0, tokens: 0 };
+      if (!map[k]) map[k] = { label: e.feature, calls: 0, cost: 0, tokens: 0 };
       map[k].calls++;
-      map[k].cost += e.cost ?? 0;
+      map[k].cost   += e.cost ?? 0;
       map[k].tokens += (e.inputTokens ?? 0) + (e.outputTokens ?? 0);
     }
     return Object.values(map).sort((a, b) => b.cost - a.cost);
   }
 
-  const LABELS = { chat: 'Discovery Chat', executive_summary: 'Executive Summary', diagnosis: 'Diagnóstico', summary: 'Resumen', insights: 'Insights', transversals: 'Patrones Transversales' };
-
   function EventGroup({ title, evts }) {
     if (!evts.length) return null;
-    const grouped = groupByFeature(evts);
     return (
       <div className="cost-event-group">
         <div className="cost-event-period">{title}</div>
-        {grouped.map((g) => (
-          <div key={`${g.product}:${g.label}`} className="cost-event-row">
-            <span className="cost-event-feature">{LABELS[g.label] ?? g.label}</span>
+        {groupByFeature(evts).map((g) => (
+          <div key={`${g.label}`} className="cost-event-row">
+            <span className="cost-event-feature">{FEAT_LABELS[g.label] ?? g.label}</span>
             <span className="cost-event-calls">{g.calls} llamada{g.calls !== 1 ? 's' : ''}</span>
             <span className="cost-event-cost">{fmtC(g.cost)}</span>
             <span className="cost-event-tokens">{fmtT(g.tokens)} tokens</span>
@@ -1827,7 +1916,7 @@ function CostsTab({ usage, events }) {
 
   return (
     <div className="cost-tab">
-      {/* Global stat cards */}
+      {/* Stat cards */}
       <div className="cost-tab-stats">
         <div className="cost-tab-stat">
           <div className="cost-tab-stat-label">Costo este mes</div>
@@ -1848,13 +1937,48 @@ function CostsTab({ usage, events }) {
         </div>
       </div>
 
+      {/* Daily spend chart */}
+      {(events ?? []).length > 0 && (
+        <div className="cost-tab-section">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div className="cost-tab-section-title" style={{ marginBottom: 0 }}>
+              Gasto por día{selectedDay ? '' : ' — click en una barra para ver por hora'}
+            </div>
+            <div style={{ display: 'flex', gap: 5 }}>
+              {[7, 14, 30].map((d) => (
+                <button key={d} onClick={() => { setDateRange(d); setSelectedDay(null); }} style={{ padding: '3px 11px', borderRadius: 6, fontSize: 11, fontWeight: 600, border: '1px solid', borderColor: dateRange === d ? '#20C997' : '#374151', background: dateRange === d ? 'rgba(32,201,151,0.1)' : 'transparent', color: dateRange === d ? '#20C997' : '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {d}d
+                </button>
+              ))}
+            </div>
+          </div>
+          <SpendChart data={dailyData} xLabel={dailyXLabel} selectedKey={selectedDay} onBarClick={(d) => setSelectedDay(selectedDay === d.key ? null : d.key)} />
+
+          {/* Hourly breakdown */}
+          {selectedDay && hourlyData && (
+            <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid #1F2937' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <div className="cost-tab-section-title" style={{ marginBottom: 0 }}>
+                  Por hora — {new Date(selectedDay).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}
+                </div>
+                <button onClick={() => setSelectedDay(null)} style={{ fontSize: 11, color: '#6B7280', background: 'none', border: '1px solid #374151', borderRadius: 5, cursor: 'pointer', padding: '2px 8px', fontFamily: 'inherit' }}>✕ cerrar</button>
+              </div>
+              <SpendChart data={hourlyData} xLabel={hourlyXLabel} selectedKey={null} onBarClick={null} />
+              {hourlyData.every((h) => h.calls === 0) && (
+                <div style={{ fontSize: 12, color: '#6B7280', textAlign: 'center', marginTop: 8 }}>Sin actividad registrada este día en el histórico disponible.</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* By feature */}
       {byFeature.length > 0 && (
         <div className="cost-tab-section">
           <div className="cost-tab-section-title">Por funcionalidad</div>
           {byFeature.map((f) => (
             <div key={`${f.product}:${f.feature}`} className="cost-feature-row">
-              <span className="cost-feature-label">{LABELS[f.feature] ?? f.feature}</span>
+              <span className="cost-feature-label">{FEAT_LABELS[f.feature] ?? f.feature}</span>
               <div className="cost-feature-bar-wrap">
                 <div className="cost-feature-bar" style={{ width: `${Math.round((f.cost / maxCost) * 100)}%` }} />
               </div>

@@ -57,7 +57,7 @@ export default async function TenantAdminPage({ params }) {
     listInvestigations(tenant),
     listLearnings(tenant),
     getTenantMonthlyUsage(tenant, currentMonth()),
-    getRecentEvents(tenant, 50),
+    getRecentEvents(tenant, 200),
   ]);
 
   if (!meta) notFound();
