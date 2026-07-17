@@ -1982,9 +1982,9 @@ function CostsTab({ usage, events }) {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 11, color: '#6B7280' }}>Desde</span>
-              <input type="date" value={fromDate} max={toDate} onChange={(e) => { setFromDate(e.target.value); setSelectedDay(null); }} style={{ fontSize: 11, background: '#111827', border: '1px solid #374151', borderRadius: 6, color: '#E5E7EB', padding: '3px 8px', fontFamily: 'inherit', cursor: 'pointer' }} />
+              <input type="date" value={fromDate} max={toDate} onChange={(e) => { setFromDate(e.target.value); setSelectedDay(null); }} style={{ fontSize: 11, background: '#1F2937', border: '1px solid #374151', borderRadius: 6, color: '#E5E7EB', padding: '4px 8px', fontFamily: 'inherit', cursor: 'pointer', colorScheme: 'dark' }} />
               <span style={{ fontSize: 11, color: '#6B7280' }}>Hasta</span>
-              <input type="date" value={toDate} min={fromDate} max={isoToday()} onChange={(e) => { setToDate(e.target.value); setSelectedDay(null); }} style={{ fontSize: 11, background: '#111827', border: '1px solid #374151', borderRadius: 6, color: '#E5E7EB', padding: '3px 8px', fontFamily: 'inherit', cursor: 'pointer' }} />
+              <input type="date" value={toDate} min={fromDate} max={isoToday()} onChange={(e) => { setToDate(e.target.value); setSelectedDay(null); }} style={{ fontSize: 11, background: '#1F2937', border: '1px solid #374151', borderRadius: 6, color: '#E5E7EB', padding: '4px 8px', fontFamily: 'inherit', cursor: 'pointer', colorScheme: 'dark' }} />
             </div>
           </div>
           <SpendChart data={dailyData} xLabel={dailyXLabel} selectedKey={selectedDay} onBarClick={(d) => setSelectedDay(selectedDay === d.key ? null : d.key)} />
