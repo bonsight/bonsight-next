@@ -4,7 +4,7 @@ import { listConversations, getConversationMessages, getConversationCheckpointSu
 import { listLearnings } from '@/lib/kai/learnings';
 import { listInvestigations } from '@/lib/aria/memory';
 import { calcOverallScore } from '@/lib/kai/scoring';
-import { getTenantMonthlyUsage, getRecentEvents, currentMonth } from '@/lib/kai/usage';
+import { getTenantMonthlyUsage, getRecentEvents, getTenantDailyUsage, currentMonth } from '@/lib/kai/usage';
 import TenantDetail from './TenantDetail';
 
 export async function generateMetadata({ params }) {
@@ -50,14 +50,23 @@ function extractRole(messages) {
 export default async function TenantAdminPage({ params }) {
   const { tenant } = await params;
 
-  const [meta, profile, conversations, ariaInvestigations, allLearnings, tenantUsage, usageEvents] = await Promise.all([
+  // Daily usage for the last 90 days (for the spend chart)
+  const ninetyDaysAgo = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 89);
+    return d.toISOString().slice(0, 10);
+  })();
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const [meta, profile, conversations, ariaInvestigations, allLearnings, tenantUsage, usageEvents, dailyUsage] = await Promise.all([
     getTenantMeta(tenant),
     getBusinessProfile(tenant),
     listConversations(tenant),
     listInvestigations(tenant),
     listLearnings(tenant),
     getTenantMonthlyUsage(tenant, currentMonth()),
-    getRecentEvents(tenant, 200),
+    getRecentEvents(tenant, 1000),
+    getTenantDailyUsage(tenant, ninetyDaysAgo, todayStr),
   ]);
 
   if (!meta) notFound();
@@ -170,6 +179,7 @@ export default async function TenantAdminPage({ params }) {
       ariaInvestigations={ariaInvestigations}
       tenantUsage={tenantUsage}
       usageEvents={usageEvents}
+      dailyUsage={dailyUsage}
     />
   );
 }

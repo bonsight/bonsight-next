@@ -1837,7 +1837,7 @@ function isoOffset(days) {
   return d.toISOString().slice(0, 10);
 }
 
-function CostsTab({ usage, events }) {
+function CostsTab({ usage, events, dailyUsage = [] }) {
   const [fromDate, setFromDate] = useState(() => isoOffset(13));
   const [toDate, setToDate] = useState(() => isoToday());
   const [selectedDay, setSelectedDay] = useState(null);
@@ -1845,30 +1845,35 @@ function CostsTab({ usage, events }) {
   const { total = {}, byFeature = [] } = usage ?? {};
   const maxCost = byFeature[0]?.cost ?? 1;
 
-  // ── Build daily chart data ──
-  const dailyMap = {};
+  // ── Build daily chart data from pre-aggregated daily stats ──
+  const dailyAggMap = {};
+  for (const d of dailyUsage) {
+    dailyAggMap[d.date] = { cost: d.cost, tokens: (d.input_tokens ?? 0) + (d.output_tokens ?? 0), calls: d.calls };
+  }
+
+  // Fallback: derive from events for days not yet in daily agg (e.g. before this deploy)
+  const eventDayMap = {};
   for (const e of (events ?? [])) {
     const day = e.createdAt?.slice(0, 10);
     if (!day) continue;
-    if (!dailyMap[day]) dailyMap[day] = { cost: 0, tokens: 0, calls: 0 };
-    dailyMap[day].cost  += e.cost ?? 0;
-    dailyMap[day].tokens += (e.inputTokens ?? 0) + (e.outputTokens ?? 0);
-    dailyMap[day].calls++;
+    if (!eventDayMap[day]) eventDayMap[day] = { cost: 0, tokens: 0, calls: 0 };
+    eventDayMap[day].cost   += e.cost ?? 0;
+    eventDayMap[day].tokens += (e.inputTokens ?? 0) + (e.outputTokens ?? 0);
+    eventDayMap[day].calls++;
   }
 
-  const allDailyData = (() => {
+  const dailyData = (() => {
     const from = new Date(fromDate);
     const to   = new Date(toDate);
     const days = [];
     for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
       const key = d.toISOString().slice(0, 10);
       const label = new Date(key).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
-      days.push({ key, label, ...(dailyMap[key] ?? { cost: 0, tokens: 0, calls: 0 }) });
+      const agg = dailyAggMap[key] ?? eventDayMap[key] ?? { cost: 0, tokens: 0, calls: 0 };
+      days.push({ key, label, ...agg });
     }
     return days;
   })();
-
-  const dailyData = allDailyData;
 
   function applyPreset(days) {
     setFromDate(isoOffset(days - 1));
@@ -2038,7 +2043,7 @@ function CostsTab({ usage, events }) {
   );
 }
 
-export default function TenantDetail({ meta, profile, conversations, allLearnings = [], participantMap = {}, knowledgeQuality = {}, recentSession = null, changeCounts = {}, recentLearnings = [], ariaInvestigations = [], tenantUsage = null, usageEvents = [] }) {
+export default function TenantDetail({ meta, profile, conversations, allLearnings = [], participantMap = {}, knowledgeQuality = {}, recentSession = null, changeCounts = {}, recentLearnings = [], ariaInvestigations = [], tenantUsage = null, usageEvents = [], dailyUsage = [] }) {
   const [activeTab, setActiveTab] = useState(0);
   const [copied, setCopied] = useState(false);
   const [isDemo, setIsDemo] = useState(!!meta.isDemo);
@@ -2209,7 +2214,7 @@ export default function TenantDetail({ meta, profile, conversations, allLearning
         {activeTab === 6 && <SummaryTab slug={meta.slug} />}
 
         {/* Costos IA Tab */}
-        {activeTab === 7 && <CostsTab usage={tenantUsage} events={usageEvents} />}
+        {activeTab === 7 && <CostsTab usage={tenantUsage} events={usageEvents} dailyUsage={dailyUsage} />}
 
       </div>
     </>
