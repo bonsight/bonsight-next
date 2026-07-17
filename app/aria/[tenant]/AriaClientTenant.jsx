@@ -427,7 +427,8 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
 
   async function processFile(file) {
     if (!file) return;
-    if (file.size > 4 * 1024 * 1024) { alert('Archivo demasiado grande (máx 4 MB).'); return; }
+    const maxMb = file.type.startsWith('image/') ? 4 : 10;
+    if (file.size > maxMb * 1024 * 1024) { alert(`Archivo demasiado grande (máx ${maxMb} MB).`); return; }
     const id = Math.random().toString(36).slice(2);
     if (file.type.startsWith('image/')) {
       const data = await compressImage(file);
@@ -436,6 +437,15 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
     } else if (file.type === 'application/pdf') {
       const data = await readAsBase64(file);
       setAttachments((prev) => [...prev, { id, name: file.name, mimeType: 'application/pdf', data, previewUrl: null }]);
+    } else if ([
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'text/csv',
+    ].includes(file.type)) {
+      const data = await readAsBase64(file);
+      setAttachments((prev) => [...prev, { id, name: file.name, mimeType: file.type, data, previewUrl: null }]);
     }
   }
 
@@ -859,7 +869,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*,.pdf"
+                accept="image/*,.pdf,.pptx,.ppt,.docx,.doc,.xlsx,.xls,.csv"
                 multiple
                 style={{ display: 'none' }}
                 onChange={(e) => { Array.from(e.target.files).forEach(processFile); e.target.value = ''; }}

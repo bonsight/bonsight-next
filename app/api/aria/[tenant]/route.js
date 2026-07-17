@@ -20,6 +20,7 @@ import { runSearchConsoleQuery } from '@/lib/aria/searchConsole';
 import { runGoogleAdsQuery } from '@/lib/aria/googleAds';
 import { getDbSources, queryDatabase, buildDbSourcesContext } from '@/lib/aria/databases';
 import { searchNotion, getNotionPage, queryNotionDatabase } from '@/lib/aria/notion';
+import { OFFICE_MIMES, extractTextFromBuffer } from '@/lib/fileExtract';
 
 const MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 8000;
@@ -1311,6 +1312,20 @@ export async function POST(req, { params }) {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const tools = buildTools();
 
+    // Pre-extract text from office attachments (can't await inside .map)
+    const officeTexts = new Map();
+    if (attachments?.length) {
+      for (const att of attachments) {
+        if (OFFICE_MIMES.has(att.mimeType)) {
+          try {
+            const buf  = Buffer.from(att.data, 'base64');
+            const text = await extractTextFromBuffer(buf, att.mimeType);
+            if (text) officeTexts.set(att.name, `[Documento adjunto: ${att.name}]\n\n${text}`);
+          } catch { /* skip unreadable */ }
+        }
+      }
+    }
+
     const cleanMessages = messages.map(({ role, content }, idx) => {
       const isLastUser = idx === messages.length - 1 && role === 'user' && attachments?.length > 0;
       if (isLastUser) {
@@ -1320,6 +1335,9 @@ export async function POST(req, { params }) {
             blocks.push({ type: 'image', source: { type: 'base64', media_type: att.mimeType, data: att.data } });
           } else if (att.mimeType === 'application/pdf') {
             blocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: att.data } });
+          } else if (OFFICE_MIMES.has(att.mimeType)) {
+            const text = officeTexts.get(att.name);
+            if (text) blocks.push({ type: 'text', text });
           }
         }
         if (content?.trim()) blocks.push({ type: 'text', text: String(content) });
@@ -1504,14 +1522,15 @@ export async function POST(req, { params }) {
           max_tokens: 60,
           messages: [{ role: 'user', content: `Responde SOLO con JSON válido sin markdown: {"titulo":"máximo 5 palabras en español para el título de esta investigación de negocio","topic":"máximo 3 palabras en español para la categoría temática"} para este mensaje: "${firstMsg.slice(0, 200)}"` }],
         });
-        const raw = titleRes.content[0]?.text?.trim() ?? '';
+        const raw     = titleRes.content[0]?.text?.trim() ?? '';
+        const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
         let titulo = '', topic = '';
         try {
-          const parsed = JSON.parse(raw);
+          const parsed = JSON.parse(cleaned);
           titulo = String(parsed.titulo ?? '').replace(/^["'""«»]+|["'""«»]+$/g, '').replace(/\.$/, '').trim();
           topic  = String(parsed.topic  ?? '').replace(/^["'""«»]+|["'""«»]+$/g, '').replace(/\.$/, '').trim();
         } catch {
-          titulo = raw.replace(/^["'""«»]+|["'""«»]+$/g, '').replace(/\.$/, '').trim();
+          titulo = cleaned.replace(/^["'""«»]+|["'""«»]+$/g, '').replace(/\.$/, '').trim();
         }
         const updates = {};
         if (titulo && titulo !== 'Nueva investigación') updates.titulo = titulo;
