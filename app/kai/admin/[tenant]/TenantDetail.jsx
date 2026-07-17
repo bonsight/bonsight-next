@@ -1786,7 +1786,7 @@ function SpendChart({ data, xLabel, selectedKey, onBarClick }) {
           return (
             <div
               key={d.key}
-              style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end', cursor: onBarClick ? 'pointer' : 'default', position: 'relative' }}
+              style={{ flex: 1, minWidth: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end', cursor: onBarClick ? 'pointer' : 'default', position: 'relative' }}
               onClick={() => onBarClick?.(d)}
               onMouseEnter={() => setHoverIdx(i)}
               onMouseLeave={() => setHoverIdx(null)}
@@ -1828,8 +1828,18 @@ function TokenBar({ input, output }) {
 
 const FEAT_LABELS = { chat: 'Discovery Chat', executive_summary: 'Executive Summary', diagnosis: 'Diagnóstico', summary: 'Resumen', insights: 'Insights', transversals: 'Patrones Transversales' };
 
+function isoToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+function isoOffset(days) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
 function CostsTab({ usage, events }) {
-  const [dateRange, setDateRange] = useState(14);
+  const [fromDate, setFromDate] = useState(() => isoOffset(13));
+  const [toDate, setToDate] = useState(() => isoToday());
   const [selectedDay, setSelectedDay] = useState(null);
 
   const { total = {}, byFeature = [] } = usage ?? {};
@@ -1846,13 +1856,27 @@ function CostsTab({ usage, events }) {
     dailyMap[day].calls++;
   }
 
-  const dailyData = Array.from({ length: dateRange }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (dateRange - 1 - i));
-    const key = d.toISOString().slice(0, 10);
-    const label = d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
-    return { key, label, ...(dailyMap[key] ?? { cost: 0, tokens: 0, calls: 0 }) };
-  });
+  const allDailyData = (() => {
+    const from = new Date(fromDate);
+    const to   = new Date(toDate);
+    const days = [];
+    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+      const key = d.toISOString().slice(0, 10);
+      const label = new Date(key).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+      days.push({ key, label, ...(dailyMap[key] ?? { cost: 0, tokens: 0, calls: 0 }) });
+    }
+    return days;
+  })();
+
+  // Auto-trim leading empty days (keep trailing zeros so "today" is visible)
+  const firstNonZero = allDailyData.findIndex((d) => d.cost > 0);
+  const dailyData = firstNonZero > 0 ? allDailyData.slice(firstNonZero) : allDailyData;
+
+  function applyPreset(days) {
+    setFromDate(isoOffset(days - 1));
+    setToDate(isoToday());
+    setSelectedDay(null);
+  }
 
   // ── Build hourly chart data for selected day ──
   const hourlyData = selectedDay
@@ -1940,16 +1964,27 @@ function CostsTab({ usage, events }) {
       {/* Daily spend chart */}
       {(events ?? []).length > 0 && (
         <div className="cost-tab-section">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div className="cost-tab-section-title" style={{ marginBottom: 0 }}>
-              Gasto por día{selectedDay ? '' : ' — click en una barra para ver por hora'}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div className="cost-tab-section-title" style={{ marginBottom: 0 }}>
+                Gasto por día{selectedDay ? '' : ' — click en una barra para ver por hora'}
+              </div>
+              <div style={{ display: 'flex', gap: 5 }}>
+                {[7, 14, 30].map((d) => {
+                  const active = fromDate === isoOffset(d - 1) && toDate === isoToday();
+                  return (
+                    <button key={d} onClick={() => applyPreset(d)} style={{ padding: '3px 11px', borderRadius: 6, fontSize: 11, fontWeight: 600, border: '1px solid', borderColor: active ? '#20C997' : '#374151', background: active ? 'rgba(32,201,151,0.1)' : 'transparent', color: active ? '#20C997' : '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      {d}d
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: 5 }}>
-              {[7, 14, 30].map((d) => (
-                <button key={d} onClick={() => { setDateRange(d); setSelectedDay(null); }} style={{ padding: '3px 11px', borderRadius: 6, fontSize: 11, fontWeight: 600, border: '1px solid', borderColor: dateRange === d ? '#20C997' : '#374151', background: dateRange === d ? 'rgba(32,201,151,0.1)' : 'transparent', color: dateRange === d ? '#20C997' : '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {d}d
-                </button>
-              ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, color: '#6B7280' }}>Desde</span>
+              <input type="date" value={fromDate} max={toDate} onChange={(e) => { setFromDate(e.target.value); setSelectedDay(null); }} style={{ fontSize: 11, background: '#111827', border: '1px solid #374151', borderRadius: 6, color: '#E5E7EB', padding: '3px 8px', fontFamily: 'inherit', cursor: 'pointer' }} />
+              <span style={{ fontSize: 11, color: '#6B7280' }}>Hasta</span>
+              <input type="date" value={toDate} min={fromDate} max={isoToday()} onChange={(e) => { setToDate(e.target.value); setSelectedDay(null); }} style={{ fontSize: 11, background: '#111827', border: '1px solid #374151', borderRadius: 6, color: '#E5E7EB', padding: '3px 8px', fontFamily: 'inherit', cursor: 'pointer' }} />
             </div>
           </div>
           <SpendChart data={dailyData} xLabel={dailyXLabel} selectedKey={selectedDay} onBarClick={(d) => setSelectedDay(selectedDay === d.key ? null : d.key)} />
