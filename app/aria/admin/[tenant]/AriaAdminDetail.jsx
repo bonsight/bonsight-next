@@ -710,6 +710,38 @@ function IntelligenceSourcesTab({ slug }) {
     }
   };
 
+  const validateNotion = async (_sourceId, { integrationToken }) => {
+    setSaving((p) => ({ ...p, notion: true }));
+    try {
+      const res = await fetch(`/api/kai/${slug}/intelligence-sources/notion/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ integrationToken }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setSources((prev) => prev.map((s) => s.id === 'notion' ? {
+          ...s, status: 'active',
+          config: {
+            ...s.config,
+            integrationToken,
+            databaseCount: data.databaseCount,
+            pageCount: data.pageCount,
+            permissionStatus: 'validated',
+            lastValidatedAt: data.lastValidatedAt,
+            lastError: null,
+          },
+        } : s));
+        return { ok: true };
+      }
+      return { ok: false, error: data.error };
+    } catch {
+      return { ok: false, error: 'Error de conexión. Intenta de nuevo.' };
+    } finally {
+      setSaving((p) => ({ ...p, notion: false }));
+    }
+  };
+
   if (!sources) {
     return <div style={{ fontSize: 13, color: '#bbb', padding: '32px 0' }}>Cargando…</div>;
   }
@@ -762,7 +794,7 @@ function IntelligenceSourcesTab({ slug }) {
             source={s}
             onToggle={() => toggle(s.id, s.status)}
             onSaveConfig={(sourceId, config) => saveConfig(sourceId, config)}
-            onValidate={s.id === 'ga4' ? validateGA4 : s.id === 'search_console' ? validateSearchConsole : s.id === 'google_ads' ? validateGoogleAds : undefined}
+            onValidate={s.id === 'ga4' ? validateGA4 : s.id === 'search_console' ? validateSearchConsole : s.id === 'google_ads' ? validateGoogleAds : s.id === 'notion' ? validateNotion : undefined}
             saEmail={s.id === 'ga4' || s.id === 'search_console' ? saEmail : undefined}
             loading={!!saving[s.id]}
           />

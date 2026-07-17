@@ -19,6 +19,7 @@ import { runGa4Query } from '@/lib/aria/ga4';
 import { runSearchConsoleQuery } from '@/lib/aria/searchConsole';
 import { runGoogleAdsQuery } from '@/lib/aria/googleAds';
 import { getDbSources, queryDatabase, buildDbSourcesContext } from '@/lib/aria/databases';
+import { searchNotion, getNotionPage, queryNotionDatabase } from '@/lib/aria/notion';
 
 const MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 8000;
@@ -487,6 +488,8 @@ present_advisory → Cuando la respuesta sea una recomendación ejecutiva con de
 
 Al cerrar una sesión de análisis importante, usa save_session_memory para persistir hallazgos, decisiones e insights.
 
+query_notion → Cuando Notion está activo y el usuario hace preguntas que podrían estar respondidas en documentos internos, wikis o bases de datos del workspace. Empieza con search para descubrir páginas relevantes, luego get_page para leer el contenido completo o query_database para obtener filas estructuradas. No asumas que tienes el contenido — consúltalo.
+
 generate_gtm_container → Cuando el usuario solicite una configuración de Google Tag Manager exportable. Genera la estructura completa con tags (GA4_CONFIG, GA4_EVENT, CUSTOM_HTML), triggers (PAGEVIEW, CUSTOM_EVENT, CLICK) y variables (DATA_LAYER, CONSTANT). Los triggerNames de cada tag deben coincidir exactamente con los nombres de triggers definidos.
 
 generate_measurement_excel → Cuando el usuario solicite un plan de medición, matriz de eventos, auditoría de analytics, inventario de tags, backlog de implementación, o cualquier entregable tabular en Excel. Puede tener múltiples hojas.
@@ -949,6 +952,24 @@ No describas el contenido del archivo en detalle — la card lo hace.`,
       },
     },
     {
+      name: 'query_notion',
+      description: 'Accede al workspace de Notion del cliente: busca páginas y wikis por tema, lee el contenido completo de una página, o consulta filas de una base de datos estructurada.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['search', 'get_page', 'query_database'],
+            description: 'search: busca por query | get_page: lee una página por ID | query_database: obtiene filas de una DB por ID',
+          },
+          query: { type: 'string', description: 'Para search: término de búsqueda' },
+          page_id: { type: 'string', description: 'Para get_page: ID de la página (formato UUID)' },
+          database_id: { type: 'string', description: 'Para query_database: ID de la base de datos' },
+        },
+        required: ['action'],
+      },
+    },
+    {
       name: 'generate_gtm_container',
       description: 'Genera un contenedor de Google Tag Manager exportable e importable. Crea la estructura completa con tags, triggers y variables. Los triggerNames de cada tag deben coincidir EXACTAMENTE con los nombres de triggers definidos en el mismo schema.',
       input_schema: {
@@ -1122,6 +1143,18 @@ async function executeTool(name, input, { tenant, investigationId, intelligenceS
   }
   if (name === 'generate_gtm_container' || name === 'generate_measurement_excel' || name === 'generate_measurement_pdf') {
     return { ok: true, message: 'Documento estructurado correctamente. El usuario podrá descargarlo desde la card.' };
+  }
+  if (name === 'query_notion') {
+    const notionSource = intelligenceSources?.find((s) => s.id === 'notion');
+    if (!notionSource || notionSource.status !== 'active') {
+      return { error: 'Notion no está configurado para este tenant.' };
+    }
+    const token = notionSource.config?.integrationToken;
+    if (!token) return { error: 'Integration Token no configurado.' };
+    if (input.action === 'search') return searchNotion(token, input.query ?? '');
+    if (input.action === 'get_page') return getNotionPage(token, input.page_id);
+    if (input.action === 'query_database') return queryNotionDatabase(token, input.database_id);
+    return { error: `Acción desconocida: ${input.action}` };
   }
   if (name === 'search_archive') {
     const results = await searchArchivedInvestigations(tenant, input.query);
