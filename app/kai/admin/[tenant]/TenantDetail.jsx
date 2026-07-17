@@ -1113,8 +1113,10 @@ const DRIVE_MIME_LABEL = {
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel',
   'application/vnd.ms-excel': 'Excel',
   'text/csv': 'CSV',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PowerPoint',
   'application/vnd.google-apps.document': 'Google Doc',
   'application/vnd.google-apps.spreadsheet': 'Google Sheet',
+  'application/vnd.google-apps.presentation': 'Google Slides',
 };
 const DRIVE_MIME_ICON = {
   'application/pdf': '📄',
@@ -1122,8 +1124,10 @@ const DRIVE_MIME_ICON = {
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '📊',
   'application/vnd.ms-excel': '📊',
   'text/csv': '📊',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '📑',
   'application/vnd.google-apps.document': '📝',
   'application/vnd.google-apps.spreadsheet': '📊',
+  'application/vnd.google-apps.presentation': '📑',
 };
 
 const SA_EMAIL = 'id-aria-platform@bonsight-web.iam.gserviceaccount.com';
@@ -1306,7 +1310,7 @@ function DriveConnectPanel({ slug, driveConfig, setDriveConfig, onImported, sour
 
           {loadingFiles ? null : files.length === 0 ? (
             <div style={{ fontSize: 12, color: '#aaa', padding: '8px 0' }}>
-              No se encontraron archivos compatibles (PDF, DOCX, XLSX, Google Docs, Google Sheets).
+              No se encontraron archivos compatibles (PDF, DOCX, XLSX, PPTX, Google Docs, Google Sheets, Google Slides).
             </div>
           ) : (
             <>
@@ -1336,7 +1340,10 @@ function DriveConnectPanel({ slug, driveConfig, setDriveConfig, onImported, sour
                         />
                       )}
                       <span className="ks-drive-file-icon">{DRIVE_MIME_ICON[f.mimeType] ?? '📄'}</span>
-                      <span className="ks-drive-file-name">{f.name}</span>
+                      <span className="ks-drive-file-name">
+                        {f.name}
+                        {f.folderPath && <span style={{ fontSize: 10, color: '#6B7280', display: 'block', marginTop: 1 }}>{f.folderPath}</span>}
+                      </span>
                       {isImported && (
                         <span className="ks-drive-file-badge ks-drive-file-badge--imported">Importado</span>
                       )}
