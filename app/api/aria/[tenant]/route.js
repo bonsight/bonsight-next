@@ -496,7 +496,7 @@ generate_gtm_container → Cuando el usuario solicite una configuración de Goog
 
 generate_measurement_excel → Cuando el usuario solicite un plan de medición, matriz de eventos, auditoría de analytics, inventario de tags, backlog de implementación, o cualquier entregable tabular en Excel. Puede tener múltiples hojas.
 
-generate_measurement_pdf → Cuando el usuario solicite una guía de medición formal, manual de implementación, o documento entregable de analytics. Usa el schema completo — cuanto más detallado, mejor el documento generado. Si conoces los eventos GA4 del cliente desde el Business Profile o el historial, inclúyelos con sus parámetros.
+generate_measurement_pdf → Cuando el usuario solicite una guía de medición formal, manual de implementación, o documento entregable de tracking/analytics — no asumas que es GA4 salvo que el usuario lo pida o el tenant lo tenga configurado como fuente activa; puede ser tracking a un backend propio, otra plataforma de analytics, o cualquier esquema de eventos. Usa el schema completo — cuanto más detallado, mejor el documento generado. Si conoces los eventos reales del cliente desde el Business Profile, Intelligence Sources o el historial, inclúyelos con sus parámetros; en `tools` listá las herramientas que realmente aplican (solo poné GA4 ahí si de verdad es parte de la implementación).
 
 Regla de documentos: no combines generate_* con present_analysis en el mismo turno. El documento es el entregable; puedes acompañarlo con una breve explicación de qué contiene y qué cubre.
 
@@ -1079,7 +1079,7 @@ No describas el contenido del archivo en detalle — la card lo hace.`,
       input_schema: {
         type: 'object',
         properties: {
-          title: { type: 'string', description: 'Título del documento, ej: Guía de Medición GA4 — TopK9' },
+          title: { type: 'string', description: 'Título del documento, ej: Guía de Medición — TopK9 (adaptá "Medición" a lo que corresponda: GA4, tracking interno, etc.)' },
           filename: { type: 'string', description: 'Nombre del archivo, ej: guia-medicion-topk9.pdf' },
           description: { type: 'string' },
           date: { type: 'string', description: 'Ej: Julio 2026' },

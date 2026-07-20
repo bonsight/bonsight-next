@@ -152,11 +152,12 @@ function SummaryPage({ data }) {
 function EventsOverviewPage({ data }) {
   const events = data.events ?? [];
   if (!events.length) return null;
+  const isGa4 = (data.tools ?? []).some((t) => /ga4/i.test(t));
   return (
     <Page size="A4" style={s.page}>
       <Hdr client={data.client} />
       <Text style={s.label}>Plan de medición</Text>
-      <Text style={s.h1}>Eventos GA4</Text>
+      <Text style={s.h1}>{isGa4 ? 'Eventos GA4' : 'Eventos a registrar'}</Text>
       <View style={s.table}>
         <View style={s.tHead}>
           <Text style={{ ...s.tHeadCell, flex: 1.5 }}>Evento</Text>
