@@ -4,12 +4,24 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import QRCode from 'qrcode';
 
 const POLL_MS = 4000;
+const DEFAULT_DURATION = 120;
 
-export default function ActivityDashboardCard({ tenant, activity, onFinished }) {
+function formatDuration(totalSeconds) {
+  const s = Math.max(0, Math.round(totalSeconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+}
+
+export default function ActivityDashboardCard({ tenant, activity }) {
   const [status, setStatus] = useState(null);
   const [qrDataUrl, setQrDataUrl] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const [durationInput, setDurationInput] = useState(String(DEFAULT_DURATION));
+  const [savingDuration, setSavingDuration] = useState(false);
   const pollRef = useRef(null);
+  const tickRef = useRef(null);
 
   const joinUrl = typeof window !== 'undefined' && activity?.code
     ? `${window.location.origin}/kai/activity/${activity.code}`
@@ -24,6 +36,7 @@ export default function ActivityDashboardCard({ tenant, activity, onFinished }) 
       setStatus(data);
       if (data.meta?.status === 'finished') {
         clearInterval(pollRef.current);
+        clearInterval(tickRef.current);
       }
     } catch { /* ignora fallos puntuales de polling */ }
   }, [tenant, activity?.id]);
@@ -32,7 +45,11 @@ export default function ActivityDashboardCard({ tenant, activity, onFinished }) 
     if (!activity?.id) return;
     fetchStatus();
     pollRef.current = setInterval(fetchStatus, POLL_MS);
-    return () => clearInterval(pollRef.current);
+    tickRef.current = setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      clearInterval(pollRef.current);
+      clearInterval(tickRef.current);
+    };
   }, [activity?.id, fetchStatus]);
 
   useEffect(() => {
@@ -41,6 +58,12 @@ export default function ActivityDashboardCard({ tenant, activity, onFinished }) 
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(null));
   }, [joinUrl]);
+
+  useEffect(() => {
+    if (status?.meta?.questionDurationSeconds) {
+      setDurationInput(String(status.meta.questionDurationSeconds));
+    }
+  }, [status?.meta?.questionDurationSeconds]);
 
   const handleAdvance = async () => {
     setBusy(true);
@@ -60,9 +83,24 @@ export default function ActivityDashboardCard({ tenant, activity, onFinished }) 
         const data = await res.json();
         setStatus(data);
         clearInterval(pollRef.current);
+        clearInterval(tickRef.current);
       }
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleSaveDuration = async () => {
+    setSavingDuration(true);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/activities/${activity.id}/duration`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seconds: Number(durationInput) }),
+      });
+      if (res.ok) setStatus(await res.json());
+    } finally {
+      setSavingDuration(false);
     }
   };
 
@@ -74,11 +112,20 @@ export default function ActivityDashboardCard({ tenant, activity, onFinished }) 
   const connectedCount = status?.connectedCount ?? 0;
   const answeredCount = status?.answeredCount ?? 0;
 
+  const sessionElapsed = meta.startedAt
+    ? ((isFinished && meta.finishedAt ? new Date(meta.finishedAt).getTime() : now) - new Date(meta.startedAt).getTime()) / 1000
+    : 0;
+
+  const questionRemaining = !isFinished && meta.currentQuestionStartedAt
+    ? (meta.questionDurationSeconds ?? DEFAULT_DURATION) - (now - new Date(meta.currentQuestionStartedAt).getTime()) / 1000
+    : null;
+
   return (
     <div className="kai-actdash">
       <div className="kai-actdash-header">
         <span className="kai-actdash-badge">{isFinished ? 'Finalizada' : 'Activity en curso'}</span>
         <h4 className="kai-actdash-title">{meta.name}</h4>
+        <span className="kai-actdash-session-timer" title="Tiempo total de la sesión">⏱ {formatDuration(sessionElapsed)}</span>
       </div>
 
       {!isFinished && (
@@ -104,6 +151,14 @@ export default function ActivityDashboardCard({ tenant, activity, onFinished }) 
               <span className="kai-actdash-stat-value">{(meta.currentQuestionIndex ?? 0) + 1}/{questionCount}</span>
               <span className="kai-actdash-stat-label">pregunta</span>
             </div>
+            {questionRemaining !== null && (
+              <div className="kai-actdash-stat">
+                <span className={`kai-actdash-stat-value ${questionRemaining <= 0 ? 'kai-actdash-stat-value--expired' : ''}`}>
+                  {formatDuration(questionRemaining)}
+                </span>
+                <span className="kai-actdash-stat-label">tiempo p/pregunta</span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -113,14 +168,31 @@ export default function ActivityDashboardCard({ tenant, activity, onFinished }) 
           {status?.connectedCount ?? 0} participantes · pedile a Aria el análisis cuando quieras.
         </p>
       ) : (
-        <div className="kai-actdash-actions">
-          <button type="button" className="kai-actdash-btn kai-actdash-btn--primary" onClick={handleAdvance} disabled={busy}>
-            Siguiente pregunta →
-          </button>
-          <button type="button" className="kai-actdash-btn" onClick={handleFinish} disabled={busy}>
-            Finalizar Activity
-          </button>
-        </div>
+        <>
+          <div className="kai-actdash-actions">
+            <button type="button" className="kai-actdash-btn kai-actdash-btn--primary" onClick={handleAdvance} disabled={busy}>
+              Siguiente pregunta →
+            </button>
+            <button type="button" className="kai-actdash-btn" onClick={handleFinish} disabled={busy}>
+              Finalizar Activity
+            </button>
+          </div>
+          <div className="kai-actdash-duration">
+            <label htmlFor="kai-actdash-duration-input">Segundos por pregunta (visible para participantes):</label>
+            <input
+              id="kai-actdash-duration-input"
+              type="number"
+              min={10}
+              max={1800}
+              value={durationInput}
+              onChange={(e) => setDurationInput(e.target.value)}
+              className="kai-actdash-duration-input"
+            />
+            <button type="button" className="kai-actdash-btn" onClick={handleSaveDuration} disabled={savingDuration}>
+              Guardar
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

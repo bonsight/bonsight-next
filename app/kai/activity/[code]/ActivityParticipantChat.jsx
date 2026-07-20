@@ -5,6 +5,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 const POLL_MS = 4000;
 const storageKey = (code) => `kai_activity_${code}_participant`;
 
+function formatDuration(totalSeconds) {
+  const s = Math.max(0, Math.round(totalSeconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+}
+
 // Mini-parser de **negrita** — mismo criterio liviano que KaiClientChat.jsx, sin dependencias.
 function renderBubbleText(text) {
   const re = /\*\*(.+?)\*\*/g;
@@ -28,9 +35,12 @@ export default function ActivityParticipantChat({ code, activityId, activityName
   const [loading, setLoading] = useState(false);
   const [finished, setFinished] = useState(false);
   const [error, setError] = useState(null);
+  const [questionTiming, setQuestionTiming] = useState(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const displayedIndexRef = useRef(0);
   const pollRef = useRef(null);
+  const tickRef = useRef(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -95,17 +105,28 @@ export default function ActivityParticipantChat({ code, activityId, activityName
         if (data.status === 'finished') {
           setFinished(true);
           clearInterval(pollRef.current);
+          clearInterval(tickRef.current);
           return;
         }
+        setQuestionTiming({ startedAt: data.currentQuestionStartedAt, durationSeconds: data.questionDurationSeconds });
         if (data.currentQuestionIndex > displayedIndexRef.current && !loading) {
           sendToKai('__next_question__', { record: false });
         }
       } catch { /* ignora fallos puntuales */ }
     };
 
+    poll();
     pollRef.current = setInterval(poll, POLL_MS);
-    return () => clearInterval(pollRef.current);
+    tickRef.current = setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      clearInterval(pollRef.current);
+      clearInterval(tickRef.current);
+    };
   }, [step, participantId, code, sendToKai, loading]);
+
+  const remainingSeconds = questionTiming?.startedAt
+    ? questionTiming.durationSeconds - (now - new Date(questionTiming.startedAt).getTime()) / 1000
+    : null;
 
   const handleJoin = async (e) => {
     e.preventDefault();
@@ -168,6 +189,11 @@ export default function ActivityParticipantChat({ code, activityId, activityName
     <div className="act-wrap">
       <div className="act-header">
         <span className="act-header-name">{activityName}</span>
+        {!finished && remainingSeconds !== null && (
+          <span className={`act-header-timer ${remainingSeconds <= 0 ? 'act-header-timer--expired' : ''}`}>
+            ⏱ {formatDuration(remainingSeconds)}
+          </span>
+        )}
         {finished && <span className="act-header-badge">Finalizada</span>}
       </div>
       <div className="act-messages">
