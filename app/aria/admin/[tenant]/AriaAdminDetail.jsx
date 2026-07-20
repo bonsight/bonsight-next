@@ -1005,6 +1005,15 @@ const TABS = ['Context', 'Analysis', 'Intelligence Sources', 'Insights', 'Recomm
 
 export default function AriaAdminDetail({ meta, profile, conversations, ariaInvestigations, ariaLastMessages }) {
   const [activeTab, setActiveTab] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  const clientUrl = `https://aria.bonsight.co/${meta.slug}`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(clientUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
 
   return (
     <>
@@ -1036,6 +1045,54 @@ export default function AriaAdminDetail({ meta, profile, conversations, ariaInve
               {meta.industry && <span>{meta.industry}</span>}
             </div>
           </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <a
+            href={`/aria/${meta.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Abrir interfaz del cliente"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '7px 12px', borderRadius: 7, fontSize: 12, fontWeight: 500,
+              border: '0.5px solid #ddd', background: '#fff', color: '#555',
+              textDecoration: 'none', fontFamily: 'inherit',
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            Abrir link
+          </a>
+
+          <button
+            onClick={handleCopy}
+            title="Copiar URL del cliente"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '7px 12px', borderRadius: 7, fontSize: 12, fontWeight: 500,
+              cursor: 'pointer', fontFamily: 'inherit',
+              border: '0.5px solid #ddd', background: '#fff', color: copied ? '#1D9E75' : '#555',
+            }}
+          >
+            {copied ? (
+              <>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                Copiado
+              </>
+            ) : (
+              <>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                Copiar link
+              </>
+            )}
+          </button>
         </div>
       </div>
 
