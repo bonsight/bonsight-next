@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import ActivityDashboardCard from '../components/ActivityDashboardCard';
 
 const AREAS_CONFIG = [
   { id: 'negocio',     label: 'Negocio' },
@@ -450,6 +451,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
   const [confirmationResolved, setConfirmationResolved] = useState({});
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [activeActivity, setActiveActivity] = useState(null);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -737,6 +739,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
       const data = await res.json();
       if (data.conversationId) activeConvIdRef.current = data.conversationId;
       onSessionUpdate?.(data);
+      if (data.activityStart) setActiveActivity(data.activityStart);
       const snap = data.checkpoint
         ? { ...areaStatuses, [data.checkpoint.area]: 'completa', ...(data.checkpoint.nextArea ? { [data.checkpoint.nextArea]: 'explorando' } : {}) }
         : { ...areaStatuses };
@@ -768,6 +771,12 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
 
       {/* Messages */}
       <div style={{ minHeight: 0, overflowY: 'auto', padding: 'clamp(12px, 4vw, 24px) clamp(14px, 5vw, 28px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {activeActivity && (
+          <div style={{ position: 'sticky', top: 0, zIndex: 5 }}>
+            <ActivityDashboardCard tenant={tenant} activity={activeActivity} />
+          </div>
+        )}
+
         {loading && messages.length === 0 && (
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             <KaiAvatar />

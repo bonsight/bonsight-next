@@ -1,0 +1,194 @@
+/* Activities — vista pública del participante (sin login, sin sidebar) */
+
+.act-wrap {
+  min-height: 100dvh;
+  background: var(--kai-bg);
+  color: var(--kai-text);
+  font-family: var(--kai-font);
+  display: flex;
+  flex-direction: column;
+}
+
+.act-wrap--center {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.act-panel {
+  width: 100%;
+  max-width: 380px;
+  background: var(--kai-surface);
+  border: 1px solid var(--kai-border);
+  border-radius: 16px;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+}
+
+.act-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--kai-green);
+}
+
+.act-panel-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--kai-text);
+}
+
+.act-panel-text {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  color: var(--kai-text-muted);
+  line-height: 1.5;
+}
+
+.act-input {
+  width: 100%;
+  background: var(--kai-surface-2);
+  border: 1px solid var(--kai-border);
+  border-radius: 10px;
+  padding: 11px 14px;
+  color: var(--kai-text);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.act-input:focus {
+  border-color: var(--kai-green);
+}
+
+.act-error {
+  margin: 0;
+  font-size: 12.5px;
+  color: #F87171;
+}
+
+.act-btn {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--kai-border);
+  background: var(--kai-surface-2);
+  color: var(--kai-text);
+  cursor: pointer;
+}
+
+.act-btn--primary {
+  background: var(--kai-green);
+  border-color: var(--kai-green);
+  color: #05231A;
+}
+
+.act-btn--primary:hover {
+  background: var(--kai-green-dark);
+  border-color: var(--kai-green-dark);
+}
+
+.act-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.act-header {
+  flex-shrink: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--kai-border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.act-header-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--kai-text);
+}
+
+.act-header-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--kai-text-faint);
+  background: var(--kai-surface-2);
+  border-radius: 20px;
+  padding: 3px 9px;
+}
+
+.act-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.act-bubble-row {
+  display: flex;
+}
+
+.act-bubble-row--user {
+  justify-content: flex-end;
+}
+
+.act-bubble-row--assistant {
+  justify-content: flex-start;
+}
+
+.act-bubble {
+  max-width: min(80%, 480px);
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 14.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.act-bubble--user {
+  background: var(--kai-user-bg);
+  border: 1px solid #2D5A42;
+  color: var(--kai-green-light);
+  border-radius: 14px 4px 14px 14px;
+}
+
+.act-bubble--assistant {
+  background: transparent;
+  color: var(--kai-text);
+}
+
+.act-bubble--typing {
+  color: var(--kai-text-faint);
+  letter-spacing: 2px;
+}
+
+.act-inputbar {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--kai-border);
+}
+
+.act-inputbar .act-input {
+  flex: 1;
+}
+
+.act-inputbar--closed {
+  justify-content: center;
+  align-items: center;
+  color: var(--kai-text-muted);
+  font-size: 13.5px;
+}

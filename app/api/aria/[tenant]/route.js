@@ -18,6 +18,7 @@ import { buildBIC, formatBICForPrompt } from '@/lib/kai/bic';
 import { runGa4Query } from '@/lib/aria/ga4';
 import { runSearchConsoleQuery } from '@/lib/aria/searchConsole';
 import { runGoogleAdsQuery } from '@/lib/aria/googleAds';
+import { runActivityResultsQuery } from '@/lib/aria/activities';
 import { getDbSources, queryDatabase, buildDbSourcesContext } from '@/lib/aria/databases';
 import { searchNotion, getNotionPage, queryNotionDatabase } from '@/lib/aria/notion';
 import { OFFICE_MIMES, extractTextFromBuffer } from '@/lib/fileExtract';
@@ -1131,6 +1132,22 @@ No describas el contenido del archivo en detalle — la card lo hace.`,
         required: ['title', 'filename', 'client'],
       },
     },
+    {
+      name: 'get_activity_results',
+      description: `Trae el detalle completo, pregunta por pregunta y participante por participante, de una Activity (workshop/dinámica colaborativa) ya finalizada. Las Activities finalizadas disponibles aparecen listadas en el contexto del cliente (sección ACTIVITIES FINALIZADAS) — usá esta tool cuando el usuario pida analizar, priorizar o profundizar en los resultados de alguna de ellas.
+No la uses para Activities que todavía están en curso — solo existen resultados una vez finalizadas.
+Después de llamarla, es obligatorio llamar present_analysis con los hallazgos.`,
+      input_schema: {
+        type: 'object',
+        properties: {
+          activityId: {
+            type: 'string',
+            description: 'ID de la Activity, tal como aparece en la sección ACTIVITIES FINALIZADAS del contexto.',
+          },
+        },
+        required: ['activityId'],
+      },
+    },
   ];
 }
 
@@ -1157,6 +1174,9 @@ async function executeTool(name, input, { tenant, investigationId, intelligenceS
     if (input.action === 'get_page') return getNotionPage(token, input.page_id);
     if (input.action === 'query_database') return queryNotionDatabase(token, input.database_id);
     return { error: `Acción desconocida: ${input.action}` };
+  }
+  if (name === 'get_activity_results') {
+    return runActivityResultsQuery({ tenant, activityId: input.activityId });
   }
   if (name === 'search_archive') {
     const results = await searchArchivedInvestigations(tenant, input.query);

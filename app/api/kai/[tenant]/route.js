@@ -17,6 +17,7 @@ import { getKnowledgeDigest } from '@/lib/kai/knowledgeSources';
 import { regenerateAllArtifacts } from '@/lib/kai/artifacts';
 import { trackUsage } from '@/lib/kai/usage';
 import { getKnownParticipants, findParticipantMatches, extractNameFromMessage } from '@/lib/kai/participants';
+import { createActivityDraft, updateActivityDraft, getLatestDraft, lockActivity } from '@/lib/kai/activities';
 
 const MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 1000;
@@ -131,6 +132,22 @@ function extractComponents(text) {
   }
   const cleaned = text.replace(/<kai-component[\s\S]*?<\/kai-component>/g, '').trim();
   return { components, cleaned };
+}
+
+function extractActivityDraft(text) {
+  const match = /\[ACTIVITY_DRAFT\]([\s\S]*?)\[\/ACTIVITY_DRAFT\]/.exec(text);
+  const cleaned = text.replace(/\[ACTIVITY_DRAFT\][\s\S]*?\[\/ACTIVITY_DRAFT\]/g, '').trim();
+  if (!match) return { activityDraft: null, cleaned };
+  try { return { activityDraft: JSON.parse(match[1].trim()), cleaned }; }
+  catch { return { activityDraft: null, cleaned }; }
+}
+
+function extractActivityLock(text) {
+  const match = /\[ACTIVITY_LOCK\]([\s\S]*?)\[\/ACTIVITY_LOCK\]/.exec(text);
+  const cleaned = text.replace(/\[ACTIVITY_LOCK\][\s\S]*?\[\/ACTIVITY_LOCK\]/g, '').trim();
+  if (!match) return { activityLock: null, cleaned };
+  try { return { activityLock: JSON.parse(match[1].trim()), cleaned }; }
+  catch { return { activityLock: null, cleaned }; }
 }
 
 // ── Profile update helpers ─────────────────────────────────────────────────
@@ -253,6 +270,27 @@ Ejemplo: [KAI_VALIDATE:abc123]
 
 No menciones estas sugerencias directamente al usuario.
 Incorpóralas de forma natural si la conversación lo confirma.`;
+}
+
+function buildActivitiesPromptBlock() {
+  return `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACTIVITIES — WORKSHOPS Y DINÁMICAS COLABORATIVAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Este modo solo se activa si el usuario pide explícitamente crear un workshop, brainstorming, retrospectiva, sesión de OKRs, discovery, focus group u otra dinámica grupal ("Activity"). No lo actives por iniciativa propia ni lo confundas con la exploración normal del Business Profile.
+
+Cuando el usuario quiera crear una Activity, ayúdalo a co-diseñarla conversando (no un formulario): nombre, objetivo, tipo de dinámica, descripción breve, y las preguntas que se les harán a los participantes (proponé opciones si no tiene claro qué preguntar, pero dejá que decida él).
+
+A medida que se van confirmando nombre/objetivo/tipo/descripción, emití (puede repetirse turno a turno, solo con los campos ya confirmados):
+
+[ACTIVITY_DRAFT]{"name": "...", "objective": "...", "type": "...", "description": "..."}[/ACTIVITY_DRAFT]
+
+Cuando el usuario confirme explícitamente que la lista de preguntas está lista y quiere arrancar la Activity, emití UNA VEZ:
+
+[ACTIVITY_LOCK]{"questions": ["primera pregunta", "segunda pregunta", "..."]}[/ACTIVITY_LOCK]
+
+Importante: una vez emitido [ACTIVITY_LOCK] la plantilla queda bloqueada — no la repitas ni la modifiques en turnos siguientes. No inventes ni menciones un código o QR: el sistema los genera automáticamente y se le van a mostrar al usuario en pantalla. Solo confirmá que la Activity quedó lista para compartir.`;
 }
 
 function buildSystemPrompt(tenantName, businessProfile, previousConvs = [], pendingSuggestions = [], knowledgeDigest = null) {
@@ -796,7 +834,7 @@ Debes transmitir criterio, curiosidad genuina y capacidad de observación.
 
 Tu trabajo no es hablar mucho.
 
-Tu trabajo es entender profundamente el negocio.${buildSuggestionsBlock(pendingSuggestions)}${knowledgeDigest ? `
+Tu trabajo es entender profundamente el negocio.${buildSuggestionsBlock(pendingSuggestions)}${buildActivitiesPromptBlock()}${knowledgeDigest ? `
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CONOCIMIENTO ORGANIZACIONAL EXISTENTE
@@ -972,10 +1010,31 @@ export async function POST(req, { params }) {
     const { components, cleaned: afterComponents } = extractComponents(afterCheckpoint);
     const component = components[0] ?? null;
 
+    // Strip [ACTIVITY_DRAFT] / [ACTIVITY_LOCK] blocks and persist to lib/kai/activities.js
+    const { activityDraft: draftFields, cleaned: afterActivityDraft } = extractActivityDraft(afterComponents);
+    const { activityLock, cleaned: afterActivityLock } = extractActivityLock(afterActivityDraft);
+
+    let activityDraft = null;
+    let activityStart = null;
+    if (draftFields || activityLock) {
+      const existingDraft = await getLatestDraft(tenant, conversationId).catch(() => null);
+      if (draftFields) {
+        activityDraft = existingDraft
+          ? await updateActivityDraft(tenant, existingDraft.id, draftFields).catch(() => null)
+          : await createActivityDraft(tenant, { ...draftFields, name: draftFields.name || 'Nueva actividad', conversationId }).catch(() => null);
+      }
+      if (activityLock?.questions?.length) {
+        const target = activityDraft ?? existingDraft;
+        if (target) {
+          activityStart = await lockActivity(tenant, target.id, activityLock.questions).catch(() => null);
+        }
+      }
+    }
+
     // Final safety pass: strip orphan block tags or bare JSON fragments that slipped through
-    const reply = afterComponents
-      .replace(/\[KAI_[A-Z_]+\][\s\S]*?\[\/KAI_[A-Z_]+\]/g, '')  // any missed blocks
-      .replace(/\[\/?\s*KAI_[A-Z_]+\s*\]/g, '')                     // orphan open/close tags
+    const reply = afterActivityLock
+      .replace(/\[(?:KAI|ACTIVITY)_[A-Z_]+\][\s\S]*?\[\/(?:KAI|ACTIVITY)_[A-Z_]+\]/g, '') // any missed blocks
+      .replace(/\[\/?\s*(?:KAI|ACTIVITY)_[A-Z_]+\s*\]/g, '')        // orphan open/close tags
       .replace(/^\s*\{[^{}]*"field"\s*:[^{}]*\}\s*$/gm, '')         // bare JSON fragment lines
       .replace(/\n{3,}/g, '\n\n')
       .trim();
@@ -1011,7 +1070,7 @@ export async function POST(req, { params }) {
         ];
     await appendMessages(tenant, conversationId, messagesToSave);
 
-    return Response.json({ reply, components, component, conversationId, newLearnings: savedLearnings, sessionUpdates: updates, sessionStart, currentArea, checkpoint });
+    return Response.json({ reply, components, component, conversationId, newLearnings: savedLearnings, sessionUpdates: updates, sessionStart, currentArea, checkpoint, activityDraft, activityStart });
   } catch (err) {
     console.error(`Kai [${tenant}] error:`, err?.message || err);
     return Response.json(
