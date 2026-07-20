@@ -206,7 +206,7 @@ export default function ActivityDashboardCard({ tenant, activity }) {
             {isActive && !questionStarted && (
               <>
                 <button type="button" className="kai-actdash-btn kai-actdash-btn--primary" onClick={handleStartQuestion} disabled={busy}>
-                  Iniciar Pregunta 1 →
+                  Iniciar Pregunta {(meta.currentQuestionIndex ?? 0) + 1} →
                 </button>
                 <button type="button" className="kai-actdash-btn" onClick={handleFinish} disabled={busy}>
                   Finalizar Activity

@@ -105,7 +105,11 @@ export default function ActivityParticipantChat({ code, activityId, activityName
         setQuestionTiming({ startedAt: data.currentQuestionStartedAt, durationSeconds: data.questionDurationSeconds });
 
         if (!data.currentQuestionStartedAt) {
-          setActivityPhase('lobby');
+          // Todavía no arrancó esta pregunta. Antes del primer saludo mostramos
+          // la sala de espera de pantalla completa; después, si ya hay chat en
+          // curso, nos quedamos ahí tal cual (la respuesta previa ya avisó que
+          // hay que esperar) para no borrarle el historial al participante.
+          if (!greetedRef.current) setActivityPhase('lobby');
           return;
         }
 
