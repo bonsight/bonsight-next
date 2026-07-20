@@ -37,8 +37,10 @@ export default function ActivityParticipantChat({ code, activityId, activityName
   const [error, setError] = useState(null);
   const [questionTiming, setQuestionTiming] = useState(null);
   const [now, setNow] = useState(() => Date.now());
+  const [activityPhase, setActivityPhase] = useState('lobby'); // 'lobby' | 'question'
 
   const displayedIndexRef = useRef(0);
+  const greetedRef = useRef(false);
   const pollRef = useRef(null);
   const tickRef = useRef(null);
   const bottomRef = useRef(null);
@@ -85,15 +87,7 @@ export default function ActivityParticipantChat({ code, activityId, activityName
     }
   }, [code, participantId]);
 
-  // Saludo inicial una vez que tenemos participantId
-  const greetedRef = useRef(false);
-  useEffect(() => {
-    if (step !== 'chat' || !participantId || greetedRef.current) return;
-    greetedRef.current = true;
-    sendToKai('__activity_greeting__', { record: false });
-  }, [step, participantId, sendToKai]);
-
-  // Polling de status: detecta si el organizador avanzó de pregunta
+  // Polling de status: detecta cuándo arranca la primera pregunta y cuándo el organizador avanza
   useEffect(() => {
     if (step !== 'chat' || !participantId) return;
 
@@ -109,7 +103,17 @@ export default function ActivityParticipantChat({ code, activityId, activityName
           return;
         }
         setQuestionTiming({ startedAt: data.currentQuestionStartedAt, durationSeconds: data.questionDurationSeconds });
-        if (data.currentQuestionIndex > displayedIndexRef.current && !loading) {
+
+        if (!data.currentQuestionStartedAt) {
+          setActivityPhase('lobby');
+          return;
+        }
+
+        setActivityPhase('question');
+        if (!greetedRef.current) {
+          greetedRef.current = true;
+          sendToKai('__activity_greeting__', { record: false });
+        } else if (data.currentQuestionIndex > displayedIndexRef.current && !loading) {
           sendToKai('__next_question__', { record: false });
         }
       } catch { /* ignora fallos puntuales */ }
@@ -181,6 +185,18 @@ export default function ActivityParticipantChat({ code, activityId, activityName
             Continuar
           </button>
         </form>
+      </div>
+    );
+  }
+
+  if (activityPhase === 'lobby' && !finished) {
+    return (
+      <div className="act-wrap act-wrap--center">
+        <div className="act-panel">
+          <span className="act-eyebrow">Estás dentro</span>
+          <h1 className="act-panel-title">{activityName}</h1>
+          <p className="act-panel-text">Esperá a que el organizador inicie la dinámica. Esta pantalla se actualiza sola — no hace falta que hagas nada.</p>
+        </div>
       </div>
     );
   }

@@ -65,6 +65,26 @@ export default function ActivityDashboardCard({ tenant, activity }) {
     }
   }, [status?.meta?.questionDurationSeconds]);
 
+  const handleStart = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/activities/${activity.id}/start`, { method: 'POST' });
+      if (res.ok) setStatus(await res.json());
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleStartQuestion = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/activities/${activity.id}/start-question`, { method: 'POST' });
+      if (res.ok) setStatus(await res.json());
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleAdvance = async () => {
     setBusy(true);
     try {
@@ -108,6 +128,9 @@ export default function ActivityDashboardCard({ tenant, activity }) {
 
   const meta = status?.meta ?? activity;
   const isFinished = meta.status === 'finished';
+  const isReady = meta.status === 'ready';
+  const isActive = meta.status === 'active';
+  const questionStarted = !!meta.currentQuestionStartedAt;
   const questionCount = status?.questionCount ?? 0;
   const connectedCount = status?.connectedCount ?? 0;
   const answeredCount = status?.answeredCount ?? 0;
@@ -116,14 +139,16 @@ export default function ActivityDashboardCard({ tenant, activity }) {
     ? ((isFinished && meta.finishedAt ? new Date(meta.finishedAt).getTime() : now) - new Date(meta.startedAt).getTime()) / 1000
     : 0;
 
-  const questionRemaining = !isFinished && meta.currentQuestionStartedAt
+  const questionRemaining = questionStarted
     ? (meta.questionDurationSeconds ?? DEFAULT_DURATION) - (now - new Date(meta.currentQuestionStartedAt).getTime()) / 1000
     : null;
+
+  const badgeLabel = isFinished ? 'Finalizada' : isReady ? 'Lista para iniciar' : 'Activity en curso';
 
   return (
     <div className="kai-actdash">
       <div className="kai-actdash-header">
-        <span className="kai-actdash-badge">{isFinished ? 'Finalizada' : 'Activity en curso'}</span>
+        <span className="kai-actdash-badge">{badgeLabel}</span>
         <h4 className="kai-actdash-title">{meta.name}</h4>
         <span className="kai-actdash-session-timer" title="Tiempo total de la sesión">⏱ {formatDuration(sessionElapsed)}</span>
       </div>
@@ -151,14 +176,12 @@ export default function ActivityDashboardCard({ tenant, activity }) {
               <span className="kai-actdash-stat-value">{(meta.currentQuestionIndex ?? 0) + 1}/{questionCount}</span>
               <span className="kai-actdash-stat-label">pregunta</span>
             </div>
-            {questionRemaining !== null && (
-              <div className="kai-actdash-stat">
-                <span className={`kai-actdash-stat-value ${questionRemaining <= 0 ? 'kai-actdash-stat-value--expired' : ''}`}>
-                  {formatDuration(questionRemaining)}
-                </span>
-                <span className="kai-actdash-stat-label">tiempo p/pregunta</span>
-              </div>
-            )}
+            <div className="kai-actdash-stat">
+              <span className={`kai-actdash-stat-value ${questionRemaining !== null && questionRemaining <= 0 ? 'kai-actdash-stat-value--expired' : ''}`}>
+                {questionRemaining !== null ? formatDuration(questionRemaining) : '—:—'}
+              </span>
+              <span className="kai-actdash-stat-label">tiempo p/pregunta</span>
+            </div>
           </div>
         </div>
       )}
@@ -170,12 +193,36 @@ export default function ActivityDashboardCard({ tenant, activity }) {
       ) : (
         <>
           <div className="kai-actdash-actions">
-            <button type="button" className="kai-actdash-btn kai-actdash-btn--primary" onClick={handleAdvance} disabled={busy}>
-              Siguiente pregunta →
-            </button>
-            <button type="button" className="kai-actdash-btn" onClick={handleFinish} disabled={busy}>
-              Finalizar Activity
-            </button>
+            {isReady && (
+              <>
+                <button type="button" className="kai-actdash-btn kai-actdash-btn--primary" onClick={handleStart} disabled={busy}>
+                  Iniciar Workshop
+                </button>
+                <button type="button" className="kai-actdash-btn" onClick={handleFinish} disabled={busy}>
+                  Cancelar
+                </button>
+              </>
+            )}
+            {isActive && !questionStarted && (
+              <>
+                <button type="button" className="kai-actdash-btn kai-actdash-btn--primary" onClick={handleStartQuestion} disabled={busy}>
+                  Iniciar Pregunta 1 →
+                </button>
+                <button type="button" className="kai-actdash-btn" onClick={handleFinish} disabled={busy}>
+                  Finalizar Activity
+                </button>
+              </>
+            )}
+            {isActive && questionStarted && (
+              <>
+                <button type="button" className="kai-actdash-btn kai-actdash-btn--primary" onClick={handleAdvance} disabled={busy}>
+                  Siguiente pregunta →
+                </button>
+                <button type="button" className="kai-actdash-btn" onClick={handleFinish} disabled={busy}>
+                  Finalizar Activity
+                </button>
+              </>
+            )}
           </div>
           <div className="kai-actdash-duration">
             <label htmlFor="kai-actdash-duration-input">Segundos por pregunta (visible para participantes):</label>
