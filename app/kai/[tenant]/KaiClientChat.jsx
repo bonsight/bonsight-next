@@ -18,6 +18,40 @@ const IconSend = () => (
   </svg>
 );
 
+const IconCopy = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+  </svg>
+);
+
+const IconCheck = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+);
+
+function CopyMessageButton({ text, idx, copiedIdx, onCopy }) {
+  const isCopied = copiedIdx === idx;
+  return (
+    <button
+      type="button"
+      onClick={() => onCopy(idx, text)}
+      title="Copiar mensaje"
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        marginTop: 6, padding: '3px 7px',
+        background: 'transparent', border: '1px solid transparent',
+        borderRadius: 6, cursor: 'pointer',
+        color: isCopied ? '#20C997' : '#6B7280',
+        fontSize: 11, fontFamily: 'inherit',
+      }}
+    >
+      {isCopied ? <IconCheck /> : <IconCopy />}
+      {isCopied ? 'Copiado' : 'Copiar'}
+    </button>
+  );
+}
+
 function AreaDots({ areaStatuses, size = 8 }) {
   return (
     <div className="kcv-session-dots">
@@ -451,6 +485,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
   const [confirmationResolved, setConfirmationResolved] = useState({});
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [copiedIdx, setCopiedIdx] = useState(null);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -763,6 +798,12 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
 
   const send = () => sendText(input);
 
+  const handleCopyMessage = (idx, text) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx((cur) => (cur === idx ? null : cur)), 1800);
+  };
+
   return (
     <div style={{ display: 'grid', gridTemplateRows: 'auto 1fr auto', flex: 1, minHeight: 0, overflow: 'hidden' }}>
       {/* Session header */}
@@ -803,6 +844,10 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
                 lineHeight: 1.6,
               }}>
                 {m.role === 'assistant' ? renderMessage(m.content) : m.content}
+
+                {m.role === 'assistant' && m.content?.trim() && (
+                  <CopyMessageButton text={m.content} idx={msgIdx} copiedIdx={copiedIdx} onCopy={handleCopyMessage} />
+                )}
 
                 {m._attachments?.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: m.content ? 6 : 0 }}>

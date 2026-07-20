@@ -255,6 +255,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
   const [transcribing, setTranscribing] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [activeSources, setActiveSources] = useState(new Set());
+  const [copiedIdx, setCopiedIdx] = useState(null);
   const messagesEndRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -456,6 +457,12 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
       e.preventDefault();
       imageItems.forEach((it) => processFile(it.getAsFile()));
     }
+  }
+
+  function handleCopyMessage(idx, text) {
+    navigator.clipboard.writeText(text);
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx((cur) => (cur === idx ? null : cur)), 1800);
   }
 
   async function send(overrideText) {
@@ -776,7 +783,26 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
                   ) : m.advisory ? (
                     <AdvisoryPresentation advisory={m.advisory} onFollowUp={(text) => send(text)} disabled={loading} />
                   ) : (
-                    <div className="aria-msg-content">{renderMessage(m.content)}</div>
+                    <>
+                      <div className="aria-msg-content">{renderMessage(m.content)}</div>
+                      {m.content?.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopyMessage(i, m.content)}
+                          title="Copiar mensaje"
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            marginTop: 6, padding: '3px 7px',
+                            background: 'transparent', border: 'none',
+                            borderRadius: 6, cursor: 'pointer',
+                            color: copiedIdx === i ? 'var(--aria-accent, #7C3AED)' : 'var(--aria-text-muted, #9CA3AF)',
+                            fontSize: 11, fontFamily: 'inherit',
+                          }}
+                        >
+                          {copiedIdx === i ? '✓ Copiado' : 'Copiar'}
+                        </button>
+                      )}
+                    </>
                   )}
                   {m.documents?.map((doc, di) => (
                     <AriaDocumentCard key={di} doc={doc} tenant={tenant} />
