@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { after } from 'next/server';
-import { getActivityByCode, getParticipant, getActivityTemplate, recordAnswer } from '@/lib/kai/activities';
+import { getActivityByCode, getParticipant, getActivityTemplate, recordAnswer, recordQuestionViewed } from '@/lib/kai/activities';
 import { buildActivityScriptPrompt } from '@/lib/kai/activityPrompt';
 import { trackUsage } from '@/lib/kai/usage';
 
@@ -41,6 +41,7 @@ export async function POST(req, { params }) {
 
   let systemPrompt;
   if (isSentinel) {
+    await recordQuestionViewed(tenant, activityId, participantId, currentQuestion.id).catch(() => null);
     systemPrompt = buildActivityScriptPrompt({
       mode: 'present',
       activityName: meta.name,
