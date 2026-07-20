@@ -83,12 +83,14 @@ export default function ActivityDashboardCard({ tenant, activity, onFinished }) 
 
       {!isFinished && (
         <div className="kai-actdash-body">
-          {qrDataUrl && (
-            <div className="kai-actdash-qr">
+          <div className="kai-actdash-qr">
+            {qrDataUrl ? (
               <img src={qrDataUrl} alt="QR de acceso" width={120} height={120} />
-              <span className="kai-actdash-code">{meta.code}</span>
-            </div>
-          )}
+            ) : (
+              <div className="kai-actdash-qr-skeleton" style={{ width: 120, height: 120 }} />
+            )}
+            <span className="kai-actdash-code">{meta.code}</span>
+          </div>
           <div className="kai-actdash-stats">
             <div className="kai-actdash-stat">
               <span className="kai-actdash-stat-value">{connectedCount}</span>

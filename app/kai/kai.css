@@ -4299,6 +4299,12 @@
   padding: 6px;
 }
 
+.kai-actdash-qr-skeleton {
+  border-radius: 8px;
+  background: var(--kai-surface-2);
+  border: 1px solid var(--kai-border);
+}
+
 .kai-actdash-code {
   font-family: monospace;
   font-size: 12px;
