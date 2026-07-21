@@ -1496,7 +1496,10 @@ export async function POST(req, { params }) {
           if (parsed?.itemsByQuestion) lastActivityItemsByQuestion = parsed.itemsByQuestion;
         }
         if (block.name === 'present_workshop_canvas') {
-          canvas = { ...block.input, itemsByQuestion: lastActivityItemsByQuestion ?? {} };
+          canvas = { ...block.input, itemsByQuestion: lastActivityItemsByQuestion ?? {}, updatedAt: new Date().toISOString() };
+          canvas.originalGroupsByQuestion = Object.fromEntries(
+            (canvas.questions ?? []).map((q) => [q.questionId, JSON.parse(JSON.stringify(q.groups ?? []))])
+          );
         }
         if (block.name === 'generate_gtm_container') documents.push({ format: 'gtm_json', ...block.input });
         if (block.name === 'generate_measurement_excel') documents.push({ format: 'excel', ...block.input });
