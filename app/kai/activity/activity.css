@@ -204,3 +204,64 @@
   color: var(--kai-text-muted);
   font-size: 13.5px;
 }
+
+/* Lista de iniciativas (preguntas de respuesta múltiple) */
+
+.act-multi {
+  flex-shrink: 0;
+  border-top: 1px solid var(--kai-border);
+}
+
+.act-multi-list {
+  padding: 12px 18px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.act-multi-list-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--kai-text-faint);
+}
+
+.act-multi-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.act-multi-item-text {
+  flex: 1;
+  font-size: 13.5px;
+  color: var(--kai-text);
+}
+
+.act-multi-mini {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--kai-border);
+  background: var(--kai-surface-2);
+  color: var(--kai-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.act-multi-mini--danger {
+  color: #F87171;
+}
+
+.act-multi-mini:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.act-multi .act-inputbar {
+  border-top: none;
+}

@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { after } from 'next/server';
-import { getActivityByCode, getParticipant, getActivityTemplate, recordAnswer, recordQuestionViewed } from '@/lib/kai/activities';
+import { getActivityByCode, getParticipant, getActivityTemplate, recordAnswer, recordQuestionViewed, getParticipantAnswers } from '@/lib/kai/activities';
 import { buildActivityScriptPrompt } from '@/lib/kai/activityPrompt';
 import { trackUsage } from '@/lib/kai/usage';
 
@@ -37,16 +37,26 @@ export async function POST(req, { params }) {
   }
 
   const content = String(message.content);
-  const isSentinel = content === '__activity_greeting__' || content === '__next_question__';
+  const isPresentSentinel = content === '__activity_greeting__' || content === '__next_question__';
+  const isSubmittedMultiple = content === '__submitted_multiple__';
 
   let systemPrompt;
-  if (isSentinel) {
+  if (isPresentSentinel) {
     await recordQuestionViewed(tenant, activityId, participantId, currentQuestion.id).catch(() => null);
     systemPrompt = buildActivityScriptPrompt({
       mode: 'present',
       activityName: meta.name,
       questionText: currentQuestion.text,
       isFirstQuestion: meta.currentQuestionIndex === 0,
+    });
+  } else if (isSubmittedMultiple) {
+    const answers = await getParticipantAnswers(tenant, activityId, participantId);
+    const itemCount = answers[currentQuestion.id]?.items?.length ?? 0;
+    systemPrompt = buildActivityScriptPrompt({
+      mode: 'ack_multiple',
+      activityName: meta.name,
+      questionText: currentQuestion.text,
+      itemCount,
     });
   } else {
     await recordAnswer(tenant, activityId, participantId, currentQuestion.id, content).catch(() => null);
@@ -58,11 +68,16 @@ export async function POST(req, { params }) {
   }
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const userTurn = isPresentSentinel
+    ? 'Presentá la pregunta.'
+    : isSubmittedMultiple
+      ? 'Confirmá que se registraron las iniciativas.'
+      : content;
   const response = await anthropic.messages.create({
     model: MODEL,
     max_tokens: MAX_TOKENS,
     system: systemPrompt,
-    messages: [{ role: 'user', content: isSentinel ? 'Presentá la pregunta.' : content }],
+    messages: [{ role: 'user', content: userTurn }],
   });
 
   after(() => trackUsage({

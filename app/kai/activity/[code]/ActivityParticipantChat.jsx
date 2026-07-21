@@ -26,6 +26,123 @@ function renderBubbleText(text) {
   return parts.length ? parts : [text];
 }
 
+function MultiAnswerBuilder({ code, participantId, questionId, onSubmitted }) {
+  const [items, setItems] = useState([]);
+  const [input, setInput] = useState('');
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editText, setEditText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/kai/activity/${code}/draft?participantId=${participantId}&questionId=${questionId}`)
+      .then((r) => r.json())
+      .then((data) => { if (!cancelled) setItems(data.items ?? []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [code, participantId, questionId]);
+
+  const postDraft = async (body) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/kai/activity/${code}/draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId, questionId, ...body }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'Ocurrió un error.'); return; }
+      setItems(data.items);
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleAdd = () => {
+    const text = input.trim();
+    if (!text || busy) return;
+    setInput('');
+    postDraft({ action: 'add', text });
+  };
+
+  const handleSaveEdit = () => {
+    const text = editText.trim();
+    if (!text || busy) return;
+    postDraft({ action: 'edit', index: editingIndex, text }).then(() => setEditingIndex(null));
+  };
+
+  const handleRemove = (index) => postDraft({ action: 'remove', index });
+
+  const handleSubmit = async () => {
+    if (!items.length || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/kai/activity/${code}/draft/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId, questionId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo enviar.'); return; }
+      onSubmitted(data.itemCount);
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="act-multi">
+      {items.length > 0 && (
+        <div className="act-multi-list">
+          <span className="act-multi-list-label">Tus iniciativas</span>
+          {items.map((it, i) => (
+            <div key={i} className="act-multi-item">
+              {editingIndex === i ? (
+                <>
+                  <input
+                    className="act-input"
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                    autoFocus
+                  />
+                  <button className="act-multi-mini" onClick={handleSaveEdit} disabled={busy}>Guardar</button>
+                </>
+              ) : (
+                <>
+                  <span className="act-multi-item-text">{i + 1}. {it.text}</span>
+                  <button className="act-multi-mini" onClick={() => { setEditingIndex(i); setEditText(it.text); }} disabled={busy}>Editar</button>
+                  <button className="act-multi-mini act-multi-mini--danger" onClick={() => handleRemove(i)} disabled={busy}>Eliminar</button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {err && <p className="act-error">{err}</p>}
+      <div className="act-inputbar">
+        <input
+          className="act-input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          placeholder="Agregar otra iniciativa…"
+          disabled={busy}
+        />
+        <button className="act-btn" onClick={handleAdd} disabled={busy || !input.trim()}>Agregar</button>
+        <button className="act-btn act-btn--primary" onClick={handleSubmit} disabled={busy || !items.length}>Enviar iniciativas</button>
+      </div>
+    </div>
+  );
+}
+
 export default function ActivityParticipantChat({ code, activityId, activityName }) {
   const [step, setStep] = useState('name');
   const [name, setName] = useState('');
@@ -38,8 +155,11 @@ export default function ActivityParticipantChat({ code, activityId, activityName
   const [questionTiming, setQuestionTiming] = useState(null);
   const [now, setNow] = useState(() => Date.now());
   const [activityPhase, setActivityPhase] = useState('lobby'); // 'lobby' | 'question'
+  const [questionMeta, setQuestionMeta] = useState(null); // { id, responseType }
+  const [multipleSubmitted, setMultipleSubmitted] = useState(false);
 
   const displayedIndexRef = useRef(0);
+  const lastQuestionIdRef = useRef(null);
   const greetedRef = useRef(false);
   const pollRef = useRef(null);
   const tickRef = useRef(null);
@@ -114,6 +234,11 @@ export default function ActivityParticipantChat({ code, activityId, activityName
         }
 
         setActivityPhase('question');
+        setQuestionMeta({ id: data.currentQuestionId, responseType: data.currentQuestionResponseType });
+        if (data.currentQuestionId !== lastQuestionIdRef.current) {
+          lastQuestionIdRef.current = data.currentQuestionId;
+          setMultipleSubmitted(false);
+        }
         if (!greetedRef.current) {
           greetedRef.current = true;
           sendToKai('__activity_greeting__', { record: false });
@@ -229,7 +354,23 @@ export default function ActivityParticipantChat({ code, activityId, activityName
         )}
         <div ref={bottomRef} />
       </div>
-      {!finished ? (
+      {finished ? (
+        <div className="act-inputbar act-inputbar--closed">Gracias por participar 🎉</div>
+      ) : questionMeta?.responseType === 'multiple' ? (
+        multipleSubmitted ? (
+          <div className="act-inputbar act-inputbar--closed">Ya enviaste tus iniciativas. Esperando al organizador…</div>
+        ) : (
+          <MultiAnswerBuilder
+            code={code}
+            participantId={participantId}
+            questionId={questionMeta.id}
+            onSubmitted={() => {
+              setMultipleSubmitted(true);
+              sendToKai('__submitted_multiple__', { record: false });
+            }}
+          />
+        )
+      ) : (
         <div className="act-inputbar">
           <input
             className="act-input"
@@ -243,8 +384,6 @@ export default function ActivityParticipantChat({ code, activityId, activityName
             Enviar
           </button>
         </div>
-      ) : (
-        <div className="act-inputbar act-inputbar--closed">Gracias por participar 🎉</div>
       )}
     </div>
   );
