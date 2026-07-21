@@ -488,6 +488,8 @@ present_analysis → Cuando tienes datos de métricas, canales, KPIs o cualquier
 
 present_advisory → Cuando la respuesta sea una recomendación ejecutiva con decisiones prioritarias y sin datos crudos de fuentes.
 
+present_workshop_canvas → Cuando el usuario pida agrupar, consolidar o mapear las iniciativas/respuestas de una Activity (workshop) finalizada — siempre después de get_activity_results. Es distinto de present_analysis: acá el pedido es organizar respuestas individuales en clusters, no un análisis narrativo de métricas.
+
 Al cerrar una sesión de análisis importante, usa save_session_memory para persistir hallazgos, decisiones e insights.
 
 query_notion → Cuando Notion está activo y el usuario hace preguntas que podrían estar respondidas en documentos internos, wikis o bases de datos del workspace. Empieza con search para descubrir páginas relevantes, luego get_page para leer el contenido completo o query_database para obtener filas estructuradas. No asumas que tienes el contenido — consúltalo.
@@ -752,6 +754,54 @@ function buildTools() {
           },
         },
         required: ['summary', 'kpis', 'insights', 'confidence', 'followUps', 'headline', 'actionItems'],
+      },
+    },
+    {
+      name: 'present_workshop_canvas',
+      description: `Presenta un mapa visual de clusters cuando el usuario pide agrupar, consolidar o mapear las iniciativas/respuestas de un workshop (Activity) ya finalizado. Usalo DESPUÉS de get_activity_results, en vez de (o además de) present_analysis, cuando el pedido es organizar respuestas en grupos — no para análisis narrativo puro.
+Para cada pregunta del workshop, agrupá las respuestas de itemsByQuestion en clusters: eliminá ruido, detectá duplicados/similares, y para cada grupo dale un nombre corto y redactá un texto consolidado que capture la idea común. Cada respuesta individual va en un solo grupo — si una respuesta no encaja en ningún patrón, ponela en un grupo propio (grupo de 1) en vez de forzarla.
+itemIndexes DEBE usar los índices exactos de itemsByQuestion[questionId] que te llegaron en get_activity_results — no inventes índices nuevos.
+No repitas el texto original de cada respuesta en tu output (ya está en itemsByQuestion, se cruza automáticamente) — solo mandá los índices.`,
+      input_schema: {
+        type: 'object',
+        properties: {
+          workshopName: { type: 'string' },
+          summary: {
+            type: 'object',
+            properties: {
+              participantCount: { type: 'integer' },
+              questionCount: { type: 'integer' },
+              totalItems: { type: 'integer' },
+              groupCount: { type: 'integer' },
+            },
+            required: ['participantCount', 'questionCount', 'totalItems', 'groupCount'],
+          },
+          questions: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                questionId: { type: 'string' },
+                questionText: { type: 'string' },
+                groups: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', description: 'Slug corto único dentro de la pregunta, ej. "eventos-demos".' },
+                      name: { type: 'string' },
+                      consolidatedText: { type: 'string' },
+                      itemIndexes: { type: 'array', items: { type: 'integer' } },
+                    },
+                    required: ['id', 'name', 'consolidatedText', 'itemIndexes'],
+                  },
+                },
+              },
+              required: ['questionId', 'questionText', 'groups'],
+            },
+          },
+        },
+        required: ['workshopName', 'summary', 'questions'],
       },
     },
     {
@@ -1157,7 +1207,7 @@ async function executeTool(name, input, { tenant, investigationId, intelligenceS
   if (name === 'save_session_memory') {
     return updateInvestigationMeta(tenant, investigationId, input);
   }
-  if (name === 'present_analysis' || name === 'present_advisory') {
+  if (name === 'present_analysis' || name === 'present_advisory' || name === 'present_workshop_canvas') {
     return { ok: true };
   }
   if (name === 'generate_gtm_container' || name === 'generate_measurement_excel' || name === 'generate_measurement_pdf') {
@@ -1372,6 +1422,8 @@ export async function POST(req, { params }) {
     let finalIntelligence = [];
     let presentation = null;
     let advisory = null;
+    let canvas = null;
+    let lastActivityItemsByQuestion = null;
     let archiveMatch = null;
     let documents = [];
     const callLogs = [];
@@ -1438,6 +1490,14 @@ export async function POST(req, { params }) {
 
         if (block.name === 'present_analysis') presentation = { ...block.input, dataSources: [] };
         if (block.name === 'present_advisory') advisory = { ...block.input };
+        if (block.name === 'get_activity_results') {
+          let parsed;
+          try { parsed = JSON.parse(content); } catch {}
+          if (parsed?.itemsByQuestion) lastActivityItemsByQuestion = parsed.itemsByQuestion;
+        }
+        if (block.name === 'present_workshop_canvas') {
+          canvas = { ...block.input, itemsByQuestion: lastActivityItemsByQuestion ?? {} };
+        }
         if (block.name === 'generate_gtm_container') documents.push({ format: 'gtm_json', ...block.input });
         if (block.name === 'generate_measurement_excel') documents.push({ format: 'excel', ...block.input });
         if (block.name === 'generate_measurement_pdf') documents.push({ format: 'pdf', ...block.input });
@@ -1457,7 +1517,7 @@ export async function POST(req, { params }) {
         });
       }
 
-      if (presentation || advisory) {
+      if (presentation || advisory || canvas) {
         finalText = response.content
           .filter((b) => b.type === 'text')
           .map((b) => b.text)
@@ -1478,11 +1538,12 @@ export async function POST(req, { params }) {
       conversation.push({ role: 'user', content: toolResults });
     }
 
-    if (!finalText && (presentation || advisory)) {
+    if (!finalText && (presentation || advisory || canvas)) {
       finalText = presentation?.summary
         || presentation?.headline?.title
         || advisory?.justification
         || advisory?.risk?.description
+        || canvas?.workshopName && `Mapa de "${canvas.workshopName}" listo.`
         || 'Aquí tienes el análisis solicitado.';
     }
 
@@ -1528,7 +1589,7 @@ export async function POST(req, { params }) {
     const lastUserMessage = messages[messages.length - 1];
     await appendInvestigationMessages(tenant, investigationId, [
       { role: lastUserMessage.role, content: lastUserMessage.content },
-      { role: 'assistant', content: finalText, presentation, advisory },
+      { role: 'assistant', content: finalText, presentation, advisory, canvas },
     ]);
 
     // Auto-title + topic on first message if title is still default
@@ -1561,7 +1622,7 @@ export async function POST(req, { params }) {
 
     const toolsUsed = [...new Set(callLogs.flatMap((l) => l.toolCalls ?? []))];
     const investigationMeta = await getInvestigationMeta(tenant, investigationId);
-    return Response.json({ reply: finalText, presentation, advisory, investigationMeta, topics: finalTopics, archiveMatch, intelligence: finalIntelligence, toolsUsed, documents });
+    return Response.json({ reply: finalText, presentation, advisory, canvas, investigationMeta, topics: finalTopics, archiveMatch, intelligence: finalIntelligence, toolsUsed, documents });
   } catch (err) {
     console.error(`Aria tenant [${tenant}] error:`, err);
     await recordAriaMetrics(tenant, {

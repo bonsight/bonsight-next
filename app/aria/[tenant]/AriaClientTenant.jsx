@@ -5,6 +5,7 @@ import { renderMessage } from '@/lib/aria/markdown';
 import AriaAvatar from '@/lib/aria/AriaAvatar';
 import AnalysisPresentation from '../components/AnalysisPresentation';
 import AdvisoryPresentation from '../components/AdvisoryPresentation';
+import WorkshopCanvasPresentation from '../components/WorkshopCanvasPresentation';
 import Sidebar from '../components/Sidebar';
 import IntelligencePanel from '../components/IntelligencePanel';
 import ChatInsightSeparator from '../components/ChatInsightSeparator';
@@ -91,7 +92,7 @@ function AnalyzingIndicator() {
 function mapStoredMessages(messages) {
   return (messages ?? []).map((m) =>
     m.role === 'assistant'
-      ? { role: 'assistant', content: m.content, presentation: m.presentation ?? null, advisory: m.advisory ?? null }
+      ? { role: 'assistant', content: m.content, presentation: m.presentation ?? null, advisory: m.advisory ?? null, canvas: m.canvas ?? null }
       : { role: 'user', content: m.content }
   );
 }
@@ -505,6 +506,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
           content: data.reply || 'Sin respuesta.',
           presentation: data.presentation ?? null,
           advisory: data.advisory ?? null,
+          canvas: data.canvas ?? null,
           topics: data.topics ?? [],
           archiveMatch: data.archiveMatch ?? null,
           intelligence: data.intelligence ?? [],
@@ -758,7 +760,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
 
           {messages.map((m, i) => {
             const isLastAssistant = m.role === 'assistant' && i === messages.length - 1;
-            const showTopics = isLastAssistant && !loading && !m.presentation && !m.advisory && m.topics?.length > 0;
+            const showTopics = isLastAssistant && !loading && !m.presentation && !m.advisory && !m.canvas && m.topics?.length > 0;
             const hasIntelligence = m.role === 'assistant' && (m.presentation || m.advisory || m.intelligence?.length > 0);
             const dominantIntelType = m.intelligence?.find((i) => i.type !== 'insight_principal')?.type ?? 'analisis';
             const sepType = m.advisory?.risk ? 'riesgo' : m.presentation ? 'analisis' : dominantIntelType;
@@ -773,7 +775,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
                     onIgnore={() => dismissArchiveCard(i)}
                   />
                 )}
-                <div className={`aria-msg-assistant-inner${m.presentation || m.advisory ? ' aria-msg-assistant-inner-wide' : ''}`}>
+                <div className={`aria-msg-assistant-inner${m.presentation || m.advisory || m.canvas ? ' aria-msg-assistant-inner-wide' : ''}`}>
                   <div className="aria-msg-label">
                     <AriaAvatar size={20} />
                     <span>Aria</span>
@@ -782,6 +784,16 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
                     <AnalysisPresentation presentation={m.presentation} onFollowUp={(text) => send(text)} disabled={loading} />
                   ) : m.advisory ? (
                     <AdvisoryPresentation advisory={m.advisory} onFollowUp={(text) => send(text)} disabled={loading} />
+                  ) : m.canvas ? (
+                    <WorkshopCanvasPresentation
+                      canvas={m.canvas}
+                      tenant={tenant}
+                      investigationId={investigationId}
+                      messageIndex={i}
+                      onCanvasUpdate={(updated) => {
+                        setMessages((prev) => prev.map((msg, mi) => (mi === i ? { ...msg, canvas: updated } : msg)));
+                      }}
+                    />
                   ) : (
                     <>
                       <div className="aria-msg-content">{renderMessage(m.content)}</div>
