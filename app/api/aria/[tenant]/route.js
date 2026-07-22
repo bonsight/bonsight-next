@@ -490,6 +490,8 @@ present_advisory → Cuando la respuesta sea una recomendación ejecutiva con de
 
 present_workshop_canvas → Cuando el usuario pida agrupar, consolidar o mapear las iniciativas/respuestas de una Activity (workshop) finalizada — siempre después de get_activity_results. Es distinto de present_analysis: acá el pedido es organizar respuestas individuales en clusters, no un análisis narrativo de métricas.
 
+present_sprint_board → Cuando el usuario pida planear el sprint, ver o abrir el tablero de tareas, crear un sprint, o gestionar/mover tareas del equipo (ej. "creemos el sprint", "muéstrame el tablero", "quiero ver las tareas"). No necesitas ningún dato previo ni tool adicional — solo llamala directo, el tablero se conecta a Notion por su cuenta.
+
 Al cerrar una sesión de análisis importante, usa save_session_memory para persistir hallazgos, decisiones e insights.
 
 query_notion → Cuando Notion está activo y el usuario hace preguntas que podrían estar respondidas en documentos internos, wikis o bases de datos del workspace. Empieza con search para descubrir páginas relevantes, luego get_page para leer el contenido completo o query_database para obtener filas estructuradas. No asumas que tienes el contenido — consúltalo.
@@ -802,6 +804,17 @@ No repitas el texto original de cada respuesta en tu output (ya está en itemsBy
           },
         },
         required: ['workshopName', 'summary', 'questions'],
+      },
+    },
+    {
+      name: 'present_sprint_board',
+      description: `Abre el tablero Kanban de tareas (Sprint) conectado a Notion. Usalo cuando el usuario pida planear el sprint, ver el tablero de tareas, crear un sprint, o gestionar/mover tareas — nunca para análisis de datos ni para workshops. No requiere datos previos: el tablero carga y guarda directo contra Notion en tiempo real, vos no manejás las tareas.
+Si el usuario nombra un sprint puntual por número (ej. "el tablero del sprint 3", "muéstrame el sprint 2"), pasá ese número en sprintNumber. Si no especifica ninguno, omití el campo — el tablero abre el sprint "En curso" por defecto (o el planificado más reciente si no hay ninguno en curso).`,
+      input_schema: {
+        type: 'object',
+        properties: {
+          sprintNumber: { type: 'integer', description: 'Número del sprint pedido explícitamente por el usuario, ej. 3 para "Sprint #3". Omitir si no lo especifica.' },
+        },
       },
     },
     {
@@ -1207,7 +1220,7 @@ async function executeTool(name, input, { tenant, investigationId, intelligenceS
   if (name === 'save_session_memory') {
     return updateInvestigationMeta(tenant, investigationId, input);
   }
-  if (name === 'present_analysis' || name === 'present_advisory' || name === 'present_workshop_canvas') {
+  if (name === 'present_analysis' || name === 'present_advisory' || name === 'present_workshop_canvas' || name === 'present_sprint_board') {
     return { ok: true };
   }
   if (name === 'generate_gtm_container' || name === 'generate_measurement_excel' || name === 'generate_measurement_pdf') {
@@ -1423,6 +1436,7 @@ export async function POST(req, { params }) {
     let presentation = null;
     let advisory = null;
     let canvas = null;
+    let board = null;
     let lastActivityItemsByQuestion = null;
     let archiveMatch = null;
     let documents = [];
@@ -1490,6 +1504,7 @@ export async function POST(req, { params }) {
 
         if (block.name === 'present_analysis') presentation = { ...block.input, dataSources: [] };
         if (block.name === 'present_advisory') advisory = { ...block.input };
+        if (block.name === 'present_sprint_board') board = { sprintNumber: block.input?.sprintNumber ?? null };
         if (block.name === 'get_activity_results') {
           let parsed;
           try { parsed = JSON.parse(content); } catch {}
@@ -1520,7 +1535,7 @@ export async function POST(req, { params }) {
         });
       }
 
-      if (presentation || advisory || canvas) {
+      if (presentation || advisory || canvas || board) {
         finalText = response.content
           .filter((b) => b.type === 'text')
           .map((b) => b.text)
@@ -1541,12 +1556,13 @@ export async function POST(req, { params }) {
       conversation.push({ role: 'user', content: toolResults });
     }
 
-    if (!finalText && (presentation || advisory || canvas)) {
+    if (!finalText && (presentation || advisory || canvas || board)) {
       finalText = presentation?.summary
         || presentation?.headline?.title
         || advisory?.justification
         || advisory?.risk?.description
         || canvas?.workshopName && `Mapa de "${canvas.workshopName}" listo.`
+        || board && 'Aquí tienes el tablero del sprint.'
         || 'Aquí tienes el análisis solicitado.';
     }
 
@@ -1584,6 +1600,7 @@ export async function POST(req, { params }) {
       callCount: callLogs.length,
       hasPresentation: !!presentation,
       hasAdvisory: !!advisory,
+      hasBoard: !!board,
       calls: callLogs,
     };
     console.log(`[aria-tenant:${tenant}]`, JSON.stringify(metrics));
@@ -1592,7 +1609,7 @@ export async function POST(req, { params }) {
     const lastUserMessage = messages[messages.length - 1];
     await appendInvestigationMessages(tenant, investigationId, [
       { role: lastUserMessage.role, content: lastUserMessage.content },
-      { role: 'assistant', content: finalText, presentation, advisory, canvas },
+      { role: 'assistant', content: finalText, presentation, advisory, canvas, board },
     ]);
 
     // Auto-title + topic on first message if title is still default
@@ -1625,7 +1642,7 @@ export async function POST(req, { params }) {
 
     const toolsUsed = [...new Set(callLogs.flatMap((l) => l.toolCalls ?? []))];
     const investigationMeta = await getInvestigationMeta(tenant, investigationId);
-    return Response.json({ reply: finalText, presentation, advisory, canvas, investigationMeta, topics: finalTopics, archiveMatch, intelligence: finalIntelligence, toolsUsed, documents });
+    return Response.json({ reply: finalText, presentation, advisory, canvas, board, investigationMeta, topics: finalTopics, archiveMatch, intelligence: finalIntelligence, toolsUsed, documents });
   } catch (err) {
     console.error(`Aria tenant [${tenant}] error:`, err);
     await recordAriaMetrics(tenant, {

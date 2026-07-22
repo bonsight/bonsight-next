@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { renderMessage } from '@/lib/aria/markdown';
 import AriaAvatar from '@/lib/aria/AriaAvatar';
 import AnalysisPresentation from '../components/AnalysisPresentation';
 import AdvisoryPresentation from '../components/AdvisoryPresentation';
 import WorkshopCanvasPresentation from '../components/WorkshopCanvasPresentation';
+import SprintBoardPresentation from '../components/SprintBoardPresentation';
 import Sidebar from '../components/Sidebar';
 import IntelligencePanel from '../components/IntelligencePanel';
 import ChatInsightSeparator from '../components/ChatInsightSeparator';
@@ -58,14 +60,62 @@ function toolsToSourceNames(toolsUsed = [], sources = []) {
   return names;
 }
 
+const IconSourceChat = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+const IconSourceBarChart = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="20" x2="12" y2="10" /><line x1="18" y1="20" x2="18" y2="4" /><line x1="6" y1="20" x2="6" y2="16" />
+  </svg>
+);
+
+const IconSourceSearch = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+);
+
+const IconSourceMegaphone = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 11l18-7v16L3 13v-2z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+  </svg>
+);
+
+const IconSourceDoc = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+  </svg>
+);
+
+const IconSourceDatabase = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5v14a9 3 0 0 0 18 0V5" /><path d="M3 12a9 3 0 0 0 18 0" />
+  </svg>
+);
+
+function SourceIcon({ name }) {
+  if (name === 'Kai') return <IconSourceChat />;
+  if (name === 'Google Analytics') return <IconSourceBarChart />;
+  if (name === 'Search Console') return <IconSourceSearch />;
+  if (name === 'Google Ads') return <IconSourceMegaphone />;
+  if (name === 'Notion') return <IconSourceDoc />;
+  return <IconSourceDatabase />;
+}
+
 function SourcesFooter({ toolsUsed, sources }) {
   if (!toolsUsed?.length) return null;
   const names = toolsToSourceNames(toolsUsed, sources);
   return (
     <div className="aria-msg-sources-footer">
-      <span className="aria-msg-sources-label">Fuentes:</span>
+      <span className="aria-msg-sources-label">Fuentes</span>
       {names.map((name) => (
-        <span key={name} className="aria-msg-source-chip">{name}</span>
+        <span key={name} className="aria-msg-source-chip">
+          <span className="aria-msg-source-chip-icon"><SourceIcon name={name} /></span>
+          {name}
+        </span>
       ))}
     </div>
   );
@@ -92,7 +142,7 @@ function AnalyzingIndicator() {
 function mapStoredMessages(messages) {
   return (messages ?? []).map((m) =>
     m.role === 'assistant'
-      ? { role: 'assistant', content: m.content, presentation: m.presentation ?? null, advisory: m.advisory ?? null, canvas: m.canvas ?? null }
+      ? { role: 'assistant', content: m.content, presentation: m.presentation ?? null, advisory: m.advisory ?? null, canvas: m.canvas ?? null, board: m.board ?? null }
       : { role: 'user', content: m.content }
   );
 }
@@ -507,6 +557,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
           presentation: data.presentation ?? null,
           advisory: data.advisory ?? null,
           canvas: data.canvas ?? null,
+          board: data.board ?? null,
           topics: data.topics ?? [],
           archiveMatch: data.archiveMatch ?? null,
           intelligence: data.intelligence ?? [],
@@ -711,6 +762,9 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
               {subtitle && <p className="aria-header-subtitle">{subtitle}</p>}
             </div>
           </div>
+          <Link href={`/aria/${tenant}/board`} className="aria-header-link">
+            📋 Sprint
+          </Link>
         </header>
 
         <div className="aria-messages">
@@ -760,7 +814,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
 
           {messages.map((m, i) => {
             const isLastAssistant = m.role === 'assistant' && i === messages.length - 1;
-            const showTopics = isLastAssistant && !loading && !m.presentation && !m.advisory && !m.canvas && m.topics?.length > 0;
+            const showTopics = isLastAssistant && !loading && !m.presentation && !m.advisory && !m.canvas && !m.board && m.topics?.length > 0;
             const hasIntelligence = m.role === 'assistant' && (m.presentation || m.advisory || m.intelligence?.length > 0);
             const dominantIntelType = m.intelligence?.find((i) => i.type !== 'insight_principal')?.type ?? 'analisis';
             const sepType = m.advisory?.risk ? 'riesgo' : m.presentation ? 'analisis' : dominantIntelType;
@@ -775,7 +829,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
                     onIgnore={() => dismissArchiveCard(i)}
                   />
                 )}
-                <div className={`aria-msg-assistant-inner${m.presentation || m.advisory || m.canvas ? ' aria-msg-assistant-inner-wide' : ''}`}>
+                <div className={`aria-msg-assistant-inner${m.presentation || m.advisory || m.canvas || m.board ? ' aria-msg-assistant-inner-wide' : ''}`}>
                   <div className="aria-msg-label">
                     <AriaAvatar size={20} />
                     <span>Aria</span>
@@ -794,6 +848,8 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
                         setMessages((prev) => prev.map((msg, mi) => (mi === i ? { ...msg, canvas: updated } : msg)));
                       }}
                     />
+                  ) : m.board ? (
+                    <SprintBoardPresentation tenant={tenant} initialSprintNumber={m.board.sprintNumber} />
                   ) : (
                     <>
                       <div className="aria-msg-content">{renderMessage(m.content)}</div>
