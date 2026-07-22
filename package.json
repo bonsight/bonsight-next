@@ -26,6 +26,7 @@
     "react-dom": "latest",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "twilio": "^6.0.2",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

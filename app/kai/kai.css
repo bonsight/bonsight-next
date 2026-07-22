@@ -4416,3 +4416,295 @@
   color: var(--kai-text);
   font-size: 12px;
 }
+
+/* Kai Meetings — trigger bar, form, and analysis card */
+
+.kai-meeting-trigger-bar {
+  padding: 8px clamp(14px, 5vw, 28px) 0;
+}
+
+.kai-meeting-trigger-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--kai-border);
+  background: var(--kai-surface);
+  color: var(--kai-text-muted);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.kai-meeting-trigger-btn:hover {
+  color: var(--kai-text);
+  border-color: var(--kai-green);
+}
+
+.kai-meeting-form {
+  margin-top: 8px;
+  background: var(--kai-surface);
+  border: 1px solid var(--kai-border);
+  border-radius: var(--kai-radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kai-meeting-form-input,
+.kai-meeting-form-textarea {
+  background: var(--kai-surface-2);
+  border: 1px solid var(--kai-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--kai-text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.kai-meeting-form-input:focus,
+.kai-meeting-form-textarea:focus {
+  outline: none;
+  border-color: var(--kai-green);
+}
+
+.kai-meeting-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.kai-meeting-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--kai-border);
+  cursor: pointer;
+  font-family: inherit;
+  background: var(--kai-surface-2);
+  color: var(--kai-text-muted);
+}
+
+.kai-meeting-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.kai-meeting-btn--accept {
+  color: var(--kai-green);
+  border-color: rgba(32, 201, 151, 0.4);
+}
+
+.kai-meeting-btn--reject {
+  color: #E8734A;
+  border-color: rgba(232, 115, 74, 0.4);
+}
+
+.kai-meeting-error {
+  color: #E8734A;
+  font-size: 12px;
+  margin: 0;
+}
+
+.kai-meeting-hint {
+  color: var(--kai-text-faint);
+  font-size: 11px;
+  margin: 0;
+}
+
+.kai-meeting-call-status {
+  background: var(--kai-surface);
+  border: 1px solid var(--kai-border);
+  border-radius: var(--kai-radius);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  max-width: 480px;
+}
+
+.kai-meeting-call-status-label {
+  margin: 0;
+  font-size: 13px;
+  color: var(--kai-text);
+  flex: 1;
+}
+
+.kai-meeting-card {
+  background: var(--kai-surface);
+  border: 1px solid var(--kai-border);
+  border-radius: var(--kai-radius);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 640px;
+}
+
+.kai-meeting-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kai-meeting-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--kai-text);
+}
+
+.kai-meeting-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kai-meeting-section-label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--kai-text-faint);
+}
+
+.kai-meeting-summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--kai-text);
+}
+
+.kai-meeting-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--kai-text);
+}
+
+.kai-meeting-knowledge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kai-meeting-knowledge-item {
+  background: var(--kai-surface-2);
+  border: 1px solid var(--kai-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kai-meeting-knowledge-item--accepted {
+  border-color: rgba(32, 201, 151, 0.4);
+}
+
+.kai-meeting-knowledge-item--rejected {
+  opacity: 0.6;
+}
+
+.kai-meeting-knowledge-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.kai-meeting-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--kai-text-muted);
+}
+
+.kai-meeting-tag--confidence-alta {
+  color: var(--kai-green);
+  background: rgba(32, 201, 151, 0.12);
+}
+
+.kai-meeting-tag--confidence-media {
+  color: #D4A017;
+  background: rgba(212, 160, 23, 0.12);
+}
+
+.kai-meeting-tag--confidence-baja {
+  color: var(--kai-text-faint);
+}
+
+.kai-meeting-knowledge-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--kai-text);
+}
+
+.kai-meeting-knowledge-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.kai-meeting-tenant-select {
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--kai-border);
+  background: var(--kai-surface-2);
+  color: var(--kai-text);
+  font-family: inherit;
+}
+
+.kai-meeting-status-label {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.kai-meeting-status-label--accepted {
+  color: var(--kai-green);
+}
+
+.kai-meeting-status-label--rejected {
+  color: var(--kai-text-faint);
+}
+
+.kai-meeting-contradiction-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kai-meeting-contradiction {
+  background: rgba(232, 115, 74, 0.08);
+  border: 1px solid rgba(232, 115, 74, 0.3);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--kai-text);
+}
+
+.kai-meeting-contradiction p {
+  margin: 2px 0;
+}
+
+.kai-meeting-contradiction-reason {
+  color: var(--kai-text-muted);
+  font-style: italic;
+}
+
+.kai-meeting-contradiction-label {
+  font-weight: 700;
+  color: #E8734A;
+}

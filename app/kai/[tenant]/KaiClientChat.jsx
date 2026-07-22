@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import ActivityDashboardCard from '../components/ActivityDashboardCard';
+import MeetingAnalysisCard from '../components/MeetingAnalysisCard';
 
 const AREAS_CONFIG = [
   { id: 'negocio',     label: 'Negocio' },
@@ -486,6 +487,17 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState(null);
+  const [meetingFormOpen, setMeetingFormOpen] = useState(false);
+  const [meetingTitleInput, setMeetingTitleInput] = useState('');
+  const [meetingTranscriptInput, setMeetingTranscriptInput] = useState('');
+  const [meetingBusy, setMeetingBusy] = useState(false);
+  const [meetingErr, setMeetingErr] = useState(null);
+  const [callFormOpen, setCallFormOpen] = useState(false);
+  const [callTitleInput, setCallTitleInput] = useState('');
+  const [callDialInInput, setCallDialInInput] = useState('');
+  const [callPinInput, setCallPinInput] = useState('');
+  const [callBusy, setCallBusy] = useState(false);
+  const [callErr, setCallErr] = useState(null);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -804,10 +816,158 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
     setTimeout(() => setCopiedIdx((cur) => (cur === idx ? null : cur)), 1800);
   };
 
+  const handleAnalyzeMeeting = async () => {
+    if (!meetingTranscriptInput.trim() || meetingBusy) return;
+    setMeetingBusy(true);
+    setMeetingErr(null);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/meetings/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: activeConvIdRef.current,
+          transcript: meetingTranscriptInput,
+          meetingTitle: meetingTitleInput,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setMeetingErr(data.error || 'No se pudo analizar la reunión.'); return; }
+      if (data.conversationId) activeConvIdRef.current = data.conversationId;
+      setMessages((prev) => [...prev, data.message]);
+      setMeetingFormOpen(false);
+      setMeetingTitleInput('');
+      setMeetingTranscriptInput('');
+    } catch {
+      setMeetingErr('Error de conexión.');
+    } finally {
+      setMeetingBusy(false);
+    }
+  };
+
+  const handleMeetingKnowledgeUpdate = (msgIdx, updatedAnalysis) => {
+    setMessages((prev) => prev.map((msg, i) => (i === msgIdx ? { ...msg, meetingAnalysis: updatedAnalysis } : msg)));
+  };
+
+  const handleStartMeetingCall = async () => {
+    if (!callDialInInput.trim() || callBusy) return;
+    setCallBusy(true);
+    setCallErr(null);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/meetings/call`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: activeConvIdRef.current,
+          dialInNumber: callDialInInput,
+          pin: callPinInput,
+          meetingTitle: callTitleInput,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setCallErr(data.error || 'No se pudo iniciar la llamada.'); return; }
+      if (data.conversationId) activeConvIdRef.current = data.conversationId;
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: '',
+        meetingCallStatus: { callSid: data.callSid, status: 'calling', meetingTitle: callTitleInput },
+      }]);
+      setCallFormOpen(false);
+      setCallTitleInput('');
+      setCallDialInInput('');
+      setCallPinInput('');
+    } catch {
+      setCallErr('Error de conexión.');
+    } finally {
+      setCallBusy(false);
+    }
+  };
+
+  const handleCheckMeetingStatus = async (msgIdx, callSid) => {
+    try {
+      const res = await fetch(`/api/kai/${tenant}/meetings/status?callSid=${encodeURIComponent(callSid)}`);
+      const data = await res.json();
+      if (!res.ok) return;
+      setMessages((prev) => prev.map((msg, i) => (i === msgIdx ? { ...msg, meetingCallStatus: { ...msg.meetingCallStatus, ...data } } : msg)));
+
+      if (data.status === 'done' && data.conversationId) {
+        const convRes = await fetch(`/api/kai/${tenant}?id=${data.conversationId}`);
+        const convData = await convRes.json();
+        if (convRes.ok && convData.messages) setMessages(convData.messages);
+      }
+    } catch { /* deja el estado como estaba, se puede reintentar */ }
+  };
+
   return (
     <div style={{ display: 'grid', gridTemplateRows: 'auto 1fr auto', flex: 1, minHeight: 0, overflow: 'hidden' }}>
       {/* Session header */}
       <SessionHeader currentArea={currentArea} areaStatuses={areaStatuses} tenantName={tenantName} knowledgeScore={knowledgeScore} onMenuOpen={onMenuOpen} />
+
+      <div className="kai-meeting-trigger-bar">
+        <button type="button" className="kai-meeting-trigger-btn" onClick={() => setMeetingFormOpen((v) => !v)}>
+          🎙️ Analizar transcripción de reunión
+        </button>
+        <button type="button" className="kai-meeting-trigger-btn" onClick={() => setCallFormOpen((v) => !v)}>
+          📞 Kai se une a una reunión
+        </button>
+        {meetingFormOpen && (
+          <div className="kai-meeting-form">
+            <input
+              className="kai-meeting-form-input"
+              placeholder="Título de la reunión (opcional)…"
+              value={meetingTitleInput}
+              onChange={(e) => setMeetingTitleInput(e.target.value)}
+            />
+            <textarea
+              className="kai-meeting-form-textarea"
+              placeholder="Pega acá la transcripción completa de la reunión…"
+              value={meetingTranscriptInput}
+              onChange={(e) => setMeetingTranscriptInput(e.target.value)}
+              rows={6}
+            />
+            {meetingErr && <p className="kai-meeting-error">{meetingErr}</p>}
+            <div className="kai-meeting-form-actions">
+              <button type="button" className="kai-meeting-btn kai-meeting-btn--accept" disabled={meetingBusy || !meetingTranscriptInput.trim()} onClick={handleAnalyzeMeeting}>
+                {meetingBusy ? 'Analizando…' : 'Analizar'}
+              </button>
+              <button type="button" className="kai-meeting-btn kai-meeting-btn--reject" onClick={() => setMeetingFormOpen(false)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+        {callFormOpen && (
+          <div className="kai-meeting-form">
+            <input
+              className="kai-meeting-form-input"
+              placeholder="Título de la reunión (opcional)…"
+              value={callTitleInput}
+              onChange={(e) => setCallTitleInput(e.target.value)}
+            />
+            <input
+              className="kai-meeting-form-input"
+              placeholder="Número de dial-in del Meet (ej. +1 213 555 0132)…"
+              value={callDialInInput}
+              onChange={(e) => setCallDialInInput(e.target.value)}
+            />
+            <input
+              className="kai-meeting-form-input"
+              placeholder="PIN de la reunión…"
+              value={callPinInput}
+              onChange={(e) => setCallPinInput(e.target.value)}
+            />
+            <p className="kai-meeting-hint">Vas a tener que admitir a Kai manualmente cuando entre a la sala de espera.</p>
+            {callErr && <p className="kai-meeting-error">{callErr}</p>}
+            <div className="kai-meeting-form-actions">
+              <button type="button" className="kai-meeting-btn kai-meeting-btn--accept" disabled={callBusy || !callDialInInput.trim()} onClick={handleStartMeetingCall}>
+                {callBusy ? 'Marcando…' : 'Llamar'}
+              </button>
+              <button type="button" className="kai-meeting-btn kai-meeting-btn--reject" onClick={() => setCallFormOpen(false)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Messages */}
       <div style={{ minHeight: 0, overflowY: 'auto', padding: 'clamp(12px, 4vw, 24px) clamp(14px, 5vw, 28px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -903,6 +1063,38 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
             {/* Activity dashboard card — inline, en el mensaje donde se creó */}
             {m.role === 'assistant' && m.activityStart && (
               <ActivityDashboardCard tenant={tenant} activity={m.activityStart} />
+            )}
+
+            {/* Estado de la llamada en curso — "calling" -> "processing" -> "done"/"error" */}
+            {m.role === 'assistant' && m.meetingCallStatus && (
+              <div className="kai-meeting-call-status">
+                <p className="kai-meeting-call-status-label">
+                  {m.meetingCallStatus.status === 'calling' && '📞 Marcando a la reunión…'}
+                  {m.meetingCallStatus.status === 'processing' && '⏳ Analizando la reunión — puede tardar unos minutos.'}
+                  {m.meetingCallStatus.status === 'done' && '✅ Análisis listo.'}
+                  {m.meetingCallStatus.status === 'error' && `⚠️ Hubo un error: ${m.meetingCallStatus.error || ''}`}
+                </p>
+                {m.meetingCallStatus.status !== 'done' && (
+                  <button
+                    type="button"
+                    className="kai-meeting-btn kai-meeting-btn--accept"
+                    onClick={() => handleCheckMeetingStatus(msgIdx, m.meetingCallStatus.callSid)}
+                  >
+                    🔄 Obtener análisis
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Meeting analysis card — inline, en el mensaje donde se generó */}
+            {m.role === 'assistant' && m.meetingAnalysis && (
+              <MeetingAnalysisCard
+                tenant={tenant}
+                conversationId={activeConvIdRef.current}
+                messageIndex={msgIdx}
+                analysis={m.meetingAnalysis}
+                onUpdate={(updated) => handleMeetingKnowledgeUpdate(msgIdx, updated)}
+              />
             )}
 
             {/* Insight separators — inline, after assistant message */}

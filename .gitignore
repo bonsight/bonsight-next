@@ -26,3 +26,5 @@ yarn-error.log*
 
 # One-time dev scripts (contain credentials)
 scripts/
+.vercel
+.env*
