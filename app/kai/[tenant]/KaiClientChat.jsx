@@ -496,6 +496,9 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
   const [callTitleInput, setCallTitleInput] = useState('');
   const [callDialInInput, setCallDialInInput] = useState('');
   const [callPinInput, setCallPinInput] = useState('');
+  const [calendarMeetings, setCalendarMeetings] = useState([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [selectedMeetingId, setSelectedMeetingId] = useState('');
   const [callBusy, setCallBusy] = useState(false);
   const [callErr, setCallErr] = useState(null);
   const bottomRef = useRef(null);
@@ -848,6 +851,26 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
     setMessages((prev) => prev.map((msg, i) => (i === msgIdx ? { ...msg, meetingAnalysis: updatedAnalysis } : msg)));
   };
 
+  useEffect(() => {
+    if (!callFormOpen) return;
+    setCalendarLoading(true);
+    fetch(`/api/kai/${tenant}/meetings/calendar`)
+      .then((res) => res.json())
+      .then((data) => setCalendarMeetings(data.meetings ?? []))
+      .catch(() => setCalendarMeetings([]))
+      .finally(() => setCalendarLoading(false));
+  }, [callFormOpen, tenant]);
+
+  const handleSelectCalendarMeeting = (id) => {
+    setSelectedMeetingId(id);
+    const meeting = calendarMeetings.find((m) => m.id === id);
+    if (!meeting) return;
+    setCallTitleInput(meeting.title || '');
+    const phone = meeting.meet?.phoneEntries?.[0];
+    setCallDialInInput(phone?.number || '');
+    setCallPinInput(phone?.pin || '');
+  };
+
   const handleStartMeetingCall = async () => {
     if (!callDialInInput.trim() || callBusy) return;
     setCallBusy(true);
@@ -875,6 +898,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
       setCallTitleInput('');
       setCallDialInInput('');
       setCallPinInput('');
+      setSelectedMeetingId('');
     } catch {
       setCallErr('Error de conexión.');
     } finally {
@@ -937,6 +961,25 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
         )}
         {callFormOpen && (
           <div className="kai-meeting-form">
+            {calendarLoading && <p className="kai-meeting-hint">Consultando el calendario de Kai…</p>}
+            {!calendarLoading && calendarMeetings.length > 0 && (
+              <select
+                className="kai-meeting-tenant-select"
+                value={selectedMeetingId}
+                onChange={(e) => handleSelectCalendarMeeting(e.target.value)}
+              >
+                <option value="">Elegí una reunión del calendario de Kai…</option>
+                {calendarMeetings.map((m) => (
+                  <option key={m.id} value={m.id} disabled={!m.meet?.phoneEntries?.length}>
+                    {m.title} — {m.start ? new Date(m.start).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }) : ''}
+                    {!m.meet?.phoneEntries?.length ? ' (sin dial-in)' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+            {!calendarLoading && calendarMeetings.length === 0 && (
+              <p className="kai-meeting-hint">No hay reuniones próximas en el calendario de Kai — invitá a kai@bonsight.co, o completá los datos a mano abajo.</p>
+            )}
             <input
               className="kai-meeting-form-input"
               placeholder="Título de la reunión (opcional)…"
@@ -961,7 +1004,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
               <button type="button" className="kai-meeting-btn kai-meeting-btn--accept" disabled={callBusy || !callDialInInput.trim()} onClick={handleStartMeetingCall}>
                 {callBusy ? 'Marcando…' : 'Llamar'}
               </button>
-              <button type="button" className="kai-meeting-btn kai-meeting-btn--reject" onClick={() => setCallFormOpen(false)}>
+              <button type="button" className="kai-meeting-btn kai-meeting-btn--reject" onClick={() => { setCallFormOpen(false); setSelectedMeetingId(''); }}>
                 Cancelar
               </button>
             </div>

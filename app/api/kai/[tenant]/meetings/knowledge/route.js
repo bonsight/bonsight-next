@@ -8,7 +8,7 @@ export async function PATCH(req, { params }) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
 
-  const { conversationId, messageIndex, itemIndex, decision, targetTenant } = await req.json();
+  const { conversationId, messageIndex, itemIndex, decision, targetTenant, editedStatement } = await req.json();
   if (!conversationId || typeof messageIndex !== 'number' || typeof itemIndex !== 'number' || !['accept', 'reject'].includes(decision)) {
     return Response.json({ error: 'conversationId, messageIndex, itemIndex y decision son requeridos.' }, { status: 400 });
   }
@@ -24,13 +24,14 @@ export async function PATCH(req, { params }) {
   try {
     const messages = await getConversationMessages(tenant, conversationId);
     const msg = messages[messageIndex];
-    const item = msg?.meetingAnalysis?.knowledge?.[itemIndex];
-    if (!item) throw new Error('Ítem de conocimiento no encontrado.');
-    if (item.status !== 'pending') throw new Error('Este ítem ya fue procesado.');
+    const original = msg?.meetingAnalysis?.knowledge?.[itemIndex];
+    if (!original) throw new Error('Ítem de conocimiento no encontrado.');
+    if (original.status !== 'pending') throw new Error('Este ítem ya fue procesado.');
 
+    const item = editedStatement?.trim() ? { ...original, statement: editedStatement.trim() } : original;
     if (decision === 'accept') await acceptKnowledgeItem(destination, item, conversationId);
 
-    const knowledge = msg.meetingAnalysis.knowledge.map((k, i) => (i === itemIndex ? { ...k, status: decision === 'accept' ? 'accepted' : 'rejected', acceptedTenant: decision === 'accept' ? destination : undefined } : k));
+    const knowledge = msg.meetingAnalysis.knowledge.map((k, i) => (i === itemIndex ? { ...item, status: decision === 'accept' ? 'accepted' : 'rejected', acceptedTenant: decision === 'accept' ? destination : undefined } : k));
     const updated = await updateMessageAt(tenant, conversationId, messageIndex, {
       meetingAnalysis: { ...msg.meetingAnalysis, knowledge },
     });

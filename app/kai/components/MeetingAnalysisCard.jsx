@@ -15,6 +15,8 @@ const CONFIDENCE_LABELS = { alta: 'Alta', media: 'Media', baja: 'Baja' };
 
 function KnowledgeItem({ item, index, busy, onDecide, tenants, defaultTenant }) {
   const [targetTenant, setTargetTenant] = useState(defaultTenant);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(item.statement);
   const isPending = item.status === 'pending';
 
   return (
@@ -25,7 +27,17 @@ function KnowledgeItem({ item, index, busy, onDecide, tenants, defaultTenant }) 
           Confianza {CONFIDENCE_LABELS[item.confidence] ?? item.confidence}
         </span>
       </div>
-      <p className="kai-meeting-knowledge-text">{item.statement}</p>
+      {editing ? (
+        <textarea
+          className="kai-meeting-form-textarea"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={3}
+          autoFocus
+        />
+      ) : (
+        <p className="kai-meeting-knowledge-text">{item.statement}</p>
+      )}
       {isPending ? (
         <div className="kai-meeting-knowledge-actions">
           {tenants.length > 1 && (
@@ -38,12 +50,33 @@ function KnowledgeItem({ item, index, busy, onDecide, tenants, defaultTenant }) 
               {tenants.map((t) => <option key={t.slug} value={t.slug}>{t.name}</option>)}
             </select>
           )}
-          <button type="button" className="kai-meeting-btn kai-meeting-btn--accept" disabled={busy} onClick={() => onDecide(index, 'accept', targetTenant)}>
-            Aceptar
-          </button>
-          <button type="button" className="kai-meeting-btn kai-meeting-btn--reject" disabled={busy} onClick={() => onDecide(index, 'reject', targetTenant)}>
-            Rechazar
-          </button>
+          {editing ? (
+            <>
+              <button
+                type="button"
+                className="kai-meeting-btn kai-meeting-btn--accept"
+                disabled={busy || !draft.trim()}
+                onClick={() => onDecide(index, 'accept', targetTenant, draft.trim())}
+              >
+                Guardar y aceptar
+              </button>
+              <button type="button" className="kai-meeting-btn kai-meeting-btn--reject" disabled={busy} onClick={() => { setEditing(false); setDraft(item.statement); }}>
+                Cancelar
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="kai-meeting-btn kai-meeting-btn--accept" disabled={busy} onClick={() => onDecide(index, 'accept', targetTenant)}>
+                Aceptar
+              </button>
+              <button type="button" className="kai-meeting-btn" disabled={busy} onClick={() => setEditing(true)}>
+                ✏️ Editar
+              </button>
+              <button type="button" className="kai-meeting-btn kai-meeting-btn--reject" disabled={busy} onClick={() => onDecide(index, 'reject', targetTenant)}>
+                Rechazar
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <span className={`kai-meeting-status-label kai-meeting-status-label--${item.status}`}>
@@ -72,16 +105,16 @@ export default function MeetingAnalysisCard({ tenant, conversationId, messageInd
   }, []);
 
   if (!analysis) return null;
-  const { meetingTitle, summary, decisions = [], tasks = [], knowledge = [], contradictions = [] } = analysis;
+  const { meetingTitle, summary, decisions = [], tasks = [], knowledge = [], contradictions = [], hasSubstantiveContent = true } = analysis;
 
-  const handleDecide = async (itemIndex, decision, targetTenant) => {
+  const handleDecide = async (itemIndex, decision, targetTenant, editedStatement) => {
     setBusy(true);
     setErr(null);
     try {
       const res = await fetch(`/api/kai/${tenant}/meetings/knowledge`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId, messageIndex, itemIndex, decision, targetTenant }),
+        body: JSON.stringify({ conversationId, messageIndex, itemIndex, decision, targetTenant, editedStatement }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo actualizar.'); return; }
@@ -96,13 +129,15 @@ export default function MeetingAnalysisCard({ tenant, conversationId, messageInd
   return (
     <div className="kai-meeting-card">
       <div className="kai-meeting-header">
-        <span className="kai-actdash-badge">Reunión analizada</span>
+        <span className={hasSubstantiveContent ? 'kai-actdash-badge' : 'kai-actdash-badge kai-actdash-badge--muted'}>
+          {hasSubstantiveContent ? 'Reunión analizada' : 'Sin contenido'}
+        </span>
         <h4 className="kai-meeting-title">{meetingTitle}</h4>
       </div>
 
       {summary && (
         <div className="kai-meeting-section">
-          <p className="kai-meeting-section-label">Resumen</p>
+          {hasSubstantiveContent && <p className="kai-meeting-section-label">Resumen</p>}
           <p className="kai-meeting-summary">{summary}</p>
         </div>
       )}

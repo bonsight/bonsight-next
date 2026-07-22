@@ -4259,6 +4259,11 @@
   gap: 10px;
 }
 
+.kai-actdash-badge--muted {
+  color: var(--kai-text-faint);
+  background: var(--kai-surface-2);
+}
+
 .kai-actdash-badge {
   font-size: 10px;
   font-weight: 700;
