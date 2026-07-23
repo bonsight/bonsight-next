@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import KaiClientChat from './KaiClientChat';
+import MeetingAnalysisCard from '../components/MeetingAnalysisCard';
 import DemoChatPlayer from './DemoChatPlayer';
 import { getDemoProgression } from '@/lib/kai/demoScripts';
 import '../kai.css';
@@ -33,6 +34,7 @@ const IconBulb        = (p) => <Icon {...p} path={<><path d="M9 18h6M10 22h4M12 
 const IconFileText    = (p) => <Icon {...p} path={<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></>} />;
 const IconUsers       = (p) => <Icon {...p} path={<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>} />;
 const IconHistory     = (p) => <Icon {...p} path={<><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4"/></>} />;
+const IconMic         = (p) => <Icon {...p} path={<><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></>} />;
 const IconNetwork     = (p) => <Icon {...p} path={<><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><line x1="12" y1="7" x2="5" y2="17"/><line x1="12" y1="7" x2="19" y2="17"/><line x1="5" y1="19" x2="19" y2="19"/></>} />;
 const IconChevron     = (p) => <Icon {...p} path={<><polyline points="6 9 12 15 18 9"/></>} />;
 
@@ -88,6 +90,7 @@ const NAV = [
   { id: 'ejecutivo',    label: 'Resumen ejecutivo',      icon: IconFileText },
   { id: 'participantes',label: 'Participantes',          icon: IconUsers },
   { id: 'historial',    label: 'Historial',              icon: IconHistory },
+  { id: 'reuniones',    label: 'Reuniones',              icon: IconMic },
 ];
 
 // ── Shared primitives ──────────────────────────────────────────────────────
@@ -1668,6 +1671,90 @@ function HistorialSection({ tenant, tenantMeta }) {
   );
 }
 
+function MeetingCard({ meeting, tenant }) {
+  const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const toggle = async () => {
+    if (open) { setOpen(false); return; }
+    setOpen(true);
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/kai/${tenant}?id=${meeting.conversationId}`);
+      const data = await res.json();
+      setDetail(data.messages?.[meeting.messageIndex]?.meetingAnalysis ?? null);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  };
+
+  const date = meeting.analyzedAt ? new Date(meeting.analyzedAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+  const time = meeting.analyzedAt ? new Date(meeting.analyzedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
+
+  return (
+    <div className={`kcv-session-card${open ? ' kcv-session-card-open' : ''}`}>
+      <button className="kcv-session-header" onClick={toggle} aria-expanded={open}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+          <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--kai-text)' }}>
+            {meeting.title}
+            {!meeting.hasSubstantiveContent && (
+              <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--kai-text-faint)' }}>sin contenido</span>
+            )}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--kai-text-muted)' }}>{date} · {time}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--kai-text-muted)' }}>
+          {meeting.counts?.decisions > 0 && <span>{meeting.counts.decisions} decisiones</span>}
+          {meeting.counts?.tasks > 0 && <span>{meeting.counts.tasks} tareas</span>}
+          {meeting.counts?.knowledge > 0 && <span>{meeting.counts.knowledge} conocimiento</span>}
+        </div>
+      </button>
+      {open && (
+        <div style={{ padding: '12px 4px' }}>
+          {loading && <p style={{ fontSize: 13, color: 'var(--kai-text-muted)' }}>Cargando…</p>}
+          {!loading && detail && (
+            <MeetingAnalysisCard
+              tenant={tenant}
+              conversationId={meeting.conversationId}
+              messageIndex={meeting.messageIndex}
+              analysis={detail}
+              onUpdate={setDetail}
+            />
+          )}
+          {!loading && !detail && <p style={{ fontSize: 13, color: 'var(--kai-text-muted)' }}>No se pudo cargar el detalle.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReunionesSection({ tenant }) {
+  const [meetings, setMeetings] = useState(null);
+
+  useEffect(() => {
+    fetch(`/api/kai/${tenant}/meetings`)
+      .then((r) => r.json())
+      .then((d) => setMeetings(d.meetings ?? []))
+      .catch(() => setMeetings([]));
+  }, [tenant]);
+
+  if (!meetings) return <p style={{ fontSize: 13, color: 'var(--kai-text-muted)' }}>Cargando…</p>;
+
+  if (!meetings.length) return (
+    <div style={{ padding: '40px 0' }}>
+      <p style={{ fontSize: 13, color: 'var(--kai-text-muted)', lineHeight: 1.75 }}>
+        Cuando analices una transcripción o Kai capture una llamada, las reuniones van a aparecer acá — sin tener que buscarlas en el chat.
+      </p>
+    </div>
+  );
+
+  return (
+    <div className="kcv-session-list">
+      {meetings.map((m) => <MeetingCard key={m.id} meeting={m} tenant={tenant} />)}
+    </div>
+  );
+}
+
 // ── Session feed config ────────────────────────────────────────────────────
 
 function SidebarAreas({ profile, learnings }) {
@@ -1897,6 +1984,7 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
     ejecutivo:     'Resumen ejecutivo',
     participantes: 'Participantes',
     historial:     'Historial de sesiones',
+    reuniones:     'Reuniones',
   };
 
   const learningCount = learnings.length + transversals.length;
@@ -2064,6 +2152,7 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
               {activeSection === 'ejecutivo'     && <EjecutivoSection     tenant={tenant} isDemo={isDemoMode} />}
               {activeSection === 'participantes' && <ParticipantesSection tenant={tenant} profile={profile} learnings={learnings} />}
               {activeSection === 'historial'     && <HistorialSection     tenant={tenant} tenantMeta={tenantMeta} />}
+              {activeSection === 'reuniones'     && <ReunionesSection     tenant={tenant} />}
             </div>
           </>
         )}

@@ -1,6 +1,7 @@
 import { isAuthorizedForTenant } from '@/lib/kai/auth';
 import { analyzeMeetingTranscript } from '@/lib/kai/meetingAnalysis';
 import { appendMessages, getConversationMessages, createConversation } from '@/lib/kai/memory';
+import { addMeetingIndexEntry } from '@/lib/kai/meetings';
 
 export async function POST(req, { params }) {
   const { tenant } = await params;
@@ -20,7 +21,9 @@ export async function POST(req, { params }) {
     const message = { role: 'assistant', content: '', meetingAnalysis: analysis };
     await appendMessages(tenant, conversationId, [message]);
     const messages = await getConversationMessages(tenant, conversationId);
-    return Response.json({ message, messageIndex: messages.length - 1, conversationId });
+    const messageIndex = messages.length - 1;
+    await addMeetingIndexEntry(tenant, { conversationId, messageIndex, analysis });
+    return Response.json({ message, messageIndex, conversationId });
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo analizar la reunión.' }, { status: 400 });
   }
