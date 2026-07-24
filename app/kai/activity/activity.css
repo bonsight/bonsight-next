@@ -126,6 +126,17 @@
   padding: 3px 9px;
 }
 
+.act-header-progress {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--kai-text-faint);
+  background: var(--kai-surface-2);
+  border-radius: 20px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
 .act-header-timer {
   margin-left: auto;
   font-family: monospace;

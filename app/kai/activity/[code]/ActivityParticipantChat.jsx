@@ -158,6 +158,7 @@ export default function ActivityParticipantChat({ code, activityId, activityName
   const [questionMeta, setQuestionMeta] = useState(null); // { id, responseType }
   const [multipleSubmitted, setMultipleSubmitted] = useState(false);
   const [personalComplete, setPersonalComplete] = useState(false);
+  const [questionProgress, setQuestionProgress] = useState(null); // { index, count } — para el contador visible
 
   const displayedIndexRef = useRef(0);
   const lastQuestionIdRef = useRef(null);
@@ -199,7 +200,12 @@ export default function ActivityParticipantChat({ code, activityId, activityName
         return;
       }
       setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
-      if (typeof data.questionIndex === 'number') displayedIndexRef.current = data.questionIndex;
+      if (typeof data.questionIndex === 'number') {
+        displayedIndexRef.current = data.questionIndex;
+        if (data.questionIndex >= 0 && typeof data.questionCount === 'number') {
+          setQuestionProgress({ index: data.questionIndex, count: data.questionCount });
+        }
+      }
       if (data.finished) setFinished(true);
       if (data.personalComplete) setPersonalComplete(true);
     } catch {
@@ -355,6 +361,9 @@ export default function ActivityParticipantChat({ code, activityId, activityName
     <div className="act-wrap">
       <div className="act-header">
         <span className="act-header-name">{activityName}</span>
+        {!finished && !personalComplete && questionProgress && (
+          <span className="act-header-progress">Pregunta {questionProgress.index + 1} de {questionProgress.count}</span>
+        )}
         {!finished && remainingSeconds !== null && (
           <span className={`act-header-timer ${remainingSeconds <= 0 ? 'act-header-timer--expired' : ''}`}>
             ⏱ {formatDuration(remainingSeconds)}

@@ -1436,12 +1436,64 @@
 }
 
 .aria-canvas-col {
+  position: relative;
   flex-shrink: 0;
-  width: 220px;
+  width: 280px;
   background: var(--aria-bg);
   border: 1px solid var(--aria-border);
   border-radius: 12px;
   padding: 14px;
+}
+
+.aria-canvas-col-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+.aria-canvas-col-menu {
+  position: absolute;
+  top: 40px;
+  right: 14px;
+  z-index: 51;
+  display: flex;
+  flex-direction: column;
+  min-width: 170px;
+  background: var(--aria-bg-elevated);
+  border: 1px solid var(--aria-border);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.aria-canvas-col-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--aria-text-dim);
+  font-size: 0.76rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.aria-canvas-col-menu button:hover {
+  background: var(--aria-bg);
+  color: var(--aria-text);
+}
+
+.aria-canvas-col-menu button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.aria-canvas-col-menu-danger {
+  color: #f87171 !important;
 }
 
 .aria-canvas-col-head {
@@ -1451,6 +1503,9 @@
 }
 
 .aria-canvas-col-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--aria-text);
@@ -1463,6 +1518,17 @@
 
 .aria-canvas-col-name:hover {
   border-bottom-color: var(--aria-text-dim);
+}
+
+.aria-canvas-col-name-pencil {
+  flex-shrink: 0;
+  color: var(--aria-text-faint);
+  opacity: 0.6;
+}
+
+.aria-canvas-col-name:hover .aria-canvas-col-name-pencil {
+  opacity: 1;
+  color: var(--aria-purple);
 }
 
 .aria-canvas-group-name-input {
@@ -1525,6 +1591,25 @@
   border: 1px solid var(--aria-border);
   border-radius: 9px;
   padding: 8px 10px;
+}
+
+.aria-canvas-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.aria-canvas-item-head .aria-canvas-item-who {
+  margin-bottom: 0;
+}
+
+.aria-canvas-item-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .aria-canvas-item-who {
@@ -1621,6 +1706,9 @@
 }
 
 .aria-canvas-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 0.68rem;
   font-weight: 600;
   padding: 4px 9px;
@@ -1695,18 +1783,28 @@
 
 /* Workshop canvas — metadata de grupo (área / responsable / involucrados) */
 
-.aria-canvas-meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-  cursor: pointer;
-}
-
 .aria-canvas-meta-empty {
   font-size: 0.68rem;
   color: var(--aria-text-faint);
+}
+
+.aria-canvas-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.aria-canvas-meta-line--column {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.aria-canvas-involucrados-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .aria-canvas-avatar--sm {
@@ -1715,24 +1813,115 @@
   font-size: 0.52rem;
 }
 
-.aria-canvas-avatar-stack {
-  display: flex;
-}
-
-.aria-canvas-avatar-stack .aria-canvas-avatar {
-  margin-left: -5px;
-  border: 1.5px solid var(--aria-bg-elevated);
-}
-
-.aria-canvas-avatar-stack .aria-canvas-avatar:first-child {
-  margin-left: 0;
-}
-
 .aria-canvas-meta-form {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   margin-bottom: 10px;
+}
+
+.aria-canvas-meta-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.aria-canvas-meta-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.aria-canvas-meta-field-label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--aria-text-faint);
+}
+
+.aria-canvas-involucrados-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.aria-canvas-involucrados-heading .aria-canvas-col-name-pencil {
+  opacity: 0.6;
+}
+
+.aria-canvas-involucrados-heading:hover .aria-canvas-col-name-pencil {
+  opacity: 1;
+  color: var(--aria-purple);
+}
+
+.aria-canvas-meta-checklist-title {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--aria-text-dim);
+  margin: 0;
+}
+
+.aria-canvas-meta-checklist-title span {
+  font-weight: 400;
+  color: var(--aria-text-faint);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.aria-canvas-meta-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 140px;
+  overflow-y: auto;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--aria-border);
+  background: var(--aria-bg);
+}
+
+.aria-canvas-meta-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.74rem;
+  color: var(--aria-text-dim);
+  cursor: pointer;
+}
+
+.aria-canvas-meta-checkbox input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.aria-canvas-meta-checkbox-box {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid var(--aria-border);
+  background: var(--aria-bg-elevated);
+  position: relative;
+}
+
+.aria-canvas-meta-checkbox input:checked + .aria-canvas-meta-checkbox-box {
+  background: var(--aria-purple);
+  border-color: var(--aria-purple);
+}
+
+.aria-canvas-meta-checkbox input:checked + .aria-canvas-meta-checkbox-box::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 .aria-canvas-meta-select,
@@ -1744,6 +1933,20 @@
   background: var(--aria-bg);
   color: var(--aria-text);
   font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.aria-canvas-meta-select--empty {
+  font-style: italic;
+  color: var(--aria-text-faint);
+}
+
+.aria-canvas-mini--primary {
+  justify-content: center;
+  border-color: var(--aria-purple);
+  background: var(--aria-purple);
+  color: #fff;
 }
 
 /* Workshop canvas — panel de Ficha por épica */
@@ -1782,18 +1985,219 @@
   letter-spacing: 0.03em;
 }
 
+.aria-ficha-share {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--aria-bg);
+  border: 1px solid var(--aria-border);
+}
+
+.aria-ficha-qr {
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: #fff;
+  cursor: zoom-in;
+}
+
+/* Modal de ficha (ver completa) y QR agrandado — comparten el mismo backdrop */
+
+.aria-ficha-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 8, 15, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 24px;
+}
+
+.aria-ficha-modal {
+  width: 100%;
+  max-width: 780px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--aria-bg-elevated);
+  border: 1px solid var(--aria-border);
+  border-radius: 14px;
+  padding: 24px;
+}
+
+.aria-ficha-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--aria-border);
+}
+
+.aria-canvas-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.aria-ficha-modal-title {
+  font-family: var(--aria-serif, inherit);
+  font-size: 1.15rem;
+  color: var(--aria-text);
+  margin: 4px 0 0;
+}
+
+.aria-ficha-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 28px;
+}
+
+.aria-ficha-modal-grid .aria-ficha-field:last-child {
+  grid-column: 1 / -1;
+}
+
+.aria-ficha-share-modal {
+  max-width: 420px;
+}
+
+.aria-ficha-share-modal-body {
+  background: #fff;
+  border-radius: 16px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.aria-ficha-qr-big {
+  width: min(60vw, 280px);
+  height: min(60vw, 280px);
+  image-rendering: pixelated;
+}
+
+.aria-ficha-code-big {
+  font-size: 1rem;
+  color: #1a1a2e;
+}
+
+.aria-ficha-share-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
 .aria-ficha-participants {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--aria-border);
+  background: var(--aria-bg);
 }
 
-.aria-ficha-participant {
+.aria-ficha-status {
+  margin: 10px 0 14px;
+  position: relative;
+}
+
+.aria-ficha-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  background: rgba(124, 58, 237, 0.06);
+  cursor: pointer;
+}
+
+.aria-ficha-status-lines {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.aria-ficha-status-lines .aria-ficha-badge {
+  margin: 0;
+}
+
+.aria-ficha-status-text {
+  font-size: 0.74rem;
+  color: var(--aria-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aria-ficha-status-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aria-ficha-status-actions .aria-ficha-primary-btn {
+  flex: 1;
+}
+
+.aria-ficha-status-chevron {
+  color: var(--aria-text-faint);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.aria-ficha-status-chevron--open {
+  transform: rotate(180deg);
+}
+
+.aria-ficha-status-body {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 9px;
+  border: 1px solid var(--aria-border);
+  background: var(--aria-bg-elevated);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.aria-ficha-participant-row {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 0.72rem;
   color: var(--aria-text-dim);
+}
+
+.aria-ficha-participant-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aria-ficha-participant-progress {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--aria-text-faint);
+}
+
+.aria-ficha-primary-btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .aria-ficha-field {

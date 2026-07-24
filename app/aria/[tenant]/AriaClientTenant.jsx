@@ -383,7 +383,11 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+    // Depende de messages.length, no de messages — así editar el canvas o el board
+    // embebido en un mensaje existente (setMessages in-place) no te tira para abajo
+    // de nuevo, solo un mensaje nuevo de verdad o un cambio de loading lo hacen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, loading]);
 
   async function handleNewInvestigation() {
     const res = await fetch(`/api/aria/${tenant}/investigations`, { method: 'POST' });
