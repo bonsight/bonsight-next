@@ -4,22 +4,42 @@ import { useState } from 'react';
 
 const CONFIDENCE_LABELS = { alta: 'Alta', media: 'Media', baja: 'Baja' };
 
-function buildCopyText({ meetingTitle, summary, decisions, tasks }) {
-  const lines = [`Reunión: ${meetingTitle}`, ''];
+// Emoji por grupo de responsable, en el orden en que van apareciendo — solo para
+// diferenciar bloques a simple vista al pegarlo en WhatsApp/Slack, sin significado fijo.
+const OWNER_COLORS = ['🔴', '🟢', '🟡', '🔵', '🟣', '🟠'];
 
-  if (summary) lines.push('Resumen', summary, '');
+function ownerGroupKey(t) {
+  if (t.owner) return t.owner;
+  if (t.possibleOwners?.length) return t.possibleOwners.join(' / ');
+  return 'Sin responsable identificado';
+}
+
+// Formato WhatsApp (*negrita*) — pensado para copiar y pegar directo en un chat.
+function buildCopyText({ meetingTitle, summary, decisions, tasks }) {
+  const lines = [`*📋 Reunión: ${meetingTitle}*`, ''];
+
+  if (summary) lines.push('*📝 Resumen*', '', summary, '');
 
   if (decisions.length) {
-    lines.push('Decisiones');
-    for (const d of decisions) lines.push(`- ${d.title}${d.reason ? ` — ${d.reason}` : ''}`);
+    lines.push('*✅ Decisiones*', '');
+    for (const d of decisions) lines.push(`• *${d.title}*${d.reason ? ` — ${d.reason}` : ''}`);
     lines.push('');
   }
 
   if (tasks.length) {
-    lines.push('Tareas');
+    lines.push('*📌 Tareas*', '');
+    const groups = new Map();
     for (const t of tasks) {
-      const owner = t.owner ?? (t.possibleOwners?.length ? `¿${t.possibleOwners.join(' o ')}?` : 'Sin responsable identificado');
-      lines.push(`- ${owner}: ${t.task}${t.deadline ? ` (${t.deadline})` : ''}`);
+      const key = ownerGroupKey(t);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(t);
+    }
+    let colorIdx = 0;
+    for (const [owner, ownerTasks] of groups) {
+      lines.push(`${OWNER_COLORS[colorIdx % OWNER_COLORS.length]} *${owner}*`);
+      colorIdx++;
+      for (const t of ownerTasks) lines.push(`• ${t.task}${t.deadline ? ` *(${t.deadline})*` : ''}`);
+      lines.push('');
     }
   }
 
