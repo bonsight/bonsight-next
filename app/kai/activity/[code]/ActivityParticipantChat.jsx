@@ -157,6 +157,7 @@ export default function ActivityParticipantChat({ code, activityId, activityName
   const [activityPhase, setActivityPhase] = useState('lobby'); // 'lobby' | 'question'
   const [questionMeta, setQuestionMeta] = useState(null); // { id, responseType }
   const [multipleSubmitted, setMultipleSubmitted] = useState(false);
+  const [personalComplete, setPersonalComplete] = useState(false);
 
   const displayedIndexRef = useRef(0);
   const lastQuestionIdRef = useRef(null);
@@ -200,6 +201,7 @@ export default function ActivityParticipantChat({ code, activityId, activityName
       setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
       if (typeof data.questionIndex === 'number') displayedIndexRef.current = data.questionIndex;
       if (data.finished) setFinished(true);
+      if (data.personalComplete) setPersonalComplete(true);
     } catch {
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Error de conexión. Probá de nuevo.' }]);
     } finally {
@@ -216,6 +218,25 @@ export default function ActivityParticipantChat({ code, activityId, activityName
         const res = await fetch(`/api/kai/activity/${code}/status?participantId=${participantId}`);
         if (!res.ok) return;
         const data = await res.json();
+
+        if (data.mode === 'self_paced') {
+          if (data.personalComplete) {
+            setPersonalComplete(true);
+            clearInterval(pollRef.current);
+            clearInterval(tickRef.current);
+            return;
+          }
+          setActivityPhase('question');
+          setQuestionMeta({ id: data.currentQuestionId, responseType: data.currentQuestionResponseType });
+          if (!greetedRef.current) {
+            greetedRef.current = true;
+            sendToKai('__activity_greeting__', { record: false });
+          }
+          // self_paced nunca dispara __next_question__ por polling — el chat ya
+          // encadena ack + siguiente pregunta en la misma respuesta.
+          return;
+        }
+
         if (data.status === 'finished') {
           setFinished(true);
           clearInterval(pollRef.current);
@@ -340,6 +361,7 @@ export default function ActivityParticipantChat({ code, activityId, activityName
           </span>
         )}
         {finished && <span className="act-header-badge">Finalizada</span>}
+        {!finished && personalComplete && <span className="act-header-badge">Listo ✓</span>}
       </div>
       <div className="act-messages">
         {messages.map((m, i) => (
@@ -354,7 +376,7 @@ export default function ActivityParticipantChat({ code, activityId, activityName
         )}
         <div ref={bottomRef} />
       </div>
-      {finished ? (
+      {finished || personalComplete ? (
         <div className="act-inputbar act-inputbar--closed">Gracias por participar 🎉</div>
       ) : questionMeta?.responseType === 'multiple' ? (
         multipleSubmitted ? (

@@ -3,12 +3,14 @@ import { generateGtmContainer } from '@/lib/aria/generators/gtm';
 import { generateMeasurementExcel } from '@/lib/aria/generators/excel';
 import { generateMeasurementPDF } from '@/lib/aria/generators/pdf.jsx';
 import { generateWorkshopCanvasPDF } from '@/lib/aria/generators/workshopCanvas.jsx';
+import { generateFichaPDF } from '@/lib/aria/generators/fichaPdf.jsx';
 
 const MIME = {
   gtm_json: 'application/json',
   excel: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   pdf: 'application/pdf',
   workshop_canvas_pdf: 'application/pdf',
+  ficha_pdf: 'application/pdf',
 };
 
 export async function POST(req, { params }) {
@@ -27,7 +29,7 @@ export async function POST(req, { params }) {
 
   const { format, filename, ...data } = body;
 
-  if (!['gtm_json', 'excel', 'pdf', 'workshop_canvas_pdf'].includes(format)) {
+  if (!['gtm_json', 'excel', 'pdf', 'workshop_canvas_pdf', 'ficha_pdf'].includes(format)) {
     return Response.json({ error: `Formato desconocido: ${format}` }, { status: 400 });
   }
 
@@ -40,6 +42,8 @@ export async function POST(req, { params }) {
       buffer = generateMeasurementExcel(data);
     } else if (format === 'workshop_canvas_pdf') {
       buffer = await generateWorkshopCanvasPDF(data);
+    } else if (format === 'ficha_pdf') {
+      buffer = await generateFichaPDF(data);
     } else {
       buffer = await generateMeasurementPDF(data);
     }

@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { after } from 'next/server';
-import { getActivityByCode, getParticipant, getActivityTemplate, recordAnswer, recordQuestionViewed, getParticipantAnswers } from '@/lib/kai/activities';
+import { getActivityByCode, getParticipant, getActivityTemplate, recordAnswer, recordQuestionViewed, getParticipantAnswers, getPersonalProgress } from '@/lib/kai/activities';
 import { buildActivityScriptPrompt } from '@/lib/kai/activityPrompt';
 import { trackUsage } from '@/lib/kai/usage';
 
@@ -28,6 +28,10 @@ export async function POST(req, { params }) {
       finished: true,
       questionIndex: meta.currentQuestionIndex,
     });
+  }
+
+  if (meta.mode === 'self_paced') {
+    return handleSelfPacedChat({ tenant, activityId, meta, participantId, content: String(message.content) });
   }
 
   const template = await getActivityTemplate(tenant, activityId);
@@ -88,4 +92,75 @@ export async function POST(req, { params }) {
   const reply = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
 
   return Response.json({ reply, questionIndex: meta.currentQuestionIndex, questionCount: template.length, finished: false });
+}
+
+async function askKai(tenant, systemPrompt, userTurn) {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: MAX_TOKENS,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userTurn }],
+  });
+  after(() => trackUsage({
+    tenant, product: 'kai', feature: 'activity_chat', model: MODEL,
+    inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens,
+  }));
+  return response.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+}
+
+// Self-paced: no hay "pregunta actual" global — cada mensaje ack+presenta la siguiente
+// pregunta pendiente DE ESTE participante en la misma vuelta, sin esperar a nadie más.
+async function handleSelfPacedChat({ tenant, activityId, meta, participantId, content }) {
+  if (content === '__activity_greeting__') {
+    const progress = await getPersonalProgress(tenant, activityId, participantId);
+    if (progress.currentIndex === -1) {
+      return Response.json({ reply: 'Ya completaste esta ficha. ¡Gracias!', finished: false, personalComplete: true, questionCount: progress.total });
+    }
+    const question = progress.template[progress.currentIndex];
+    await recordQuestionViewed(tenant, activityId, participantId, question.id).catch(() => null);
+    const systemPrompt = buildActivityScriptPrompt({
+      mode: 'present_self_paced',
+      activityName: meta.name,
+      questionText: question.text,
+      isFirstQuestion: progress.currentIndex === 0,
+      progressLabel: `pregunta ${progress.currentIndex + 1} de ${progress.total}`,
+    });
+    const reply = await askKai(tenant, systemPrompt, 'Presentá la pregunta.');
+    return Response.json({ reply, questionIndex: progress.currentIndex, questionCount: progress.total, finished: false, personalComplete: false });
+  }
+
+  const before = await getPersonalProgress(tenant, activityId, participantId);
+  if (before.currentIndex === -1) {
+    return Response.json({ reply: 'Ya completaste esta ficha. ¡Gracias!', finished: false, personalComplete: true, questionCount: before.total });
+  }
+  const answeredQuestion = before.template[before.currentIndex];
+  await recordAnswer(tenant, activityId, participantId, answeredQuestion.id, content).catch(() => null);
+
+  const progressAfter = await getPersonalProgress(tenant, activityId, participantId);
+  let systemPrompt, userTurn;
+  if (progressAfter.currentIndex === -1) {
+    systemPrompt = buildActivityScriptPrompt({ mode: 'closing_self_paced', activityName: meta.name });
+    userTurn = 'Agradecé y cerrá.';
+  } else {
+    const nextQuestion = progressAfter.template[progressAfter.currentIndex];
+    await recordQuestionViewed(tenant, activityId, participantId, nextQuestion.id).catch(() => null);
+    systemPrompt = buildActivityScriptPrompt({
+      mode: 'ack_and_next_self_paced',
+      activityName: meta.name,
+      questionText: answeredQuestion.text,
+      nextQuestionText: nextQuestion.text,
+      progressLabel: `pregunta ${progressAfter.currentIndex + 1} de ${progressAfter.total}`,
+    });
+    userTurn = 'Agradecé y presentá la siguiente.';
+  }
+
+  const reply = await askKai(tenant, systemPrompt, userTurn);
+  return Response.json({
+    reply,
+    questionIndex: progressAfter.currentIndex,
+    questionCount: progressAfter.total,
+    finished: false,
+    personalComplete: progressAfter.currentIndex === -1,
+  });
 }

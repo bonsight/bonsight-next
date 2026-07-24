@@ -13,6 +13,6 @@ export async function GET(req, { params }) {
 
   touchParticipant(ref.tenant, ref.activityId, participantId).catch(() => null);
 
-  const status = await getPublicActivityStatus(ref.tenant, ref.activityId);
+  const status = await getPublicActivityStatus(ref.tenant, ref.activityId, participantId);
   return Response.json(status);
 }

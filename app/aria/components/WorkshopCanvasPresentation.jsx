@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const IconChevronDown = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -69,6 +69,16 @@ function initials(name) {
   return String(name ?? '?').slice(0, 2).toUpperCase();
 }
 
+const AREA_OPTIONS = ['Ventas', 'Producto / UX', 'Tecnología cliente', 'Desarrollo', 'Datos (BI/Tagueo)', 'Transformación y Agilidad'];
+
+const FICHA_FIELDS = [
+  { key: 'objetivo', label: 'Objetivo' },
+  { key: 'problema', label: 'Problema / situación actual' },
+  { key: 'prioridad', label: 'Por qué es prioritario ahora' },
+  { key: 'exito', label: 'Cómo se ve el éxito' },
+  { key: 'restricciones', label: 'Restricciones y condiciones' },
+];
+
 function formatRelativeTime(dateStr) {
   if (!dateStr) return '';
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -85,6 +95,15 @@ function formatRelativeTime(dateStr) {
 }
 
 function InitiativeCard({ item, group, otherGroups, busy, onAction }) {
+  const [commenting, setCommenting] = useState(false);
+  const [comment, setComment] = useState(item.comment ?? '');
+
+  const saveComment = () => {
+    const trimmed = comment.trim();
+    if (trimmed !== (item.comment ?? '')) onAction('comment_item', { itemIndex: item.itemIndex, comment: trimmed });
+    setCommenting(false);
+  };
+
   return (
     <div className="aria-canvas-item">
       <div className="aria-canvas-item-who">
@@ -92,6 +111,23 @@ function InitiativeCard({ item, group, otherGroups, busy, onAction }) {
         <span className="aria-canvas-item-name">{item.participant}</span>
       </div>
       <p className="aria-canvas-item-text">{item.text}</p>
+      {item.comment && !commenting && (
+        <p className="aria-canvas-item-comment" onClick={() => setCommenting(true)} title="Click para editar">💬 {item.comment}</p>
+      )}
+      {commenting ? (
+        <input
+          className="aria-canvas-comment-input"
+          value={comment}
+          disabled={busy}
+          onChange={(e) => setComment(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && saveComment()}
+          onBlur={saveComment}
+          placeholder="Agregar comentario…"
+          autoFocus
+        />
+      ) : !item.comment && (
+        <button type="button" className="aria-canvas-comment-btn" onClick={() => setCommenting(true)}>+ comentario</button>
+      )}
       {otherGroups.length > 0 && (
         <select
           className="aria-canvas-move-select"
@@ -109,7 +145,300 @@ function InitiativeCard({ item, group, otherGroups, busy, onAction }) {
   );
 }
 
-function GroupColumn({ group, items, otherGroups, busy, onAction }) {
+function GroupMetaRow({ group, busy, onSave }) {
+  const [open, setOpen] = useState(false);
+  const [area, setArea] = useState(group.area ?? '');
+  const [responsable, setResponsable] = useState(group.responsable ?? '');
+  const [involucrados, setInvolucrados] = useState((group.involucrados ?? []).join(', '));
+
+  if (open) {
+    const submit = () => {
+      onSave({ area, responsable, involucrados: involucrados.split(',').map((s) => s.trim()).filter(Boolean) });
+      setOpen(false);
+    };
+    return (
+      <div className="aria-canvas-meta-form">
+        <select className="aria-canvas-meta-select" value={area} disabled={busy} onChange={(e) => setArea(e.target.value)}>
+          <option value="">Área…</option>
+          {AREA_OPTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <input className="aria-canvas-meta-input" placeholder="Responsable" value={responsable} disabled={busy} onChange={(e) => setResponsable(e.target.value)} />
+        <input className="aria-canvas-meta-input" placeholder="Involucrados (separados por coma)" value={involucrados} disabled={busy} onChange={(e) => setInvolucrados(e.target.value)} />
+        <div className="aria-canvas-newcol-actions">
+          <button type="button" className="aria-canvas-mini" disabled={busy} onClick={submit}>Guardar</button>
+          <button type="button" className="aria-canvas-mini" onClick={() => setOpen(false)}>Cancelar</button>
+        </div>
+      </div>
+    );
+  }
+
+  const hasMeta = group.area || group.responsable || group.involucrados?.length > 0;
+
+  return (
+    <div className="aria-canvas-meta-row" onClick={() => setOpen(true)} title="Click para editar responsable/área">
+      {group.area && <span className="aria-board-tag">{group.area}</span>}
+      {group.responsable && (
+        <span className="aria-canvas-item-who">
+          <span className="aria-canvas-avatar">{initials(group.responsable)}</span>
+          <span className="aria-canvas-item-name">{group.responsable}</span>
+        </span>
+      )}
+      {group.involucrados?.length > 0 && (
+        <span className="aria-canvas-avatar-stack">
+          {group.involucrados.map((n) => (
+            <span key={n} className="aria-canvas-avatar aria-canvas-avatar--sm" title={n}>{initials(n)}</span>
+          ))}
+        </span>
+      )}
+      {!hasMeta && <span className="aria-canvas-meta-empty">+ Responsable / área</span>}
+    </div>
+  );
+}
+
+function AddItemRow({ busy, onSubmit }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+
+  if (!open) {
+    return (
+      <button type="button" className="aria-canvas-add-item-btn" onClick={() => setOpen(true)}>
+        <IconPlus /> Agregar iniciativa
+      </button>
+    );
+  }
+
+  const submit = () => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    onSubmit(trimmed);
+    setText('');
+    setOpen(false);
+  };
+
+  return (
+    <div className="aria-canvas-newcol-form">
+      <input
+        className="aria-canvas-group-name-input"
+        placeholder="Nueva iniciativa…"
+        value={text}
+        disabled={busy}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && submit()}
+        autoFocus
+      />
+      <div className="aria-canvas-newcol-actions">
+        <button type="button" className="aria-canvas-mini" disabled={busy} onClick={submit}>Agregar</button>
+        <button type="button" className="aria-canvas-mini" onClick={() => setOpen(false)}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+function FichaEditForm({ initial, busy, err, onSave, onCancel }) {
+  const [values, setValues] = useState({
+    objetivo: initial?.objetivo ?? '',
+    problema: initial?.problema ?? '',
+    prioridad: initial?.prioridad ?? '',
+    exito: initial?.exito ?? '',
+    restricciones: initial?.restricciones ?? '',
+  });
+
+  return (
+    <div className="aria-ficha-panel">
+      <span className="aria-ficha-badge">Revisar ficha</span>
+      {FICHA_FIELDS.map((f) => (
+        <div key={f.key} className="aria-ficha-field">
+          <p className="aria-ficha-field-label">{f.label}</p>
+          <textarea
+            className="aria-ficha-textarea"
+            rows={2}
+            value={values[f.key]}
+            disabled={busy}
+            onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+          />
+        </div>
+      ))}
+      {err && <p className="aria-canvas-error">{err}</p>}
+      <div className="aria-canvas-newcol-actions">
+        <button type="button" className="aria-canvas-mini" disabled={busy} onClick={() => onSave(values)}>Guardar</button>
+        <button type="button" className="aria-canvas-mini" onClick={onCancel}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+function FichaPanel({ group, tenant, investigationId, messageIndex, questionId, onCanvasUpdate }) {
+  const [starting, setStarting] = useState(false);
+  const [status, setStatus] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [consolidating, setConsolidating] = useState(false);
+  const [err, setErr] = useState(null);
+  const pollRef = useRef(null);
+
+  const activityId = group.fichaActivityId;
+  const hasSavedFicha = !!group.ficha;
+
+  useEffect(() => {
+    if (!activityId || hasSavedFicha) return undefined;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/aria/${tenant}/investigations/${investigationId}/ficha?activityId=${activityId}`);
+        const data = await res.json();
+        if (res.ok) setStatus(data);
+      } catch { /* ignora fallos puntuales de polling */ }
+    };
+    poll();
+    pollRef.current = setInterval(poll, 4000);
+    return () => clearInterval(pollRef.current);
+  }, [activityId, hasSavedFicha, tenant, investigationId]);
+
+  const handleStart = async () => {
+    setStarting(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/aria/${tenant}/investigations/${investigationId}/ficha`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageIndex, questionId, groupId: group.id, groupName: group.name }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo armar la ficha.'); return; }
+      onCanvasUpdate?.(data.canvas);
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const handleConsolidate = async () => {
+    setConsolidating(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/aria/${tenant}/investigations/${investigationId}/ficha`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activityId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo consolidar.'); return; }
+      clearInterval(pollRef.current);
+      setDraft(data.ficha);
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setConsolidating(false);
+    }
+  };
+
+  const handleSave = async (ficha) => {
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/aria/${tenant}/investigations/${investigationId}/canvas`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageIndex, action: 'save_ficha', questionId, groupId: group.id, ficha }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo guardar la ficha.'); return; }
+      onCanvasUpdate?.(data.canvas);
+      setDraft(null);
+      setEditing(false);
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    try {
+      const filename = `ficha-${group.name}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '.pdf';
+      const res = await fetch(`/api/aria/${tenant}/generate-document`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          format: 'ficha_pdf',
+          filename,
+          title: group.name,
+          date: new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }),
+          ficha: group.ficha,
+          participantCount: group.ficha?.participantCount,
+        }),
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch { /* silencioso — no hay mucho que hacer si falla la descarga */ }
+  };
+
+  if (draft || (hasSavedFicha && editing)) {
+    return <FichaEditForm initial={draft ?? group.ficha} busy={saving} err={err} onSave={handleSave} onCancel={() => { setDraft(null); setEditing(false); }} />;
+  }
+
+  if (hasSavedFicha) {
+    return (
+      <div className="aria-ficha-panel">
+        <div className="aria-ficha-header">
+          <span className="aria-ficha-badge">Ficha lista</span>
+          <button type="button" className="aria-canvas-mini" onClick={() => setEditing(true)}>Editar</button>
+          <button type="button" className="aria-canvas-mini" onClick={handleExportPdf}>PDF</button>
+        </div>
+        {FICHA_FIELDS.map((f) => (
+          <div key={f.key} className="aria-ficha-field">
+            <p className="aria-ficha-field-label">{f.label}</p>
+            <p className="aria-ficha-field-text">{group.ficha[f.key]}</p>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!activityId) {
+    return (
+      <button type="button" className="aria-canvas-add-item-btn" disabled={starting} onClick={handleStart}>
+        📋 {starting ? 'Creando…' : 'Armar ficha'}
+      </button>
+    );
+  }
+
+  return (
+    <div className="aria-ficha-panel">
+      <div className="aria-ficha-header">
+        <span className="aria-ficha-badge">Ficha en curso</span>
+        <span className="aria-ficha-code">{group.fichaCode}</span>
+      </div>
+      {err && <p className="aria-canvas-error">{err}</p>}
+      {(status?.participants ?? []).length === 0 ? (
+        <p className="aria-board-hint">Compartí el código — todavía nadie se unió.</p>
+      ) : (
+        <div className="aria-ficha-participants">
+          {status.participants.map((p) => (
+            <span key={p.id} className="aria-ficha-participant">
+              <span className="aria-canvas-avatar aria-canvas-avatar--sm">{initials(p.name)}</span>
+              {p.name} — {p.answeredCount}/{p.total}
+            </span>
+          ))}
+        </div>
+      )}
+      <button type="button" className="aria-canvas-mini" disabled={consolidating || !status?.participants?.length} onClick={handleConsolidate}>
+        {consolidating ? 'Consolidando…' : 'Consolidar'}
+      </button>
+    </div>
+  );
+}
+
+function GroupColumn({ group, items, otherGroups, busy, onAction, tenant, investigationId, messageIndex, questionId, onCanvasUpdate }) {
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState(group.name);
   const [expanded, setExpanded] = useState(false);
@@ -176,6 +505,8 @@ function GroupColumn({ group, items, otherGroups, busy, onAction }) {
         </select>
       )}
 
+      <GroupMetaRow group={group} busy={busy} onSave={(meta) => onAction('update_group_meta', { groupId: group.id, ...meta })} />
+
       <span className="aria-canvas-col-count">{resolvedItems.length} iniciativa{resolvedItems.length === 1 ? '' : 's'}</span>
 
       <div className="aria-canvas-cards">
@@ -189,6 +520,17 @@ function GroupColumn({ group, items, otherGroups, busy, onAction }) {
           Ver {restCount} más <IconChevronDown />
         </button>
       )}
+
+      <AddItemRow busy={busy} onSubmit={(text) => onAction('create_item', { groupId: group.id, text })} />
+
+      <FichaPanel
+        group={group}
+        tenant={tenant}
+        investigationId={investigationId}
+        messageIndex={messageIndex}
+        questionId={questionId}
+        onCanvasUpdate={onCanvasUpdate}
+      />
     </div>
   );
 }
@@ -243,6 +585,7 @@ export default function WorkshopCanvasPresentation({ canvas, tenant, investigati
   const question = questions[activeQ];
   const updatedLabel = canvas.updatedAt ? formatRelativeTime(canvas.updatedAt) : null;
   const hasOriginal = !!canvas.originalGroupsByQuestion?.[question?.questionId];
+  const canUndo = (canvas.historyByQuestion?.[question?.questionId]?.length ?? 0) > 0;
 
   const handleAction = async (action, params) => {
     if (!tenant || !investigationId || typeof messageIndex !== 'number' || !question) return;
@@ -391,20 +734,32 @@ export default function WorkshopCanvasPresentation({ canvas, tenant, investigati
 
       {question && (
         <div className="aria-canvas-question">
-          {(questions.length === 1 || hasOriginal) && (
+          {(questions.length === 1 || hasOriginal || canUndo) && (
             <div className="aria-canvas-question-head">
               {questions.length === 1 && <p className="aria-canvas-question-title">{question.questionText}</p>}
-              {hasOriginal && (
-                <button
-                  type="button"
-                  className={`aria-canvas-revert-btn${confirmingRevert ? ' aria-canvas-revert-btn--confirm' : ''}`}
-                  disabled={busy}
-                  onClick={handleRevertClick}
-                  onBlur={() => setConfirmingRevert(false)}
-                >
-                  <IconRevert /> {confirmingRevert ? '¿Perder cambios manuales?' : 'Volver a original'}
-                </button>
-              )}
+              <div className="aria-board-header-actions">
+                {canUndo && (
+                  <button
+                    type="button"
+                    className="aria-canvas-mini"
+                    disabled={busy}
+                    onClick={() => handleAction('undo', {})}
+                  >
+                    <IconRevert /> Deshacer
+                  </button>
+                )}
+                {hasOriginal && (
+                  <button
+                    type="button"
+                    className={`aria-canvas-revert-btn${confirmingRevert ? ' aria-canvas-revert-btn--confirm' : ''}`}
+                    disabled={busy}
+                    onClick={handleRevertClick}
+                    onBlur={() => setConfirmingRevert(false)}
+                  >
+                    <IconRevert /> {confirmingRevert ? '¿Perder cambios manuales?' : 'Volver a original'}
+                  </button>
+                )}
+              </div>
             </div>
           )}
           <div className="aria-canvas-board">
@@ -416,6 +771,11 @@ export default function WorkshopCanvasPresentation({ canvas, tenant, investigati
                 otherGroups={question.groups.filter((og) => og.id !== g.id)}
                 busy={busy}
                 onAction={handleAction}
+                tenant={tenant}
+                investigationId={investigationId}
+                messageIndex={messageIndex}
+                questionId={question.questionId}
+                onCanvasUpdate={onCanvasUpdate}
               />
             ))}
             <NewGroupColumn

@@ -1637,6 +1637,199 @@
   cursor: default;
 }
 
+/* Workshop canvas — comentarios en tarjetas */
+
+.aria-canvas-item-comment {
+  font-size: 0.72rem;
+  color: var(--aria-text-dim);
+  background: var(--aria-bg);
+  border: 1px solid var(--aria-border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  margin: 0 0 8px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.aria-canvas-comment-input {
+  width: 100%;
+  font-size: 0.72rem;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--aria-purple);
+  background: var(--aria-bg);
+  color: var(--aria-text);
+  font-family: inherit;
+  margin: 0 0 8px;
+  box-sizing: border-box;
+}
+
+.aria-canvas-comment-btn {
+  font-size: 0.68rem;
+  color: var(--aria-text-faint);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin: -4px 0 8px;
+  font-family: inherit;
+}
+
+.aria-canvas-add-item-btn {
+  width: 100%;
+  margin-top: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 7px;
+  border: 1px dashed var(--aria-border);
+  background: none;
+  color: var(--aria-text-dim);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Workshop canvas — metadata de grupo (área / responsable / involucrados) */
+
+.aria-canvas-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.aria-canvas-meta-empty {
+  font-size: 0.68rem;
+  color: var(--aria-text-faint);
+}
+
+.aria-canvas-avatar--sm {
+  width: 15px;
+  height: 15px;
+  font-size: 0.52rem;
+}
+
+.aria-canvas-avatar-stack {
+  display: flex;
+}
+
+.aria-canvas-avatar-stack .aria-canvas-avatar {
+  margin-left: -5px;
+  border: 1.5px solid var(--aria-bg-elevated);
+}
+
+.aria-canvas-avatar-stack .aria-canvas-avatar:first-child {
+  margin-left: 0;
+}
+
+.aria-canvas-meta-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.aria-canvas-meta-select,
+.aria-canvas-meta-input {
+  font-size: 0.72rem;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--aria-border);
+  background: var(--aria-bg);
+  color: var(--aria-text);
+  font-family: inherit;
+}
+
+/* Workshop canvas — panel de Ficha por épica */
+
+.aria-ficha-panel {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  background: rgba(124, 58, 237, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aria-ficha-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aria-ficha-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--aria-purple);
+  margin-right: auto;
+}
+
+.aria-ficha-code {
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: ui-monospace, monospace;
+  color: var(--aria-text-dim);
+  letter-spacing: 0.03em;
+}
+
+.aria-ficha-participants {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.aria-ficha-participant {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--aria-text-dim);
+}
+
+.aria-ficha-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.aria-ficha-field-label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--aria-text-faint);
+  margin: 0;
+}
+
+.aria-ficha-field-text {
+  font-size: 0.76rem;
+  color: var(--aria-text);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.aria-ficha-textarea {
+  width: 100%;
+  font-size: 0.76rem;
+  font-family: inherit;
+  color: var(--aria-text);
+  background: var(--aria-bg);
+  border: 1px solid var(--aria-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
 /* Sprint board */
 
 .aria-header-link {
