@@ -1565,6 +1565,163 @@ function KnowledgeSourcesTab({ slug }) {
   );
 }
 
+// ── Pending meeting knowledge (revisión de conocimiento de reuniones) ──────
+
+const MK_CONFIDENCE_LABELS = { alta: 'Alta', media: 'Media', baja: 'Baja' };
+const MK_CONFIDENCE_STYLE = {
+  alta:  { background: '#F0F9F6', color: '#065F46' },
+  media: { background: '#FEF3C7', color: '#92400E' },
+  baja:  { background: '#f5f5f2', color: '#888' },
+};
+const MK_BTN_BASE = { fontSize: 12, fontWeight: 600, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', border: '0.5px solid transparent' };
+const MK_BTN_ACCEPT = { ...MK_BTN_BASE, background: '#065F46', color: '#fff' };
+const MK_BTN_REJECT = { ...MK_BTN_BASE, background: '#fff', color: '#991B1B', borderColor: '#f3caca' };
+const MK_BTN_GHOST = { ...MK_BTN_BASE, background: '#fff', color: '#555', borderColor: '#ddd' };
+
+function PendingKnowledgeItem({ item, busy, tenants, defaultTenant, onDecide }) {
+  const [targetTenant, setTargetTenant] = useState(defaultTenant);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(item.statement);
+
+  return (
+    <div style={{ background: '#fff', border: '0.5px solid #e8e8e4', borderRadius: 10, padding: '12px 14px' }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', padding: '2px 8px', borderRadius: 20, background: '#f5f5f2', color: '#666' }}>
+          {item.area}
+        </span>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', padding: '2px 8px', borderRadius: 20, ...(MK_CONFIDENCE_STYLE[item.confidence] ?? {}) }}>
+          Confianza {MK_CONFIDENCE_LABELS[item.confidence] ?? item.confidence}
+        </span>
+      </div>
+      {editing ? (
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={3}
+          autoFocus
+          style={{ width: '100%', fontSize: 13, fontFamily: 'inherit', border: '0.5px solid #ddd', borderRadius: 8, padding: 8, marginBottom: 10, resize: 'vertical', boxSizing: 'border-box' }}
+        />
+      ) : (
+        <p style={{ fontSize: 13, color: '#1a1a1a', lineHeight: 1.55, margin: '0 0 10px' }}>{item.statement}</p>
+      )}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        {tenants.length > 1 && (
+          <select
+            value={targetTenant}
+            disabled={busy}
+            onChange={(e) => setTargetTenant(e.target.value)}
+            style={{ fontSize: 12, border: '0.5px solid #ddd', borderRadius: 6, padding: '4px 6px' }}
+          >
+            {tenants.map((t) => <option key={t.slug} value={t.slug}>{t.name}</option>)}
+          </select>
+        )}
+        {editing ? (
+          <>
+            <button disabled={busy || !draft.trim()} onClick={() => onDecide('accept', targetTenant, draft.trim())} style={MK_BTN_ACCEPT}>Guardar y aceptar</button>
+            <button disabled={busy} onClick={() => { setEditing(false); setDraft(item.statement); }} style={MK_BTN_GHOST}>Cancelar</button>
+          </>
+        ) : (
+          <>
+            <button disabled={busy} onClick={() => onDecide('accept', targetTenant)} style={MK_BTN_ACCEPT}>Aceptar</button>
+            <button disabled={busy} onClick={() => setEditing(true)} style={MK_BTN_GHOST}>✏️ Editar</button>
+            <button disabled={busy} onClick={() => onDecide('reject', targetTenant)} style={MK_BTN_REJECT}>Rechazar</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PendingMeetingKnowledgeSection({ slug }) {
+  const [groups, setGroups] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tenants, setTenants] = useState([{ slug, name: slug }]);
+  const [busyKey, setBusyKey] = useState(null);
+
+  const load = () => {
+    fetch(`/api/kai/${slug}/meetings/knowledge-queue`)
+      .then((r) => r.json())
+      .then((d) => setGroups(d.groups ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
+    fetch('/api/kai/tenants')
+      .then((r) => r.json())
+      .then((d) => {
+        const list = (d.tenants ?? []).map((t) => ({ slug: t.slug, name: t.name || t.slug }));
+        if (list.length) setTenants(list);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
+
+  const decide = async (group, itemIndex, decision, targetTenant, editedStatement) => {
+    setBusyKey(`${group.conversationId}:${group.messageIndex}:${itemIndex}`);
+    try {
+      await fetch(`/api/kai/${slug}/meetings/knowledge`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: group.conversationId,
+          messageIndex: group.messageIndex,
+          itemIndex,
+          decision,
+          targetTenant,
+          editedStatement,
+        }),
+      });
+      load();
+    } catch { /* deja el ítem como estaba, se puede reintentar */ } finally {
+      setBusyKey(null);
+    }
+  };
+
+  if (loading || !groups.length) return null;
+
+  const totalPending = groups.reduce((sum, g) => sum + g.items.length, 0);
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ fontSize: 11, color: '#aaa', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
+        Conocimiento pendiente de reuniones — {totalPending}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {groups.map((g) => (
+          <div key={`${g.conversationId}:${g.messageIndex}`} style={{ border: '0.5px solid #e8e8e4', borderRadius: 12, padding: '14px 16px', background: '#fafaf8' }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: '#444', marginBottom: 10 }}>
+              {g.meetingTitle} · {new Date(g.analyzedAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </div>
+            {g.contradictions.length > 0 && (
+              <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {g.contradictions.map((c, i) => (
+                  <div key={i} style={{ fontSize: 11.5, background: '#FEF3C7', color: '#92400E', borderRadius: 8, padding: '8px 10px' }}>
+                    ⚠️ {c.reason}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {g.items.map(({ item, itemIndex }) => (
+                <PendingKnowledgeItem
+                  key={itemIndex}
+                  item={item}
+                  busy={busyKey === `${g.conversationId}:${g.messageIndex}:${itemIndex}`}
+                  tenants={tenants}
+                  defaultTenant={slug}
+                  onDecide={(decision, targetTenant, editedStatement) => decide(g, itemIndex, decision, targetTenant, editedStatement)}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Learnings Tab ─────────────────────────────────────────────────────────
 
 const IMPACT_STYLE = {
@@ -2215,7 +2372,12 @@ export default function TenantDetail({ meta, profile, conversations, allLearning
         )}
 
         {/* Aprendizajes Tab */}
-        {activeTab === 5 && <LearningsTab slug={meta.slug} participantMap={participantMap} />}
+        {activeTab === 5 && (
+          <>
+            <PendingMeetingKnowledgeSection slug={meta.slug} />
+            <LearningsTab slug={meta.slug} participantMap={participantMap} />
+          </>
+        )}
 
         {/* Resumen Tab */}
         {activeTab === 6 && <SummaryTab slug={meta.slug} />}

@@ -1,129 +1,43 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-
-const AREA_LABELS = {
-  negocio: 'Negocio',
-  operaciones: 'Operaciones',
-  tecnologia: 'Tecnología',
-  finanzas: 'Finanzas',
-  marketing: 'Marketing',
-  personas: 'Personas',
-};
+import { useState } from 'react';
 
 const CONFIDENCE_LABELS = { alta: 'Alta', media: 'Media', baja: 'Baja' };
 
-function KnowledgeItem({ item, index, busy, onDecide, tenants, defaultTenant }) {
-  const [targetTenant, setTargetTenant] = useState(defaultTenant);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(item.statement);
-  const isPending = item.status === 'pending';
+function buildCopyText({ meetingTitle, summary, decisions, tasks }) {
+  const lines = [`Reunión: ${meetingTitle}`, ''];
 
-  return (
-    <div className={`kai-meeting-knowledge-item kai-meeting-knowledge-item--${item.status}`}>
-      <div className="kai-meeting-knowledge-tags">
-        <span className="kai-meeting-tag">{AREA_LABELS[item.area] ?? item.area}</span>
-        <span className={`kai-meeting-tag kai-meeting-tag--confidence-${item.confidence}`}>
-          Confianza {CONFIDENCE_LABELS[item.confidence] ?? item.confidence}
-        </span>
-      </div>
-      {editing ? (
-        <textarea
-          className="kai-meeting-form-textarea"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          rows={3}
-          autoFocus
-        />
-      ) : (
-        <p className="kai-meeting-knowledge-text">{item.statement}</p>
-      )}
-      {isPending ? (
-        <div className="kai-meeting-knowledge-actions">
-          {tenants.length > 1 && (
-            <select
-              className="kai-meeting-tenant-select"
-              value={targetTenant}
-              disabled={busy}
-              onChange={(e) => setTargetTenant(e.target.value)}
-            >
-              {tenants.map((t) => <option key={t.slug} value={t.slug}>{t.name}</option>)}
-            </select>
-          )}
-          {editing ? (
-            <>
-              <button
-                type="button"
-                className="kai-meeting-btn kai-meeting-btn--accept"
-                disabled={busy || !draft.trim()}
-                onClick={() => onDecide(index, 'accept', targetTenant, draft.trim())}
-              >
-                Guardar y aceptar
-              </button>
-              <button type="button" className="kai-meeting-btn kai-meeting-btn--reject" disabled={busy} onClick={() => { setEditing(false); setDraft(item.statement); }}>
-                Cancelar
-              </button>
-            </>
-          ) : (
-            <>
-              <button type="button" className="kai-meeting-btn kai-meeting-btn--accept" disabled={busy} onClick={() => onDecide(index, 'accept', targetTenant)}>
-                Aceptar
-              </button>
-              <button type="button" className="kai-meeting-btn" disabled={busy} onClick={() => setEditing(true)}>
-                ✏️ Editar
-              </button>
-              <button type="button" className="kai-meeting-btn kai-meeting-btn--reject" disabled={busy} onClick={() => onDecide(index, 'reject', targetTenant)}>
-                Rechazar
-              </button>
-            </>
-          )}
-        </div>
-      ) : (
-        <span className={`kai-meeting-status-label kai-meeting-status-label--${item.status}`}>
-          {item.status === 'accepted'
-            ? `✓ Incorporado al conocimiento de ${tenants.find((t) => t.slug === item.acceptedTenant)?.name ?? item.acceptedTenant ?? 'Kai'}`
-            : '✕ Rechazado'}
-        </span>
-      )}
-    </div>
-  );
+  if (summary) lines.push('Resumen', summary, '');
+
+  if (decisions.length) {
+    lines.push('Decisiones');
+    for (const d of decisions) lines.push(`- ${d.title}${d.reason ? ` — ${d.reason}` : ''}`);
+    lines.push('');
+  }
+
+  if (tasks.length) {
+    lines.push('Tareas');
+    for (const t of tasks) {
+      const owner = t.owner ?? (t.possibleOwners?.length ? `¿${t.possibleOwners.join(' o ')}?` : 'Sin responsable identificado');
+      lines.push(`- ${owner}: ${t.task}${t.deadline ? ` (${t.deadline})` : ''}`);
+    }
+  }
+
+  return lines.join('\n').trim();
 }
 
-export default function MeetingAnalysisCard({ tenant, conversationId, messageIndex, analysis, onUpdate }) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState(null);
-  const [tenants, setTenants] = useState([{ slug: tenant, name: tenant }]);
-
-  useEffect(() => {
-    fetch('/api/kai/tenants')
-      .then((res) => res.json())
-      .then((data) => {
-        const list = (data.tenants ?? []).map((t) => ({ slug: t.slug, name: t.name || t.slug }));
-        if (list.length) setTenants(list);
-      })
-      .catch(() => {});
-  }, []);
+export default function MeetingAnalysisCard({ analysis }) {
+  const [copied, setCopied] = useState(false);
 
   if (!analysis) return null;
-  const { meetingTitle, summary, decisions = [], tasks = [], knowledge = [], contradictions = [], hasSubstantiveContent = true } = analysis;
+  const { meetingTitle, summary, decisions = [], tasks = [], hasSubstantiveContent = true } = analysis;
 
-  const handleDecide = async (itemIndex, decision, targetTenant, editedStatement) => {
-    setBusy(true);
-    setErr(null);
+  const handleCopy = async () => {
     try {
-      const res = await fetch(`/api/kai/${tenant}/meetings/knowledge`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId, messageIndex, itemIndex, decision, targetTenant, editedStatement }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setErr(data.error || 'No se pudo actualizar.'); return; }
-      onUpdate?.(data.meetingAnalysis);
-    } catch {
-      setErr('Error de conexión.');
-    } finally {
-      setBusy(false);
-    }
+      await navigator.clipboard.writeText(buildCopyText({ meetingTitle, summary, decisions, tasks }));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch { /* clipboard no disponible, no bloquea nada */ }
   };
 
   return (
@@ -133,6 +47,9 @@ export default function MeetingAnalysisCard({ tenant, conversationId, messageInd
           {hasSubstantiveContent ? 'Reunión analizada' : 'Sin contenido'}
         </span>
         <h4 className="kai-meeting-title">{meetingTitle}</h4>
+        <button type="button" className="kai-meeting-btn kai-meeting-copy-btn" onClick={handleCopy}>
+          {copied ? '✓ Copiado' : '📋 Copiar'}
+        </button>
       </div>
 
       {summary && (
@@ -157,40 +74,26 @@ export default function MeetingAnalysisCard({ tenant, conversationId, messageInd
         <div className="kai-meeting-section">
           <p className="kai-meeting-section-label">Tareas</p>
           <ul className="kai-meeting-list">
-            {tasks.map((t, i) => (
-              <li key={i}><strong>{t.owner}:</strong> {t.task}{t.deadline ? ` (${t.deadline})` : ''}</li>
-            ))}
+            {tasks.map((t, i) => {
+              const ownerLabel = t.owner
+                ? t.owner
+                : t.possibleOwners?.length
+                  ? `¿${t.possibleOwners.join(' o ')}?`
+                  : 'Sin responsable identificado';
+              return (
+                <li key={i} title={t.evidence || undefined}>
+                  <strong>{ownerLabel}:</strong> {t.task}{t.deadline ? ` (${t.deadline})` : ''}
+                  {t.confidence && (
+                    <span className={`kai-meeting-tag kai-meeting-tag--confidence-${t.confidence}`}>
+                      {CONFIDENCE_LABELS[t.confidence] ?? t.confidence}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
-
-      {knowledge.length > 0 && (
-        <div className="kai-meeting-section">
-          <p className="kai-meeting-section-label">Nuevo conocimiento</p>
-          <div className="kai-meeting-knowledge-list">
-            {knowledge.map((item, i) => (
-              <KnowledgeItem key={i} item={item} index={i} busy={busy} onDecide={handleDecide} tenants={tenants} defaultTenant={tenant} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {contradictions.length > 0 && (
-        <div className="kai-meeting-section">
-          <p className="kai-meeting-section-label">Posibles contradicciones</p>
-          <div className="kai-meeting-contradiction-list">
-            {contradictions.map((c, i) => (
-              <div key={i} className="kai-meeting-contradiction">
-                <p className="kai-meeting-contradiction-reason">{c.reason}</p>
-                <p><span className="kai-meeting-contradiction-label">Antes:</span> {c.existing}</p>
-                <p><span className="kai-meeting-contradiction-label">Ahora:</span> {c.new}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {err && <p className="kai-meeting-error">{err}</p>}
     </div>
   );
 }

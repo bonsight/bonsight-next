@@ -876,6 +876,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
     setCallBusy(true);
     setCallErr(null);
     try {
+      const selectedMeeting = calendarMeetings.find((m) => m.id === selectedMeetingId);
       const res = await fetch(`/api/kai/${tenant}/meetings/call`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -884,6 +885,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
           dialInNumber: callDialInInput,
           pin: callPinInput,
           meetingTitle: callTitleInput,
+          attendees: selectedMeeting?.attendees ?? [],
         }),
       });
       const data = await res.json();
@@ -892,7 +894,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
       setMessages((prev) => [...prev, {
         role: 'assistant',
         content: '',
-        meetingCallStatus: { callSid: data.callSid, status: 'calling', meetingTitle: callTitleInput },
+        meetingCallStatus: { callSid: data.callSid, status: 'calling', meetingTitle: callTitleInput, conversationId: data.conversationId, messageIndex: data.messageIndex },
       }]);
       setCallFormOpen(false);
       setCallTitleInput('');
@@ -908,7 +910,8 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
 
   const handleCheckMeetingStatus = async (msgIdx, callSid) => {
     try {
-      const res = await fetch(`/api/kai/${tenant}/meetings/status?callSid=${encodeURIComponent(callSid)}`);
+      const params = new URLSearchParams({ callSid, conversationId: activeConvIdRef.current, messageIndex: String(msgIdx) });
+      const res = await fetch(`/api/kai/${tenant}/meetings/status?${params}`);
       const data = await res.json();
       if (!res.ok) return;
       setMessages((prev) => prev.map((msg, i) => (i === msgIdx ? { ...msg, meetingCallStatus: { ...msg.meetingCallStatus, ...data } } : msg)));
