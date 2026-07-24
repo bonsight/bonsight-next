@@ -2407,6 +2407,52 @@
   font-size: 0.68rem;
 }
 
+/* Sprint review — foto de métricas de un sprint cerrado */
+
+.aria-review-panel {
+  margin-top: 16px;
+}
+
+.aria-review-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--aria-border);
+}
+
+.aria-review-section-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--aria-text-faint);
+  margin: 0 0 10px;
+}
+
+.aria-review-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.aria-review-row-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+  color: var(--aria-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aria-review-row-value {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: var(--aria-text-faint);
+  font-variant-numeric: tabular-nums;
+  min-width: 70px;
+  text-align: right;
+}
+
 /* Confidence — percentage bar + basis metrics */
 
 .aria-confidence-bar {

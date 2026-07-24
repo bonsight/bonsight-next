@@ -46,7 +46,42 @@ function buildCopyText({ meetingTitle, summary, decisions, tasks }) {
   return lines.join('\n').trim();
 }
 
-export default function MeetingAnalysisCard({ analysis }) {
+// Solo se activa cuando Kai dejó la duda explícita (possibleOwners) — si el owner
+// quedó con confianza alta, se muestra como texto plano, sin selector.
+function TaskOwner({ task, index, tenant, conversationId, messageIndex, onUpdate }) {
+  const [busy, setBusy] = useState(false);
+  const candidates = [...new Set([task.owner, ...(task.possibleOwners ?? [])].filter(Boolean))];
+
+  if (!task.possibleOwners?.length) {
+    return <strong>{task.owner ?? 'Sin responsable identificado'}:</strong>;
+  }
+
+  const handleChange = async (e) => {
+    const owner = e.target.value;
+    if (!owner) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/meetings/tasks`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationId, messageIndex, itemIndex: index, owner }),
+      });
+      const data = await res.json();
+      if (res.ok) onUpdate?.(data.meetingAnalysis);
+    } catch { /* deja el valor anterior, se puede reintentar */ } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <select className="kai-meeting-owner-select" value={task.owner ?? ''} disabled={busy} onChange={handleChange}>
+      {!task.owner && <option value="" disabled>¿Quién?</option>}
+      {candidates.map((name) => <option key={name} value={name}>{name}</option>)}
+    </select>
+  );
+}
+
+export default function MeetingAnalysisCard({ tenant, conversationId, messageIndex, analysis, onUpdate }) {
   const [copied, setCopied] = useState(false);
 
   if (!analysis) return null;
@@ -94,23 +129,17 @@ export default function MeetingAnalysisCard({ analysis }) {
         <div className="kai-meeting-section">
           <p className="kai-meeting-section-label">Tareas</p>
           <ul className="kai-meeting-list">
-            {tasks.map((t, i) => {
-              const ownerLabel = t.owner
-                ? t.owner
-                : t.possibleOwners?.length
-                  ? `¿${t.possibleOwners.join(' o ')}?`
-                  : 'Sin responsable identificado';
-              return (
-                <li key={i} title={t.evidence || undefined}>
-                  <strong>{ownerLabel}:</strong> {t.task}{t.deadline ? ` (${t.deadline})` : ''}
-                  {t.confidence && (
-                    <span className={`kai-meeting-tag kai-meeting-tag--confidence-${t.confidence}`}>
-                      {CONFIDENCE_LABELS[t.confidence] ?? t.confidence}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
+            {tasks.map((t, i) => (
+              <li key={i} title={t.evidence || undefined}>
+                <TaskOwner task={t} index={i} tenant={tenant} conversationId={conversationId} messageIndex={messageIndex} onUpdate={onUpdate} />
+                {' '}{t.task}{t.deadline ? ` (${t.deadline})` : ''}
+                {t.confidence && (
+                  <span className={`kai-meeting-tag kai-meeting-tag--confidence-${t.confidence}`}>
+                    {CONFIDENCE_LABELS[t.confidence] ?? t.confidence}
+                  </span>
+                )}
+              </li>
+            ))}
           </ul>
         </div>
       )}

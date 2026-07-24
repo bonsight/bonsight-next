@@ -60,7 +60,7 @@ function isOverdue(dueDate, status) {
 
 function TaskCard({ task, columns, viewMode, busy, onAction, sprints, currentSprintId }) {
   const otherColumns = viewMode === 'estado' ? columns.filter((c) => c.id !== task.status) : [];
-  const otherSprints = sprints.filter((s) => s.id !== currentSprintId);
+  const otherSprints = sprints.filter((s) => s.id !== currentSprintId && s.status !== 'Cerrado');
 
   return (
     <div className={`aria-canvas-item${task.outOfPlan ? ' aria-board-item--outofplan' : ''}`}>
@@ -355,11 +355,12 @@ function CreateSprintForm({ nextLabel, busy, onCreate, onClose }) {
   );
 }
 
-function SprintHeader({ sprint, sprints, busy, onClosePlanning, onNewSprintClick, onSelectSprint }) {
+function SprintHeader({ sprint, sprints, busy, onClosePlanning, onCloseSprint, onNewSprintClick, onSelectSprint }) {
   const [confirming, setConfirming] = useState(false);
 
   const handleClose = () => {
-    if (confirming) { setConfirming(false); onClosePlanning(); }
+    const action = sprint.status === 'Planificado' ? onClosePlanning : onCloseSprint;
+    if (confirming) { setConfirming(false); action(); }
     else setConfirming(true);
   };
 
@@ -391,7 +392,7 @@ function SprintHeader({ sprint, sprints, busy, onClosePlanning, onNewSprintClick
         {sprint.objetivo && <p className="aria-board-sprint-objetivo">{sprint.objetivo}</p>}
       </div>
       <div className="aria-board-header-actions">
-        {sprint.status === 'Planificado' ? (
+        {sprint.status === 'Planificado' && (
           <button
             type="button"
             className={`aria-canvas-revert-btn${confirming ? ' aria-canvas-revert-btn--confirm' : ''}`}
@@ -401,12 +402,97 @@ function SprintHeader({ sprint, sprints, busy, onClosePlanning, onNewSprintClick
           >
             <IconCheck /> {confirming ? '¿Terminar planificación?' : 'Terminar planificación'}
           </button>
-        ) : (
-          <button type="button" className="aria-header-link" onClick={onNewSprintClick}>
-            + Nuevo sprint
+        )}
+        {sprint.status === 'En curso' && (
+          <button
+            type="button"
+            className={`aria-canvas-revert-btn${confirming ? ' aria-canvas-revert-btn--confirm' : ''}`}
+            disabled={busy}
+            onClick={handleClose}
+            onBlur={() => setConfirming(false)}
+          >
+            <IconCheck /> {confirming ? '¿Cerrar sprint?' : 'Cerrar sprint'}
           </button>
         )}
+        <button type="button" className="aria-header-link" onClick={onNewSprintClick}>
+          + Nuevo sprint
+        </button>
       </div>
+    </div>
+  );
+}
+
+function MetricRow({ label, stat }) {
+  const pct = stat.total ? Math.round((stat.completadas / stat.total) * 100) : 0;
+  return (
+    <div className="aria-review-row">
+      <span className="aria-review-row-label">{label}</span>
+      <div className="aria-confidence-bar">
+        <div className="aria-confidence-bar-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="aria-review-row-value">{stat.completadas}/{stat.total} · {pct}%</span>
+    </div>
+  );
+}
+
+function SprintReviewPanel({ metrics }) {
+  if (!metrics) {
+    return (
+      <div className="aria-card aria-review-panel">
+        <p className="aria-board-hint">Este sprint se cerró antes de que existiera el registro de métricas — no hay foto guardada.</p>
+      </div>
+    );
+  }
+
+  const { committed, scopeCreep, committedHours, loggedHours, byType, byResponsable, byCliente } = metrics;
+  const committedPct = committed.total ? Math.round((committed.completadas / committed.total) * 100) : 0;
+
+  return (
+    <div className="aria-card aria-review-panel">
+      <p className="aria-canvas-header-eyebrow">Review del sprint</p>
+      <div className="aria-canvas-stats-row">
+        <div className="aria-canvas-stat aria-canvas-stat--main">
+          <div>
+            <p className="aria-canvas-stat-num">{committedPct}%</p>
+            <p className="aria-canvas-stat-label">Compromiso cumplido ({committed.completadas}/{committed.total})</p>
+          </div>
+        </div>
+        <div className="aria-canvas-stat">
+          <div>
+            <p className="aria-canvas-stat-num">{scopeCreep.total}</p>
+            <p className="aria-canvas-stat-label">Fuera de plan ({scopeCreep.completadas} completadas)</p>
+          </div>
+        </div>
+        {(committedHours != null || loggedHours != null) && (
+          <div className="aria-canvas-stat">
+            <div>
+              <p className="aria-canvas-stat-num">{loggedHours ?? 0}h</p>
+              <p className="aria-canvas-stat-label">de {committedHours ?? 0}h comprometidas</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {Object.keys(byType).length > 0 && (
+        <div className="aria-review-section">
+          <p className="aria-review-section-label">Por tipo</p>
+          {Object.entries(byType).map(([type, stat]) => <MetricRow key={type} label={type} stat={stat} />)}
+        </div>
+      )}
+
+      {Object.keys(byResponsable).length > 0 && (
+        <div className="aria-review-section">
+          <p className="aria-review-section-label">Por responsable</p>
+          {Object.entries(byResponsable).map(([name, stat]) => <MetricRow key={name} label={name} stat={stat} />)}
+        </div>
+      )}
+
+      {Object.keys(byCliente).length > 1 && (
+        <div className="aria-review-section">
+          <p className="aria-review-section-label">Por cliente</p>
+          {Object.entries(byCliente).map(([name, stat]) => <MetricRow key={name} label={name} stat={stat} />)}
+        </div>
+      )}
     </div>
   );
 }
@@ -511,20 +597,23 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
             </div>
             <h3 className="aria-canvas-title">Tablero de tareas</h3>
           </div>
-          <div className="aria-board-header-actions">
-            <button type="button" className="aria-canvas-mini" onClick={() => setMode(mode === 'import' ? null : 'import')}>
-              <IconSearch /> Traer tarea existente
-            </button>
-            <button type="button" className="aria-canvas-export-btn" onClick={() => setMode(mode === 'add' ? null : 'add')}>
-              <IconPlus /> Nueva tarea
-            </button>
-          </div>
+          {sprint.status !== 'Cerrado' && (
+            <div className="aria-board-header-actions">
+              <button type="button" className="aria-canvas-mini" onClick={() => setMode(mode === 'import' ? null : 'import')}>
+                <IconSearch /> Traer tarea existente
+              </button>
+              <button type="button" className="aria-canvas-export-btn" onClick={() => setMode(mode === 'add' ? null : 'add')}>
+                <IconPlus /> Nueva tarea
+              </button>
+            </div>
+          )}
         </div>
         <SprintHeader
           sprint={sprint}
           sprints={sprints}
           busy={busy}
           onClosePlanning={() => handleAction('close_planning', { sprintId: sprint.id })}
+          onCloseSprint={() => handleAction('close_sprint', { sprintId: sprint.id })}
           onNewSprintClick={() => setMode('new_sprint')}
           onSelectSprint={(sprintId) => load({ sprintId })}
         />
@@ -547,6 +636,8 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
       </div>
 
       {err && <p className="aria-canvas-error">{err}</p>}
+
+      {sprint.status === 'Cerrado' && <SprintReviewPanel metrics={data.metrics} />}
 
       {mode === 'add' && (
         <AddTaskForm

@@ -1,6 +1,7 @@
 import { isAuthorizedForTenant } from '@/lib/aria/auth';
 import { getIntelligenceSources } from '@/lib/kai/intelligenceSources';
-import { getBoardData, searchTareas, moveTask, createTask, addExistingTask, removeTask, createSprint, closeSprintPlanning } from '@/lib/aria/board';
+import { getBoardData, searchTareas, moveTask, createTask, addExistingTask, removeTask, createSprint, closeSprintPlanning, closeSprint, computeSprintMetrics } from '@/lib/aria/board';
+import { saveSprintMetrics, getSprintMetrics } from '@/lib/aria/sprintMetrics';
 
 async function getNotionToken(tenant) {
   const sources = await getIntelligenceSources(tenant);
@@ -32,6 +33,9 @@ export async function GET(req, { params }) {
       sprintId: sp.get('sprintId') || undefined,
       sprintNumber: sp.get('sprintNumber') || undefined,
     });
+    if (data.sprint?.status === 'Cerrado') {
+      data.metrics = await getSprintMetrics(tenant, data.sprint.id);
+    }
     return Response.json(data);
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo cargar el tablero.' }, { status: 400 });
@@ -61,6 +65,13 @@ export async function PATCH(req, { params }) {
     } else if (action === 'close_planning') {
       if (!sprintId) throw new Error('sprintId es requerido.');
       await closeSprintPlanning(token, sprintId);
+    } else if (action === 'close_sprint') {
+      if (!sprintId) throw new Error('sprintId es requerido.');
+      const before = await getBoardData(token, { sprintId });
+      if (!before.sprint) throw new Error('Ese sprint ya no existe.');
+      const metrics = computeSprintMetrics(before.sprint, before.tasks);
+      await saveSprintMetrics(tenant, sprintId, metrics);
+      await closeSprint(token, sprintId);
     } else if (action === 'move_task') {
       if (!p.pageId || !p.status) throw new Error('pageId y status son requeridos.');
       await moveTask(token, p.pageId, p.status);
@@ -82,6 +93,9 @@ export async function PATCH(req, { params }) {
     }
 
     const data = await getBoardData(token, { sprintId: viewedSprintId });
+    if (data.sprint?.status === 'Cerrado') {
+      data.metrics = await getSprintMetrics(tenant, data.sprint.id);
+    }
     return Response.json(data);
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo actualizar el tablero.' }, { status: 400 });
