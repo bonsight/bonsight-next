@@ -284,8 +284,8 @@ function extractIntelligence(presentation, advisory) {
 
 export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
   const tenantName = tenantMeta?.name ?? tenant;
-  const industry = tenantMeta?.industry ?? '';
-  const country = tenantMeta?.country ?? '';
+  const industry = profile?.general?.industry || tenantMeta?.industry || '';
+  const country = profile?.general?.country || tenantMeta?.country || '';
   const subtitle = [industry, country].filter(Boolean).join(' · ');
 
   const welcomeText = buildWelcomeText(tenantName, profile);
