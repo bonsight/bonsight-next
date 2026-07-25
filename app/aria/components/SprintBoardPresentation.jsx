@@ -32,6 +32,20 @@ const IconExternal = () => (
   </svg>
 );
 
+const IconMoreHorizontal = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+    <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
+  </svg>
+);
+
+const IconChevronDown = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+
+const Spinner = () => <span className="aria-board-spinner" aria-hidden="true" />;
+
 const PRIORITIES = ['Alta', 'Media', 'Baja'];
 const SEVERITIES = ['Crítica', 'Alta', 'Media', 'Baja'];
 const TASK_TYPES = ['Desarrollo', 'Soporte', 'Bug', 'Mejora', 'Reunión'];
@@ -58,36 +72,58 @@ function isOverdue(dueDate, status) {
   return new Date(`${dueDate}T00:00:00`).getTime() < new Date().setHours(0, 0, 0, 0);
 }
 
-function TaskCard({ task, columns, viewMode, busy, onAction, sprints, currentSprintId }) {
+function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints, currentSprintId }) {
+  const [moveOpen, setMoveOpen] = useState(false);
   const otherColumns = viewMode === 'estado' ? columns.filter((c) => c.id !== task.status) : [];
   const otherSprints = sprints.filter((s) => s.id !== currentSprintId && s.status !== 'Cerrado');
+  const hasMoveOptions = otherColumns.length > 0 || otherSprints.length > 0;
+  const removeKey = `remove:${task.id}`;
+  const movePrefix = `move:${task.id}:`;
+  const isMoving = pendingKey?.startsWith(movePrefix);
+
+  // Prioridad, severidad, tipo y cliente son clasificación de rutina — van en una sola
+  // línea de texto. Un solo acento de color (el punto de prioridad) para no diluir la
+  // señal; severidad va como texto plano al lado, no con su propio punto.
+  const metaParts = [task.severity ? `${task.severity} severidad` : null, task.taskType, task.clienteName].filter(Boolean);
 
   return (
     <div className={`aria-canvas-item${task.outOfPlan ? ' aria-board-item--outofplan' : ''}`}>
       <div className="aria-canvas-item-who">
         <span className="aria-canvas-avatar">{initials(task.responsableName)}</span>
         <span className="aria-canvas-item-name">{task.responsableName ?? 'Sin responsable'}</span>
-        <a
-          href={task.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="aria-board-card-link"
-          title="Abrir en Notion"
-        >
-          <IconExternal />
-        </a>
-        <button
-          type="button"
-          className="aria-board-card-remove"
-          title="Quitar del tablero (no borra la tarea en Notion)"
-          disabled={busy}
-          onClick={() => onAction('remove_task', { pageId: task.id })}
-        >
-          <IconX />
-        </button>
+        <div className="aria-board-card-icons">
+          <a href={task.url} target="_blank" rel="noopener noreferrer" className="aria-board-card-link" title="Abrir en Notion">
+            <IconExternal />
+          </a>
+          <button
+            type="button"
+            className="aria-board-card-remove"
+            title="Quitar del tablero (no borra la tarea en Notion)"
+            disabled={busy}
+            onClick={() => onAction('remove_task', { pageId: task.id }, removeKey)}
+          >
+            {pendingKey === removeKey ? <Spinner /> : <IconX />}
+          </button>
+          {hasMoveOptions && (
+            <button type="button" className="aria-canvas-icon-btn" aria-label="Mover" title="Mover a estado u otro sprint" disabled={busy} onClick={() => setMoveOpen((v) => !v)}>
+              {isMoving ? <Spinner /> : <IconMoreHorizontal />}
+            </button>
+          )}
+        </div>
       </div>
       <p className="aria-canvas-item-text">{task.title}</p>
       {task.parentName && <p className="aria-board-parent-tag">↳ {task.parentName}</p>}
+
+      {(task.priority || metaParts.length > 0) && (
+        <p className="aria-board-meta-line">
+          {task.priority && <span className={`aria-board-priority-dot aria-board-priority-dot--${slug(task.priority)}`} />}
+          {task.priority && task.priority}
+          {metaParts.map((part, i) => (
+            <span key={i}>{(task.priority || i > 0) ? ' · ' : ''}{part}</span>
+          ))}
+        </p>
+      )}
+
       <div className="aria-board-card-tags">
         {task.outOfPlan && <span className="aria-board-tag aria-board-tag--outofplan">Fuera de plan</span>}
         {isOverdue(task.dueDate, task.status) && <span className="aria-board-tag aria-board-tag--overdue">Vencida {formatDate(task.dueDate)}</span>}
@@ -95,44 +131,42 @@ function TaskCard({ task, columns, viewMode, busy, onAction, sprints, currentSpr
         {viewMode === 'tipo' && (
           <span className="aria-board-tag">{columns.find((c) => c.id === task.status)?.name ?? task.status}</span>
         )}
-        {task.taskType && <span className={`aria-board-tag aria-board-tag--type-${slug(task.taskType)}`}>{task.taskType}</span>}
-        {task.severity && <span className={`aria-board-tag aria-board-tag--priority-${slug(task.severity)}`}>Sev. {task.severity}</span>}
-        {task.priority && <span className={`aria-board-tag aria-board-tag--priority-${slug(task.priority)}`}>{task.priority}</span>}
-        {task.clienteName && <span className="aria-board-tag">{task.clienteName}</span>}
         {task.proyectoName && <span className="aria-board-tag">{task.proyectoName}</span>}
         {task.iniciativaName && <span className="aria-board-tag">🎯 {task.iniciativaName}</span>}
       </div>
-      {otherColumns.length > 0 && (
-        <select
-          className="aria-canvas-move-select"
-          value=""
-          disabled={busy}
-          onChange={(e) => {
-            if (e.target.value) onAction('move_task', { pageId: task.id, status: e.target.value });
-          }}
-        >
-          <option value="">Mover a…</option>
-          {otherColumns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      )}
-      {otherSprints.length > 0 && (
-        <select
-          className="aria-canvas-move-select"
-          value=""
-          disabled={busy}
-          onChange={(e) => {
-            if (e.target.value) onAction('move_task_sprint', { pageId: task.id, targetSprintId: e.target.value });
-          }}
-        >
-          <option value="">Mover a otro sprint…</option>
-          {otherSprints.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
-        </select>
+
+      {moveOpen && (
+        <>
+          <div className="aria-canvas-col-menu-backdrop" onClick={() => setMoveOpen(false)} />
+          <div className="aria-canvas-col-menu aria-board-card-menu">
+            {otherColumns.length > 0 && (
+              <>
+                <p className="aria-board-card-menu-label">Mover a estado</p>
+                {otherColumns.map((c) => (
+                  <button key={c.id} type="button" disabled={busy} onClick={() => { onAction('move_task', { pageId: task.id, status: c.id }, `${movePrefix}status:${c.id}`); setMoveOpen(false); }}>
+                    {c.name}
+                  </button>
+                ))}
+              </>
+            )}
+            {otherSprints.length > 0 && (
+              <>
+                <p className="aria-board-card-menu-label">Mover a otro sprint</p>
+                {otherSprints.map((s) => (
+                  <button key={s.id} type="button" disabled={busy} onClick={() => { onAction('move_task_sprint', { pageId: task.id, targetSprintId: s.id }, `${movePrefix}sprint:${s.id}`); setMoveOpen(false); }}>
+                    {s.title}
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-function BoardColumn({ column, tasks, columns, viewMode, busy, onAction, sprints, currentSprintId }) {
+function BoardColumn({ column, tasks, columns, viewMode, busy, pendingKey, onAction, sprints, currentSprintId }) {
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? tasks : tasks.slice(0, 6);
   const restCount = tasks.length - shown.length;
@@ -151,6 +185,7 @@ function BoardColumn({ column, tasks, columns, viewMode, busy, onAction, sprints
             columns={columns}
             viewMode={viewMode}
             busy={busy}
+            pendingKey={pendingKey}
             onAction={onAction}
             sprints={sprints}
             currentSprintId={currentSprintId}
@@ -166,8 +201,8 @@ function BoardColumn({ column, tasks, columns, viewMode, busy, onAction, sprints
   );
 }
 
-function AddTaskForm({ proyectos, talento, iniciativas, columns, busy, onCreate, onClose }) {
-  const [title, setTitle] = useState('');
+function AddTaskForm({ proyectos, talento, iniciativas, columns, busy, pendingKey, initialTitle, onCreate, onClose }) {
+  const [title, setTitle] = useState(initialTitle ?? '');
   const [status, setStatus] = useState(columns[0]?.id ?? '');
   const [proyectoId, setProyectoId] = useState('');
   const [responsableId, setResponsableId] = useState('');
@@ -194,80 +229,104 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, busy, onCreate,
   };
 
   return (
-    <div className="aria-board-form">
-      <input
-        className="aria-board-input"
-        placeholder="Nombre de la tarea…"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && submit()}
-        autoFocus
-      />
-      <div className="aria-board-form-row">
-        <select className="aria-canvas-move-select" value={status} onChange={(e) => setStatus(e.target.value)}>
-          {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select
-          className="aria-canvas-move-select"
-          value={taskType}
-          onChange={(e) => {
-            setTaskType(e.target.value);
-            if (!SEVERITY_APPLIES_TO.has(e.target.value)) setSeverity('');
-          }}
-        >
-          <option value="">Tipo de tarea…</option>
-          {TASK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
+    <div className="aria-board-form aria-board-popover">
+      <div className="aria-board-field">
+        <label className="aria-board-field-label">Nombre de la tarea</label>
+        <input
+          className="aria-board-input"
+          placeholder="¿Qué hay que hacer?"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && submit()}
+          autoFocus
+        />
       </div>
       <div className="aria-board-form-row">
-        <select className="aria-canvas-move-select" value={priority} onChange={(e) => setPriority(e.target.value)}>
-          <option value="">Prioridad…</option>
-          {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
-        {SEVERITY_APPLIES_TO.has(taskType) && (
-          <select className="aria-canvas-move-select" value={severity} onChange={(e) => setSeverity(e.target.value)}>
-            <option value="">Severidad…</option>
-            {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
+        <div className="aria-board-field">
+          <label className="aria-board-field-label">Estado</label>
+          <select className="aria-board-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+            {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+        </div>
+        <div className="aria-board-field">
+          <label className="aria-board-field-label">Tipo</label>
+          <select
+            className={`aria-board-select${taskType ? '' : ' aria-canvas-meta-select--empty'}`}
+            value={taskType}
+            onChange={(e) => {
+              setTaskType(e.target.value);
+              if (!SEVERITY_APPLIES_TO.has(e.target.value)) setSeverity('');
+            }}
+          >
+            <option value="">Sin definir</option>
+            {TASK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="aria-board-form-row">
+        <div className="aria-board-field">
+          <label className="aria-board-field-label">Prioridad</label>
+          <select className={`aria-board-select${priority ? '' : ' aria-canvas-meta-select--empty'}`} value={priority} onChange={(e) => setPriority(e.target.value)}>
+            <option value="">Sin definir</option>
+            {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        {SEVERITY_APPLIES_TO.has(taskType) && (
+          <div className="aria-board-field">
+            <label className="aria-board-field-label">Severidad</label>
+            <select className={`aria-board-select${severity ? '' : ' aria-canvas-meta-select--empty'}`} value={severity} onChange={(e) => setSeverity(e.target.value)}>
+              <option value="">Sin definir</option>
+              {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
         )}
       </div>
       <div className="aria-board-form-row">
-        <select
-          className="aria-canvas-move-select"
-          value={proyectoId}
-          onChange={(e) => { setProyectoId(e.target.value); setIniciativaId(''); }}
-        >
-          <option value="">Proyecto…</option>
-          {proyectos.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        <select
-          className="aria-canvas-move-select"
-          value={iniciativaId}
-          onChange={(e) => setIniciativaId(e.target.value)}
-          disabled={!proyectoId}
-        >
-          <option value="">{proyectoId ? 'Iniciativa…' : 'Elegí un proyecto primero'}</option>
-          {iniciativasDelProyecto.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-        </select>
+        <div className="aria-board-field">
+          <label className="aria-board-field-label">Proyecto</label>
+          <select
+            className={`aria-board-select${proyectoId ? '' : ' aria-canvas-meta-select--empty'}`}
+            value={proyectoId}
+            onChange={(e) => { setProyectoId(e.target.value); setIniciativaId(''); }}
+          >
+            <option value="">Sin definir</option>
+            {proyectos.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        <div className="aria-board-field">
+          <label className="aria-board-field-label">Iniciativa</label>
+          <select
+            className={`aria-board-select${iniciativaId ? '' : ' aria-canvas-meta-select--empty'}`}
+            value={iniciativaId}
+            onChange={(e) => setIniciativaId(e.target.value)}
+            disabled={!proyectoId}
+          >
+            <option value="">{proyectoId ? 'Sin definir' : 'Elegí un proyecto primero'}</option>
+            {iniciativasDelProyecto.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+          </select>
+        </div>
       </div>
       {proyectoId && iniciativasDelProyecto.length === 0 && (
         <p className="aria-board-hint">Sin iniciativas para este proyecto — créala en Notion.</p>
       )}
-      <div className="aria-board-form-row">
-        <select className="aria-canvas-move-select" value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
-          <option value="">Responsable…</option>
+      <div className="aria-board-field">
+        <label className="aria-board-field-label">Responsable</label>
+        <select className={`aria-board-select${responsableId ? '' : ' aria-canvas-meta-select--empty'}`} value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
+          <option value="">Sin definir</option>
           {talento.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
       </div>
       <div className="aria-canvas-newcol-actions">
-        <button type="button" className="aria-canvas-mini" onClick={submit} disabled={busy || !title.trim()}>Crear</button>
+        <button type="button" className="aria-canvas-mini aria-canvas-mini--primary" onClick={submit} disabled={busy || !title.trim()}>
+          {pendingKey === 'create_task' ? <Spinner /> : 'Crear'}
+        </button>
         <button type="button" className="aria-canvas-mini" onClick={onClose}>Cancelar</button>
       </div>
     </div>
   );
 }
 
-function ImportTaskSearch({ tenant, busy, onImport, onClose }) {
+function ImportTaskSearch({ tenant, busy, pendingKey, excludeIds, onImport, onCreateNew }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -288,37 +347,51 @@ function ImportTaskSearch({ tenant, busy, onImport, onClose }) {
     return () => clearTimeout(timer);
   }, [query, tenant]);
 
+  const q = query.trim();
+  const excludeSet = new Set(excludeIds ?? []);
+  const visibleResults = results.filter((r) => !excludeSet.has(r.id));
+
   return (
-    <div className="aria-board-form">
-      <input
-        className="aria-board-input"
-        placeholder="Buscar tarea existente en Notion…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        autoFocus
-      />
+    <div className="aria-board-form aria-board-popover">
+      <div className="aria-board-search-input-wrap">
+        <span className="aria-board-search-icon"><IconSearch /></span>
+        <input
+          className="aria-board-input aria-board-search-input"
+          placeholder="Buscar tarea existente en Notion…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          autoFocus
+        />
+      </div>
       {searching && <p className="aria-board-hint">Buscando…</p>}
-      {!searching && query.trim().length >= 2 && results.length === 0 && (
-        <p className="aria-board-hint">Sin resultados.</p>
+      {!searching && q.length >= 2 && visibleResults.length === 0 && (
+        <div className="aria-board-search-empty">
+          <p className="aria-board-hint">Sin resultados para “{q}”.</p>
+          <button type="button" className="aria-canvas-mini aria-canvas-mini--primary" disabled={busy} onClick={() => onCreateNew(q)}>
+            <IconPlus /> Crear “{q}” como tarea nueva
+          </button>
+        </div>
       )}
       <div className="aria-board-search-results">
-        {results.map((r) => (
+        {visibleResults.map((r) => (
           <div key={r.id} className="aria-board-search-result">
-            <span className="aria-board-search-result-title">{r.title}</span>
+            <div className="aria-board-search-result-info">
+              <span className="aria-board-search-result-title">{r.title}</span>
+              <span className="aria-board-search-result-ctx">
+                {[r.clienteName, r.proyectoName, r.status].filter(Boolean).join(' · ')}
+              </span>
+            </div>
             <button type="button" className="aria-canvas-mini" disabled={busy} onClick={() => onImport(r.id)}>
-              Agregar
+              {pendingKey === `import:${r.id}` ? <Spinner /> : 'Agregar'}
             </button>
           </div>
         ))}
-      </div>
-      <div className="aria-canvas-newcol-actions">
-        <button type="button" className="aria-canvas-mini" onClick={onClose}>Cerrar</button>
       </div>
     </div>
   );
 }
 
-function CreateSprintForm({ nextLabel, busy, onCreate, onClose }) {
+function CreateSprintForm({ nextLabel, busy, pendingKey, onCreate, onClose }) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [objetivo, setObjetivo] = useState('');
@@ -348,14 +421,49 @@ function CreateSprintForm({ nextLabel, busy, onCreate, onClose }) {
         onChange={(e) => setObjetivo(e.target.value)}
       />
       <div className="aria-canvas-newcol-actions">
-        <button type="button" className="aria-canvas-mini" onClick={submit} disabled={busy || !startDate || !endDate}>Crear sprint</button>
+        <button type="button" className="aria-canvas-mini" onClick={submit} disabled={busy || !startDate || !endDate}>
+          {pendingKey === 'create_sprint' ? <Spinner /> : 'Crear sprint'}
+        </button>
         {onClose && <button type="button" className="aria-canvas-mini" onClick={onClose}>Cancelar</button>}
       </div>
     </div>
   );
 }
 
-function SprintHeader({ sprint, sprints, busy, onClosePlanning, onCloseSprint, onNewSprintClick, onSelectSprint }) {
+function SprintSelector({ sprint, sprints, busy, onSelectSprint, onNewSprintClick }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <span className="aria-board-sprint-selector">
+      <button type="button" className="aria-board-sprint-select-btn" disabled={busy} onClick={() => setOpen((v) => !v)}>
+        {sprint.title} — {sprint.status} <IconChevronDown />
+      </button>
+      {open && (
+        <>
+          <div className="aria-canvas-col-menu-backdrop" onClick={() => setOpen(false)} />
+          <div className="aria-board-sprint-dropdown">
+            {sprints.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className={`aria-board-sprint-opt${s.id === sprint.id ? ' aria-board-sprint-opt--current' : ''}`}
+                onClick={() => { onSelectSprint(s.id); setOpen(false); }}
+              >
+                {s.title} — {s.status}
+              </button>
+            ))}
+            <div className="aria-board-sprint-dropdown-divider" />
+            <button type="button" className="aria-board-sprint-opt aria-board-sprint-opt--new" onClick={() => { onNewSprintClick(); setOpen(false); }}>
+              + Nuevo sprint
+            </button>
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
+
+function SprintHeader({ sprint, sprints, busy, pendingKey, onClosePlanning, onCloseSprint, onNewSprintClick, onSelectSprint }) {
   const [confirming, setConfirming] = useState(false);
 
   const handleClose = () => {
@@ -366,19 +474,12 @@ function SprintHeader({ sprint, sprints, busy, onClosePlanning, onCloseSprint, o
 
   return (
     <div className="aria-board-sprint-header">
-      <div>
+      <div className="aria-board-sprint-header-row">
         <span className={`aria-board-sprint-badge aria-board-sprint-badge--${slug(sprint.status)}`}>
           {sprint.status}
         </span>
         {sprints.length > 1 ? (
-          <select
-            className="aria-board-sprint-select"
-            value={sprint.id}
-            disabled={busy}
-            onChange={(e) => onSelectSprint(e.target.value)}
-          >
-            {sprints.map((s) => <option key={s.id} value={s.id}>{s.title} — {s.status}</option>)}
-          </select>
+          <SprintSelector sprint={sprint} sprints={sprints} busy={busy} onSelectSprint={onSelectSprint} onNewSprintClick={onNewSprintClick} />
         ) : (
           <span className="aria-board-sprint-title">{sprint.title}</span>
         )}
@@ -389,10 +490,8 @@ function SprintHeader({ sprint, sprints, busy, onClosePlanning, onCloseSprint, o
             {sprint.totalTasks != null && ` · ${sprint.totalTasks} tareas`}
           </span>
         )}
-        {sprint.objetivo && <p className="aria-board-sprint-objetivo">{sprint.objetivo}</p>}
-      </div>
-      <div className="aria-board-header-actions">
-        {sprint.status === 'Planificado' && (
+        <div className="aria-board-sprint-header-spacer" />
+        {(sprint.status === 'Planificado' || sprint.status === 'En curso') && (
           <button
             type="button"
             className={`aria-canvas-revert-btn${confirming ? ' aria-canvas-revert-btn--confirm' : ''}`}
@@ -400,24 +499,13 @@ function SprintHeader({ sprint, sprints, busy, onClosePlanning, onCloseSprint, o
             onClick={handleClose}
             onBlur={() => setConfirming(false)}
           >
-            <IconCheck /> {confirming ? '¿Terminar planificación?' : 'Terminar planificación'}
+            {pendingKey === 'close_sprint' ? <Spinner /> : <IconCheck />} {confirming
+              ? (sprint.status === 'Planificado' ? '¿Terminar planificación?' : '¿Cerrar sprint?')
+              : (sprint.status === 'Planificado' ? 'Terminar planificación' : 'Cerrar sprint')}
           </button>
         )}
-        {sprint.status === 'En curso' && (
-          <button
-            type="button"
-            className={`aria-canvas-revert-btn${confirming ? ' aria-canvas-revert-btn--confirm' : ''}`}
-            disabled={busy}
-            onClick={handleClose}
-            onBlur={() => setConfirming(false)}
-          >
-            <IconCheck /> {confirming ? '¿Cerrar sprint?' : 'Cerrar sprint'}
-          </button>
-        )}
-        <button type="button" className="aria-header-link" onClick={onNewSprintClick}>
-          + Nuevo sprint
-        </button>
       </div>
+      {sprint.objetivo && <p className="aria-board-sprint-objetivo">{sprint.objetivo}</p>}
     </div>
   );
 }
@@ -501,8 +589,10 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [pendingKey, setPendingKey] = useState(null);
   const [err, setErr] = useState(null);
   const [mode, setMode] = useState(null); // null | 'add' | 'import' | 'new_sprint'
+  const [newTaskTitle, setNewTaskTitle] = useState('');
   const [viewMode, setViewMode] = useState('estado'); // 'estado' | 'tipo'
 
   const load = async (opts = {}) => {
@@ -529,8 +619,9 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant]);
 
-  const handleAction = async (action, params) => {
+  const handleAction = async (action, params, key) => {
     setBusy(true);
+    setPendingKey(key ?? action);
     setErr(null);
     try {
       const res = await fetch(`/api/aria/${tenant}/board`, {
@@ -546,6 +637,7 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
       setErr('Error de conexión.');
     } finally {
       setBusy(false);
+      setPendingKey(null);
     }
   };
 
@@ -572,7 +664,8 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
         <CreateSprintForm
           nextLabel={sprint ? `Se creará el Sprint #${sprint.number + 1}.` : 'Se creará el Sprint #1.'}
           busy={busy}
-          onCreate={(p) => handleAction('create_sprint', p)}
+          pendingKey={pendingKey}
+          onCreate={(p) => handleAction('create_sprint', p, 'create_sprint')}
           onClose={sprint ? () => setMode(null) : null}
         />
       </div>
@@ -599,12 +692,45 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
           </div>
           {sprint.status !== 'Cerrado' && (
             <div className="aria-board-header-actions">
-              <button type="button" className="aria-canvas-mini" onClick={() => setMode(mode === 'import' ? null : 'import')}>
-                <IconSearch /> Traer tarea existente
-              </button>
-              <button type="button" className="aria-canvas-export-btn" onClick={() => setMode(mode === 'add' ? null : 'add')}>
-                <IconPlus /> Nueva tarea
-              </button>
+              <span className="aria-board-popover-anchor">
+                <button type="button" className="aria-canvas-mini" onClick={() => setMode(mode === 'import' ? null : 'import')}>
+                  <IconSearch /> Traer tarea existente
+                </button>
+                {mode === 'import' && (
+                  <>
+                    <div className="aria-canvas-col-menu-backdrop" onClick={() => setMode(null)} />
+                    <ImportTaskSearch
+                      tenant={tenant}
+                      busy={busy}
+                      pendingKey={pendingKey}
+                      excludeIds={tasks.map((t) => t.id)}
+                      onImport={(pageId) => handleAction('add_existing_task', { pageId }, `import:${pageId}`)}
+                      onCreateNew={(title) => { setNewTaskTitle(title); setMode('add'); }}
+                    />
+                  </>
+                )}
+              </span>
+              <span className="aria-board-popover-anchor">
+                <button type="button" className="aria-canvas-export-btn" onClick={() => { setNewTaskTitle(''); setMode(mode === 'add' ? null : 'add'); }}>
+                  <IconPlus /> Nueva tarea
+                </button>
+                {mode === 'add' && (
+                  <>
+                    <div className="aria-canvas-col-menu-backdrop" onClick={() => setMode(null)} />
+                    <AddTaskForm
+                      proyectos={proyectos}
+                      talento={talento}
+                      iniciativas={iniciativas}
+                      columns={columns}
+                      busy={busy}
+                      pendingKey={pendingKey}
+                      initialTitle={newTaskTitle}
+                      onCreate={(p) => handleAction('create_task', p, 'create_task')}
+                      onClose={() => setMode(null)}
+                    />
+                  </>
+                )}
+              </span>
             </div>
           )}
         </div>
@@ -612,8 +738,9 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
           sprint={sprint}
           sprints={sprints}
           busy={busy}
-          onClosePlanning={() => handleAction('close_planning', { sprintId: sprint.id })}
-          onCloseSprint={() => handleAction('close_sprint', { sprintId: sprint.id })}
+          pendingKey={pendingKey}
+          onClosePlanning={() => handleAction('close_planning', { sprintId: sprint.id }, 'close_sprint')}
+          onCloseSprint={() => handleAction('close_sprint', { sprintId: sprint.id }, 'close_sprint')}
           onNewSprintClick={() => setMode('new_sprint')}
           onSelectSprint={(sprintId) => load({ sprintId })}
         />
@@ -639,27 +766,6 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
 
       {sprint.status === 'Cerrado' && <SprintReviewPanel metrics={data.metrics} />}
 
-      {mode === 'add' && (
-        <AddTaskForm
-          proyectos={proyectos}
-          talento={talento}
-          iniciativas={iniciativas}
-          columns={columns}
-          busy={busy}
-          onCreate={(p) => handleAction('create_task', p)}
-          onClose={() => setMode(null)}
-        />
-      )}
-
-      {mode === 'import' && (
-        <ImportTaskSearch
-          tenant={tenant}
-          busy={busy}
-          onImport={(pageId) => handleAction('add_existing_task', { pageId })}
-          onClose={() => setMode(null)}
-        />
-      )}
-
       <div className="aria-canvas-board">
         {displayColumns.map((col) => (
           <BoardColumn
@@ -669,6 +775,7 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
             columns={columns}
             viewMode={viewMode}
             busy={busy}
+            pendingKey={pendingKey}
             onAction={handleAction}
             sprints={sprints}
             currentSprintId={sprint.id}

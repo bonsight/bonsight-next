@@ -14,7 +14,7 @@ import ChatInsightSeparator from '../components/ChatInsightSeparator';
 import ArchiveContextCard from '../components/ArchiveContextCard';
 import AriaDocumentCard from './AriaDocumentCard';
 
-const ACTIVE_ID_KEY = (tenant) => `ariaTenant_${tenant}_activeInvestigationId`;
+const ACTIVE_ID_KEY = (tenant, usr) => `ariaTenant_${tenant}${usr ? `_${usr}` : ''}_activeInvestigationId`;
 
 const TOOL_SOURCE_MAP = {
   query_ga4: ['ga4'],
@@ -282,7 +282,7 @@ function extractIntelligence(presentation, advisory) {
   return { items, main };
 }
 
-export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
+export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
   const tenantName = tenantMeta?.name ?? tenant;
   const industry = tenantMeta?.industry ?? '';
   const country = tenantMeta?.country ?? '';
@@ -335,8 +335,9 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
 
   useEffect(() => {
     async function init() {
+      const investigationsUrl = `/api/aria/${tenant}/investigations${usr ? `?usr=${encodeURIComponent(usr)}` : ''}`;
       const [invRes, srcRes, dbRes] = await Promise.all([
-        fetch(`/api/aria/${tenant}/investigations`),
+        fetch(investigationsUrl),
         fetch(`/api/kai/${tenant}/intelligence-sources`).catch(() => null),
         fetch(`/api/aria/${tenant}/databases`).catch(() => null),
       ]);
@@ -358,7 +359,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
       if (combined.length > 0) setSources(combined);
       const list = data.investigations ?? [];
 
-      const storedId = localStorage.getItem(ACTIVE_ID_KEY(tenant));
+      const storedId = localStorage.getItem(ACTIVE_ID_KEY(tenant, usr));
       let activeId = list.find((inv) => inv.id === storedId)?.id;
       if (!activeId && list.length > 0) activeId = list[0].id;
 
@@ -368,18 +369,22 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
         const detail = await detailRes.json();
         setInvestigationId(activeId);
         setMessages(mapStoredMessages(detail.messages));
-        localStorage.setItem(ACTIVE_ID_KEY(tenant), activeId);
+        localStorage.setItem(ACTIVE_ID_KEY(tenant, usr), activeId);
       } else {
-        const createRes = await fetch(`/api/aria/${tenant}/investigations`, { method: 'POST' });
+        const createRes = await fetch(`/api/aria/${tenant}/investigations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usr }),
+        });
         const created = await createRes.json();
         setInvestigations([created.meta]);
         setInvestigationId(created.id);
         setMessages([]);
-        localStorage.setItem(ACTIVE_ID_KEY(tenant), created.id);
+        localStorage.setItem(ACTIVE_ID_KEY(tenant, usr), created.id);
       }
     }
     init();
-  }, [tenant]);
+  }, [tenant, usr]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -390,12 +395,16 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
   }, [messages.length, loading]);
 
   async function handleNewInvestigation() {
-    const res = await fetch(`/api/aria/${tenant}/investigations`, { method: 'POST' });
+    const res = await fetch(`/api/aria/${tenant}/investigations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usr }),
+    });
     const created = await res.json();
     setInvestigations((prev) => [created.meta, ...prev]);
     setInvestigationId(created.id);
     setMessages([]);
-    localStorage.setItem(ACTIVE_ID_KEY(tenant), created.id);
+    localStorage.setItem(ACTIVE_ID_KEY(tenant, usr), created.id);
   }
 
   async function handleSelectInvestigation(id) {
@@ -404,7 +413,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile }) {
     const data = await res.json();
     setInvestigationId(id);
     setMessages(mapStoredMessages(data.messages));
-    localStorage.setItem(ACTIVE_ID_KEY(tenant), id);
+    localStorage.setItem(ACTIVE_ID_KEY(tenant, usr), id);
   }
 
   async function handleDeleteInvestigation(id) {

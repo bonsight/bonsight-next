@@ -7,7 +7,8 @@ export async function GET(req, { params }) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
 
-  const investigations = await listInvestigations(tenant);
+  const owner = new URL(req.url).searchParams.get('usr') || undefined;
+  const investigations = await listInvestigations(tenant, owner);
   return Response.json({ investigations });
 }
 
@@ -17,6 +18,7 @@ export async function POST(req, { params }) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
 
-  const { id, meta } = await createInvestigation(tenant);
+  const body = await req.json().catch(() => ({}));
+  const { id, meta } = await createInvestigation(tenant, body?.usr || undefined);
   return Response.json({ id, meta });
 }

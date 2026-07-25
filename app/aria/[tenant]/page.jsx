@@ -82,5 +82,7 @@ export default async function AriaTenantPage({ params, searchParams }) {
     }
   }
 
-  return <AriaClientTenant tenant={tenant} tenantMeta={meta} profile={profile} />;
+  const usr = typeof sp?.usr === 'string' ? sp.usr : undefined;
+
+  return <AriaClientTenant tenant={tenant} tenantMeta={meta} profile={profile} usr={usr} />;
 }
