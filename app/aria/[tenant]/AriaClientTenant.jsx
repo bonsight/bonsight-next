@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { renderMessage } from '@/lib/aria/markdown';
 import AriaAvatar from '@/lib/aria/AriaAvatar';
 import AnalysisPresentation from '../components/AnalysisPresentation';
 import AdvisoryPresentation from '../components/AdvisoryPresentation';
 import WorkshopCanvasPresentation from '../components/WorkshopCanvasPresentation';
 import SprintBoardPresentation from '../components/SprintBoardPresentation';
+import SprintDraftReviewPresentation from '../components/SprintDraftReviewPresentation';
+import SprintTriagePresentation from '../components/SprintTriagePresentation';
+import GroupFusionPresentation from '../components/GroupFusionPresentation';
 import Sidebar from '../components/Sidebar';
 import IntelligencePanel from '../components/IntelligencePanel';
 import ChatInsightSeparator from '../components/ChatInsightSeparator';
@@ -142,9 +144,57 @@ function AnalyzingIndicator() {
 function mapStoredMessages(messages) {
   return (messages ?? []).map((m) =>
     m.role === 'assistant'
-      ? { role: 'assistant', content: m.content, presentation: m.presentation ?? null, advisory: m.advisory ?? null, canvas: m.canvas ?? null, board: m.board ?? null }
+      ? { role: 'assistant', content: m.content, presentation: m.presentation ?? null, advisory: m.advisory ?? null, canvas: m.canvas ?? null, board: m.board ?? null, sprintDraft: m.sprintDraft ?? null, sprintTriage: m.sprintTriage ?? null, groupFusion: m.groupFusion ?? null }
       : { role: 'user', content: m.content }
   );
+}
+
+// Activities/Sprints son paneles persistentes, no acumulan tarjetas en el chat — siempre
+// muestran lo último de su tipo en toda la conversación, sin importar cuántos mensajes
+// haya en el medio.
+function findLatestWorkshopMessage(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.canvas) return { type: 'canvas', message: m, index: i };
+    if (m.groupFusion) return { type: 'groupFusion', message: m, index: i };
+    if (m.sprintTriage) return { type: 'sprintTriage', message: m, index: i };
+    if (m.sprintDraft) return { type: 'sprintDraft', message: m, index: i };
+  }
+  return null;
+}
+
+function findLatestBoardMessage(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].board) return messages[i];
+  }
+  return null;
+}
+
+// pin != null → el usuario clickeó un puntero puntual, respeta ESE mensaje en vez del más
+// reciente de todo el historial (que podía no tener nada que ver con lo que clickeó).
+function resolveWorkshopMessage(messages, pin) {
+  if (pin != null && messages[pin]) {
+    const m = messages[pin];
+    if (m.canvas) return { type: 'canvas', message: m, index: pin };
+    if (m.groupFusion) return { type: 'groupFusion', message: m, index: pin };
+    if (m.sprintTriage) return { type: 'sprintTriage', message: m, index: pin };
+    if (m.sprintDraft) return { type: 'sprintDraft', message: m, index: pin };
+  }
+  return findLatestWorkshopMessage(messages);
+}
+
+function resolveBoardMessage(messages, pin) {
+  if (pin != null && messages[pin]?.board) return messages[pin];
+  return findLatestBoardMessage(messages);
+}
+
+// Todos los workshops (canvas) de esta conversación, para el selector de Activities —
+// una investigación puede tener más de uno (ej. "Construyendo Bonsight" y "Consolidando
+// Bonsight" en la misma conversación).
+function listWorkshops(messages) {
+  return messages
+    .map((m, i) => ({ index: i, name: m.canvas?.workshopName }))
+    .filter((w) => w.name);
 }
 
 function upsertInvestigation(list, meta) {
@@ -307,6 +357,17 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
   const [attachments, setAttachments] = useState([]);
   const [activeSources, setActiveSources] = useState(new Set());
   const [copiedIdx, setCopiedIdx] = useState(null);
+  const [activeSection, setActiveSection] = useState('chat'); // 'chat' | 'activities' | 'sprints'
+  // Una vez visitada, una sección queda montada (solo se oculta con display:none) para no
+  // repetir fetches caros al volver — generar un triage/borrador de sprint de nuevo puede
+  // tardar 10s+ porque es una llamada real a Claude, no algo para repetir en cada click de tab.
+  const [visited, setVisited] = useState({ chat: true, activities: false, sprints: false });
+  // Índice del mensaje al que apunta el puntero clickeado ("→ Ver en Activities/Sprints") —
+  // null significa "el más reciente de todo el historial" (comportamiento por default al
+  // entrar por la pestaña del header, no por un puntero puntual).
+  const [activitiesPin, setActivitiesPin] = useState(null);
+  const [sprintsPin, setSprintsPin] = useState(null);
+  const [activitiesCommand, setActivitiesCommand] = useState('');
   const messagesEndRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -571,6 +632,9 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
           advisory: data.advisory ?? null,
           canvas: data.canvas ?? null,
           board: data.board ?? null,
+          sprintDraft: data.sprintDraft ?? null,
+          sprintTriage: data.sprintTriage ?? null,
+          groupFusion: data.groupFusion ?? null,
           topics: data.topics ?? [],
           archiveMatch: data.archiveMatch ?? null,
           intelligence: data.intelligence ?? [],
@@ -620,6 +684,16 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function sendActivitiesCommand() {
+    const text = activitiesCommand.trim();
+    if (!text || loading) return;
+    setActivitiesCommand('');
+    // El pin queda en "lo más reciente" — así el panel muestra directo lo que Aria acaba
+    // de generar, sin importar qué workshop estaba fijado antes de mandar el comando.
+    setActivitiesPin(null);
+    await send(text);
   }
 
   function handleKeyDown(e) {
@@ -775,11 +849,21 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
               {subtitle && <p className="aria-header-subtitle">{subtitle}</p>}
             </div>
           </div>
-          <Link href={`/aria/${tenant}/board`} className="aria-header-link">
-            📋 Sprint
-          </Link>
+          <div className="aria-nav-tabs">
+            <button type="button" className={`aria-nav-tab${activeSection === 'chat' ? ' aria-nav-tab--active' : ''}`} onClick={() => setActiveSection('chat')}>
+              Chat
+            </button>
+            <button type="button" className={`aria-nav-tab${activeSection === 'activities' ? ' aria-nav-tab--active' : ''}`} onClick={() => { setActivitiesPin(null); setActiveSection('activities'); setVisited((v) => ({ ...v, activities: true })); }}>
+              Activities
+            </button>
+            <button type="button" className={`aria-nav-tab${activeSection === 'sprints' ? ' aria-nav-tab--active' : ''}`} onClick={() => { setSprintsPin(null); setActiveSection('sprints'); setVisited((v) => ({ ...v, sprints: true })); }}>
+              Sprints
+            </button>
+          </div>
         </header>
 
+        {visited.chat && (
+        <div style={{ display: activeSection === 'chat' ? 'contents' : 'none' }}>
         <div className="aria-messages">
           {messages.length === 0 && (
             <div className="aria-empty-hero">
@@ -827,7 +911,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
 
           {messages.map((m, i) => {
             const isLastAssistant = m.role === 'assistant' && i === messages.length - 1;
-            const showTopics = isLastAssistant && !loading && !m.presentation && !m.advisory && !m.canvas && !m.board && m.topics?.length > 0;
+            const showTopics = isLastAssistant && !loading && !m.presentation && !m.advisory && !m.canvas && !m.board && !m.sprintDraft && !m.sprintTriage && !m.groupFusion && m.topics?.length > 0;
             const hasIntelligence = m.role === 'assistant' && (m.presentation || m.advisory || m.intelligence?.length > 0);
             const dominantIntelType = m.intelligence?.find((i) => i.type !== 'insight_principal')?.type ?? 'analisis';
             const sepType = m.advisory?.risk ? 'riesgo' : m.presentation ? 'analisis' : dominantIntelType;
@@ -842,7 +926,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
                     onIgnore={() => dismissArchiveCard(i)}
                   />
                 )}
-                <div className={`aria-msg-assistant-inner${m.presentation || m.advisory || m.canvas || m.board ? ' aria-msg-assistant-inner-wide' : ''}`}>
+                <div className={`aria-msg-assistant-inner${m.presentation || m.advisory ? ' aria-msg-assistant-inner-wide' : ''}`}>
                   <div className="aria-msg-label">
                     <AriaAvatar size={20} />
                     <span>Aria</span>
@@ -851,18 +935,24 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
                     <AnalysisPresentation presentation={m.presentation} onFollowUp={(text) => send(text)} disabled={loading} />
                   ) : m.advisory ? (
                     <AdvisoryPresentation advisory={m.advisory} onFollowUp={(text) => send(text)} disabled={loading} />
-                  ) : m.canvas ? (
-                    <WorkshopCanvasPresentation
-                      canvas={m.canvas}
-                      tenant={tenant}
-                      investigationId={investigationId}
-                      messageIndex={i}
-                      onCanvasUpdate={(updated) => {
-                        setMessages((prev) => prev.map((msg, mi) => (mi === i ? { ...msg, canvas: updated } : msg)));
-                      }}
-                    />
+                  ) : m.canvas || m.sprintTriage || m.sprintDraft || m.groupFusion ? (
+                    <>
+                      <div className="aria-msg-content">
+                        {renderMessage(m.content?.trim() || 'Actualicé el workshop.')}
+                      </div>
+                      <button type="button" className="aria-msg-pointer" onClick={() => { setActivitiesPin(i); setActiveSection('activities'); setVisited((v) => ({ ...v, activities: true })); }}>
+                        → Ver en Activities
+                      </button>
+                    </>
                   ) : m.board ? (
-                    <SprintBoardPresentation tenant={tenant} initialSprintNumber={m.board.sprintNumber} />
+                    <>
+                      <div className="aria-msg-content">
+                        {renderMessage(m.content?.trim() || 'Abrí el tablero de tareas.')}
+                      </div>
+                      <button type="button" className="aria-msg-pointer" onClick={() => { setSprintsPin(i); setActiveSection('sprints'); setVisited((v) => ({ ...v, sprints: true })); }}>
+                        → Ver en Sprints
+                      </button>
+                    </>
                   ) : (
                     <>
                       <div className="aria-msg-content">{renderMessage(m.content)}</div>
@@ -1034,6 +1124,100 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
           )}
         </div>
         <p className="aria-disclaimer">Aria puede cometer errores. Verifica siempre la información crítica.</p>
+        </div>
+        )}
+
+        {visited.activities && (() => {
+          const latest = resolveWorkshopMessage(messages, activitiesPin);
+          const workshops = listWorkshops(messages);
+          return (
+            <div style={{ display: activeSection === 'activities' ? 'contents' : 'none' }}>
+              <div className="aria-messages">
+                {workshops.length > 1 && (
+                  <div className="aria-activities-workshop-picker">
+                    {workshops.map((w) => (
+                      <button
+                        key={w.index}
+                        type="button"
+                        className={`aria-nav-tab${latest?.type === 'canvas' && latest.index === w.index ? ' aria-nav-tab--active' : ''}`}
+                        onClick={() => setActivitiesPin(w.index)}
+                      >
+                        {w.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {latest?.message?.content?.trim() && (
+                  <p className="aria-activities-status">{latest.message.content.trim()}</p>
+                )}
+
+                {!latest ? (
+                  <div className="aria-empty-hero">
+                    <p className="aria-empty-hero-title aria-gradient-text">Activities</p>
+                    <p className="aria-empty-hero-text">Todavía no hay ningún workshop en esta conversación — pedile a Aria que arme uno desde el chat.</p>
+                  </div>
+                ) : latest.type === 'canvas' ? (
+                  <WorkshopCanvasPresentation
+                    key={latest.index}
+                    canvas={latest.message.canvas}
+                    tenant={tenant}
+                    investigationId={investigationId}
+                    messageIndex={latest.index}
+                    onCanvasUpdate={(updated) => {
+                      setMessages((prev) => prev.map((msg, mi) => (mi === latest.index ? { ...msg, canvas: updated } : msg)));
+                    }}
+                    onSprintFlowStarted={(updatedMessages) => setMessages(mapStoredMessages(updatedMessages))}
+                    onGroupFusionStarted={(updatedMessages) => setMessages(mapStoredMessages(updatedMessages))}
+                  />
+                ) : latest.type === 'groupFusion' ? (
+                  <GroupFusionPresentation
+                    key={latest.index}
+                    tenant={tenant}
+                    investigationId={investigationId}
+                    onDone={(canvasMessageIndex) => setActivitiesPin(canvasMessageIndex ?? null)}
+                  />
+                ) : latest.type === 'sprintTriage' ? (
+                  <SprintTriagePresentation
+                    key={latest.index}
+                    tenant={tenant}
+                    investigationId={investigationId}
+                    onContinue={(updatedMessages) => setMessages(mapStoredMessages(updatedMessages))}
+                  />
+                ) : (
+                  <SprintDraftReviewPresentation key={latest.index} tenant={tenant} investigationId={investigationId} groupIds={latest.message.sprintDraft.groupIds} />
+                )}
+              </div>
+
+              <div className="aria-activities-command-bar">
+                <input
+                  className="aria-input"
+                  placeholder="Pedile algo a Aria sobre este workshop…"
+                  value={activitiesCommand}
+                  disabled={loading || !investigationId}
+                  onChange={(e) => setActivitiesCommand(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendActivitiesCommand(); } }}
+                />
+                <button
+                  type="button"
+                  className="aria-send-btn"
+                  disabled={loading || !activitiesCommand.trim()}
+                  onClick={sendActivitiesCommand}
+                >
+                  →
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {visited.sprints && (
+          <div style={{ display: activeSection === 'sprints' ? 'contents' : 'none' }}>
+            <div className="aria-messages">
+              <SprintBoardPresentation tenant={tenant} initialSprintNumber={resolveBoardMessage(messages, sprintsPin)?.board?.sprintNumber} />
+            </div>
+          </div>
+        )}
       </div>
       {panelOpen && (
         <IntelligencePanel

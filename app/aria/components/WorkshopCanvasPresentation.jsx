@@ -87,6 +87,8 @@ const IconRevert = () => (
   </svg>
 );
 
+const Spinner = () => <span className="aria-board-spinner" aria-hidden="true" />;
+
 const IconCopy = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
@@ -660,13 +662,14 @@ function FichaPanel({ group, tenant, investigationId, messageIndex, questionId, 
   );
 }
 
-function GroupColumn({ group, items, otherGroups, busy, onAction, tenant, investigationId, messageIndex, questionId, workshopName, workshopParticipants, onCanvasUpdate }) {
+function GroupColumn({ group, items, otherGroups, busy, onAction, tenant, investigationId, messageIndex, questionId, workshopName, workshopParticipants, onCanvasUpdate, orderEntry }) {
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState(group.name);
   const [expanded, setExpanded] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [startingFicha, setStartingFicha] = useState(false);
   const [fichaModalOpen, setFichaModalOpen] = useState(false);
+  const [orderTooltipOpen, setOrderTooltipOpen] = useState(false);
 
   const resolvedItems = (group.itemIndexes ?? []).map((idx) => ({ ...items[idx], itemIndex: idx })).filter((it) => it.text);
   const shown = expanded ? resolvedItems : resolvedItems.slice(0, 2);
@@ -697,6 +700,27 @@ function GroupColumn({ group, items, otherGroups, busy, onAction, tenant, invest
   return (
     <div className="aria-canvas-col">
       <div className="aria-canvas-col-head">
+        {orderEntry && (
+          <span className="aria-order-badge-anchor">
+            <button
+              type="button"
+              className={`aria-order-badge${orderEntry.hasSignal ? '' : ' aria-order-badge--tie'}`}
+              onClick={() => setOrderTooltipOpen((v) => !v)}
+              title="Orden sugerido para lanzar la ficha"
+            >
+              {orderEntry.order}
+            </button>
+            {orderTooltipOpen && (
+              <>
+                <div className="aria-canvas-col-menu-backdrop" onClick={() => setOrderTooltipOpen(false)} />
+                <div className={`aria-order-tooltip${orderEntry.hasSignal ? '' : ' aria-order-tooltip--tie'}`}>
+                  <span className="aria-order-tooltip-tag">{orderEntry.hasSignal ? 'Alineación estratégica' : 'Sin señal clara'}</span>
+                  <p>{orderEntry.reason}</p>
+                </div>
+              </>
+            )}
+          </span>
+        )}
         {editing ? (
           <input
             className="aria-canvas-group-name-input"
@@ -838,12 +862,43 @@ function NewGroupColumn({ busy, onCreate }) {
   );
 }
 
-export default function WorkshopCanvasPresentation({ canvas, tenant, investigationId, messageIndex, onCanvasUpdate }) {
+export default function WorkshopCanvasPresentation({ canvas, tenant, investigationId, messageIndex, onCanvasUpdate, onSprintFlowStarted, onGroupFusionStarted }) {
   const [activeQ, setActiveQ] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [confirmingRevert, setConfirmingRevert] = useState(false);
+  const [startingDraft, setStartingDraft] = useState(false);
+  const [startingFusion, setStartingFusion] = useState(false);
+  const [fichaOrderByQuestion, setFichaOrderByQuestion] = useState({});
+  const [orderLoading, setOrderLoading] = useState(false);
+
+  const activeQuestionId = canvas?.questions?.[activeQ]?.questionId;
+  const activeGroupCount = canvas?.questions?.[activeQ]?.groups?.length ?? 0;
+
+  const fetchFichaOrder = async (questionId) => {
+    if (!tenant || !investigationId || !questionId) return;
+    setOrderLoading(true);
+    try {
+      const res = await fetch(`/api/aria/${tenant}/investigations/${investigationId}/ficha-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questionId }),
+      });
+      const data = await res.json();
+      if (res.ok) setFichaOrderByQuestion((prev) => ({ ...prev, [questionId]: data.groups }));
+    } catch {
+      // silencioso — es una sugerencia, no bloquea nada del workshop
+    } finally {
+      setOrderLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!activeQuestionId || activeGroupCount < 2 || fichaOrderByQuestion[activeQuestionId]) return;
+    fetchFichaOrder(activeQuestionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeQuestionId, activeGroupCount]);
 
   if (!canvas) return null;
   const { workshopName, summary, questions = [], itemsByQuestion = {} } = canvas;
@@ -851,6 +906,8 @@ export default function WorkshopCanvasPresentation({ canvas, tenant, investigati
   // Gente que de verdad participó de este workshop puntual — se prioriza sobre la
   // lista global de known_participants al elegir responsable/involucrados de una épica.
   const workshopParticipants = [...new Set((itemsByQuestion[question?.questionId] ?? []).map((it) => it.participant).filter(Boolean))];
+  const hasAnyFicha = questions.some((q) => (q.groups ?? []).some((g) => g.ficha));
+  const canReviewFusions = !hasAnyFicha && questions.length > 1;
   const updatedLabel = canvas.updatedAt ? formatRelativeTime(canvas.updatedAt) : null;
   const hasOriginal = !!canvas.originalGroupsByQuestion?.[question?.questionId];
   const canUndo = (canvas.historyByQuestion?.[question?.questionId]?.length ?? 0) > 0;
@@ -872,6 +929,36 @@ export default function WorkshopCanvasPresentation({ canvas, tenant, investigati
       setErr('Error de conexión.');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleStartSprintDraft = async () => {
+    setStartingDraft(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/aria/${tenant}/investigations/${investigationId}/sprint-triage/start`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo iniciar el triage.'); return; }
+      onSprintFlowStarted?.(data.messages);
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setStartingDraft(false);
+    }
+  };
+
+  const handleStartGroupFusion = async () => {
+    setStartingFusion(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/aria/${tenant}/investigations/${investigationId}/group-fusion/start`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo iniciar la revisión de fusiones.'); return; }
+      onGroupFusionStarted?.(data.messages);
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setStartingFusion(false);
     }
   };
 
@@ -946,9 +1033,21 @@ export default function WorkshopCanvasPresentation({ canvas, tenant, investigati
             </div>
             <h3 className="aria-canvas-title">{workshopName}</h3>
           </div>
-          <button type="button" className="aria-canvas-export-btn" disabled={exporting} onClick={handleExport}>
-            <IconDownload /> {exporting ? 'Generando…' : 'Exportar consolidado'}
-          </button>
+          <div className="aria-canvas-header-actions-group">
+            {canReviewFusions && (
+              <button type="button" className="aria-canvas-export-btn" disabled={startingFusion} onClick={handleStartGroupFusion}>
+                {startingFusion ? 'Buscando…' : 'Revisar fusiones sugeridas'}
+              </button>
+            )}
+            {hasAnyFicha && (
+              <button type="button" className="aria-canvas-export-btn aria-ficha-primary-btn" disabled={startingDraft} onClick={handleStartSprintDraft}>
+                {startingDraft ? 'Generando…' : 'Generar borrador de sprint'}
+              </button>
+            )}
+            <button type="button" className="aria-canvas-export-btn" disabled={exporting} onClick={handleExport}>
+              <IconDownload /> {exporting ? 'Generando…' : 'Exportar consolidado'}
+            </button>
+          </div>
         </div>
         <div className="aria-canvas-stats-row">
           <div className="aria-canvas-stat aria-canvas-stat--main">
@@ -1002,10 +1101,22 @@ export default function WorkshopCanvasPresentation({ canvas, tenant, investigati
 
       {question && (
         <div className="aria-canvas-question">
-          {(questions.length === 1 || hasOriginal || canUndo) && (
+          {(questions.length === 1 || hasOriginal || canUndo || activeGroupCount >= 2) && (
             <div className="aria-canvas-question-head">
               {questions.length === 1 && <p className="aria-canvas-question-title">{question.questionText}</p>}
               <div className="aria-board-header-actions">
+                {activeGroupCount >= 2 && (
+                  <button
+                    type="button"
+                    className="aria-canvas-icon-btn"
+                    aria-label="Actualizar orden sugerido de fichas"
+                    title="Actualizar orden sugerido de fichas"
+                    disabled={orderLoading}
+                    onClick={() => fetchFichaOrder(question.questionId)}
+                  >
+                    {orderLoading ? <Spinner /> : <IconRevert />}
+                  </button>
+                )}
                 {canUndo && (
                   <button
                     type="button"
@@ -1046,6 +1157,7 @@ export default function WorkshopCanvasPresentation({ canvas, tenant, investigati
                 workshopName={workshopName}
                 workshopParticipants={workshopParticipants}
                 onCanvasUpdate={onCanvasUpdate}
+                orderEntry={fichaOrderByQuestion[question.questionId]?.find((o) => o.groupId === g.id)}
               />
             ))}
             <NewGroupColumn

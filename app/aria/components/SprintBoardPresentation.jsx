@@ -44,6 +44,13 @@ const IconChevronDown = () => (
   </svg>
 );
 
+const IconRefresh = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+  </svg>
+);
+
 const Spinner = () => <span className="aria-board-spinner" aria-hidden="true" />;
 
 const PRIORITIES = ['Alta', 'Media', 'Baja'];
@@ -62,6 +69,13 @@ function slug(s) {
   return String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
 }
 
+// El valor real en Notion sigue siendo "Planificado" (as\u00ed lo espera todo el c\u00f3digo de
+// negocio) \u2014 ac\u00e1 solo se relabelea para mostrar, porque "Planificado" suena a que la
+// planificaci\u00f3n ya termin\u00f3 cuando en realidad todav\u00eda se est\u00e1 armando el sprint.
+function statusLabel(status) {
+  return status === 'Planificado' ? 'Planificando' : status;
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return '';
   return new Date(`${dateStr}T00:00:00`).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -72,13 +86,15 @@ function isOverdue(dueDate, status) {
   return new Date(`${dueDate}T00:00:00`).getTime() < new Date().setHours(0, 0, 0, 0);
 }
 
-function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints, currentSprintId }) {
+function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints, currentSprintId, talento }) {
   const [moveOpen, setMoveOpen] = useState(false);
+  const [responsableOpen, setResponsableOpen] = useState(false);
   const otherColumns = viewMode === 'estado' ? columns.filter((c) => c.id !== task.status) : [];
   const otherSprints = sprints.filter((s) => s.id !== currentSprintId && s.status !== 'Cerrado');
   const hasMoveOptions = otherColumns.length > 0 || otherSprints.length > 0;
   const removeKey = `remove:${task.id}`;
   const movePrefix = `move:${task.id}:`;
+  const responsableKey = `responsable:${task.id}`;
   const isMoving = pendingKey?.startsWith(movePrefix);
 
   // Prioridad, severidad, tipo y cliente son clasificación de rutina — van en una sola
@@ -89,8 +105,27 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
   return (
     <div className={`aria-canvas-item${task.outOfPlan ? ' aria-board-item--outofplan' : ''}`}>
       <div className="aria-canvas-item-who">
-        <span className="aria-canvas-avatar">{initials(task.responsableName)}</span>
-        <span className="aria-canvas-item-name">{task.responsableName ?? 'Sin responsable'}</span>
+        <div className="aria-board-responsable-anchor">
+          <button type="button" className="aria-board-responsable-trigger" disabled={busy} onClick={() => setResponsableOpen((v) => !v)}>
+            <span className="aria-canvas-avatar">{pendingKey === responsableKey ? <Spinner /> : initials(task.responsableName)}</span>
+            <span className={`aria-canvas-item-name${task.responsableName ? '' : ' aria-canvas-meta-select--empty'}`}>{task.responsableName ?? 'Sin responsable'}</span>
+          </button>
+          {responsableOpen && (
+            <>
+              <div className="aria-canvas-col-menu-backdrop" onClick={() => setResponsableOpen(false)} />
+              <div className="aria-canvas-col-menu aria-board-responsable-menu">
+                <button type="button" disabled={busy} onClick={() => { onAction('update_task_responsable', { pageId: task.id, responsableId: null }, responsableKey); setResponsableOpen(false); }}>
+                  Sin responsable
+                </button>
+                {talento.map((t) => (
+                  <button key={t.id} type="button" disabled={busy} onClick={() => { onAction('update_task_responsable', { pageId: task.id, responsableId: t.id }, responsableKey); setResponsableOpen(false); }}>
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
         <div className="aria-board-card-icons">
           <a href={task.url} target="_blank" rel="noopener noreferrer" className="aria-board-card-link" title="Abrir en Notion">
             <IconExternal />
@@ -113,6 +148,7 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
       </div>
       <p className="aria-canvas-item-text">{task.title}</p>
       {task.parentName && <p className="aria-board-parent-tag">↳ {task.parentName}</p>}
+      {task.previousSprintTitle && <p className="aria-board-parent-tag">↳ vino de {task.previousSprintTitle}</p>}
 
       {(task.priority || metaParts.length > 0) && (
         <p className="aria-board-meta-line">
@@ -166,7 +202,7 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
   );
 }
 
-function BoardColumn({ column, tasks, columns, viewMode, busy, pendingKey, onAction, sprints, currentSprintId }) {
+function BoardColumn({ column, tasks, columns, viewMode, busy, pendingKey, onAction, sprints, currentSprintId, talento }) {
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? tasks : tasks.slice(0, 6);
   const restCount = tasks.length - shown.length;
@@ -189,6 +225,7 @@ function BoardColumn({ column, tasks, columns, viewMode, busy, pendingKey, onAct
             onAction={onAction}
             sprints={sprints}
             currentSprintId={currentSprintId}
+            talento={talento}
           />
         ))}
       </div>
@@ -436,7 +473,7 @@ function SprintSelector({ sprint, sprints, busy, onSelectSprint, onNewSprintClic
   return (
     <span className="aria-board-sprint-selector">
       <button type="button" className="aria-board-sprint-select-btn" disabled={busy} onClick={() => setOpen((v) => !v)}>
-        {sprint.title} — {sprint.status} <IconChevronDown />
+        {sprint.title} — {statusLabel(sprint.status)} <IconChevronDown />
       </button>
       {open && (
         <>
@@ -449,7 +486,7 @@ function SprintSelector({ sprint, sprints, busy, onSelectSprint, onNewSprintClic
                 className={`aria-board-sprint-opt${s.id === sprint.id ? ' aria-board-sprint-opt--current' : ''}`}
                 onClick={() => { onSelectSprint(s.id); setOpen(false); }}
               >
-                {s.title} — {s.status}
+                {s.title} — {statusLabel(s.status)}
               </button>
             ))}
             <div className="aria-board-sprint-dropdown-divider" />
@@ -463,11 +500,12 @@ function SprintSelector({ sprint, sprints, busy, onSelectSprint, onNewSprintClic
   );
 }
 
-function SprintHeader({ sprint, sprints, busy, pendingKey, onClosePlanning, onCloseSprint, onNewSprintClick, onSelectSprint }) {
+function SprintHeader({ sprint, sprints, busy, pendingKey, refreshing, onRefresh, onClosePlanning, onCloseSprint, onNewSprintClick, onSelectSprint, onUpdateDates }) {
   const [confirming, setConfirming] = useState(false);
+  const isPlanning = sprint.status === 'Planificado';
 
   const handleClose = () => {
-    const action = sprint.status === 'Planificado' ? onClosePlanning : onCloseSprint;
+    const action = isPlanning ? onClosePlanning : onCloseSprint;
     if (confirming) { setConfirming(false); action(); }
     else setConfirming(true);
   };
@@ -476,14 +514,34 @@ function SprintHeader({ sprint, sprints, busy, pendingKey, onClosePlanning, onCl
     <div className="aria-board-sprint-header">
       <div className="aria-board-sprint-header-row">
         <span className={`aria-board-sprint-badge aria-board-sprint-badge--${slug(sprint.status)}`}>
-          {sprint.status}
+          {statusLabel(sprint.status)}
         </span>
         {sprints.length > 1 ? (
           <SprintSelector sprint={sprint} sprints={sprints} busy={busy} onSelectSprint={onSelectSprint} onNewSprintClick={onNewSprintClick} />
         ) : (
           <span className="aria-board-sprint-title">{sprint.title}</span>
         )}
-        <span className="aria-board-sprint-dates">{formatDate(sprint.startDate)} → {formatDate(sprint.endDate)}</span>
+        {isPlanning ? (
+          <span className="aria-board-sprint-dates-edit">
+            <input
+              type="date"
+              className="aria-board-date-input"
+              value={sprint.startDate ?? ''}
+              disabled={busy}
+              onChange={(e) => onUpdateDates({ startDate: e.target.value, endDate: sprint.endDate })}
+            />
+            <span>→</span>
+            <input
+              type="date"
+              className="aria-board-date-input"
+              value={sprint.endDate ?? ''}
+              disabled={busy}
+              onChange={(e) => onUpdateDates({ startDate: sprint.startDate, endDate: e.target.value })}
+            />
+          </span>
+        ) : (
+          <span className="aria-board-sprint-dates">{formatDate(sprint.startDate)} → {formatDate(sprint.endDate)}</span>
+        )}
         {(sprint.committedHours != null || sprint.loggedHours != null) && (
           <span className="aria-board-sprint-dates">
             {' · '}{sprint.loggedHours ?? 0}h / {sprint.committedHours ?? 0}h comprometidas
@@ -491,6 +549,16 @@ function SprintHeader({ sprint, sprints, busy, pendingKey, onClosePlanning, onCl
           </span>
         )}
         <div className="aria-board-sprint-header-spacer" />
+        <button
+          type="button"
+          className="aria-canvas-icon-btn"
+          aria-label="Actualizar desde Notion"
+          title="Actualizar desde Notion"
+          disabled={busy || refreshing}
+          onClick={onRefresh}
+        >
+          {refreshing ? <Spinner /> : <IconRefresh />}
+        </button>
         {(sprint.status === 'Planificado' || sprint.status === 'En curso') && (
           <button
             type="button"
@@ -588,6 +656,7 @@ function SprintReviewPanel({ metrics }) {
 export default function SprintBoardPresentation({ tenant, initialSprintNumber }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pendingKey, setPendingKey] = useState(null);
   const [err, setErr] = useState(null);
@@ -596,7 +665,8 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
   const [viewMode, setViewMode] = useState('estado'); // 'estado' | 'tipo'
 
   const load = async (opts = {}) => {
-    setLoading(true);
+    const silent = opts.silent;
+    silent ? setRefreshing(true) : setLoading(true);
     setErr(null);
     try {
       const params = new URLSearchParams();
@@ -610,7 +680,7 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
     } catch {
       setErr('Error de conexión.');
     } finally {
-      setLoading(false);
+      silent ? setRefreshing(false) : setLoading(false);
     }
   };
 
@@ -739,10 +809,13 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
           sprints={sprints}
           busy={busy}
           pendingKey={pendingKey}
+          refreshing={refreshing}
+          onRefresh={() => load({ sprintId: sprint.id, silent: true })}
           onClosePlanning={() => handleAction('close_planning', { sprintId: sprint.id }, 'close_sprint')}
           onCloseSprint={() => handleAction('close_sprint', { sprintId: sprint.id }, 'close_sprint')}
           onNewSprintClick={() => setMode('new_sprint')}
           onSelectSprint={(sprintId) => load({ sprintId })}
+          onUpdateDates={({ startDate, endDate }) => handleAction('update_sprint_dates', { sprintId: sprint.id, startDate, endDate }, 'update_sprint_dates')}
         />
         <div className="aria-canvas-stats-row">
           <div className="aria-canvas-stat aria-canvas-stat--main">
@@ -778,6 +851,7 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
             pendingKey={pendingKey}
             onAction={handleAction}
             sprints={sprints}
+            talento={talento}
             currentSprintId={sprint.id}
           />
         ))}

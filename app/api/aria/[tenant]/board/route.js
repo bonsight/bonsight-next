@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant } from '@/lib/aria/auth';
 import { getIntelligenceSources } from '@/lib/kai/intelligenceSources';
-import { getBoardData, searchTareas, moveTask, createTask, addExistingTask, removeTask, createSprint, closeSprintPlanning, closeSprint, computeSprintMetrics } from '@/lib/aria/board';
+import { getBoardData, searchTareas, moveTask, createTask, addExistingTask, removeTask, updateTaskResponsable, createSprint, closeSprintPlanning, closeSprint, updateSprintDates, computeSprintMetrics } from '@/lib/aria/board';
 import { saveSprintMetrics, getSprintMetrics } from '@/lib/aria/sprintMetrics';
 
 async function getNotionToken(tenant) {
@@ -88,6 +88,12 @@ export async function PATCH(req, { params }) {
     } else if (action === 'remove_task') {
       if (!p.pageId) throw new Error('pageId es requerido.');
       await removeTask(token, p.pageId);
+    } else if (action === 'update_task_responsable') {
+      if (!p.pageId) throw new Error('pageId es requerido.');
+      await updateTaskResponsable(token, p.pageId, p.responsableId || null);
+    } else if (action === 'update_sprint_dates') {
+      if (!sprintId) throw new Error('sprintId es requerido.');
+      await updateSprintDates(token, sprintId, { startDate: p.startDate, endDate: p.endDate });
     } else {
       throw new Error(`Acción desconocida: ${action}`);
     }

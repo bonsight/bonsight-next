@@ -492,6 +492,10 @@ present_workshop_canvas → Cuando el usuario pida agrupar, consolidar o mapear 
 
 present_sprint_board → Cuando el usuario pida planear el sprint, ver o abrir el tablero de tareas, crear un sprint, o gestionar/mover tareas del equipo (ej. "creemos el sprint", "muéstrame el tablero", "quiero ver las tareas"). No necesitas ningún dato previo ni tool adicional — solo llamala directo, el tablero se conecta a Notion por su cuenta.
 
+present_sprint_draft → Cuando el usuario pida convertir un workshop ya trabajado (con al menos una ficha de objetivos consolidada) en tareas de sprint — ej. "armemos el sprint de esto", "pasá el workshop al tablero", "generá las tareas de esta agrupación". Distinto de present_sprint_board: acá el punto de partida es el workshop, no el tablero directamente. No necesitas ningún dato previo — arranca con un triage (valor vs. esfuerzo por agrupación) donde el usuario elige qué avanza; recién después se genera el borrador de tareas para revisión. Nada se escribe en Notion hasta que el usuario confirma cada agrupación ahí.
+
+present_group_fusion → Cuando el usuario pida revisar si hay agrupaciones de preguntas distintas del workshop que en realidad son el mismo tema y convendría fusionar, antes de armar fichas — ej. "revisá si hay grupos repetidos", "che, esto y esto de otra pregunta no es lo mismo?". Solo tiene sentido si el workshop tiene más de una pregunta y todavía NINGÚN grupo tiene ficha — si ya hay una ficha en curso, no la uses, ya pasó el momento. No requiere datos previos.
+
 Al cerrar una sesión de análisis importante, usa save_session_memory para persistir hallazgos, decisiones e insights.
 
 query_notion → Cuando Notion está activo y el usuario hace preguntas que podrían estar respondidas en documentos internos, wikis o bases de datos del workspace. Empieza con search para descubrir páginas relevantes, luego get_page para leer el contenido completo o query_database para obtener filas estructuradas. No asumas que tienes el contenido — consúltalo.
@@ -816,6 +820,16 @@ Si el usuario nombra un sprint puntual por número (ej. "el tablero del sprint 3
           sprintNumber: { type: 'integer', description: 'Número del sprint pedido explícitamente por el usuario, ej. 3 para "Sprint #3". Omitir si no lo especifica.' },
         },
       },
+    },
+    {
+      name: 'present_sprint_draft',
+      description: `Arranca el flujo de convertir un workshop ya trabajado (con al menos una ficha de objetivos consolidada) en tareas de sprint. Usalo cuando el usuario pida armar/generar el sprint, convertir el workshop en tareas, o "pasar esto al tablero" — nunca si el workshop todavía no tiene ninguna ficha consolidada. No requiere datos previos: primero se muestra un triage (valor vs. esfuerzo por agrupación) para elegir qué avanza, y luego el borrador de tareas para revisión — ninguna tarea se crea en Notion hasta que el usuario confirme cada agrupación ahí mismo.`,
+      input_schema: { type: 'object', properties: {} },
+    },
+    {
+      name: 'present_group_fusion',
+      description: `Busca agrupaciones de preguntas distintas del mismo workshop que en realidad hablan del mismo tema, y sugiere fusionarlas — antes de que exista cualquier ficha. Usalo cuando el usuario pida revisar duplicados/temas repetidos entre preguntas del workshop. No requiere datos previos. No lo uses si el workshop ya tiene alguna ficha en curso o consolidada — en ese caso ya pasó el momento de fusionar.`,
+      input_schema: { type: 'object', properties: {} },
     },
     {
       name: 'query_ga4',
@@ -1220,7 +1234,7 @@ async function executeTool(name, input, { tenant, investigationId, intelligenceS
   if (name === 'save_session_memory') {
     return updateInvestigationMeta(tenant, investigationId, input);
   }
-  if (name === 'present_analysis' || name === 'present_advisory' || name === 'present_workshop_canvas' || name === 'present_sprint_board') {
+  if (name === 'present_analysis' || name === 'present_advisory' || name === 'present_workshop_canvas' || name === 'present_sprint_board' || name === 'present_sprint_draft' || name === 'present_group_fusion') {
     return { ok: true };
   }
   if (name === 'generate_gtm_container' || name === 'generate_measurement_excel' || name === 'generate_measurement_pdf') {
@@ -1437,6 +1451,9 @@ export async function POST(req, { params }) {
     let advisory = null;
     let canvas = null;
     let board = null;
+    let sprintDraft = null;
+    let sprintTriage = null;
+    let groupFusion = null;
     let lastActivityItemsByQuestion = null;
     let archiveMatch = null;
     let documents = [];
@@ -1505,6 +1522,8 @@ export async function POST(req, { params }) {
         if (block.name === 'present_analysis') presentation = { ...block.input, dataSources: [] };
         if (block.name === 'present_advisory') advisory = { ...block.input };
         if (block.name === 'present_sprint_board') board = { sprintNumber: block.input?.sprintNumber ?? null };
+        if (block.name === 'present_sprint_draft') sprintTriage = {};
+        if (block.name === 'present_group_fusion') groupFusion = {};
         if (block.name === 'get_activity_results') {
           let parsed;
           try { parsed = JSON.parse(content); } catch {}
@@ -1609,7 +1628,7 @@ export async function POST(req, { params }) {
     const lastUserMessage = messages[messages.length - 1];
     await appendInvestigationMessages(tenant, investigationId, [
       { role: lastUserMessage.role, content: lastUserMessage.content },
-      { role: 'assistant', content: finalText, presentation, advisory, canvas, board },
+      { role: 'assistant', content: finalText, presentation, advisory, canvas, board, sprintDraft, sprintTriage, groupFusion },
     ]);
 
     // Auto-title + topic on first message if title is still default
@@ -1642,7 +1661,7 @@ export async function POST(req, { params }) {
 
     const toolsUsed = [...new Set(callLogs.flatMap((l) => l.toolCalls ?? []))];
     const investigationMeta = await getInvestigationMeta(tenant, investigationId);
-    return Response.json({ reply: finalText, presentation, advisory, canvas, board, investigationMeta, topics: finalTopics, archiveMatch, intelligence: finalIntelligence, toolsUsed, documents });
+    return Response.json({ reply: finalText, presentation, advisory, canvas, board, sprintDraft, sprintTriage, groupFusion, investigationMeta, topics: finalTopics, archiveMatch, intelligence: finalIntelligence, toolsUsed, documents });
   } catch (err) {
     console.error(`Aria tenant [${tenant}] error:`, err);
     await recordAriaMetrics(tenant, {
