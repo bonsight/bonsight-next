@@ -1728,19 +1728,116 @@ function MeetingCard({ meeting, tenant }) {
   );
 }
 
+// Sesión de llamada sin análisis todavía (colgada, con error, o recién iniciada) — a
+// diferencia de MeetingCard (que muestra un análisis ya completo), esto da acceso directo
+// a "Procesar"/"Reprocesar" sin depender de tener la conversación original abierta en el
+// chat, que es donde vivía antes el único botón "Obtener análisis".
+function SessionCallCard({ call, tenant, onUpdated }) {
+  const [status, setStatus] = useState(call.status);
+  const [error, setError] = useState(call.error);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const refreshStatus = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const params = new URLSearchParams({ callSid: call.callSid, conversationId: call.conversationId, messageIndex: String(call.messageIndex) });
+      const res = await fetch(`/api/kai/${tenant}/meetings/status?${params}`);
+      const data = await res.json();
+      if (!res.ok) { setMsg(data.error || 'No se pudo actualizar.'); return; }
+      setStatus(data.status);
+      setError(data.error ?? null);
+      if (data.status === 'done') onUpdated?.();
+    } catch {
+      setMsg('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const process = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/meetings/calls/reprocess`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callSid: call.callSid }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setMsg(data.error || 'No se pudo procesar.'); setStatus('error'); setError(data.error ?? null); return; }
+      setStatus('done');
+      onUpdated?.();
+    } catch {
+      setMsg('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const date = call.startedAt ? new Date(call.startedAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+  const time = call.startedAt ? new Date(call.startedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
+  const isLive = status === 'calling' || status === 'processing';
+  const statusLabel = {
+    calling: '📞 Marcando…',
+    processing: '⏳ Procesando…',
+    error: `⚠️ Error${error ? `: ${error}` : ''}`,
+    desconocido: '❔ Sin analizar',
+  }[status] || status;
+
+  return (
+    <div className="kcv-session-card">
+      <div className="kcv-session-header" style={{ cursor: 'default', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, flex: 1, minWidth: 0 }}>
+          <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--kai-text)' }}>{call.meetingTitle}</span>
+          <span style={{ fontSize: 11, color: 'var(--kai-text-muted)' }}>{date} · {time} · {statusLabel}</span>
+        </div>
+        <button
+          type="button"
+          className="kai-meeting-btn kai-meeting-btn--accept"
+          disabled={busy}
+          onClick={isLive ? refreshStatus : process}
+        >
+          {busy ? '…' : isLive ? '🔄 Actualizar' : '⚙️ Procesar'}
+        </button>
+      </div>
+      {msg && <p style={{ fontSize: 12, color: '#e05252', padding: '0 16px 12px' }}>{msg}</p>}
+    </div>
+  );
+}
+
 function ReunionesSection({ tenant }) {
   const [meetings, setMeetings] = useState(null);
+  const [calls, setCalls] = useState(null);
 
-  useEffect(() => {
+  const loadMeetings = () => {
     fetch(`/api/kai/${tenant}/meetings`)
       .then((r) => r.json())
       .then((d) => setMeetings(d.meetings ?? []))
       .catch(() => setMeetings([]));
+  };
+  const loadCalls = () => {
+    fetch(`/api/kai/${tenant}/meetings/calls`)
+      .then((r) => r.json())
+      .then((d) => setCalls(d.calls ?? []))
+      .catch(() => setCalls([]));
+  };
+
+  useEffect(() => {
+    loadMeetings();
+    loadCalls();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant]);
 
-  if (!meetings) return <p style={{ fontSize: 13, color: 'var(--kai-text-muted)' }}>Cargando…</p>;
+  if (meetings === null || calls === null) return <p style={{ fontSize: 13, color: 'var(--kai-text-muted)' }}>Cargando…</p>;
 
-  if (!meetings.length) return (
+  // El mensaje de "llamando…" original en el chat nunca se actualiza solo a "done" (eso
+  // vive en Redis vía callMeta, que es justo lo que /meetings/calls ya resolvió por nosotros
+  // más arriba) — así que basta con mirar el status real para no duplicar tarjetas.
+  const pendingCalls = calls.filter((c) => c.status !== 'done');
+
+  if (!meetings.length && !pendingCalls.length) return (
     <div style={{ padding: '40px 0' }}>
       <p style={{ fontSize: 13, color: 'var(--kai-text-muted)', lineHeight: 1.75 }}>
         Cuando analices una transcripción o Kai capture una llamada, las reuniones van a aparecer acá — sin tener que buscarlas en el chat.
@@ -1750,6 +1847,14 @@ function ReunionesSection({ tenant }) {
 
   return (
     <div className="kcv-session-list">
+      {pendingCalls.map((c) => (
+        <SessionCallCard
+          key={c.callSid}
+          call={c}
+          tenant={tenant}
+          onUpdated={() => { loadCalls(); loadMeetings(); }}
+        />
+      ))}
       {meetings.map((m) => <MeetingCard key={m.id} meeting={m} tenant={tenant} />)}
     </div>
   );

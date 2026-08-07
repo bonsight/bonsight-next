@@ -1176,6 +1176,9 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
                     tenant={tenant}
                     investigationId={investigationId}
                     onDone={(canvasMessageIndex) => setActivitiesPin(canvasMessageIndex ?? null)}
+                    onCanvasUpdate={(canvasMessageIndex, updatedCanvas) => {
+                      setMessages((prev) => prev.map((msg, mi) => (mi === canvasMessageIndex ? { ...msg, canvas: updatedCanvas } : msg)));
+                    }}
                   />
                 ) : latest.type === 'sprintTriage' ? (
                   <SprintTriagePresentation

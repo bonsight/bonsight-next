@@ -32,7 +32,7 @@ function ConflictPicker({ label, valueA, valueB, selected, onSelect }) {
   );
 }
 
-function FusionCard({ suggestion, tenant, investigationId, messageIndex, onResolved }) {
+function FusionCard({ suggestion, tenant, investigationId, messageIndex, onCanvasUpdate }) {
   const { groupA, groupB, strength, reason, preview } = suggestion;
   const [status, setStatus] = useState('pending'); // pending | merging | merged | kept
   const [err, setErr] = useState(null);
@@ -64,7 +64,9 @@ function FusionCard({ suggestion, tenant, investigationId, messageIndex, onResol
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo fusionar.'); setStatus('pending'); return; }
       setStatus('merged');
-      onResolved?.(data.canvas);
+      // Sin esto, la vista del workshop (fuera de esta pantalla de revisión) queda con el
+      // canvas viejo hasta un reload — nadie más se entera de que el canvas cambió acá.
+      onCanvasUpdate?.(messageIndex, data.canvas);
     } catch {
       setErr('Error de conexión.');
       setStatus('pending');
@@ -127,7 +129,7 @@ function FusionCard({ suggestion, tenant, investigationId, messageIndex, onResol
   );
 }
 
-export default function GroupFusionPresentation({ tenant, investigationId, onDone }) {
+export default function GroupFusionPresentation({ tenant, investigationId, onDone, onCanvasUpdate }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
@@ -174,7 +176,7 @@ export default function GroupFusionPresentation({ tenant, investigationId, onDon
             tenant={tenant}
             investigationId={investigationId}
             messageIndex={data.messageIndex}
-            onResolved={() => {}}
+            onCanvasUpdate={onCanvasUpdate}
           />
         ))
       )}

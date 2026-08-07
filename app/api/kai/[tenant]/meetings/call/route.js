@@ -1,6 +1,7 @@
 import { isAuthorizedForTenant } from '@/lib/kai/auth';
 import { startMeetingCall } from '@/lib/kai/meetingCapture';
 import { createConversation, appendMessages, getConversationMessages } from '@/lib/kai/memory';
+import { addCallIndexEntry } from '@/lib/kai/meetings';
 
 export async function POST(req, { params }) {
   const { tenant } = await params;
@@ -26,8 +27,10 @@ export async function POST(req, { params }) {
       meetingCallStatus: { callSid: call.sid, status: 'calling', meetingTitle: meetingTitle || 'Reunión' },
     }]);
     const messages = await getConversationMessages(tenant, conversationId);
+    const messageIndex = messages.length - 1;
+    await addCallIndexEntry(tenant, { callSid: call.sid, conversationId, messageIndex, meetingTitle: meetingTitle || 'Reunión' });
 
-    return Response.json({ ok: true, callSid: call.sid, conversationId, messageIndex: messages.length - 1 });
+    return Response.json({ ok: true, callSid: call.sid, conversationId, messageIndex });
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo iniciar la llamada.' }, { status: 400 });
   }
