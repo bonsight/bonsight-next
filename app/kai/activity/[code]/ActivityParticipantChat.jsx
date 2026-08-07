@@ -345,7 +345,7 @@ export default function ActivityParticipantChat({ code, activityId, activityName
     );
   }
 
-  if (activityPhase === 'lobby' && !finished) {
+  if (activityPhase === 'lobby' && !finished && !personalComplete) {
     return (
       <div className="act-wrap act-wrap--center">
         <div className="act-panel">
