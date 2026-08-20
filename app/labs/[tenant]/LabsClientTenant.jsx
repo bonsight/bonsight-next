@@ -53,6 +53,36 @@ function formatDateTime(iso) {
   return new Date(iso).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+const EVIDENCE_ACCEPT = 'image/*,.pdf';
+
+// Mismo esquema que AriaClientTenant.jsx: imágenes se comprimen client-side (máx 1280px,
+// jpeg 0.85) antes de mandarlas — evita blobs enormes en Redis y en el request a Claude.
+async function compressImage(file) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 1280;
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
+    };
+    img.src = url;
+  });
+}
+
+async function readAsBase64(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result.split(',')[1]);
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
   const [experiments, setExperiments] = useState(null);
   const [experimentId, setExperimentId] = useState(null);
@@ -419,14 +449,35 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
   const [step, setStep] = useState(0); // 0 elegir prueba, 1 escribir, 2 pensando, 3 preview, 4 confirmado
   const [testId, setTestId] = useState(null);
   const [freeText, setFreeText] = useState('');
+  const [attachments, setAttachments] = useState([]);
   const [interpreted, setInterpreted] = useState(null);
   const [err, setErr] = useState(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   const test = experiment.tests.find((t) => t.id === testId);
+
+  const resetAportar = () => {
+    setStep(0); setTestId(null); setFreeText(''); setAttachments([]); setInterpreted(null); setErr(null);
+  };
+
+  const processFile = async (file) => {
+    if (!file) return;
+    const maxMb = file.type.startsWith('image/') ? 4 : 10;
+    if (file.size > maxMb * 1024 * 1024) { setErr(`Archivo demasiado grande (máx ${maxMb} MB).`); return; }
+    const id = Math.random().toString(36).slice(2);
+    if (file.type.startsWith('image/')) {
+      const data = await compressImage(file);
+      setAttachments((prev) => [...prev, { id, name: file.name || 'foto.jpg', mimeType: 'image/jpeg', data, previewUrl: `data:image/jpeg;base64,${data}` }]);
+    } else if (file.type === 'application/pdf') {
+      const data = await readAsBase64(file);
+      setAttachments((prev) => [...prev, { id, name: file.name, mimeType: 'application/pdf', data, previewUrl: null }]);
+    }
+  };
 
   const startRecording = async () => {
     try {
@@ -460,14 +511,14 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
   };
 
   const handleInterpret = async () => {
-    if (!freeText.trim()) return;
+    if (!freeText.trim() && attachments.length === 0) return;
     setStep(2);
     setErr(null);
     try {
       const res = await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/executions/interpret`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ testId, freeText }),
+        body: JSON.stringify({ testId, freeText, evidence: attachments.map(({ mimeType, data }) => ({ mimeType, data })) }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo interpretar.'); setStep(1); return; }
@@ -489,6 +540,7 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
           testId, contributor: identity.name, role: identity.role,
           values: interpreted.values, tag: interpreted.tag,
           missingFields: interpreted.missingFields, note: interpreted.note,
+          evidence: attachments.map(({ name, mimeType, data, previewUrl }) => ({ name, mimeType, data, previewUrl })),
         }),
       });
       const data = await res.json();
@@ -541,10 +593,44 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
           </div>
           <label className="field-label">Qué pasó en "{test.name}"</label>
           <textarea rows={6} value={freeText} onChange={(e) => setFreeText(e.target.value)} placeholder="Contá los resultados, condiciones, y cualquier cosa que valga la pena registrar…" />
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={EVIDENCE_ACCEPT}
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => { Array.from(e.target.files).forEach(processFile); e.target.value = ''; }}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style={{ display: 'none' }}
+            onChange={(e) => { Array.from(e.target.files).forEach(processFile); e.target.value = ''; }}
+          />
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button type="button" className="labs-attach-btn" onClick={() => fileInputRef.current?.click()}>📎 Adjuntar archivo</button>
+            <button type="button" className="labs-attach-btn" onClick={() => cameraInputRef.current?.click()}>📷 Tomar foto</button>
+          </div>
+
+          {attachments.length > 0 && (
+            <div className="labs-attach-strip">
+              {attachments.map((att) => (
+                <div key={att.id} className="labs-attach-chip">
+                  {att.previewUrl ? <img src={att.previewUrl} className="labs-attach-thumb" alt={att.name} /> : <div className="labs-attach-icon">📄</div>}
+                  <span className="labs-attach-name">{att.name}</span>
+                  <button type="button" className="labs-attach-remove" onClick={() => setAttachments((p) => p.filter((a) => a.id !== att.id))}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {err && <p className="labs-login-error" style={{ marginTop: 8 }}>{err}</p>}
           <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
             <button className="btn btn-secondary" onClick={() => setStep(0)}>Atrás</button>
-            <button className="btn btn-primary" disabled={!freeText.trim()} onClick={handleInterpret}>Continuar →</button>
+            <button className="btn btn-primary" disabled={!freeText.trim() && attachments.length === 0} onClick={handleInterpret}>Continuar →</button>
           </div>
         </div>
       )}
@@ -570,6 +656,12 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
             ))}
             <div className="sp-row dark-bg"><div className="k">Etiqueta</div><div className="v"><span className={`tag ${tagClass(interpreted.tag)}`}>{interpreted.tag}</span></div></div>
             {interpreted.note && <div className="sp-row"><div className="k">Nota</div><div className="v">{interpreted.note}</div></div>}
+            {attachments.length > 0 && (
+              <div className="sp-row dark-bg">
+                <div className="k">Evidencia</div>
+                <div className="v">{attachments.length} adjunto{attachments.length !== 1 ? 's' : ''} — {attachments.map((a) => a.name).join(', ')}</div>
+              </div>
+            )}
           </div>
           {err && <p className="labs-login-error" style={{ marginBottom: 12 }}>{err}</p>}
           <div style={{ display: 'flex', gap: 10 }}>
@@ -589,7 +681,7 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
             </div>
           </div>
           <div style={{ marginTop: 18, display: 'flex', gap: 10 }}>
-            <button className="btn btn-primary" onClick={() => { setStep(0); setTestId(null); setFreeText(''); setInterpreted(null); }}>Aportar algo más</button>
+            <button className="btn btn-primary" onClick={resetAportar}>Aportar algo más</button>
           </div>
         </div>
       )}
