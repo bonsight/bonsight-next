@@ -7,7 +7,7 @@ const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500'], variabl
 
 export const metadata = {
   title: 'Labs — Bonsight',
-  description: 'Espacio de experimentos vivos — pruebas, aportes y aprendizaje continuo.',
+  description: 'Espacio de proyectos vivos — pruebas, aportes y aprendizaje continuo.',
   robots: { index: false, follow: false },
 };
 

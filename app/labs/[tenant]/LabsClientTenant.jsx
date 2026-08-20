@@ -143,7 +143,7 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
           <span className="role-btn active"><span className="dot"></span>{identity.name} · {identity.role}</span>
         </div>
         <div className="topbar-actions">
-          <button className="btn-ghost-top" onClick={() => { setExperimentId(null); setExperiment(null); }}>Otros experimentos</button>
+          <button className="btn-ghost-top" onClick={() => { setExperimentId(null); setExperiment(null); }}>Otros proyectos</button>
         </div>
       </header>
 
@@ -156,7 +156,7 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
       </nav>
 
       <div className="shell">
-        <nav className="sidenav" aria-label="Secciones del experimento">
+        <nav className="sidenav" aria-label="Secciones del proyecto">
           <div className="nav-label">{experiment.meta.name}</div>
           {nav.map((item) => (
             <button key={item.id} className={`nav-item ${view === item.id ? 'active' : ''}`} onClick={() => setView(item.id)}>
@@ -197,14 +197,14 @@ function ExperimentPicker({ tenant, tenantMeta, identity, experiments, onSelect,
     <div className="labs-admin-wrap">
       <h1 className="labs-admin-title">{tenantMeta.name} <span className="living-word" style={{ color: 'var(--labs-living)', fontStyle: 'italic', fontWeight: 500 }}>· vivo</span></h1>
       <p style={{ fontSize: 13.5, color: 'var(--labs-cream-dim)', marginBottom: 24 }}>
-        Hola {identity.name} — elegí un experimento{canCreate ? ' o creá uno nuevo' : ''}.
+        Hola {identity.name} — elegí un proyecto{canCreate ? ' o creá uno nuevo' : ''}.
       </p>
 
       {canCreate && (
-        <button className="btn btn-primary" style={{ marginBottom: 20 }} onClick={() => setOpen(true)}>+ Crear experimento</button>
+        <button className="btn btn-primary" style={{ marginBottom: 20 }} onClick={() => setOpen(true)}>+ Crear proyecto</button>
       )}
 
-      {experiments.length === 0 && <p className="empty-note">Todavía no hay ningún experimento en este espacio.</p>}
+      {experiments.length === 0 && <p className="empty-note">Todavía no hay ningún proyecto en este espacio.</p>}
       {experiments.map((e) => (
         <div className="labs-tenant-row" key={e.id} style={{ cursor: 'pointer' }} onClick={() => onSelect(e.id)}>
           <div>
@@ -254,8 +254,8 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-card" style={{ position: 'relative' }}>
         <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
-        <span className="eyebrow-mini on-dark">Crear experimento</span>
-        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Nuevo experimento</h2>
+        <span className="eyebrow-mini on-dark">Crear proyecto</span>
+        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Nuevo proyecto</h2>
         <form onSubmit={handleCreate}>
           <label className="field-label">Nombre</label>
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 14 }} required />
@@ -268,7 +268,7 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
           {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
           <div className="modal-footer">
             <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Creando…' : 'Crear experimento →'}</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Creando…' : 'Crear proyecto →'}</button>
           </div>
         </form>
       </div>
@@ -291,7 +291,7 @@ function ViewResumenRegistrador({ experiment, identity, onGo }) {
       <div className="hero-prompt">
         <span className="eyebrow-mini on-dark">Hoy · {experiment.meta.name}</span>
         <h2>¿Qué hiciste hoy en {experiment.meta.name}?</h2>
-        <button className="btn btn-primary" onClick={() => onGo('aportar')}>Aportar al experimento →</button>
+        <button className="btn btn-primary" onClick={() => onGo('aportar')}>Aportar al proyecto →</button>
         <div className="hero-meta-row">
           <div className="hero-meta-item">⬢ <b>{experiment.tests.length}</b> pruebas activas</div>
           <div className="hero-meta-item">✎ <b>{experiment.executions.length}</b> aportes en total</div>
@@ -344,7 +344,7 @@ function ViewResumenSupervisor({ tenant, experiment }) {
 
       <div className="synth-banner">
         <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Qué cambió</div>
-        {loading && <p className="empty-note">Analizando el estado del experimento…</p>}
+        {loading && <p className="empty-note">Analizando el estado del proyecto…</p>}
         {err && <p className="labs-login-error">{err}</p>}
         {summary && <div style={{ fontSize: 13.5, color: 'var(--labs-cream-dim)', lineHeight: 1.6 }}>{summary.whatChanged}</div>}
         <div className="synth-stats">
@@ -677,7 +677,7 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
             <div className="confirm-ic">✓</div>
             <div className="confirm-text">
               <b>Agregaste un aporte nuevo a {test?.name}</b>
-              <span>El experimento está actualizado.</span>
+              <span>El proyecto está actualizado.</span>
             </div>
           </div>
           <div style={{ marginTop: 18, display: 'flex', gap: 10 }}>
@@ -838,7 +838,7 @@ function ViewHistoria({ experiment }) {
     <div className="view">
       <div className="view-header">
         <span className="view-eyebrow">Historia · {experiment.meta.name}</span>
-        <h1 className="view-title">Memoria del experimento</h1>
+        <h1 className="view-title">Memoria del proyecto</h1>
         <p className="view-sub">No se escribe a mano — emerge de los aportes, validaciones y feedback del equipo.</p>
       </div>
       {experiment.events.length === 0 && <p className="empty-note">Todavía no hay historia — el primer aporte la va a empezar.</p>}
@@ -866,12 +866,12 @@ function ViewFeedback({ tenant, experiment, identity, onUpdate }) {
 }
 
 function FeedbackCompose({ tenant, experiment, identity, onUpdate }) {
-  const [target, setTarget] = useState('Experimento general');
+  const [target, setTarget] = useState('Proyecto general');
   const [text, setText] = useState('');
   const [visibility, setVisibility] = useState('Todo el equipo');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
-  const targets = ['Experimento general', ...experiment.tests.map((t) => t.name)];
+  const targets = ['Proyecto general', ...experiment.tests.map((t) => t.name)];
 
   const handleSend = async () => {
     if (!text.trim() || busy) return;
@@ -898,7 +898,7 @@ function FeedbackCompose({ tenant, experiment, identity, onUpdate }) {
       <div className="view-header">
         <span className="view-eyebrow">Feedback · {experiment.meta.name}</span>
         <h1 className="view-title">Dejar feedback</h1>
-        <p className="view-sub">Sobre el experimento en general o algo puntual. Vos decidís quién lo ve.</p>
+        <p className="view-sub">Sobre el proyecto en general o algo puntual. Vos decidís quién lo ve.</p>
       </div>
       <div className="feedback-compose">
         <label className="field-label">¿Sobre qué es este feedback?</label>
@@ -930,7 +930,7 @@ function FeedbackReceived({ tenant, experiment, identity, onUpdate }) {
       <div className="view-header">
         <span className="view-eyebrow">Feedback · {experiment.meta.name}</span>
         <h1 className="view-title">Feedback recibido</h1>
-        <p className="view-sub">Lo que el Director comparte sobre el experimento, en un solo lugar.</p>
+        <p className="view-sub">Lo que el Director comparte sobre el proyecto, en un solo lugar.</p>
       </div>
       {visible.length === 0 && <p className="empty-note">Todavía no hay feedback.</p>}
       {visible.map((f) => <FeedbackItem key={f.id} f={f} tenant={tenant} experimentId={experiment.meta.id} onUpdate={onUpdate} />)}
