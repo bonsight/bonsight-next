@@ -67,6 +67,33 @@ export async function proxy(request) {
     return NextResponse.rewrite(url);
   }
 
+  // ── labs.bonsight.co ───────────────────────────────────────
+  if (host.startsWith('labs.')) {
+    const url = request.nextUrl.clone();
+
+    // Login page — always accessible
+    if (pathname === '/login') {
+      url.pathname = '/labs/login';
+      return NextResponse.rewrite(url);
+    }
+
+    // Root and admin — require global LABS_ACCESS_CODE
+    if (pathname === '/' || pathname.startsWith('/admin')) {
+      const expected = await sha256Hex(process.env.LABS_ACCESS_CODE || '');
+      const isAuthed = request.cookies.get('labs_auth')?.value === expected;
+      if (!isAuthed) {
+        url.pathname = '/labs/login';
+        return NextResponse.rewrite(url);
+      }
+      url.pathname = pathname === '/' ? '/labs' : `/labs${pathname}`;
+      return NextResponse.rewrite(url);
+    }
+
+    // Tenant routes — per-tenant auth handled at page level
+    url.pathname = `/labs${pathname}`;
+    return NextResponse.rewrite(url);
+  }
+
   // ── Main site — locale routing ────────────────────────────
   const hasLocale = locales.some(
     (l) => pathname.startsWith(`/${l}/`) || pathname === `/${l}`
@@ -87,5 +114,5 @@ export async function proxy(request) {
 }
 
 export const config = {
-  matcher: ['/((?!api|aria|kai|quiniela|proposals|assets|_next/static|_next/image|favicon\\.svg|logo\\.svg|hero_home\\.png|.*\\.ico|sitemap\\.xml|robots\\.txt).*)'],
+  matcher: ['/((?!api|aria|kai|labs|quiniela|proposals|assets|_next/static|_next/image|favicon\\.svg|logo\\.svg|hero_home\\.png|.*\\.ico|sitemap\\.xml|robots\\.txt).*)'],
 };
