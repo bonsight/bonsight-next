@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-export default function LabsAdminDashboard() {
+export default function LabsAdminList() {
   const [tenants, setTenants] = useState(null);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -67,7 +67,10 @@ export default function LabsAdminDashboard() {
             <div className="labs-tenant-name">{t.name}</div>
             <div className="labs-tenant-meta">labs.bonsight.co/{t.slug} · código {t.accessCode}</div>
           </div>
-          <a href={`/labs/${t.slug}`} className="btn btn-secondary" style={{ textDecoration: 'none' }}>Abrir →</a>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <a href={`/admin/${t.slug}`} className="btn btn-secondary" style={{ textDecoration: 'none' }}>Configurar</a>
+            <a href={`https://labs.bonsight.co/${t.slug}`} target="_blank" rel="noreferrer" className="chip-btn" style={{ display: 'flex', alignItems: 'center' }}>Abrir →</a>
+          </div>
         </div>
       ))}
     </div>
