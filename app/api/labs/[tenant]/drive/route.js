@@ -1,14 +1,10 @@
-import { Redis } from '@upstash/redis';
 import { isAuthorizedForTenant } from '@/lib/labs/auth';
-import { getFolderMetadata, extractFolderId } from '@/lib/labs/googleDrive';
-
-const kv = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
-const configKey = (t) => `labs:${t}:drive:config`;
+import { getFolderMetadata, extractFolderId, getDriveConfig, setDriveConfig, clearDriveConfig } from '@/lib/labs/googleDrive';
 
 export async function GET(req, { params }) {
   const { tenant } = await params;
   if (!(await isAuthorizedForTenant(tenant))) return Response.json({ error: 'No autorizado.' }, { status: 401 });
-  const config = await kv.get(configKey(tenant));
+  const config = await getDriveConfig(tenant);
   return Response.json({ config: config ?? null });
 }
 
@@ -37,14 +33,13 @@ export async function POST(req, { params }) {
     return Response.json({ error: hint }, { status: 400 });
   }
 
-  const config = { folderId: id, folderName, connectedAt: new Date().toISOString() };
-  await kv.set(configKey(tenant), config);
+  const config = await setDriveConfig(tenant, { folderId: id, folderName, connectedAt: new Date().toISOString() });
   return Response.json({ config });
 }
 
 export async function DELETE(req, { params }) {
   const { tenant } = await params;
   if (!(await isAuthorizedForTenant(tenant))) return Response.json({ error: 'No autorizado.' }, { status: 401 });
-  await kv.del(configKey(tenant));
+  await clearDriveConfig(tenant);
   return Response.json({ ok: true });
 }

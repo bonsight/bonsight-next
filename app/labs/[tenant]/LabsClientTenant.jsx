@@ -729,6 +729,13 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
                     <b>{e.contributor}</b> ({e.role}) — {t.fields.map((f) => `${f.label}: ${e.values[f.key] ?? '—'}`).join(' · ')}
                     {e.note && <div style={{ marginTop: 3, color: 'var(--labs-cream-faint)' }}>{e.note}</div>}
                     {e.validatedBy && <div style={{ marginTop: 3, color: 'var(--labs-living)', fontSize: 11.5 }}>✓ validado por {e.validatedBy}</div>}
+                    {e.evidence?.some((a) => a.driveUrl) && (
+                      <div style={{ marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {e.evidence.filter((a) => a.driveUrl).map((a, i) => (
+                          <a key={i} href={a.driveUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--labs-living)' }}>📁 {a.name} ↗</a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
                     <span className={`tag ${tagClass(e.tag)}`}>{e.tag}</span>
@@ -1020,7 +1027,10 @@ function ViewReportes({ tenant, experiment, onUpdate }) {
         <div className="report-doc" style={{ marginTop: 16 }}>
           <div className="report-meta-strip">
             <span className="eyebrow-mini">{latest.status === 'aprobado' ? 'Aprobado' : 'Borrador generado por IA'}</span>
-            <span className={`tag ${latest.status === 'aprobado' ? 'tag-living' : 'tag-ember'} on-paper`}>{latest.status}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {latest.driveUrl && <a href={latest.driveUrl} target="_blank" rel="noreferrer" className="tag tag-living on-paper" style={{ textDecoration: 'none' }}>📁 Ver en Drive ↗</a>}
+              <span className={`tag ${latest.status === 'aprobado' ? 'tag-living' : 'tag-ember'} on-paper`}>{latest.status}</span>
+            </div>
           </div>
           <h3>Resumen</h3>
           <p>{latest.doc.summary}</p>
