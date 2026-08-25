@@ -2,7 +2,9 @@ import { notFound, redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { createHash } from 'crypto';
 import { getTenantMeta } from '@/lib/labs/tenants';
-import LabsTenantGate from './LabsTenantGate';
+import { getUserByCode } from '@/lib/labs/users';
+import { signLabsUser, getCurrentLabsUser } from '@/lib/labs/auth';
+import LabsClientTenant from './LabsClientTenant';
 
 export async function generateMetadata({ params }) {
   const { tenant } = await params;
@@ -61,5 +63,45 @@ export default async function LabsTenantPage({ params, searchParams }) {
     );
   }
 
-  return <LabsTenantGate tenant={tenant} tenantMeta={meta} />;
+  // Segundo paso — quién sos vos dentro del equipo del tenant. Reemplaza el auto-declare
+  // libre de antes: el código personal viene del roster que arma el admin (ver
+  // lib/labs/users.js), así que el rol que se guarda en el cookie es real, no autodeclarado.
+  const currentUser = await getCurrentLabsUser(tenant);
+
+  if (!currentUser) {
+    async function doUserEnter(formData) {
+      'use server';
+      const code = String(formData.get('userCode') ?? '').trim();
+      const user = await getUserByCode(tenant, code);
+      if (!user) {
+        redirect(`/labs/${tenant}?userError=1`);
+      }
+      (await cookies()).set(`labs_user_${tenant}`, signLabsUser(tenant, user.id), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 365,
+        path: '/',
+      });
+      redirect(`/labs/${tenant}`);
+    }
+
+    const hasUserError = sp?.userError === '1';
+
+    return (
+      <div className="labs-entry-wrap">
+        <div className="labs-entry-card">
+          <h1 className="labs-entry-title">{meta.name} <span className="living-word">· vivo</span></h1>
+          <p className="labs-entry-subtitle">Tu código personal</p>
+          {hasUserError && <p className="labs-login-error">Código incorrecto.</p>}
+          <form action={doUserEnter}>
+            <input type="password" name="userCode" placeholder="Código personal" className="labs-entry-input" autoFocus required />
+            <button type="submit" className="labs-entry-button">Entrar</button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  return <LabsClientTenant tenant={tenant} tenantMeta={meta} identity={currentUser} />;
 }

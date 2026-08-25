@@ -53,7 +53,9 @@ function formatDateTime(iso) {
   return new Date(iso).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-const EVIDENCE_ACCEPT = 'image/*,.pdf';
+const EVIDENCE_ACCEPT = 'image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.dxf';
+const VIDEO_MAX_MB = 500;
+const DOC_MAX_MB = 10;
 
 // Mismo esquema que AriaClientTenant.jsx: imágenes se comprimen client-side (máx 1280px,
 // jpeg 0.85) antes de mandarlas — evita blobs enormes en Redis y en el request a Claude.
@@ -81,6 +83,41 @@ async function readAsBase64(file) {
     reader.onload = (e) => resolve(e.target.result.split(',')[1]);
     reader.readAsDataURL(file);
   });
+}
+
+// Selector de personas del roster filtrado por rol — lo usa el Director para asignar
+// Supervisores a un proyecto, y el Supervisor/Director para asignar Registradores a una prueba.
+function UserMultiSelect({ tenant, role, selected, onChange }) {
+  const [users, setUsers] = useState(undefined);
+
+  useEffect(() => {
+    fetch(`/api/labs/${tenant}/users`)
+      .then((r) => r.json())
+      .then((d) => setUsers((d.users ?? []).filter((u) => u.role === role && u.active !== false)))
+      .catch(() => setUsers([]));
+  }, [tenant, role]);
+
+  const toggle = (id) => {
+    onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
+  };
+
+  if (users === undefined) return <p className="empty-note">Cargando {role.toLowerCase()}es…</p>;
+  if (users.length === 0) return <p className="empty-note">Todavía no hay ningún {role} creado — pedile al admin que lo agregue.</p>;
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      {users.map((u) => (
+        <button
+          type="button"
+          key={u.id}
+          className={`labs-entry-role-btn${selected.includes(u.id) ? ' active' : ''}`}
+          onClick={() => toggle(u.id)}
+        >
+          {u.name}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
@@ -113,6 +150,11 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
     return <div className="labs-entry-wrap"><p style={{ color: 'var(--labs-cream-dim)' }}>Cargando…</p></div>;
   }
 
+  const handleLogout = async () => {
+    await fetch(`/api/labs/${tenant}/logout`, { method: 'POST' });
+    window.location.href = `/labs/${tenant}`;
+  };
+
   if (!experimentId || !experiment) {
     return (
       <ExperimentPicker
@@ -122,6 +164,7 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
         experiments={experiments}
         onSelect={setExperimentId}
         onCreated={(id) => { loadExperiments(); setExperimentId(id); }}
+        onLogout={handleLogout}
       />
     );
   }
@@ -144,6 +187,7 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
         </div>
         <div className="topbar-actions">
           <button className="btn-ghost-top" onClick={() => { setExperimentId(null); setExperiment(null); }}>Otros proyectos</button>
+          <button className="btn-ghost-top" onClick={handleLogout}>Salir</button>
         </div>
       </header>
 
@@ -189,15 +233,18 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
 
 /* ======================= Experiment picker + create ======================= */
 
-function ExperimentPicker({ tenant, tenantMeta, identity, experiments, onSelect, onCreated }) {
+function ExperimentPicker({ tenant, tenantMeta, identity, experiments, onSelect, onCreated, onLogout }) {
   const [open, setOpen] = useState(false);
-  const canCreate = identity.role !== 'Registrador';
+  const canCreate = identity.role === 'Director';
 
   return (
     <div className="labs-admin-wrap">
-      <h1 className="labs-admin-title">{tenantMeta.name} <span className="living-word" style={{ color: 'var(--labs-living)', fontStyle: 'italic', fontWeight: 500 }}>· vivo</span></h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+        <h1 className="labs-admin-title">{tenantMeta.name} <span className="living-word" style={{ color: 'var(--labs-living)', fontStyle: 'italic', fontWeight: 500 }}>· vivo</span></h1>
+        <button className="chip-btn" onClick={onLogout}>Salir</button>
+      </div>
       <p style={{ fontSize: 13.5, color: 'var(--labs-cream-dim)', marginBottom: 24 }}>
-        Hola {identity.name} — elegí un proyecto{canCreate ? ' o creá uno nuevo' : ''}.
+        Hola {identity.name} · {identity.role} — elegí un proyecto{canCreate ? ' o creá uno nuevo' : ''}.
       </p>
 
       {canCreate && (
@@ -225,6 +272,7 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
   const [purpose, setPurpose] = useState('');
   const [hypothesis, setHypothesis] = useState('');
   const [criteriaText, setCriteriaText] = useState('');
+  const [supervisorIds, setSupervisorIds] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -238,7 +286,7 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
       const res = await fetch(`/api/labs/${tenant}/experiments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, purpose, hypothesis, successCriteria }),
+        body: JSON.stringify({ name, purpose, hypothesis, successCriteria, supervisorIds }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo crear.'); return; }
@@ -264,7 +312,9 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
           <label className="field-label">Hipótesis a validar o refutar</label>
           <textarea rows={2} value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} style={{ marginBottom: 14 }} />
           <label className="field-label">Criterios de éxito (uno por línea)</label>
-          <textarea rows={3} value={criteriaText} onChange={(e) => setCriteriaText(e.target.value)} placeholder={'Resistencia ≥ 45 kgf\nTiempo de secado ≤ 10 horas'} />
+          <textarea rows={3} value={criteriaText} onChange={(e) => setCriteriaText(e.target.value)} placeholder={'Resistencia ≥ 45 kgf\nTiempo de secado ≤ 10 horas'} style={{ marginBottom: 14 }} />
+          <label className="field-label">Supervisores del proyecto</label>
+          <UserMultiSelect tenant={tenant} role="Supervisor" selected={supervisorIds} onChange={setSupervisorIds} />
           {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
           <div className="modal-footer">
             <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
@@ -467,16 +517,50 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
 
   const processFile = async (file) => {
     if (!file) return;
-    const maxMb = file.type.startsWith('image/') ? 4 : 10;
+    setErr(null);
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    const maxMb = isImage ? 4 : isVideo ? VIDEO_MAX_MB : DOC_MAX_MB;
     if (file.size > maxMb * 1024 * 1024) { setErr(`Archivo demasiado grande (máx ${maxMb} MB).`); return; }
     const id = Math.random().toString(36).slice(2);
-    if (file.type.startsWith('image/')) {
+
+    if (isImage) {
       const data = await compressImage(file);
-      setAttachments((prev) => [...prev, { id, name: file.name || 'foto.jpg', mimeType: 'image/jpeg', data, previewUrl: `data:image/jpeg;base64,${data}` }]);
-    } else if (file.type === 'application/pdf') {
-      const data = await readAsBase64(file);
-      setAttachments((prev) => [...prev, { id, name: file.name, mimeType: 'application/pdf', data, previewUrl: null }]);
+      setAttachments((prev) => [...prev, { id, name: file.name || 'foto.jpg', mimeType: 'image/jpeg', kind: 'image', data, previewUrl: `data:image/jpeg;base64,${data}` }]);
+      return;
     }
+
+    if (isVideo) {
+      // El video no viaja por nuestro backend (el body de una Serverless Function de Vercel
+      // tiene un límite de ~4.5MB) — se sube directo del navegador a Drive con una sesión
+      // de subida resumible. Se guarda solo como evidencia de soporte, nunca se analiza.
+      if (!testId) { setErr('Elegí una prueba antes de adjuntar un video.'); return; }
+      setAttachments((prev) => [...prev, { id, name: file.name, mimeType: file.type, kind: 'video', uploading: true, previewUrl: null }]);
+      try {
+        const urlRes = await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/executions/video-upload-url`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ testId, name: file.name, mimeType: file.type }),
+        });
+        const urlData = await urlRes.json();
+        if (!urlRes.ok) throw new Error(urlData.error || 'No se pudo iniciar la subida.');
+
+        const putRes = await fetch(urlData.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+        if (!putRes.ok) throw new Error('No se pudo subir el video.');
+        const uploaded = await putRes.json();
+
+        setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, uploading: false, driveFileId: uploaded.id, driveUrl: uploaded.webViewLink } : a)));
+      } catch (e) {
+        setErr(e.message || 'No se pudo subir el video.');
+        setAttachments((prev) => prev.filter((a) => a.id !== id));
+      }
+      return;
+    }
+
+    // PDF, Word, Excel, DXF — se leen igual que hoy (base64 en el body); el servidor decide
+    // según el tipo si puede extraer texto para completar los campos automáticamente.
+    const data = await readAsBase64(file);
+    setAttachments((prev) => [...prev, { id, name: file.name, mimeType: file.type || 'application/octet-stream', kind: 'document', data, previewUrl: null }]);
   };
 
   const startRecording = async () => {
@@ -518,7 +602,7 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
       const res = await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/executions/interpret`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ testId, freeText, evidence: attachments.map(({ mimeType, data }) => ({ mimeType, data })) }),
+        body: JSON.stringify({ testId, freeText, evidence: attachments.map(({ name, mimeType, data }) => ({ name, mimeType, data })) }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo interpretar.'); setStep(1); return; }
@@ -537,10 +621,10 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          testId, contributor: identity.name, role: identity.role,
+          testId,
           values: interpreted.values, tag: interpreted.tag,
           missingFields: interpreted.missingFields, note: interpreted.note,
-          evidence: attachments.map(({ name, mimeType, data, previewUrl }) => ({ name, mimeType, data, previewUrl })),
+          evidence: attachments.map(({ name, mimeType, data, previewUrl, driveFileId, driveUrl, kind }) => ({ name, mimeType, data, previewUrl, driveFileId, driveUrl, kind })),
         }),
       });
       const data = await res.json();
@@ -567,14 +651,19 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
       {step === 0 && (
         <div>
           {experiment.tests.length === 0 && <p className="empty-note">Todavía no hay ninguna prueba creada — pedile a tu Supervisor que cree una en la pestaña Pruebas.</p>}
+          {experiment.tests.length > 0 && identity.role === 'Registrador' && !experiment.tests.some((t) => t.registradorIds?.includes(identity.id)) && (
+            <p className="empty-note">Todavía no te asignaron a ninguna prueba — pedile a tu Supervisor que te agregue.</p>
+          )}
           <div className="mode-grid">
-            {experiment.tests.map((t) => (
-              <button key={t.id} className="mode-card" onClick={() => { setTestId(t.id); setStep(1); }}>
-                <span className="mode-ic">{t.icon}</span>
-                <div className="mode-title">{t.name}</div>
-                <div className="mode-sub">{t.fields.length} campos</div>
-              </button>
-            ))}
+            {experiment.tests
+              .filter((t) => identity.role !== 'Registrador' || t.registradorIds?.includes(identity.id))
+              .map((t) => (
+                <button key={t.id} className="mode-card" onClick={() => { setTestId(t.id); setStep(1); }}>
+                  <span className="mode-ic">{t.icon}</span>
+                  <div className="mode-title">{t.name}</div>
+                  <div className="mode-sub">{t.fields.length} campos</div>
+                </button>
+              ))}
           </div>
         </div>
       )}
@@ -619,9 +708,13 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
             <div className="labs-attach-strip">
               {attachments.map((att) => (
                 <div key={att.id} className="labs-attach-chip">
-                  {att.previewUrl ? <img src={att.previewUrl} className="labs-attach-thumb" alt={att.name} /> : <div className="labs-attach-icon">📄</div>}
-                  <span className="labs-attach-name">{att.name}</span>
-                  <button type="button" className="labs-attach-remove" onClick={() => setAttachments((p) => p.filter((a) => a.id !== att.id))}>✕</button>
+                  {att.previewUrl ? (
+                    <img src={att.previewUrl} className="labs-attach-thumb" alt={att.name} />
+                  ) : (
+                    <div className="labs-attach-icon">{att.kind === 'video' ? '🎥' : '📄'}</div>
+                  )}
+                  <span className="labs-attach-name">{att.uploading ? `Subiendo ${att.name}…` : att.name}</span>
+                  <button type="button" className="labs-attach-remove" disabled={att.uploading} onClick={() => setAttachments((p) => p.filter((a) => a.id !== att.id))}>✕</button>
                 </div>
               ))}
             </div>
@@ -630,7 +723,13 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
           {err && <p className="labs-login-error" style={{ marginTop: 8 }}>{err}</p>}
           <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
             <button className="btn btn-secondary" onClick={() => setStep(0)}>Atrás</button>
-            <button className="btn btn-primary" disabled={!freeText.trim() && attachments.length === 0} onClick={handleInterpret}>Continuar →</button>
+            <button
+              className="btn btn-primary"
+              disabled={(!freeText.trim() && attachments.length === 0) || attachments.some((a) => a.uploading)}
+              onClick={handleInterpret}
+            >
+              Continuar →
+            </button>
           </div>
         </div>
       )}
@@ -660,6 +759,14 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
               <div className="sp-row dark-bg">
                 <div className="k">Evidencia</div>
                 <div className="v">{attachments.length} adjunto{attachments.length !== 1 ? 's' : ''} — {attachments.map((a) => a.name).join(', ')}</div>
+              </div>
+            )}
+            {interpreted.unanalyzed?.length > 0 && (
+              <div className="sp-row">
+                <div className="k">No analizado</div>
+                <div className="v" style={{ color: 'var(--labs-cream-faint)' }}>
+                  {interpreted.unanalyzed.map((u) => `${u.name}: ${u.reason}`).join(' · ')}
+                </div>
               </div>
             )}
           </div>
@@ -694,7 +801,19 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
 function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
   const [openTest, setOpenTest] = useState(experiment.tests[0]?.id ?? null);
   const [createOpen, setCreateOpen] = useState(false);
-  const canCreateTest = identity.role !== 'Registrador';
+  const [editSupervisorsOpen, setEditSupervisorsOpen] = useState(false);
+  const [editRegistradoresOf, setEditRegistradoresOf] = useState(null); // testId o null
+  const [users, setUsers] = useState([]);
+  const canCreateTest = identity.role === 'Director' || experiment.meta.supervisorIds?.includes(identity.id);
+
+  useEffect(() => {
+    fetch(`/api/labs/${tenant}/users`)
+      .then((r) => r.json())
+      .then((d) => setUsers(d.users ?? []))
+      .catch(() => setUsers([]));
+  }, [tenant]);
+
+  const nameOf = (id) => users.find((u) => u.id === id)?.name ?? '(persona eliminada)';
 
   return (
     <div className="view">
@@ -703,6 +822,18 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
         <h1 className="view-title">Pruebas y ejecuciones</h1>
         <p className="view-sub">Cada prueba es un formato repetible con su propio esquema de campos.</p>
       </div>
+
+      {identity.role === 'Director' && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 13, color: 'var(--labs-cream-dim)' }}>
+              <b style={{ color: 'var(--labs-cream)' }}>Supervisores del proyecto:</b>{' '}
+              {experiment.meta.supervisorIds?.length ? experiment.meta.supervisorIds.map(nameOf).join(', ') : 'ninguno asignado'}
+            </div>
+            <button className="chip-btn" onClick={() => setEditSupervisorsOpen(true)}>Editar</button>
+          </div>
+        </div>
+      )}
 
       {canCreateTest && (
         <button className="btn btn-primary" style={{ marginBottom: 16 }} onClick={() => setCreateOpen(true)}>+ Nueva prueba</button>
@@ -721,6 +852,14 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
               </div>
               <span className="chev">⌄</span>
             </button>
+            {canCreateTest && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '0 18px 12px', flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 12, color: 'var(--labs-cream-faint)' }}>
+                  Registradores: {t.registradorIds?.length ? t.registradorIds.map(nameOf).join(', ') : 'ninguno asignado'}
+                </div>
+                <button type="button" className="chip-btn" onClick={() => setEditRegistradoresOf(t.id)}>Editar</button>
+              </div>
+            )}
             <div className="exec-list">
               {execs.map((e) => (
                 <div className="exec-row" key={e.id}>
@@ -752,6 +891,107 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
       })}
 
       {createOpen && <CreateTestModal tenant={tenant} experimentId={experiment.meta.id} onClose={() => setCreateOpen(false)} onCreated={() => { setCreateOpen(false); onUpdate(); }} />}
+      {editSupervisorsOpen && (
+        <EditSupervisorsModal
+          tenant={tenant}
+          experimentId={experiment.meta.id}
+          current={experiment.meta.supervisorIds ?? []}
+          onClose={() => setEditSupervisorsOpen(false)}
+          onSaved={() => { setEditSupervisorsOpen(false); onUpdate(); }}
+        />
+      )}
+      {editRegistradoresOf && (
+        <EditRegistradoresModal
+          tenant={tenant}
+          experimentId={experiment.meta.id}
+          testId={editRegistradoresOf}
+          current={experiment.tests.find((t) => t.id === editRegistradoresOf)?.registradorIds ?? []}
+          onClose={() => setEditRegistradoresOf(null)}
+          onSaved={() => { setEditRegistradoresOf(null); onUpdate(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditSupervisorsModal({ tenant, experimentId, current, onClose, onSaved }) {
+  const [supervisorIds, setSupervisorIds] = useState(current);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const handleSave = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ supervisorIds }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo guardar.'); return; }
+      onSaved();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" style={{ position: 'relative' }}>
+        <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
+        <span className="eyebrow-mini on-dark">Editar equipo</span>
+        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Supervisores del proyecto</h2>
+        <UserMultiSelect tenant={tenant} role="Supervisor" selected={supervisorIds} onChange={setSupervisorIds} />
+        {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
+        <div className="modal-footer">
+          <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={handleSave}>{busy ? 'Guardando…' : 'Guardar →'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditRegistradoresModal({ tenant, experimentId, testId, current, onClose, onSaved }) {
+  const [registradorIds, setRegistradorIds] = useState(current);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const handleSave = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/tests/${testId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registradorIds }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo guardar.'); return; }
+      onSaved();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" style={{ position: 'relative' }}>
+        <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
+        <span className="eyebrow-mini on-dark">Editar equipo</span>
+        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Registradores de la prueba</h2>
+        <UserMultiSelect tenant={tenant} role="Registrador" selected={registradorIds} onChange={setRegistradorIds} />
+        {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
+        <div className="modal-footer">
+          <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={handleSave}>{busy ? 'Guardando…' : 'Guardar →'}</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -775,6 +1015,7 @@ function CreateTestModal({ tenant, experimentId, onClose, onCreated }) {
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('🧪');
   const [fields, setFields] = useState([{ key: '', label: '', type: 'text' }]);
+  const [registradorIds, setRegistradorIds] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -793,7 +1034,7 @@ function CreateTestModal({ tenant, experimentId, onClose, onCreated }) {
         .map((f) => ({ ...f, key: f.key.trim() || f.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_') }));
       const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/tests`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, icon, fields: cleanFields }),
+        body: JSON.stringify({ name, icon, fields: cleanFields, registradorIds }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo crear.'); return; }
@@ -827,7 +1068,9 @@ function CreateTestModal({ tenant, experimentId, onClose, onCreated }) {
             </div>
           ))}
           <button type="button" className="chip-btn" onClick={addField} style={{ marginBottom: 14 }}>+ Agregar campo</button>
-          {err && <p className="labs-login-error">{err}</p>}
+          <label className="field-label">Registradores asignados a esta prueba</label>
+          <UserMultiSelect tenant={tenant} role="Registrador" selected={registradorIds} onChange={setRegistradorIds} />
+          {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
           <div className="modal-footer">
             <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
             <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Creando…' : 'Crear prueba →'}</button>

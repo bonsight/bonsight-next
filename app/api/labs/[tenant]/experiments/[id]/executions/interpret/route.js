@@ -1,10 +1,13 @@
-import { isAuthorizedForTenant } from '@/lib/labs/auth';
+import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
 import { getTests } from '@/lib/labs/experiments';
 import { interpretContribution } from '@/lib/labs/contribution';
 
 export async function POST(req, { params }) {
   const { tenant, id } = await params;
   if (!(await isAuthorizedForTenant(tenant))) {
+    return Response.json({ error: 'No autorizado.' }, { status: 401 });
+  }
+  if (!(await getCurrentLabsUser(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
   const { testId, freeText, evidence } = await req.json();

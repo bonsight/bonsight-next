@@ -20,7 +20,101 @@ export default function LabsAdminTenantDetail({ tenant, tenantMeta }) {
         </div>
       </div>
 
+      <TeamPanel tenant={tenant} />
+
       <DriveConnectPanel tenant={tenant} />
+    </div>
+  );
+}
+
+const ROLES = ['Registrador', 'Supervisor', 'Director'];
+
+function TeamPanel({ tenant }) {
+  const [users, setUsers] = useState(undefined); // undefined = cargando
+  const [name, setName] = useState('');
+  const [role, setRole] = useState('Registrador');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const load = () => {
+    fetch(`/api/labs/${tenant}/users`)
+      .then((r) => r.json())
+      .then((d) => setUsers(d.users ?? []))
+      .catch(() => setUsers([]));
+  };
+
+  useEffect(() => { load(); }, [tenant]);
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/labs/${tenant}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, role }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo crear.'); return; }
+      setName('');
+      load();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const changeRole = async (userId, newRole) => {
+    await fetch(`/api/labs/${tenant}/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: newRole }),
+    });
+    load();
+  };
+
+  const removeUser = async (userId) => {
+    await fetch(`/api/labs/${tenant}/users/${userId}`, { method: 'DELETE' });
+    load();
+  };
+
+  return (
+    <div className="card">
+      <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Equipo</div>
+      <p style={{ fontSize: 12.5, color: 'var(--labs-cream-faint)', marginTop: 4, marginBottom: 12 }}>
+        Cada persona entra con su código individual — el rol define qué puede hacer adentro (solo Director crea proyectos, Supervisor asigna Registradores en las pruebas).
+      </p>
+
+      <form onSubmit={handleCreate} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        <input type="text" placeholder="Nombre" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1, minWidth: 160 }} />
+        <select value={role} onChange={(e) => setRole(e.target.value)}>
+          {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Creando…' : '+ Agregar'}</button>
+      </form>
+      {err && <p style={{ color: '#E19680', fontSize: 12.5, marginBottom: 12 }}>{err}</p>}
+
+      {users === undefined && <p className="empty-note">Cargando…</p>}
+      {users?.length === 0 && <p className="empty-note">Todavía no hay nadie en el equipo.</p>}
+      {users?.map((u) => (
+        <div key={u.id} className="labs-tenant-row" style={{ alignItems: 'center' }}>
+          <div>
+            <div className="labs-tenant-name">{u.name}</div>
+            <div className="labs-tenant-meta">
+              Código: <span style={{ fontFamily: 'var(--labs-mono)' }}>{u.accessCode}</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <select value={u.role} onChange={(e) => changeRole(u.id, e.target.value)}>
+              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <button className="chip-btn" onClick={() => removeUser(u.id)}>Eliminar</button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
