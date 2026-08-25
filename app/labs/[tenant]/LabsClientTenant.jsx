@@ -14,6 +14,7 @@ const NAV = {
     { id: 'resumen', label: 'Resumen', ic: '◈' },
     { id: 'aportar', label: 'Aportar', ic: '✎' },
     { id: 'pruebas', label: 'Pruebas', ic: '⬢' },
+    { id: 'documentacion', label: 'Documentación', ic: '▧' },
     { id: 'historia', label: 'Historia', ic: '~' },
     { id: 'feedback', label: 'Feedback', ic: '◔' },
     { id: 'reportes', label: 'Reportes', ic: '▤' },
@@ -21,6 +22,7 @@ const NAV = {
   Director: [
     { id: 'resumen', label: 'Resumen', ic: '◈' },
     { id: 'pruebas', label: 'Pruebas', ic: '⬢' },
+    { id: 'documentacion', label: 'Documentación', ic: '▧' },
     { id: 'historia', label: 'Historia', ic: '~' },
     { id: 'feedback', label: 'Feedback', ic: '◔' },
     { id: 'reportes', label: 'Reportes', ic: '▤' },
@@ -217,6 +219,9 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
           )}
           {view === 'pruebas' && (
             <ViewPruebas tenant={tenant} experiment={experiment} identity={identity} onUpdate={refresh} />
+          )}
+          {view === 'documentacion' && (
+            <ViewDocumentacion tenant={tenant} experiment={experiment} identity={identity} onUpdate={refresh} />
           )}
           {view === 'historia' && <ViewHistoria experiment={experiment} />}
           {view === 'feedback' && (
@@ -974,6 +979,108 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ======================= Documentación ======================= */
+
+const DOC_CATEGORIES = ['Cronograma', 'Presupuesto', 'Otro'];
+
+// Cronogramas, presupuestos y otros adjuntos de referencia del proyecto — no se analizan con
+// IA, es solo almacenamiento. Solo Director, o Supervisor asignado a este proyecto, suben o
+// borran (el server ya lo hace cumplir; acá es nomás la UI).
+function ViewDocumentacion({ tenant, experiment, identity, onUpdate }) {
+  const [category, setCategory] = useState('Cronograma');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const fileInputRef = useRef(null);
+  const canManage = identity.role === 'Director' || experiment.meta.supervisorIds?.includes(identity.id);
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    const maxMb = 15;
+    if (file.size > maxMb * 1024 * 1024) { setErr(`Archivo demasiado grande (máx ${maxMb} MB).`); return; }
+    setBusy(true);
+    setErr(null);
+    try {
+      const data = await readAsBase64(file);
+      const res = await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/documents`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: file.name, mimeType: file.type, data, category }),
+      });
+      const resData = await res.json();
+      if (!res.ok) { setErr(resData.error || 'No se pudo subir.'); return; }
+      onUpdate();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (documentId) => {
+    await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/documents`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ documentId }),
+    });
+    onUpdate();
+  };
+
+  const grouped = DOC_CATEGORIES.map((c) => ({ category: c, docs: experiment.documents.filter((d) => d.category === c) }));
+
+  return (
+    <div className="view">
+      <div className="view-header">
+        <span className="view-eyebrow">Documentación · {experiment.meta.name}</span>
+        <h1 className="view-title">Documentación del proyecto</h1>
+        <p className="view-sub">Cronogramas, presupuestos y otros adjuntos de referencia — visible solo para Director y Supervisor.</p>
+      </div>
+
+      {canManage && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <label className="field-label">Categoría</label>
+          <div className="target-select" style={{ marginBottom: 12 }}>
+            {DOC_CATEGORIES.map((c) => (
+              <button key={c} type="button" className={`target-chip ${category === c ? 'active' : ''}`} onClick={() => setCategory(c)}>{c}</button>
+            ))}
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            style={{ display: 'none' }}
+            onChange={(e) => { handleFile(e.target.files[0]); e.target.value = ''; }}
+          />
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => fileInputRef.current?.click()}>
+            {busy ? 'Subiendo…' : '+ Subir documento'}
+          </button>
+          {err && <p className="labs-login-error" style={{ marginTop: 8 }}>{err}</p>}
+        </div>
+      )}
+
+      {experiment.documents.length === 0 && <p className="empty-note">Todavía no hay documentación cargada.</p>}
+
+      {grouped.filter((g) => g.docs.length > 0).map((g) => (
+        <div key={g.category} style={{ marginBottom: 18 }}>
+          <div className="divider-label"><span>{g.category}</span></div>
+          {g.docs.map((d) => {
+            const href = d.driveUrl || (d.data ? `data:${d.mimeType};base64,${d.data}` : null);
+            return (
+              <div className="labs-tenant-row" key={d.id}>
+                <div>
+                  <div className="labs-tenant-name">
+                    {href ? (
+                      <a href={href} target="_blank" rel="noreferrer" download={d.driveUrl ? undefined : d.name} style={{ color: 'var(--labs-living)' }}>📁 {d.name} ↗</a>
+                    ) : d.name}
+                  </div>
+                  <div className="labs-tenant-meta">{d.uploadedBy} ({d.uploadedByRole}) · {formatDate(d.createdAt)}</div>
+                </div>
+                {canManage && <button className="chip-btn" onClick={() => handleDelete(d.id)}>Eliminar</button>}
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }

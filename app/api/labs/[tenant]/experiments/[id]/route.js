@@ -35,6 +35,7 @@ export async function GET(req, { params }) {
       || (f.targetType === 'aporte' && visibleExecutionIds.has(f.targetId))
       || (!f.targetType) // feedback viejo, previo a este modelo — se trata como "proyecto general"
     ));
+    experiment.documents = []; // documentación del proyecto: cosa de Director/Supervisor únicamente
   }
 
   return Response.json(experiment);
