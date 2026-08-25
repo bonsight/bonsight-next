@@ -1,14 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { isAuthorizedForTenant } from '@/lib/labs/auth';
+import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
 import { addFeedback, dismissFeedbackSuggestion, getExperiment } from '@/lib/labs/experiments';
 
 const MODEL = 'claude-sonnet-4-6';
 
 // Best-effort — si esto falla, el feedback igual se guarda sin sugerencia. No bloquea nada.
-async function suggestConversion(experimentName, target, text) {
+async function suggestConversion(experimentName, targetLabel, text) {
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const prompt = `Un feedback sobre el experimento "${experimentName}" (respecto a: ${target}) dice:\n"""${text}"""\n\n¿Este feedback pide o implica claramente una nueva ejecución de prueba (ej. repetir algo con otras condiciones, probar a mayor escala)? Si sí, respondé con UNA frase corta describiendo qué ejecución nueva sugiere, en español, sin comillas. Si no lo implica claramente, respondé exactamente: NINGUNA`;
+    const prompt = `Un feedback sobre el experimento "${experimentName}" (respecto a: ${targetLabel}) dice:\n"""${text}"""\n\n¿Este feedback pide o implica claramente una nueva ejecución de prueba (ej. repetir algo con otras condiciones, probar a mayor escala)? Si sí, respondé con UNA frase corta describiendo qué ejecución nueva sugiere, en español, sin comillas. Si no lo implica claramente, respondé exactamente: NINGUNA`;
     const response = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 150,
@@ -22,13 +22,34 @@ async function suggestConversion(experimentName, target, text) {
   }
 }
 
+// No la usa el cliente hoy (lee experiment.feedback del fetch principal) pero queda expuesta,
+// así que aplica el mismo recorte por rol que /experiments/[id] para un Registrador.
 export async function GET(req, { params }) {
   const { tenant, id } = await params;
   if (!(await isAuthorizedForTenant(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
+  const user = await getCurrentLabsUser(tenant);
+  if (!user) return Response.json({ error: 'No autorizado.' }, { status: 401 });
+
   const experiment = await getExperiment(tenant, id);
   if (!experiment) return Response.json({ error: 'Experimento no encontrado.' }, { status: 404 });
+
+  if (user.role === 'Supervisor' && !experiment.meta.supervisorIds?.includes(user.id)) {
+    return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+  }
+  if (user.role === 'Registrador') {
+    const visibleTestIds = new Set(experiment.tests.filter((t) => t.registradorIds?.includes(user.id)).map((t) => t.id));
+    if (visibleTestIds.size === 0) return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+    const visibleExecutionIds = new Set(experiment.executions.filter((e) => visibleTestIds.has(e.testId)).map((e) => e.id));
+    experiment.feedback = experiment.feedback.filter((f) => (
+      f.targetType === 'proyecto'
+      || (f.targetType === 'prueba' && visibleTestIds.has(f.targetId))
+      || (f.targetType === 'aporte' && visibleExecutionIds.has(f.targetId))
+      || !f.targetType
+    ));
+  }
+
   return Response.json({ feedback: experiment.feedback });
 }
 
@@ -37,16 +58,51 @@ export async function POST(req, { params }) {
   if (!(await isAuthorizedForTenant(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
-  const { who, target, text, visibility } = await req.json();
-  if (!who?.trim() || !text?.trim()) {
-    return Response.json({ error: 'who y text son requeridos.' }, { status: 400 });
+  const user = await getCurrentLabsUser(tenant);
+  if (!user) return Response.json({ error: 'No autorizado.' }, { status: 401 });
+  if (user.role === 'Registrador') {
+    return Response.json({ error: 'Los Registradores no dejan feedback, solo lo reciben.' }, { status: 403 });
+  }
+
+  const { targetType, targetId, text, visibility } = await req.json();
+  if (!text?.trim()) {
+    return Response.json({ error: 'text es requerido.' }, { status: 400 });
+  }
+  if (!['proyecto', 'prueba', 'aporte'].includes(targetType)) {
+    return Response.json({ error: 'targetType inválido.' }, { status: 400 });
+  }
+  // Director puede dejar feedback en cualquier nivel; Supervisor solo sobre aportes (registros)
+  // del equipo que supervisa — nunca sobre el proyecto en general ni sobre una prueba entera.
+  if (user.role === 'Supervisor' && targetType !== 'aporte') {
+    return Response.json({ error: 'Un Supervisor solo puede dejar feedback sobre aportes.' }, { status: 403 });
   }
 
   const experiment = await getExperiment(tenant, id);
   if (!experiment) return Response.json({ error: 'Experimento no encontrado.' }, { status: 404 });
 
-  const suggestion = await suggestConversion(experiment.meta.name, target || 'Experimento general', text);
-  const entry = await addFeedback(tenant, id, { who, target, text, visibility, suggestion });
+  if (user.role === 'Supervisor' && !experiment.meta.supervisorIds?.includes(user.id)) {
+    return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+  }
+
+  let resolvedTargetId = null;
+  let targetLabel = 'Proyecto general';
+  if (targetType === 'prueba') {
+    const test = experiment.tests.find((t) => t.id === targetId);
+    if (!test) return Response.json({ error: 'Prueba no encontrada.' }, { status: 400 });
+    resolvedTargetId = test.id;
+    targetLabel = test.name;
+  } else if (targetType === 'aporte') {
+    const execution = experiment.executions.find((e) => e.id === targetId);
+    if (!execution) return Response.json({ error: 'Aporte no encontrado.' }, { status: 400 });
+    const test = experiment.tests.find((t) => t.id === execution.testId);
+    resolvedTargetId = execution.id;
+    targetLabel = `Aporte de ${execution.contributor} — ${test?.name || 'prueba eliminada'}`;
+  }
+
+  const suggestion = await suggestConversion(experiment.meta.name, targetLabel, text);
+  const entry = await addFeedback(tenant, id, {
+    who: user.name, whoRole: user.role, targetType, targetId: resolvedTargetId, targetLabel, text, visibility, suggestion,
+  });
   return Response.json({ ok: true, feedback: entry });
 }
 

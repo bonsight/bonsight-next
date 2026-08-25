@@ -15,7 +15,7 @@ const NAV = {
     { id: 'aportar', label: 'Aportar', ic: '✎' },
     { id: 'pruebas', label: 'Pruebas', ic: '⬢' },
     { id: 'historia', label: 'Historia', ic: '~' },
-    { id: 'feedback', label: 'Feedback recibido', ic: '◔' },
+    { id: 'feedback', label: 'Feedback', ic: '◔' },
     { id: 'reportes', label: 'Reportes', ic: '▤' },
   ],
   Director: [
@@ -210,7 +210,7 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
         </nav>
         <main>
           {view === 'resumen' && (
-            <ViewResumen tenant={tenant} experiment={experiment} identity={identity} onGo={setView} />
+            <ViewResumen tenant={tenant} experiment={experiment} identity={identity} onGo={setView} onUpdate={refresh} />
           )}
           {view === 'aportar' && (
             <ViewAportar tenant={tenant} experiment={experiment} identity={identity} onDone={refresh} />
@@ -251,7 +251,15 @@ function ExperimentPicker({ tenant, tenantMeta, identity, experiments, onSelect,
         <button className="btn btn-primary" style={{ marginBottom: 20 }} onClick={() => setOpen(true)}>+ Crear proyecto</button>
       )}
 
-      {experiments.length === 0 && <p className="empty-note">Todavía no hay ningún proyecto en este espacio.</p>}
+      {experiments.length === 0 && (
+        <p className="empty-note">
+          {identity.role === 'Director'
+            ? 'Todavía no hay ningún proyecto en este espacio.'
+            : identity.role === 'Supervisor'
+              ? 'Todavía no te asignaron como Supervisor a ningún proyecto.'
+              : 'Todavía no te asignaron a ninguna prueba en ningún proyecto.'}
+        </p>
+      )}
       {experiments.map((e) => (
         <div className="labs-tenant-row" key={e.id} style={{ cursor: 'pointer' }} onClick={() => onSelect(e.id)}>
           <div>
@@ -273,6 +281,11 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
   const [hypothesis, setHypothesis] = useState('');
   const [criteriaText, setCriteriaText] = useState('');
   const [supervisorIds, setSupervisorIds] = useState([]);
+  const [code, setCode] = useState('');
+  const [type, setType] = useState('');
+  const [hasBudget, setHasBudget] = useState(false);
+  const [budgetAmount, setBudgetAmount] = useState('');
+  const [budgetCurrency, setBudgetCurrency] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -286,7 +299,11 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
       const res = await fetch(`/api/labs/${tenant}/experiments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, purpose, hypothesis, successCriteria, supervisorIds }),
+        body: JSON.stringify({
+          name, purpose, hypothesis, successCriteria, supervisorIds, code, type, hasBudget,
+          budgetAmount: hasBudget && budgetAmount !== '' ? Number(budgetAmount) : null,
+          budgetCurrency: hasBudget ? budgetCurrency : '',
+        }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo crear.'); return; }
@@ -313,6 +330,27 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
           <textarea rows={2} value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} style={{ marginBottom: 14 }} />
           <label className="field-label">Criterios de éxito (uno por línea)</label>
           <textarea rows={3} value={criteriaText} onChange={(e) => setCriteriaText(e.target.value)} placeholder={'Resistencia ≥ 45 kgf\nTiempo de secado ≤ 10 horas'} style={{ marginBottom: 14 }} />
+          <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+            <div style={{ flex: 1 }}>
+              <label className="field-label">Código</label>
+              <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="ej. PRY-2026-014" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="field-label">Tipo</label>
+              <input type="text" value={type} onChange={(e) => setType(e.target.value)} placeholder="ej. Estructural" />
+            </div>
+          </div>
+          <label className="field-label">¿Tiene presupuesto asignado?</label>
+          <div className="labs-entry-role-grid" style={{ marginBottom: hasBudget ? 10 : 14 }}>
+            <button type="button" className={`labs-entry-role-btn${hasBudget ? ' active' : ''}`} onClick={() => setHasBudget(true)}>Sí</button>
+            <button type="button" className={`labs-entry-role-btn${!hasBudget ? ' active' : ''}`} onClick={() => setHasBudget(false)}>No</button>
+          </div>
+          {hasBudget && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+              <input type="number" placeholder="Monto" value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} style={{ flex: 2 }} />
+              <input type="text" placeholder="Moneda (ej. USD)" value={budgetCurrency} onChange={(e) => setBudgetCurrency(e.target.value)} style={{ flex: 1 }} />
+            </div>
+          )}
           <label className="field-label">Supervisores del proyecto</label>
           <UserMultiSelect tenant={tenant} role="Supervisor" selected={supervisorIds} onChange={setSupervisorIds} />
           {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
@@ -328,8 +366,8 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
 
 /* ======================= Resumen ======================= */
 
-function ViewResumen({ tenant, experiment, identity, onGo }) {
-  if (identity.role === 'Director') return <ViewResumenDirector tenant={tenant} experiment={experiment} onGo={onGo} />;
+function ViewResumen({ tenant, experiment, identity, onGo, onUpdate }) {
+  if (identity.role === 'Director') return <ViewResumenDirector tenant={tenant} experiment={experiment} onGo={onGo} onUpdate={onUpdate} />;
   if (identity.role === 'Supervisor') return <ViewResumenSupervisor tenant={tenant} experiment={experiment} />;
   return <ViewResumenRegistrador experiment={experiment} identity={identity} onGo={onGo} />;
 }
@@ -422,7 +460,7 @@ function ViewResumenSupervisor({ tenant, experiment }) {
   );
 }
 
-function ViewResumenDirector({ tenant, experiment, onGo }) {
+function ViewResumenDirector({ tenant, experiment, onGo, onUpdate }) {
   const [brief, setBrief] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
@@ -447,6 +485,8 @@ function ViewResumenDirector({ tenant, experiment, onGo }) {
         <span className="view-eyebrow">Resumen · {experiment.meta.name}</span>
         <h1 className="view-title">En 30 segundos</h1>
       </div>
+
+      <ProjectDetailsCard tenant={tenant} experiment={experiment} onUpdate={onUpdate} />
 
       <div className="brief-card">
         {loading && <p className="empty-note">Sintetizando…</p>}
@@ -488,6 +528,148 @@ function ViewResumenDirector({ tenant, experiment, onGo }) {
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button className="btn btn-secondary" onClick={() => onGo('historia')}>Ver historia completa</button>
         <button className="btn btn-primary" onClick={() => onGo('feedback')}>Dejar feedback →</button>
+      </div>
+    </div>
+  );
+}
+
+// Código, tipo y presupuesto — solo Director ve y edita esto, y solo Director consulta el
+// historial de cambios (ver /api/labs/[tenant]/experiments/[id]/details).
+function ProjectDetailsCard({ tenant, experiment, onUpdate }) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const m = experiment.meta;
+  const budgetLabel = m.hasBudget
+    ? `Sí${m.budgetAmount != null ? ` — ${m.budgetAmount}${m.budgetCurrency ? ' ' + m.budgetCurrency : ''}` : ''}`
+    : 'No asignado';
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Detalles del proyecto</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="chip-btn" onClick={() => setHistoryOpen(true)}>Historial de cambios</button>
+          <button className="chip-btn" onClick={() => setEditOpen(true)}>Editar</button>
+        </div>
+      </div>
+      <div style={{ marginTop: 10, fontSize: 13, color: 'var(--labs-cream-dim)', display: 'grid', gap: 4 }}>
+        <div>Código: <b style={{ color: 'var(--labs-cream)' }}>{m.code || '—'}</b></div>
+        <div>Tipo: <b style={{ color: 'var(--labs-cream)' }}>{m.type || '—'}</b></div>
+        <div>Presupuesto asignado: <b style={{ color: 'var(--labs-cream)' }}>{budgetLabel}</b></div>
+      </div>
+      {editOpen && (
+        <EditProjectDetailsModal
+          tenant={tenant}
+          experimentId={m.id}
+          current={m}
+          onClose={() => setEditOpen(false)}
+          onSaved={() => { setEditOpen(false); onUpdate(); }}
+        />
+      )}
+      {historyOpen && (
+        <ProjectDetailsHistoryModal tenant={tenant} experimentId={m.id} onClose={() => setHistoryOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+function EditProjectDetailsModal({ tenant, experimentId, current, onClose, onSaved }) {
+  const [code, setCode] = useState(current.code || '');
+  const [type, setType] = useState(current.type || '');
+  const [hasBudget, setHasBudget] = useState(!!current.hasBudget);
+  const [budgetAmount, setBudgetAmount] = useState(current.budgetAmount ?? '');
+  const [budgetCurrency, setBudgetCurrency] = useState(current.budgetCurrency || '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const handleSave = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/details`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code, type, hasBudget,
+          budgetAmount: hasBudget && budgetAmount !== '' ? Number(budgetAmount) : null,
+          budgetCurrency: hasBudget ? budgetCurrency : '',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo guardar.'); return; }
+      onSaved();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" style={{ position: 'relative' }}>
+        <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
+        <span className="eyebrow-mini on-dark">Editar</span>
+        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Detalles del proyecto</h2>
+        <label className="field-label">Código</label>
+        <input type="text" value={code} onChange={(e) => setCode(e.target.value)} style={{ marginBottom: 14 }} />
+        <label className="field-label">Tipo</label>
+        <input type="text" value={type} onChange={(e) => setType(e.target.value)} style={{ marginBottom: 14 }} />
+        <label className="field-label">¿Tiene presupuesto asignado?</label>
+        <div className="labs-entry-role-grid" style={{ marginBottom: hasBudget ? 10 : 14 }}>
+          <button type="button" className={`labs-entry-role-btn${hasBudget ? ' active' : ''}`} onClick={() => setHasBudget(true)}>Sí</button>
+          <button type="button" className={`labs-entry-role-btn${!hasBudget ? ' active' : ''}`} onClick={() => setHasBudget(false)}>No</button>
+        </div>
+        {hasBudget && (
+          <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+            <input type="number" placeholder="Monto" value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} style={{ flex: 2 }} />
+            <input type="text" placeholder="Moneda (ej. USD)" value={budgetCurrency} onChange={(e) => setBudgetCurrency(e.target.value)} style={{ flex: 1 }} />
+          </div>
+        )}
+        {err && <p className="labs-login-error">{err}</p>}
+        <div className="modal-footer">
+          <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={handleSave}>{busy ? 'Guardando…' : 'Guardar →'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProjectDetailsHistoryModal({ tenant, experimentId, onClose }) {
+  const [history, setHistory] = useState(undefined);
+
+  useEffect(() => {
+    fetch(`/api/labs/${tenant}/experiments/${experimentId}/details`)
+      .then((r) => r.json())
+      .then((d) => setHistory(d.history ?? []))
+      .catch(() => setHistory([]));
+  }, [tenant, experimentId]);
+
+  const fieldLabel = { code: 'Código', type: 'Tipo', hasBudget: 'Presupuesto asignado', budgetAmount: 'Monto', budgetCurrency: 'Moneda' };
+  const fmt = (v) => (v === null || v === undefined || v === '' ? '—' : (typeof v === 'boolean' ? (v ? 'Sí' : 'No') : String(v)));
+
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" style={{ position: 'relative' }}>
+        <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
+        <span className="eyebrow-mini on-dark">Solo Director</span>
+        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Historial de cambios</h2>
+        {history === undefined && <p className="empty-note">Cargando…</p>}
+        {history?.length === 0 && <p className="empty-note">Todavía no hubo cambios en código, tipo o presupuesto.</p>}
+        {history?.map((h) => (
+          <div key={h.id} className="feedback-item">
+            <div className="fb-top">
+              <div className="fb-who">{h.changedBy}</div>
+              <span className="recent-time">{formatDateTime(h.changedAt)}</span>
+            </div>
+            <div className="fb-text">
+              {h.changes.map((c, i) => (
+                <div key={i}>{fieldLabel[c.field] || c.field}: {fmt(c.from)} → {fmt(c.to)}</div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1109,28 +1291,41 @@ function ViewHistoria({ experiment }) {
 /* ======================= Feedback ======================= */
 
 function ViewFeedback({ tenant, experiment, identity, onUpdate }) {
-  if (identity.role === 'Director') {
+  if (identity.role === 'Director' || identity.role === 'Supervisor') {
     return <FeedbackCompose tenant={tenant} experiment={experiment} identity={identity} onUpdate={onUpdate} />;
   }
   return <FeedbackReceived tenant={tenant} experiment={experiment} identity={identity} onUpdate={onUpdate} />;
 }
 
+// Director puede dejar feedback al proyecto en general, a una prueba, o a un aporte puntual.
+// Supervisor solo puede dejar feedback sobre aportes (registros) — nunca al proyecto ni a una
+// prueba entera. Registrador nunca da feedback, solo lo recibe (ver FeedbackReceived).
 function FeedbackCompose({ tenant, experiment, identity, onUpdate }) {
-  const [target, setTarget] = useState('Proyecto general');
+  const canTargetAll = identity.role === 'Director';
+  const [targetType, setTargetType] = useState(canTargetAll ? 'proyecto' : 'aporte');
+  const [testId, setTestId] = useState(null);
+  const [executionId, setExecutionId] = useState(null);
   const [text, setText] = useState('');
   const [visibility, setVisibility] = useState('Todo el equipo');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
-  const targets = ['Proyecto general', ...experiment.tests.map((t) => t.name)];
+
+  const executionsWithTest = experiment.executions.map((e) => ({
+    ...e,
+    testName: experiment.tests.find((t) => t.id === e.testId)?.name || '—',
+  }));
 
   const handleSend = async () => {
     if (!text.trim() || busy) return;
+    if (targetType === 'prueba' && !testId) { setErr('Elegí una prueba.'); return; }
+    if (targetType === 'aporte' && !executionId) { setErr('Elegí un aporte.'); return; }
     setBusy(true);
     setErr(null);
     try {
+      const targetId = targetType === 'prueba' ? testId : targetType === 'aporte' ? executionId : null;
       const res = await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/feedback`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ who: identity.name, target, text, visibility }),
+        body: JSON.stringify({ targetType, targetId, text, visibility }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo enviar.'); return; }
@@ -1148,15 +1343,42 @@ function FeedbackCompose({ tenant, experiment, identity, onUpdate }) {
       <div className="view-header">
         <span className="view-eyebrow">Feedback · {experiment.meta.name}</span>
         <h1 className="view-title">Dejar feedback</h1>
-        <p className="view-sub">Sobre el proyecto en general o algo puntual. Vos decidís quién lo ve.</p>
+        <p className="view-sub">{canTargetAll ? 'Sobre el proyecto en general o algo puntual.' : 'Sobre un aporte puntual del equipo.'} Vos decidís quién lo ve.</p>
       </div>
       <div className="feedback-compose">
-        <label className="field-label">¿Sobre qué es este feedback?</label>
-        <div className="target-select">
-          {targets.map((t) => (
-            <button key={t} className={`target-chip ${target === t ? 'active' : ''}`} onClick={() => setTarget(t)}>{t}</button>
-          ))}
-        </div>
+        {canTargetAll && (
+          <>
+            <label className="field-label">¿Sobre qué es este feedback?</label>
+            <div className="target-select">
+              <button className={`target-chip ${targetType === 'proyecto' ? 'active' : ''}`} onClick={() => setTargetType('proyecto')}>Proyecto general</button>
+              <button className={`target-chip ${targetType === 'prueba' ? 'active' : ''}`} onClick={() => setTargetType('prueba')}>Una prueba</button>
+              <button className={`target-chip ${targetType === 'aporte' ? 'active' : ''}`} onClick={() => setTargetType('aporte')}>Un aporte</button>
+            </div>
+          </>
+        )}
+
+        {targetType === 'prueba' && (
+          <div className="target-select" style={{ marginTop: canTargetAll ? 8 : 0, marginBottom: 4 }}>
+            {experiment.tests.map((t) => (
+              <button key={t.id} className={`target-chip ${testId === t.id ? 'active' : ''}`} onClick={() => setTestId(t.id)}>{t.icon} {t.name}</button>
+            ))}
+            {experiment.tests.length === 0 && <p className="empty-note">No hay pruebas todavía.</p>}
+          </div>
+        )}
+
+        {targetType === 'aporte' && (
+          <div style={{ marginTop: canTargetAll ? 8 : 0, marginBottom: 14 }}>
+            <label className="field-label">Elegí el aporte</label>
+            <select value={executionId ?? ''} onChange={(e) => setExecutionId(e.target.value || null)} style={{ width: '100%' }}>
+              <option value="">— Elegir —</option>
+              {executionsWithTest.map((e) => (
+                <option key={e.id} value={e.id}>{e.contributor} · {e.testName} · {formatDate(e.createdAt)}</option>
+              ))}
+            </select>
+            {experiment.executions.length === 0 && <p className="empty-note">Todavía no hay aportes.</p>}
+          </div>
+        )}
+
         <textarea rows={4} placeholder="Escribí tu feedback…" value={text} onChange={(e) => setText(e.target.value)} />
         <div className="visibility-row">
           <div className="vis-toggle">
@@ -1180,7 +1402,7 @@ function FeedbackReceived({ tenant, experiment, identity, onUpdate }) {
       <div className="view-header">
         <span className="view-eyebrow">Feedback · {experiment.meta.name}</span>
         <h1 className="view-title">Feedback recibido</h1>
-        <p className="view-sub">Lo que el Director comparte sobre el proyecto, en un solo lugar.</p>
+        <p className="view-sub">Lo que Director y Supervisor comparten sobre tu trabajo, en un solo lugar.</p>
       </div>
       {visible.length === 0 && <p className="empty-note">Todavía no hay feedback.</p>}
       {visible.map((f) => <FeedbackItem key={f.id} f={f} tenant={tenant} experimentId={experiment.meta.id} onUpdate={onUpdate} />)}
@@ -1200,11 +1422,14 @@ function FeedbackItem({ f, tenant, experimentId, onUpdate }) {
       onUpdate();
     } finally { setBusy(false); }
   };
+  // f.targetLabel es el modelo nuevo; f.target es el campo viejo (feedback de antes de esta
+  // versión) — se muestra igual en vez de quedar en blanco.
+  const targetDisplay = f.targetLabel || f.target || 'Proyecto general';
   return (
     <div className="feedback-item">
       <div className="fb-top">
-        <div className="fb-who"><span className="recent-avatar" style={{ width: 24, height: 24, fontSize: 10.5 }}>{initials(f.who)}</span>{f.who} <span className="tag tag-neutral">{f.visibility}</span></div>
-        <span className="recent-time">{formatDateTime(f.createdAt)} · {f.target}</span>
+        <div className="fb-who"><span className="recent-avatar" style={{ width: 24, height: 24, fontSize: 10.5 }}>{initials(f.who)}</span>{f.who}{f.whoRole ? ` (${f.whoRole})` : ''} <span className="tag tag-neutral">{f.visibility}</span></div>
+        <span className="recent-time">{formatDateTime(f.createdAt)} · {targetDisplay}</span>
       </div>
       <div className="fb-text">{f.text}</div>
       {f.suggestion && (

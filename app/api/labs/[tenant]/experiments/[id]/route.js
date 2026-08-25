@@ -7,8 +7,36 @@ export async function GET(req, { params }) {
   if (!(await isAuthorizedForTenant(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
+  const user = await getCurrentLabsUser(tenant);
+  if (!user) return Response.json({ error: 'No autorizado.' }, { status: 401 });
+
   const experiment = await getExperiment(tenant, id);
   if (!experiment) return Response.json({ error: 'Experimento no encontrado.' }, { status: 404 });
+
+  // Director ve todo. Supervisor solo si está asignado a este proyecto. Registrador solo si
+  // tiene al menos una prueba asignada — y en ese caso, solo ve SUS pruebas (y las ejecuciones
+  // de esas pruebas), no las del resto del equipo.
+  if (user.role === 'Supervisor') {
+    if (!experiment.meta.supervisorIds?.includes(user.id)) {
+      return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+    }
+  } else if (user.role === 'Registrador') {
+    const visibleTests = experiment.tests.filter((t) => t.registradorIds?.includes(user.id));
+    if (visibleTests.length === 0) {
+      return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+    }
+    const visibleTestIds = new Set(visibleTests.map((t) => t.id));
+    experiment.tests = visibleTests;
+    experiment.executions = experiment.executions.filter((e) => visibleTestIds.has(e.testId));
+    const visibleExecutionIds = new Set(experiment.executions.map((e) => e.id));
+    experiment.feedback = experiment.feedback.filter((f) => (
+      f.targetType === 'proyecto'
+      || (f.targetType === 'prueba' && visibleTestIds.has(f.targetId))
+      || (f.targetType === 'aporte' && visibleExecutionIds.has(f.targetId))
+      || (!f.targetType) // feedback viejo, previo a este modelo — se trata como "proyecto general"
+    ));
+  }
+
   return Response.json(experiment);
 }
 
