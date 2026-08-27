@@ -1417,14 +1417,12 @@ function FeedbackCompose({ tenant, experiment, identity, onUpdate }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
-  const executionsWithTest = experiment.executions.map((e) => ({
-    ...e,
-    testName: experiment.tests.find((t) => t.id === e.testId)?.name || '—',
-  }));
+  const executionsOfTest = testId ? experiment.executions.filter((e) => e.testId === testId) : [];
 
   const handleSend = async () => {
     if (!text.trim() || busy) return;
     if (targetType === 'prueba' && !testId) { setErr('Elegí una prueba.'); return; }
+    if (targetType === 'aporte' && !testId) { setErr('Elegí una prueba.'); return; }
     if (targetType === 'aporte' && !executionId) { setErr('Elegí un aporte.'); return; }
     setBusy(true);
     setErr(null);
@@ -1457,32 +1455,38 @@ function FeedbackCompose({ tenant, experiment, identity, onUpdate }) {
           <>
             <label className="field-label">¿Sobre qué es este feedback?</label>
             <div className="target-select">
-              <button className={`target-chip ${targetType === 'proyecto' ? 'active' : ''}`} onClick={() => setTargetType('proyecto')}>Proyecto general</button>
-              <button className={`target-chip ${targetType === 'prueba' ? 'active' : ''}`} onClick={() => setTargetType('prueba')}>Una prueba</button>
-              <button className={`target-chip ${targetType === 'aporte' ? 'active' : ''}`} onClick={() => setTargetType('aporte')}>Un aporte</button>
+              <button className={`target-chip ${targetType === 'proyecto' ? 'active' : ''}`} onClick={() => { setTargetType('proyecto'); setTestId(null); setExecutionId(null); }}>Proyecto general</button>
+              <button className={`target-chip ${targetType === 'prueba' ? 'active' : ''}`} onClick={() => { setTargetType('prueba'); setTestId(null); setExecutionId(null); }}>Una prueba</button>
+              <button className={`target-chip ${targetType === 'aporte' ? 'active' : ''}`} onClick={() => { setTargetType('aporte'); setTestId(null); setExecutionId(null); }}>Un aporte</button>
             </div>
           </>
         )}
 
-        {targetType === 'prueba' && (
+        {(targetType === 'prueba' || targetType === 'aporte') && (
           <div className="target-select" style={{ marginTop: canTargetAll ? 8 : 0, marginBottom: 4 }}>
             {experiment.tests.map((t) => (
-              <button key={t.id} className={`target-chip ${testId === t.id ? 'active' : ''}`} onClick={() => setTestId(t.id)}>{t.icon} {t.name}</button>
+              <button
+                key={t.id}
+                className={`target-chip ${testId === t.id ? 'active' : ''}`}
+                onClick={() => { setTestId(t.id); setExecutionId(null); }}
+              >
+                {t.icon} {t.name}
+              </button>
             ))}
             {experiment.tests.length === 0 && <p className="empty-note">No hay pruebas todavía.</p>}
           </div>
         )}
 
-        {targetType === 'aporte' && (
-          <div style={{ marginTop: canTargetAll ? 8 : 0, marginBottom: 14 }}>
-            <label className="field-label">Elegí el aporte</label>
+        {targetType === 'aporte' && testId && (
+          <div style={{ marginTop: 8, marginBottom: 14 }}>
+            <label className="field-label">Elegí el aporte (dentro de esta prueba)</label>
             <select value={executionId ?? ''} onChange={(e) => setExecutionId(e.target.value || null)} style={{ width: '100%' }}>
               <option value="">— Elegir —</option>
-              {executionsWithTest.map((e) => (
-                <option key={e.id} value={e.id}>{e.contributor} · {e.testName} · {formatDate(e.createdAt)}</option>
+              {executionsOfTest.map((e) => (
+                <option key={e.id} value={e.id}>{e.contributor} · {formatDate(e.createdAt)}</option>
               ))}
             </select>
-            {experiment.executions.length === 0 && <p className="empty-note">Todavía no hay aportes.</p>}
+            {executionsOfTest.length === 0 && <p className="empty-note">Todavía no hay aportes en esta prueba.</p>}
           </div>
         )}
 
