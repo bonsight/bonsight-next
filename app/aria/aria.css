@@ -1377,6 +1377,23 @@
   margin: 0;
 }
 
+/* ============ Reportes de servicio por cliente (Sprint board) ============ */
+.aria-report-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
+.aria-report-label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--aria-text-dim); margin: 12px 0 6px; }
+.aria-report-input, .aria-report-textarea {
+  width: 100%; font-size: 0.85rem; font-family: inherit; color: var(--aria-text);
+  background: var(--aria-bg); border: 1px solid var(--aria-border); border-radius: 8px; padding: 9px 11px;
+}
+.aria-report-textarea { resize: vertical; line-height: 1.5; }
+.aria-report-input:focus, .aria-report-textarea:focus { outline: 2px solid var(--aria-purple); outline-offset: 1px; }
+.aria-report-seccion { border: 1px solid var(--aria-border); border-radius: 10px; padding: 12px; margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.aria-report-sprint-list { display: flex; flex-direction: column; gap: 4px; }
+.aria-report-sprint-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--aria-border); border-radius: 8px; font-size: 0.82rem; color: var(--aria-text); cursor: pointer; }
+.aria-report-sprint-row:hover { border-color: var(--aria-purple); }
+.aria-report-footer { display: flex; justify-content: flex-end; margin-top: 18px; }
+.aria-report-btn-ghost { flex-shrink: 0; font-size: 0.78rem; font-weight: 600; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--aria-border); background: transparent; color: var(--aria-text-dim); cursor: pointer; }
+.aria-report-btn-ghost:hover { border-color: var(--aria-purple); color: var(--aria-text); }
+
 .aria-canvas-tabs {
   display: flex;
   gap: 6px;

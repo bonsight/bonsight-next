@@ -7,6 +7,7 @@ import AnalysisPresentation from '../components/AnalysisPresentation';
 import AdvisoryPresentation from '../components/AdvisoryPresentation';
 import WorkshopCanvasPresentation from '../components/WorkshopCanvasPresentation';
 import SprintBoardPresentation from '../components/SprintBoardPresentation';
+import SprintClientReportPresentation from '../components/SprintClientReportPresentation';
 import SprintDraftReviewPresentation from '../components/SprintDraftReviewPresentation';
 import SprintTriagePresentation from '../components/SprintTriagePresentation';
 import GroupFusionPresentation from '../components/GroupFusionPresentation';
@@ -357,11 +358,11 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
   const [attachments, setAttachments] = useState([]);
   const [activeSources, setActiveSources] = useState(new Set());
   const [copiedIdx, setCopiedIdx] = useState(null);
-  const [activeSection, setActiveSection] = useState('chat'); // 'chat' | 'activities' | 'sprints'
+  const [activeSection, setActiveSection] = useState('chat'); // 'chat' | 'activities' | 'sprints' | 'reportes'
   // Una vez visitada, una sección queda montada (solo se oculta con display:none) para no
   // repetir fetches caros al volver — generar un triage/borrador de sprint de nuevo puede
   // tardar 10s+ porque es una llamada real a Claude, no algo para repetir en cada click de tab.
-  const [visited, setVisited] = useState({ chat: true, activities: false, sprints: false });
+  const [visited, setVisited] = useState({ chat: true, activities: false, sprints: false, reportes: false });
   // Índice del mensaje al que apunta el puntero clickeado ("→ Ver en Activities/Sprints") —
   // null significa "el más reciente de todo el historial" (comportamiento por default al
   // entrar por la pestaña del header, no por un puntero puntual).
@@ -859,6 +860,9 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
             <button type="button" className={`aria-nav-tab${activeSection === 'sprints' ? ' aria-nav-tab--active' : ''}`} onClick={() => { setSprintsPin(null); setActiveSection('sprints'); setVisited((v) => ({ ...v, sprints: true })); }}>
               Sprints
             </button>
+            <button type="button" className={`aria-nav-tab${activeSection === 'reportes' ? ' aria-nav-tab--active' : ''}`} onClick={() => { setActiveSection('reportes'); setVisited((v) => ({ ...v, reportes: true })); }}>
+              Reportes
+            </button>
           </div>
         </header>
 
@@ -1218,6 +1222,14 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
           <div style={{ display: activeSection === 'sprints' ? 'contents' : 'none' }}>
             <div className="aria-messages">
               <SprintBoardPresentation tenant={tenant} initialSprintNumber={resolveBoardMessage(messages, sprintsPin)?.board?.sprintNumber} />
+            </div>
+          </div>
+        )}
+
+        {visited.reportes && (
+          <div style={{ display: activeSection === 'reportes' ? 'contents' : 'none' }}>
+            <div className="aria-messages">
+              <SprintClientReportPresentation tenant={tenant} />
             </div>
           </div>
         )}
