@@ -1,20 +1,49 @@
-import { isAuthorizedForTenant } from '@/lib/labs/auth';
-import { getExperiment, addReportDraft, approveReport } from '@/lib/labs/experiments';
-import { generateReportDraft } from '@/lib/labs/reports';
+import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
+import { getExperiment, addReportDraft, updateReportDraft, submitReport, approveReport, computeCivilReportBreakdown } from '@/lib/labs/experiments';
+import { generateReportDraft, generateCivilReportDraft } from '@/lib/labs/reports';
 
 export async function POST(req, { params }) {
   const { tenant, id } = await params;
   if (!(await isAuthorizedForTenant(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
+  const user = await getCurrentLabsUser(tenant);
+  if (!user) return Response.json({ error: 'No autorizado.' }, { status: 401 });
+
   const experiment = await getExperiment(tenant, id);
   if (!experiment) return Response.json({ error: 'Experimento no encontrado.' }, { status: 404 });
 
+  // Solo Supervisor genera el borrador — Director lo aprueba (ver PATCH). Registrador no
+  // tiene el nav item, pero igual lo bloqueamos acá por si alguien pega el request a mano.
+  if (user.role !== 'Supervisor') {
+    return Response.json({ error: 'Solo un Supervisor puede generar un reporte.' }, { status: 403 });
+  }
+  if (!experiment.meta.supervisorIds?.includes(user.id)) {
+    return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+  }
+
   try {
-    const doc = await generateReportDraft(experiment);
     const periodFrom = experiment.meta.createdAt;
     const periodTo = new Date().toISOString();
-    const report = await addReportDraft(tenant, id, { doc, periodFrom, periodTo });
+
+    if (experiment.meta.projectKind === 'civil') {
+      const { photos } = await req.json().catch(() => ({ photos: [] }));
+      const breakdown = computeCivilReportBreakdown(experiment.tasks, experiment.partidas);
+      const analysis = await generateCivilReportDraft(experiment, breakdown);
+      const report = await addReportDraft(tenant, id, {
+        kind: 'civil',
+        metrics: experiment.civilMetrics,
+        breakdown,
+        analysis,
+        photos: Array.isArray(photos) ? photos : [],
+        generatedBy: user.name,
+        periodFrom, periodTo,
+      });
+      return Response.json({ ok: true, report });
+    }
+
+    const doc = await generateReportDraft(experiment);
+    const report = await addReportDraft(tenant, id, { kind: 'experimental', doc, generatedBy: user.name, periodFrom, periodTo });
     return Response.json({ ok: true, report });
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo generar el reporte.' }, { status: 400 });
@@ -26,11 +55,29 @@ export async function PATCH(req, { params }) {
   if (!(await isAuthorizedForTenant(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
-  const { reportId } = await req.json();
+  const user = await getCurrentLabsUser(tenant);
+  if (!user) return Response.json({ error: 'No autorizado.' }, { status: 401 });
+
+  const { reportId, action, analysis, doc } = await req.json();
+
   try {
+    // edit/submit son del Supervisor que todavía tiene el borrador; approve es del Director.
+    if (action === 'edit') {
+      if (user.role !== 'Supervisor') return Response.json({ error: 'Solo un Supervisor puede editar el borrador.' }, { status: 403 });
+      const report = await updateReportDraft(tenant, id, reportId, { analysis, doc });
+      return Response.json({ ok: true, report });
+    }
+    if (action === 'submit') {
+      if (user.role !== 'Supervisor') return Response.json({ error: 'Solo un Supervisor puede enviar el reporte.' }, { status: 403 });
+      const report = await submitReport(tenant, id, reportId);
+      return Response.json({ ok: true, report });
+    }
+    if (user.role !== 'Director') {
+      return Response.json({ error: 'Solo un Director puede aprobar un reporte.' }, { status: 403 });
+    }
     const report = await approveReport(tenant, id, reportId);
     return Response.json({ ok: true, report });
   } catch (err) {
-    return Response.json({ error: err.message || 'No se pudo aprobar.' }, { status: 400 });
+    return Response.json({ error: err.message || 'No se pudo actualizar el reporte.' }, { status: 400 });
   }
 }

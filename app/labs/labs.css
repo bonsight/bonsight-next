@@ -158,6 +158,7 @@
   max-width:920px;
   animation: viewIn .38s var(--labs-ease);
 }
+.labs-root .view.view-wide{ max-width:none; }
 @keyframes viewIn{ from{ opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
 
 .labs-root .view-header{ margin-bottom:26px; }
@@ -439,6 +440,7 @@
 .modal-card{
   background:var(--labs-dark-2); border:1px solid var(--labs-line-dark); border-radius:16px; width:100%; max-width:560px;
   padding:30px 30px 26px; animation: modalIn .32s var(--labs-ease);
+  max-height:88vh; overflow-y:auto;
 }
 @keyframes modalIn{ from{opacity:0; transform:translateY(14px) scale(.98);} to{opacity:1; transform:none;} }
 .modal-close{ position:absolute; }
@@ -552,3 +554,93 @@
   line-height:1; flex-shrink:0; opacity:.6; transition:opacity .15s;
 }
 .labs-root .labs-attach-remove:hover{ opacity:1; }
+
+/* ============ Cronograma: toggle Lista/Gantt, filas, gantt ============ */
+.labs-root .cron-title-row{ display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:8px; }
+.labs-root .cron-view-toggle{ display:flex; align-items:center; gap:2px; background:var(--labs-dark-3); border:1px solid var(--labs-line-dark); border-radius:10px; padding:3px; }
+.labs-root .cron-view-toggle button{ border:none; background:transparent; color:var(--labs-cream-faint); font-family:var(--labs-sans); font-weight:600; font-size:12.5px; padding:7px 14px; border-radius:7px; transition:all .18s var(--labs-ease); }
+.labs-root .cron-view-toggle button.active{ background:var(--labs-dark-2); color:var(--labs-cream); }
+.labs-root .cron-view-toggle button:focus-visible{ outline:2px solid var(--labs-living); outline-offset:1px; }
+
+.labs-root .cron-row{ display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 18px; background:var(--labs-dark-2); border:1px solid var(--labs-line-dark); border-radius:12px; margin-bottom:10px; flex-wrap:wrap; }
+.labs-root .cron-row-info{ min-width:0; }
+.labs-root .cron-row-name{ font-weight:600; font-size:14px; color:var(--labs-cream); }
+.labs-root .cron-row-meta{ font-family:var(--labs-mono); font-size:11.5px; color:var(--labs-cream-faint); display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:5px; }
+.labs-root .cron-row-meta .dim{ opacity:.6; }
+.labs-root .cron-overdue{ color:#E19680; }
+.labs-root .cron-row-actions{ display:flex; align-items:center; gap:8px; flex-shrink:0; }
+
+.labs-root .cron-comment-wrap{ position:relative; }
+.labs-root .cron-comment-btn{ width:32px; height:32px; border-radius:999px; border:1px solid var(--labs-line-dark); background:transparent; color:var(--labs-cream-faint); display:flex; align-items:center; justify-content:center; padding:0; transition:border-color .18s, color .18s; }
+.labs-root .cron-comment-btn:hover{ border-color:var(--labs-living); color:var(--labs-cream); }
+.labs-root .cron-comment-badge{ position:absolute; top:-4px; right:-4px; min-width:15px; height:15px; padding:0 3px; border-radius:999px; background:var(--labs-living); color:var(--labs-dark); font-family:var(--labs-mono); font-size:9.5px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+
+.labs-root .cron-status-pill{ display:inline-flex; align-items:center; gap:7px; height:32px; padding:0 13px 0 10px; border-radius:999px; border:1px solid; background:transparent; font-family:var(--labs-sans); font-weight:600; font-size:12.5px; white-space:nowrap; }
+.labs-root .cron-status-pill.small{ height:29px; font-size:11.5px; }
+.labs-root .cron-status-pill:not(.static){ cursor:pointer; }
+.labs-root .cron-status-pill.static{ cursor:default; }
+.labs-root .cron-status-pill.pending{ border-color:var(--labs-line-dark); color:var(--labs-cream-dim); }
+.labs-root .cron-status-pill.saving{ border-color:rgba(63,158,115,0.4); background:rgba(63,158,115,0.09); color:#9fceb0; cursor:default; animation:cronPulse 1.15s ease-in-out infinite; }
+.labs-root .cron-status-pill.done{ border-color:rgba(63,158,115,0.45); background:var(--labs-living-glow); color:#8FE0BC; }
+.labs-root .cron-status-pill:focus-visible{ outline:2px solid var(--labs-living); outline-offset:2px; }
+@keyframes cronPulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(63,158,115,0); } 50%{ box-shadow:0 0 0 5px rgba(63,158,115,0.14); } }
+@keyframes cronSpin{ to{ transform:rotate(360deg); } }
+.labs-root .cron-spin{ animation:cronSpin .9s linear infinite; transform-origin:center; }
+
+.labs-root .cron-gantt-scroll{ overflow-x:auto; padding-bottom:4px; margin: 0 -4px; }
+.labs-root .cron-gantt-wrap{ position:relative; padding: 0 4px; }
+.labs-root .cron-gantt-axisrow{ display:flex; position:relative; z-index:1; }
+.labs-root .cron-gantt-axis{ position:relative; height:26px; flex-shrink:0; }
+.labs-root .cron-gantt-axis span{ position:absolute; top:6px; font-family:var(--labs-mono); font-size:10px; color:var(--labs-cream-faint); white-space:nowrap; }
+.labs-root .cron-gantt-grid{ position:absolute; top:0; bottom:0; pointer-events:none; }
+.labs-root .cron-gantt-grid div{ position:absolute; top:0; bottom:0; width:1px; background:var(--labs-line-dark); opacity:.5; }
+.labs-root .cron-gantt-row{ display:flex; align-items:center; min-height:60px; border-bottom:1px solid var(--labs-line-soft); }
+.labs-root .cron-gantt-corner{ position:sticky; left:0; z-index:3; background:var(--labs-dark); }
+.labs-root .cron-gantt-info{ position:sticky; left:0; z-index:2; flex-shrink:0; padding-right:14px; min-width:0; background:var(--labs-dark); box-shadow:8px 0 12px -8px rgba(0,0,0,.45); }
+.labs-root .cron-gantt-assignee{ font-family:var(--labs-mono); font-size:10.5px; color:var(--labs-cream-faint); margin-top:3px; }
+.labs-root .cron-gantt-track{ position:relative; flex-shrink:0; height:60px; }
+.labs-root .cron-gantt-nodate{ position:absolute; top:50%; transform:translateY(-50%); font-family:var(--labs-mono); font-size:11px; color:var(--labs-cream-faint); font-style:italic; }
+.labs-root .cron-gantt-bar{ position:absolute; top:50%; height:24px; transform:translateY(-50%); border-radius:999px; border:1.5px solid; display:flex; align-items:center; padding:0 8px; gap:5px; transition:background .3s, border-color .3s; }
+.labs-root .cron-gantt-bar span{ font-family:var(--labs-mono); font-size:10.5px; font-weight:600; white-space:nowrap; overflow:hidden; }
+.labs-root .cron-gantt-bar.pending{ border-color:var(--labs-line-dark); background:rgba(246,242,228,0.06); }
+.labs-root .cron-gantt-bar.pending span{ color:var(--labs-cream-dim); }
+.labs-root .cron-gantt-bar.overdue{ border-color:#E19680; background:var(--labs-alert-soft); }
+.labs-root .cron-gantt-bar.overdue span{ color:#E5AC96; }
+.labs-root .cron-gantt-bar.saving{ border-color:rgba(63,158,115,0.55); background:rgba(63,158,115,0.16); animation:cronBarPulse 1.15s ease-in-out infinite; }
+.labs-root .cron-gantt-bar.saving span{ color:#9fceb0; }
+.labs-root .cron-gantt-bar.done{ border-color:var(--labs-living); background:var(--labs-living); }
+.labs-root .cron-gantt-bar.done span{ color:var(--labs-dark); }
+@keyframes cronBarPulse{ 0%,100%{ filter:brightness(1); } 50%{ filter:brightness(1.25); } }
+.labs-root .cron-gantt-actions{ position:sticky; right:0; z-index:2; display:flex; align-items:center; gap:7px; flex-shrink:0; padding-left:14px; margin-left:auto; background:var(--labs-dark); box-shadow:-8px 0 12px -8px rgba(0,0,0,.45); }
+
+/* ============ Reportes: meters, fotos (fondo claro tipo "papel") ============ */
+.labs-root .report-meter-row{ margin-bottom:14px; }
+.labs-root .report-meter-top{ display:flex; align-items:center; justify-content:space-between; font-size:12.5px; font-weight:600; color:var(--labs-ink); margin-bottom:5px; }
+.labs-root .report-meter-track{ height:10px; border-radius:999px; background:rgba(23,20,15,0.08); overflow:hidden; }
+.labs-root .report-meter-fill{ height:100%; border-radius:999px; }
+.labs-root .report-meter-fill.good{ background:var(--labs-living); }
+.labs-root .report-meter-fill.warning{ background:var(--labs-ember); }
+.labs-root .report-meter-fill.critical{ background:var(--labs-alert); }
+.labs-root .report-meter-sub{ font-size:11.5px; color:var(--labs-graphite); margin-top:4px; }
+
+.labs-root .report-photo-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(112px, 1fr)); gap:8px; }
+.labs-root .report-photo-item{ display:block; border-radius:9px; overflow:hidden; border:1px solid var(--labs-line); text-decoration:none; background:var(--labs-paper-2); }
+.labs-root .report-photo-item img{ width:100%; height:96px; object-fit:cover; display:block; }
+.labs-root .report-photo-item span{ display:block; font-size:10.5px; color:var(--labs-graphite); padding:5px 7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.labs-root .report-photo-pick{ position:relative; border-radius:9px; overflow:hidden; border:2px solid transparent; padding:0; background:var(--labs-dark-3); text-align:left; transition:border-color .15s; }
+.labs-root .report-photo-pick img{ width:100%; height:96px; object-fit:cover; display:block; opacity:.6; }
+.labs-root .report-photo-pick.selected{ border-color:var(--labs-living); }
+.labs-root .report-photo-pick.selected img{ opacity:1; }
+.labs-root .report-photo-check{ position:absolute; top:6px; right:6px; width:20px; height:20px; border-radius:50%; background:var(--labs-living); color:#0C1F16; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.labs-root .report-photo-pick:not(.selected) .report-photo-check{ background:rgba(0,0,0,0.35); }
+.labs-root .report-photo-caption{ display:block; font-size:10.5px; color:var(--labs-cream-dim); padding:5px 7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.labs-root .chip-btn.on-paper{ border-color:var(--labs-line); color:var(--labs-graphite); }
+.labs-root .chip-btn.on-paper:hover{ border-color:var(--labs-living); color:var(--labs-ink); }
+.labs-root .report-doc label.field-label{ color:var(--labs-graphite); }
+
+.labs-root .report-history{ display:flex; flex-direction:column; gap:6px; }
+.labs-root .report-history-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; padding:10px 14px; border:1px solid var(--labs-line-dark); border-radius:10px; background:var(--labs-dark-2); color:var(--labs-cream-dim); font-size:12.5px; text-align:left; transition:border-color .15s; }
+.labs-root .report-history-row:hover{ border-color:var(--labs-living); }
+.labs-root .report-history-row.active{ border-color:var(--labs-living); background:var(--labs-living-glow); color:var(--labs-cream); }

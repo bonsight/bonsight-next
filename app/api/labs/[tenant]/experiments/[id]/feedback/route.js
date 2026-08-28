@@ -38,7 +38,11 @@ export async function GET(req, { params }) {
   if (user.role === 'Supervisor' && !experiment.meta.supervisorIds?.includes(user.id)) {
     return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
   }
-  if (user.role === 'Registrador') {
+  if (user.role === 'Registrador' && experiment.meta.projectKind === 'civil') {
+    const visibleTaskIds = new Set(experiment.tasks.filter((t) => t.responsable === user.id).map((t) => t.id));
+    if (visibleTaskIds.size === 0) return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+    experiment.feedback = experiment.feedback.filter((f) => f.targetType === 'tarea' && visibleTaskIds.has(f.targetId));
+  } else if (user.role === 'Registrador') {
     const visibleTestIds = new Set(experiment.tests.filter((t) => t.registradorIds?.includes(user.id)).map((t) => t.id));
     if (visibleTestIds.size === 0) return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
     const visibleExecutionIds = new Set(experiment.executions.filter((e) => visibleTestIds.has(e.testId)).map((e) => e.id));
@@ -64,17 +68,24 @@ export async function POST(req, { params }) {
     return Response.json({ error: 'Los Registradores no dejan feedback, solo lo reciben.' }, { status: 403 });
   }
 
-  const { targetType, targetId, text, visibility } = await req.json();
-  if (!text?.trim()) {
-    return Response.json({ error: 'text es requerido.' }, { status: 400 });
+  const { targetType, targetId, text, visibility, attachments } = await req.json();
+  const cleanAttachments = Array.isArray(attachments) ? attachments : [];
+  // Un comentario puede ser solo evidencia (una foto sin texto) — no forzamos texto si ya
+  // hay al menos un adjunto.
+  if (!text?.trim() && cleanAttachments.length === 0) {
+    return Response.json({ error: 'Escribí un texto o adjuntá un archivo.' }, { status: 400 });
   }
-  if (!['proyecto', 'prueba', 'aporte'].includes(targetType)) {
+  if (!['proyecto', 'prueba', 'aporte', 'tarea', 'partida', 'reporte'].includes(targetType)) {
     return Response.json({ error: 'targetType inválido.' }, { status: 400 });
   }
-  // Director puede dejar feedback en cualquier nivel; Supervisor solo sobre aportes (registros)
-  // del equipo que supervisa — nunca sobre el proyecto en general ni sobre una prueba entera.
-  if (user.role === 'Supervisor' && targetType !== 'aporte') {
-    return Response.json({ error: 'Un Supervisor solo puede dejar feedback sobre aportes.' }, { status: 403 });
+  // Experimental: Director puede dejar feedback en cualquier nivel; Supervisor solo sobre
+  // aportes (registros) del equipo que supervisa. Civil: comentarios en Tareas/Partidas —
+  // tanto Director como Supervisor pueden, sin restricción entre ellos (nunca Registrador,
+  // ya bloqueado arriba). 'reporte' vale para ambos flujos — es donde Director y Supervisor
+  // se van y vienen comentarios sobre un reporte ya generado.
+  const supervisorAllowedTargets = ['aporte', 'tarea', 'partida', 'reporte'];
+  if (user.role === 'Supervisor' && !supervisorAllowedTargets.includes(targetType)) {
+    return Response.json({ error: 'Un Supervisor no puede dejar feedback a este nivel.' }, { status: 403 });
   }
 
   const experiment = await getExperiment(tenant, id);
@@ -97,11 +108,31 @@ export async function POST(req, { params }) {
     const test = experiment.tests.find((t) => t.id === execution.testId);
     resolvedTargetId = execution.id;
     targetLabel = `Aporte de ${execution.contributor} — ${test?.name || 'prueba eliminada'}`;
+  } else if (targetType === 'tarea') {
+    const task = experiment.tasks.find((t) => t.id === targetId);
+    if (!task) return Response.json({ error: 'Tarea no encontrada.' }, { status: 400 });
+    resolvedTargetId = task.id;
+    targetLabel = task.nombre;
+  } else if (targetType === 'partida') {
+    const partida = experiment.partidas.find((p) => p.id === targetId);
+    if (!partida) return Response.json({ error: 'Partida no encontrada.' }, { status: 400 });
+    resolvedTargetId = partida.id;
+    targetLabel = partida.descripcion;
+  } else if (targetType === 'reporte') {
+    const report = experiment.reports.find((r) => r.id === targetId);
+    if (!report) return Response.json({ error: 'Reporte no encontrado.' }, { status: 400 });
+    resolvedTargetId = report.id;
+    targetLabel = `Reporte del ${new Date(report.createdAt).toLocaleDateString('es-ES')}`;
   }
 
-  const suggestion = await suggestConversion(experiment.meta.name, targetLabel, text);
+  // La sugerencia de "convertir en una nueva ejecución" solo tiene sentido para proyectos
+  // experimentales (pruebas/aportes) — no aplica al vocabulario de tareas/partidas de civil.
+  const suggestion = ['proyecto', 'prueba', 'aporte'].includes(targetType)
+    ? await suggestConversion(experiment.meta.name, targetLabel, text)
+    : null;
   const entry = await addFeedback(tenant, id, {
     who: user.name, whoRole: user.role, targetType, targetId: resolvedTargetId, targetLabel, text, visibility, suggestion,
+    attachments: cleanAttachments,
   });
   return Response.json({ ok: true, feedback: entry });
 }

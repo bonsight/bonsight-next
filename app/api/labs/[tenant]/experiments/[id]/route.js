@@ -20,6 +20,18 @@ export async function GET(req, { params }) {
     if (!experiment.meta.supervisorIds?.includes(user.id)) {
       return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
     }
+  } else if (user.role === 'Registrador' && experiment.meta.projectKind === 'civil') {
+    const visibleTasks = experiment.tasks.filter((t) => t.responsable === user.id);
+    if (visibleTasks.length === 0) {
+      return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+    }
+    experiment.tasks = visibleTasks;
+    experiment.partidas = []; // presupuesto: cosa de Director/Supervisor únicamente
+    experiment.civilMetrics = null; // métricas/alertas agregadas del proyecto: idem
+    experiment.civilAlerts = [];
+    experiment.documents = [];
+    const visibleTaskIds = new Set(visibleTasks.map((t) => t.id));
+    experiment.feedback = experiment.feedback.filter((f) => f.targetType === 'tarea' && visibleTaskIds.has(f.targetId));
   } else if (user.role === 'Registrador') {
     const visibleTests = experiment.tests.filter((t) => t.registradorIds?.includes(user.id));
     if (visibleTests.length === 0) {

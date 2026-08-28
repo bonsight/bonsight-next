@@ -2,32 +2,65 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+// Civil reemplaza Pruebas/Aportar por Cronograma+Presupuesto — Registrador no ve Presupuesto
+// ni Documentación (info financiera/administrativa, cosa de Director/Supervisor).
 const NAV = {
-  Registrador: [
-    { id: 'resumen', label: 'Resumen', ic: '◈' },
-    { id: 'aportar', label: 'Aportar', ic: '✎' },
-    { id: 'pruebas', label: 'Pruebas', ic: '⬢' },
-    { id: 'historia', label: 'Historia', ic: '~' },
-    { id: 'feedback', label: 'Feedback recibido', ic: '◔' },
-  ],
-  Supervisor: [
-    { id: 'resumen', label: 'Resumen', ic: '◈' },
-    { id: 'aportar', label: 'Aportar', ic: '✎' },
-    { id: 'pruebas', label: 'Pruebas', ic: '⬢' },
-    { id: 'documentacion', label: 'Documentación', ic: '▧' },
-    { id: 'historia', label: 'Historia', ic: '~' },
-    { id: 'feedback', label: 'Feedback', ic: '◔' },
-    { id: 'reportes', label: 'Reportes', ic: '▤' },
-  ],
-  Director: [
-    { id: 'resumen', label: 'Resumen', ic: '◈' },
-    { id: 'pruebas', label: 'Pruebas', ic: '⬢' },
-    { id: 'documentacion', label: 'Documentación', ic: '▧' },
-    { id: 'historia', label: 'Historia', ic: '~' },
-    { id: 'feedback', label: 'Feedback', ic: '◔' },
-    { id: 'reportes', label: 'Reportes', ic: '▤' },
-  ],
+  experimental: {
+    Registrador: [
+      { id: 'resumen', label: 'Resumen', ic: '◈' },
+      { id: 'aportar', label: 'Aportar', ic: '✎' },
+      { id: 'pruebas', label: 'Pruebas', ic: '⬢' },
+      { id: 'historia', label: 'Historia', ic: '~' },
+      { id: 'feedback', label: 'Feedback recibido', ic: '◔' },
+    ],
+    Supervisor: [
+      { id: 'resumen', label: 'Resumen', ic: '◈' },
+      { id: 'aportar', label: 'Aportar', ic: '✎' },
+      { id: 'pruebas', label: 'Pruebas', ic: '⬢' },
+      { id: 'documentacion', label: 'Documentación', ic: '▧' },
+      { id: 'historia', label: 'Historia', ic: '~' },
+      { id: 'feedback', label: 'Feedback', ic: '◔' },
+      { id: 'reportes', label: 'Reportes', ic: '▤' },
+    ],
+    Director: [
+      { id: 'resumen', label: 'Resumen', ic: '◈' },
+      { id: 'pruebas', label: 'Pruebas', ic: '⬢' },
+      { id: 'documentacion', label: 'Documentación', ic: '▧' },
+      { id: 'historia', label: 'Historia', ic: '~' },
+      { id: 'feedback', label: 'Feedback', ic: '◔' },
+      { id: 'reportes', label: 'Reportes', ic: '▤' },
+    ],
+  },
+  // Civil no tiene sección Feedback aparte: los comentarios puntuales ya viven en cada
+  // tarea (Cronograma) y partida (Presupuesto) — una sección separada era redundante.
+  civil: {
+    Registrador: [
+      { id: 'resumen', label: 'Resumen', ic: '◈' },
+      { id: 'cronograma', label: 'Cronograma', ic: '⬢' },
+      { id: 'historia', label: 'Historia', ic: '~' },
+    ],
+    Supervisor: [
+      { id: 'resumen', label: 'Resumen', ic: '◈' },
+      { id: 'cronograma', label: 'Cronograma', ic: '⬢' },
+      { id: 'presupuesto', label: 'Presupuesto', ic: '▤' },
+      { id: 'documentacion', label: 'Documentación', ic: '▧' },
+      { id: 'historia', label: 'Historia', ic: '~' },
+      { id: 'reportes', label: 'Reportes', ic: '▤' },
+    ],
+    Director: [
+      { id: 'resumen', label: 'Resumen', ic: '◈' },
+      { id: 'cronograma', label: 'Cronograma', ic: '⬢' },
+      { id: 'presupuesto', label: 'Presupuesto', ic: '▤' },
+      { id: 'documentacion', label: 'Documentación', ic: '▧' },
+      { id: 'historia', label: 'Historia', ic: '~' },
+      { id: 'reportes', label: 'Reportes', ic: '▤' },
+    ],
+  },
 };
+
+function getNav(role, projectKind) {
+  return NAV[projectKind === 'civil' ? 'civil' : 'experimental'][role];
+}
 
 const FIELD_TYPES = [
   { value: 'text', label: 'Texto' },
@@ -48,6 +81,16 @@ function initials(name) {
 function formatDate(iso) {
   if (!iso) return '';
   return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function formatShortDate(iso) {
+  if (!iso) return '—';
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+function daysBetween(a, b) {
+  const MS_DAY = 86400000;
+  return Math.round((new Date(`${b}T00:00:00Z`).getTime() - new Date(`${a}T00:00:00Z`).getTime()) / MS_DAY);
 }
 
 function formatDateTime(iso) {
@@ -171,7 +214,7 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
     );
   }
 
-  const nav = NAV[identity.role];
+  const nav = getNav(identity.role, experiment.meta.projectKind);
   const refresh = () => loadExperiment(experimentId);
 
   return (
@@ -220,6 +263,12 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
           {view === 'pruebas' && (
             <ViewPruebas tenant={tenant} experiment={experiment} identity={identity} onUpdate={refresh} />
           )}
+          {view === 'cronograma' && (
+            <ViewCronograma tenant={tenant} experiment={experiment} identity={identity} onUpdate={refresh} />
+          )}
+          {view === 'presupuesto' && (
+            <ViewPresupuesto tenant={tenant} experiment={experiment} identity={identity} onUpdate={refresh} />
+          )}
           {view === 'documentacion' && (
             <ViewDocumentacion tenant={tenant} experiment={experiment} identity={identity} onUpdate={refresh} />
           )}
@@ -228,7 +277,7 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
             <ViewFeedback tenant={tenant} experiment={experiment} identity={identity} onUpdate={refresh} />
           )}
           {view === 'reportes' && (
-            <ViewReportes tenant={tenant} experiment={experiment} onUpdate={refresh} />
+            <ViewReportes tenant={tenant} experiment={experiment} identity={identity} onUpdate={refresh} />
           )}
         </main>
       </div>
@@ -281,6 +330,7 @@ function ExperimentPicker({ tenant, tenantMeta, identity, experiments, onSelect,
 }
 
 function CreateExperimentModal({ tenant, onClose, onCreated }) {
+  const [projectKind, setProjectKind] = useState('experimental');
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
   const [hypothesis, setHypothesis] = useState('');
@@ -294,21 +344,71 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
+  // Solo para proyectos civiles — import del Excel de cronograma+presupuesto.
+  const [roster, setRoster] = useState([]);
+  const [excelBusy, setExcelBusy] = useState(false);
+  const [civilTasks, setCivilTasks] = useState(null); // null = todavía no se importó nada
+  const [civilPartidas, setCivilPartidas] = useState(null);
+  const [civilWarnings, setCivilWarnings] = useState([]);
+  const excelInputRef = useRef(null);
+
+  useEffect(() => {
+    if (projectKind !== 'civil') return;
+    fetch(`/api/labs/${tenant}/users`)
+      .then((r) => r.json())
+      .then((d) => setRoster((d.users ?? []).filter((u) => (u.role === 'Supervisor' || u.role === 'Registrador') && u.active !== false)))
+      .catch(() => setRoster([]));
+  }, [projectKind, tenant]);
+
+  const handleExcelFile = async (file) => {
+    if (!file) return;
+    setExcelBusy(true);
+    setErr(null);
+    try {
+      const data = await readAsBase64(file);
+      const res = await fetch(`/api/labs/${tenant}/civil/import-preview`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data }),
+      });
+      const resData = await res.json();
+      if (!res.ok) { setErr(resData.error || 'No se pudo interpretar el archivo.'); return; }
+      setCivilTasks(resData.tasks ?? []);
+      setCivilPartidas(resData.partidas ?? []);
+      setCivilWarnings(resData.warnings ?? []);
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setExcelBusy(false);
+    }
+  };
+
+  const updateCivilTask = (i, patch) => setCivilTasks((prev) => prev.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
+  const removeCivilTask = (i) => setCivilTasks((prev) => prev.filter((_, idx) => idx !== i));
+  const updateCivilPartida = (i, patch) => setCivilPartidas((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  const removeCivilPartida = (i) => setCivilPartidas((prev) => prev.filter((_, idx) => idx !== i));
+
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!name.trim() || busy) return;
     setBusy(true);
     setErr(null);
     try {
-      const successCriteria = criteriaText.split('\n').map((l) => l.trim()).filter(Boolean);
+      const body = projectKind === 'civil'
+        ? {
+            name, code, type, supervisorIds, projectKind: 'civil',
+            tasks: (civilTasks ?? []).map((t) => ({ fase: t.fase, nombre: t.nombre, responsable: t.responsable, fechaInicio: t.fechaInicio, fechaFin: t.fechaFin, duracionDias: t.duracionDias, progreso: t.progreso })),
+            partidas: (civilPartidas ?? []).map((p) => ({ etapa: p.etapa, descripcion: p.descripcion, cantidad: p.cantidad, unidad: p.unidad, precioUnitario: p.precioUnitario, proveedor: p.proveedor, comentarios: p.comentarios })),
+          }
+        : {
+            name, purpose, hypothesis, supervisorIds, code, type, hasBudget,
+            successCriteria: criteriaText.split('\n').map((l) => l.trim()).filter(Boolean),
+            budgetAmount: hasBudget && budgetAmount !== '' ? Number(budgetAmount) : null,
+            budgetCurrency: hasBudget ? budgetCurrency : '',
+          };
       const res = await fetch(`/api/labs/${tenant}/experiments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name, purpose, hypothesis, successCriteria, supervisorIds, code, type, hasBudget,
-          budgetAmount: hasBudget && budgetAmount !== '' ? Number(budgetAmount) : null,
-          budgetCurrency: hasBudget ? budgetCurrency : '',
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo crear.'); return; }
@@ -322,19 +422,32 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
 
   return (
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-card" style={{ position: 'relative' }}>
+      <div className="modal-card" style={{ position: 'relative', maxWidth: projectKind === 'civil' ? 720 : undefined }}>
         <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
         <span className="eyebrow-mini on-dark">Crear proyecto</span>
         <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Nuevo proyecto</h2>
+
+        <label className="field-label">Tipo de proyecto</label>
+        <div className="labs-entry-role-grid" style={{ marginBottom: 14 }}>
+          <button type="button" className={`labs-entry-role-btn${projectKind === 'experimental' ? ' active' : ''}`} onClick={() => setProjectKind('experimental')}>Experimental</button>
+          <button type="button" className={`labs-entry-role-btn${projectKind === 'civil' ? ' active' : ''}`} onClick={() => setProjectKind('civil')}>Civil</button>
+        </div>
+
         <form onSubmit={handleCreate}>
           <label className="field-label">Nombre</label>
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 14 }} required />
-          <label className="field-label">¿Qué queremos conseguir o descubrir?</label>
-          <textarea rows={3} value={purpose} onChange={(e) => setPurpose(e.target.value)} style={{ marginBottom: 14 }} />
-          <label className="field-label">Hipótesis a validar o refutar</label>
-          <textarea rows={2} value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} style={{ marginBottom: 14 }} />
-          <label className="field-label">Criterios de éxito (uno por línea)</label>
-          <textarea rows={3} value={criteriaText} onChange={(e) => setCriteriaText(e.target.value)} placeholder={'Resistencia ≥ 45 kgf\nTiempo de secado ≤ 10 horas'} style={{ marginBottom: 14 }} />
+
+          {projectKind === 'experimental' && (
+            <>
+              <label className="field-label">¿Qué queremos conseguir o descubrir?</label>
+              <textarea rows={3} value={purpose} onChange={(e) => setPurpose(e.target.value)} style={{ marginBottom: 14 }} />
+              <label className="field-label">Hipótesis a validar o refutar</label>
+              <textarea rows={2} value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} style={{ marginBottom: 14 }} />
+              <label className="field-label">Criterios de éxito (uno por línea)</label>
+              <textarea rows={3} value={criteriaText} onChange={(e) => setCriteriaText(e.target.value)} placeholder={'Resistencia ≥ 45 kgf\nTiempo de secado ≤ 10 horas'} style={{ marginBottom: 14 }} />
+            </>
+          )}
+
           <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
             <div style={{ flex: 1 }}>
               <label className="field-label">Código</label>
@@ -345,17 +458,113 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
               <input type="text" value={type} onChange={(e) => setType(e.target.value)} placeholder="ej. Estructural" />
             </div>
           </div>
-          <label className="field-label">¿Tiene presupuesto asignado?</label>
-          <div className="labs-entry-role-grid" style={{ marginBottom: hasBudget ? 10 : 14 }}>
-            <button type="button" className={`labs-entry-role-btn${hasBudget ? ' active' : ''}`} onClick={() => setHasBudget(true)}>Sí</button>
-            <button type="button" className={`labs-entry-role-btn${!hasBudget ? ' active' : ''}`} onClick={() => setHasBudget(false)}>No</button>
-          </div>
-          {hasBudget && (
-            <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-              <input type="number" placeholder="Monto" value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} style={{ flex: 2 }} />
-              <input type="text" placeholder="Moneda (ej. USD)" value={budgetCurrency} onChange={(e) => setBudgetCurrency(e.target.value)} style={{ flex: 1 }} />
-            </div>
+
+          {projectKind === 'experimental' && (
+            <>
+              <label className="field-label">¿Tiene presupuesto asignado?</label>
+              <div className="labs-entry-role-grid" style={{ marginBottom: hasBudget ? 10 : 14 }}>
+                <button type="button" className={`labs-entry-role-btn${hasBudget ? ' active' : ''}`} onClick={() => setHasBudget(true)}>Sí</button>
+                <button type="button" className={`labs-entry-role-btn${!hasBudget ? ' active' : ''}`} onClick={() => setHasBudget(false)}>No</button>
+              </div>
+              {hasBudget && (
+                <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+                  <input type="number" placeholder="Monto" value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} style={{ flex: 2 }} />
+                  <input type="text" placeholder="Moneda (ej. USD)" value={budgetCurrency} onChange={(e) => setBudgetCurrency(e.target.value)} style={{ flex: 1 }} />
+                </div>
+              )}
+            </>
           )}
+
+          {projectKind === 'civil' && (
+            <>
+              <label className="field-label">Cronograma + Presupuesto (Excel)</label>
+              <p style={{ fontSize: 12, color: 'var(--labs-cream-faint)', marginTop: -8, marginBottom: 10 }}>
+                Subí el mismo Excel que ya usan — se interpreta automáticamente. Revisá y corregí antes de crear el proyecto.
+              </p>
+              <input
+                ref={excelInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                style={{ display: 'none' }}
+                onChange={(e) => { handleExcelFile(e.target.files[0]); e.target.value = ''; }}
+              />
+              <button type="button" className="btn btn-secondary" disabled={excelBusy} onClick={() => excelInputRef.current?.click()} style={{ marginBottom: 14 }}>
+                {excelBusy ? 'Interpretando…' : civilTasks ? 'Volver a subir Excel' : '+ Subir Excel'}
+              </button>
+
+              {civilWarnings.length > 0 && (
+                <div className="callout" style={{ marginBottom: 14 }}>
+                  {civilWarnings.map((w, i) => <div key={i} style={{ fontSize: 12.5 }}>{w}</div>)}
+                </div>
+              )}
+
+              {civilTasks && (
+                <>
+                  <label className="field-label">Tareas ({civilTasks.length})</label>
+                  <div style={{ maxHeight: 260, overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--labs-line-dark)', borderRadius: 8, marginBottom: 14 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ position: 'sticky', top: 0, background: 'var(--labs-dark-3)' }}>
+                          <th style={{ textAlign: 'left', padding: 6 }}>Fase</th>
+                          <th style={{ textAlign: 'left', padding: 6 }}>Tarea</th>
+                          <th style={{ textAlign: 'left', padding: 6 }}>Responsable</th>
+                          <th style={{ textAlign: 'left', padding: 6 }}>Inicio</th>
+                          <th style={{ textAlign: 'left', padding: 6 }}>Fin</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {civilTasks.map((t, i) => (
+                          <tr key={i} style={{ borderTop: '1px solid var(--labs-line-dark)' }}>
+                            <td style={{ padding: 6 }}><input value={t.fase} onChange={(e) => updateCivilTask(i, { fase: e.target.value })} style={{ width: 90, fontSize: 12 }} /></td>
+                            <td style={{ padding: 6 }}><input value={t.nombre} onChange={(e) => updateCivilTask(i, { nombre: e.target.value })} style={{ width: 160, fontSize: 12 }} /></td>
+                            <td style={{ padding: 6 }}>
+                              <select value={t.responsable ?? ''} onChange={(e) => updateCivilTask(i, { responsable: e.target.value || null })} style={{ fontSize: 12, background: 'var(--labs-dark-3)', color: 'var(--labs-cream)', border: '1px solid var(--labs-line-dark)', borderRadius: 6 }}>
+                                <option value="">{t.responsableNombreOriginal ? `⚠ ${t.responsableNombreOriginal}` : '— Elegir —'}</option>
+                                {roster.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+                              </select>
+                            </td>
+                            <td style={{ padding: 6 }}><input type="date" value={t.fechaInicio || ''} onChange={(e) => updateCivilTask(i, { fechaInicio: e.target.value })} style={{ fontSize: 12 }} /></td>
+                            <td style={{ padding: 6 }}><input type="date" value={t.fechaFin || ''} onChange={(e) => updateCivilTask(i, { fechaFin: e.target.value })} style={{ fontSize: 12 }} /></td>
+                            <td style={{ padding: 6 }}><button type="button" className="labs-attach-remove" onClick={() => removeCivilTask(i)}>✕</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <label className="field-label">Partidas de presupuesto ({civilPartidas.length})</label>
+                  <div style={{ maxHeight: 260, overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--labs-line-dark)', borderRadius: 8, marginBottom: 14 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ position: 'sticky', top: 0, background: 'var(--labs-dark-3)' }}>
+                          <th style={{ textAlign: 'left', padding: 6 }}>Etapa</th>
+                          <th style={{ textAlign: 'left', padding: 6 }}>Descripción</th>
+                          <th style={{ textAlign: 'right', padding: 6 }}>Cant.</th>
+                          <th style={{ textAlign: 'left', padding: 6 }}>Unidad</th>
+                          <th style={{ textAlign: 'right', padding: 6 }}>P. Unit.</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {civilPartidas.map((p, i) => (
+                          <tr key={i} style={{ borderTop: '1px solid var(--labs-line-dark)' }}>
+                            <td style={{ padding: 6 }}><input value={p.etapa} onChange={(e) => updateCivilPartida(i, { etapa: e.target.value })} style={{ width: 90, fontSize: 12 }} /></td>
+                            <td style={{ padding: 6 }}><input value={p.descripcion} onChange={(e) => updateCivilPartida(i, { descripcion: e.target.value })} style={{ width: 160, fontSize: 12 }} /></td>
+                            <td style={{ padding: 6 }}><input type="number" value={p.cantidad ?? ''} onChange={(e) => updateCivilPartida(i, { cantidad: e.target.value })} style={{ width: 60, fontSize: 12, textAlign: 'right' }} /></td>
+                            <td style={{ padding: 6 }}><input value={p.unidad} onChange={(e) => updateCivilPartida(i, { unidad: e.target.value })} style={{ width: 50, fontSize: 12 }} /></td>
+                            <td style={{ padding: 6 }}><input type="number" value={p.precioUnitario ?? ''} onChange={(e) => updateCivilPartida(i, { precioUnitario: e.target.value })} style={{ width: 70, fontSize: 12, textAlign: 'right' }} /></td>
+                            <td style={{ padding: 6 }}><button type="button" className="labs-attach-remove" onClick={() => removeCivilPartida(i)}>✕</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
           <label className="field-label">Supervisores del proyecto</label>
           <UserMultiSelect tenant={tenant} role="Supervisor" selected={supervisorIds} onChange={setSupervisorIds} />
           {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
@@ -372,9 +581,82 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
 /* ======================= Resumen ======================= */
 
 function ViewResumen({ tenant, experiment, identity, onGo, onUpdate }) {
+  if (experiment.meta.projectKind === 'civil') {
+    return <ViewResumenCivil tenant={tenant} experiment={experiment} identity={identity} onUpdate={onUpdate} />;
+  }
   if (identity.role === 'Director') return <ViewResumenDirector tenant={tenant} experiment={experiment} onGo={onGo} onUpdate={onUpdate} />;
   if (identity.role === 'Supervisor') return <ViewResumenSupervisor tenant={tenant} experiment={experiment} />;
   return <ViewResumenRegistrador experiment={experiment} identity={identity} onGo={onGo} />;
+}
+
+// Proyecto civil: nada de resumen generado por IA — las 3 métricas se calculan solas
+// (lib/labs/experiments.js: computeCivilMetrics/computeCivilAlerts), no hay nada que "resumir".
+function ViewResumenCivil({ tenant, experiment, identity, onUpdate }) {
+  if (identity.role === 'Registrador') {
+    return (
+      <div className="view">
+        <div className="view-header">
+          <span className="view-eyebrow">Resumen · {experiment.meta.name}</span>
+          <h1 className="view-title">Tus tareas</h1>
+        </div>
+        {experiment.tasks.length === 0 && <p className="empty-note">No tenés tareas asignadas en este proyecto.</p>}
+        {experiment.tasks.map((t) => (
+          <div className="labs-tenant-row" key={t.id}>
+            <div>
+              <div className="labs-tenant-name">{t.nombre}</div>
+              <div className="labs-tenant-meta">{t.fase} · {t.fechaInicio ?? '—'} → {t.fechaFin ?? '—'}</div>
+            </div>
+            <span className={`tag ${t.progreso >= 100 ? 'tag-living' : 'tag-neutral'}`}>{t.progreso >= 100 ? 'Terminada' : 'Pendiente'}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const m = experiment.civilMetrics;
+  const alerts = experiment.civilAlerts ?? [];
+  if (!m) return null;
+
+  return (
+    <div className="view">
+      <div className="view-header">
+        <span className="view-eyebrow">Resumen · {experiment.meta.name}</span>
+        <h1 className="view-title">Avance del proyecto</h1>
+      </div>
+
+      {identity.role === 'Director' && <ProjectDetailsCard tenant={tenant} experiment={experiment} onUpdate={onUpdate} />}
+
+      <div className="dim-grid" style={{ marginBottom: 18 }}>
+        <div className="dim-item">
+          <div className="dim-name">Tareas</div>
+          <div className="dim-bar"><div className="dim-fill" style={{ width: `${m.pctTareas}%` }} /></div>
+          <div className="dim-label">{m.pctTareas}% — {m.tareasTerminadas}/{m.totalTareas} terminadas</div>
+        </div>
+        <div className="dim-item">
+          <div className="dim-name">Financiero</div>
+          <div className="dim-bar"><div className="dim-fill" style={{ width: `${Math.min(100, m.pctFinanciero)}%` }} /></div>
+          <div className="dim-label">{m.pctFinanciero}% ejecutado</div>
+        </div>
+        <div className="dim-item">
+          <div className="dim-name">Tiempo</div>
+          <div className="dim-bar"><div className="dim-fill" style={{ width: `${Math.min(100, m.pctTiempo)}%` }} /></div>
+          <div className="dim-label">{m.pctTiempo}% transcurrido</div>
+        </div>
+      </div>
+
+      {alerts.length > 0 && (
+        <>
+          <div className="divider-label"><span>Alertas</span></div>
+          {alerts.map((a, i) => (
+            <div className="priority-row" key={i}>
+              <span className="pr-ic">⚠</span>
+              <div className="pr-body"><div className="pr-title">{a.message}</div></div>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
 }
 
 function ViewResumenRegistrador({ experiment, identity, onGo }) {
@@ -544,8 +826,13 @@ function ProjectDetailsCard({ tenant, experiment, onUpdate }) {
   const [editOpen, setEditOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const m = experiment.meta;
-  const budgetLabel = m.hasBudget
-    ? `Sí${m.budgetAmount != null ? ` — ${m.budgetAmount}${m.budgetCurrency ? ' ' + m.budgetCurrency : ''}` : ''}`
+  // hasBudget es un flag manual (se edita en "Editar"); si nadie lo tocó pero ya hay
+  // partidas cargadas en Presupuesto, el total real de ahí vale más que el flag vacío.
+  const partidasTotal = experiment.civilMetrics?.totalImporte ?? 0;
+  const derivedFromPartidas = !m.hasBudget && partidasTotal > 0;
+  const budgetAmount = m.hasBudget ? m.budgetAmount : (derivedFromPartidas ? partidasTotal : null);
+  const budgetLabel = (m.hasBudget || derivedFromPartidas)
+    ? `Sí${budgetAmount != null ? ` — ${budgetAmount.toLocaleString('es-PE')}${m.budgetCurrency ? ' ' + m.budgetCurrency : ''}` : ''}${derivedFromPartidas ? ' (según partidas)' : ''}`
     : 'No asignado';
 
   return (
@@ -985,13 +1272,18 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
 
 /* ======================= Documentación ======================= */
 
-const DOC_CATEGORIES = ['Cronograma', 'Presupuesto', 'Otro'];
+// Civil ya tiene Cronograma y Presupuesto como datos estructurados (ver ViewCronograma/
+// ViewPresupuesto) — acá quedan categorías que solo tienen sentido como archivo suelto.
+function getDocCategories(projectKind) {
+  return projectKind === 'civil' ? ['Planos', 'Contratos', 'Permisos', 'Otro'] : ['Cronograma', 'Presupuesto', 'Otro'];
+}
 
 // Cronogramas, presupuestos y otros adjuntos de referencia del proyecto — no se analizan con
 // IA, es solo almacenamiento. Solo Director, o Supervisor asignado a este proyecto, suben o
 // borran (el server ya lo hace cumplir; acá es nomás la UI).
 function ViewDocumentacion({ tenant, experiment, identity, onUpdate }) {
-  const [category, setCategory] = useState('Cronograma');
+  const DOC_CATEGORIES = getDocCategories(experiment.meta.projectKind);
+  const [category, setCategory] = useState(DOC_CATEGORIES[0]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const fileInputRef = useRef(null);
@@ -1081,6 +1373,710 @@ function ViewDocumentacion({ tenant, experiment, identity, onUpdate }) {
           })}
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ======================= Cronograma (civil) ======================= */
+
+function ResponsableSelect({ tenant, selected, onChange }) {
+  const [users, setUsers] = useState([]);
+  useEffect(() => {
+    fetch(`/api/labs/${tenant}/users`)
+      .then((r) => r.json())
+      .then((d) => setUsers((d.users ?? []).filter((u) => (u.role === 'Supervisor' || u.role === 'Registrador') && u.active !== false)))
+      .catch(() => setUsers([]));
+  }, [tenant]);
+  return (
+    <select value={selected ?? ''} onChange={(e) => onChange(e.target.value || null)} style={{ width: '100%', marginBottom: 14 }}>
+      <option value="">— Sin asignar —</option>
+      {users.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+    </select>
+  );
+}
+
+// Comentarios sobre una Tarea o Partida puntual — reusa el mismo feedback del proyecto
+// (targetType 'tarea'/'partida'), solo que acá se ve como hilo de comentarios de esa fila,
+// no en la pestaña Feedback general. Director y Supervisor pueden comentar; Registrador (si
+// llega a ver el modal desde su propia tarea) solo lee.
+// Mismo mecanismo de adjuntos que ViewAportar (compressImage/readAsBase64/subida resumible de
+// video), sin el gate de testId — acá la carpeta de Drive es una sola por proyecto.
+async function processFeedbackFile(file, { tenant, experimentId, setAttachments, setErr }) {
+  if (!file) return;
+  setErr(null);
+  const isImage = file.type.startsWith('image/');
+  const isVideo = file.type.startsWith('video/');
+  const maxMb = isImage ? 4 : isVideo ? VIDEO_MAX_MB : DOC_MAX_MB;
+  if (file.size > maxMb * 1024 * 1024) { setErr(`Archivo demasiado grande (máx ${maxMb} MB).`); return; }
+  const id = Math.random().toString(36).slice(2);
+
+  if (isImage) {
+    const data = await compressImage(file);
+    setAttachments((prev) => [...prev, { id, name: file.name || 'foto.jpg', mimeType: 'image/jpeg', kind: 'image', data, previewUrl: `data:image/jpeg;base64,${data}` }]);
+    return;
+  }
+
+  if (isVideo) {
+    setAttachments((prev) => [...prev, { id, name: file.name, mimeType: file.type, kind: 'video', uploading: true, previewUrl: null }]);
+    try {
+      const urlRes = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/feedback/video-upload-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: file.name, mimeType: file.type }),
+      });
+      const urlData = await urlRes.json();
+      if (!urlRes.ok) throw new Error(urlData.error || 'No se pudo iniciar la subida.');
+
+      const putRes = await fetch(urlData.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+      if (!putRes.ok) throw new Error('No se pudo subir el video.');
+      const uploaded = await putRes.json();
+
+      setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, uploading: false, driveFileId: uploaded.id, driveUrl: uploaded.webViewLink } : a)));
+    } catch (e) {
+      setErr(e.message || 'No se pudo subir el video.');
+      setAttachments((prev) => prev.filter((a) => a.id !== id));
+    }
+    return;
+  }
+
+  const data = await readAsBase64(file);
+  setAttachments((prev) => [...prev, { id, name: file.name, mimeType: file.type || 'application/octet-stream', kind: 'document', data, previewUrl: null }]);
+}
+
+function CommentAttachment({ att }) {
+  const href = att.driveUrl || (att.data ? `data:${att.mimeType};base64,${att.data}` : null);
+  return (
+    <a href={href || undefined} target="_blank" rel="noreferrer" download={att.driveUrl || !href ? undefined : att.name} className="labs-attach-chip" style={{ textDecoration: 'none', cursor: href ? 'pointer' : 'default' }}>
+      {att.kind === 'image' && att.previewUrl
+        ? <img src={att.previewUrl} className="labs-attach-thumb" alt={att.name} />
+        : <div className="labs-attach-icon">{att.kind === 'video' ? '🎥' : '📄'}</div>}
+      <span className="labs-attach-name">{att.name}</span>
+    </a>
+  );
+}
+
+function CommentsModal({ tenant, experimentId, canComment, targetType, targetId, targetLabel, comments, onClose, onUpdate }) {
+  const [text, setText] = useState('');
+  const [attachments, setAttachments] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+
+  const hasContent = text.trim() || attachments.length > 0;
+  const uploading = attachments.some((a) => a.uploading);
+
+  const handleSend = async () => {
+    if (!hasContent || busy || uploading) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/feedback`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetType, targetId, text, visibility: 'Todo el equipo',
+          attachments: attachments.map(({ name, mimeType, data, previewUrl, driveFileId, driveUrl, kind }) => ({ name, mimeType, data, previewUrl, driveFileId, driveUrl, kind })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo enviar.'); return; }
+      setText('');
+      setAttachments([]);
+      onUpdate();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" style={{ position: 'relative' }}>
+        <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
+        <span className="eyebrow-mini on-dark">Comentarios</span>
+        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 20, fontWeight: 600, margin: '6px 0 16px' }}>{targetLabel}</h2>
+
+        {comments.length === 0 && <p className="empty-note">Todavía no hay comentarios.</p>}
+        {comments.map((c) => (
+          <div className="feedback-item" key={c.id}>
+            <div className="fb-top">
+              <div className="fb-who"><span className="recent-avatar" style={{ width: 24, height: 24, fontSize: 10.5 }}>{initials(c.who)}</span>{c.who}{c.whoRole ? ` (${c.whoRole})` : ''}</div>
+              <span className="recent-time">{formatDateTime(c.createdAt)}</span>
+            </div>
+            {c.text && <div className="fb-text">{c.text}</div>}
+            {c.attachments?.length > 0 && (
+              <div className="labs-attach-strip" style={{ marginTop: 10 }}>
+                {c.attachments.map((a, i) => <CommentAttachment att={a} key={i} />)}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {canComment && (
+          <>
+            <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Escribí un comentario… (o adjuntá evidencia sin texto)" style={{ marginTop: 14 }} />
+
+            <input
+              ref={fileInputRef} type="file" accept={EVIDENCE_ACCEPT} multiple style={{ display: 'none' }}
+              onChange={(e) => { Array.from(e.target.files).forEach((f) => processFeedbackFile(f, { tenant, experimentId, setAttachments, setErr })); e.target.value = ''; }}
+            />
+            <input
+              ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+              onChange={(e) => { Array.from(e.target.files).forEach((f) => processFeedbackFile(f, { tenant, experimentId, setAttachments, setErr })); e.target.value = ''; }}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button type="button" className="labs-attach-btn" onClick={() => fileInputRef.current?.click()}>📎 Adjuntar archivo</button>
+              <button type="button" className="labs-attach-btn" onClick={() => cameraInputRef.current?.click()}>📷 Tomar foto</button>
+            </div>
+
+            {attachments.length > 0 && (
+              <div className="labs-attach-strip">
+                {attachments.map((att) => (
+                  <div key={att.id} className="labs-attach-chip">
+                    {att.previewUrl ? <img src={att.previewUrl} className="labs-attach-thumb" alt={att.name} /> : <div className="labs-attach-icon">{att.kind === 'video' ? '🎥' : '📄'}</div>}
+                    <span className="labs-attach-name">{att.uploading ? `Subiendo ${att.name}…` : att.name}</span>
+                    <button type="button" className="labs-attach-remove" disabled={att.uploading} onClick={() => setAttachments((p) => p.filter((a) => a.id !== att.id))}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {err && <p className="labs-login-error" style={{ marginTop: 8 }}>{err}</p>}
+            <div className="modal-footer">
+              <button type="button" className="btn btn-quiet" onClick={onClose}>Cerrar</button>
+              <button type="button" className="btn btn-primary" disabled={busy || uploading || !hasContent} onClick={handleSend}>{busy ? 'Enviando…' : 'Comentar →'}</button>
+            </div>
+          </>
+        )}
+        {!canComment && (
+          <div className="modal-footer">
+            <button type="button" className="btn btn-quiet" onClick={onClose}>Cerrar</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Director asigna tareas (nunca a sí mismo) — Supervisor se autoasigna o asigna a Registrador.
+// El % de avance lo actualiza el responsable de la tarea, o el Director/Supervisor del proyecto.
+function TaskCommentButton({ count, onClick, small }) {
+  const size = small ? 13 : 15;
+  return (
+    <div className="cron-comment-wrap">
+      <button type="button" className="cron-comment-btn" title="Comentarios" onClick={onClick}>
+        <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+          <path d="M3 5.5C3 4.12 4.12 3 5.5 3h9C15.88 3 17 4.12 17 5.5v6c0 1.38-1.12 2.5-2.5 2.5H9l-3.6 3.1c-.4.34-1 .06-1-.46V14h-.9C2.12 14 1 12.88 1 11.5v-6C1 4.12 2.12 3 3.5 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {count > 0 && <span className="cron-comment-badge">{count}</span>}
+    </div>
+  );
+}
+
+function TaskStatusIcon({ status }) {
+  if (status === 'saving') {
+    return (
+      <svg className="cron-spin" width="14" height="14" viewBox="0 0 16 16">
+        <circle cx="8" cy="8" r="6.2" fill="none" stroke="rgba(63,158,115,0.25)" strokeWidth="1.5" />
+        <path d="M14.2 8a6.2 6.2 0 0 0-6.2-6.2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (status === 'done') {
+    return (
+      <svg width="14" height="14" viewBox="0 0 16 16">
+        <circle cx="8" cy="8" r="6.2" fill="currentColor" />
+        <path d="M5 8.2l1.9 1.9 4-4.3" fill="none" stroke="var(--labs-dark)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+const TASK_STATUS_LABEL = { pending: 'Pendiente', saving: 'Guardando…', done: 'Terminada' };
+
+function TaskStatusPill({ task, saving, interactive, onToggle, small }) {
+  const status = saving ? 'saving' : task.progreso >= 100 ? 'done' : 'pending';
+  const clickable = interactive && status !== 'saving';
+  const Tag = clickable ? 'button' : 'span';
+  return (
+    <Tag
+      type={clickable ? 'button' : undefined}
+      className={`cron-status-pill ${status}${small ? ' small' : ''}${clickable ? '' : ' static'}`}
+      onClick={clickable ? onToggle : undefined}
+    >
+      <TaskStatusIcon status={status} /><span>{TASK_STATUS_LABEL[status]}</span>
+    </Tag>
+  );
+}
+
+function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
+  const [users, setUsers] = useState([]);
+  const [view, setView] = useState('list'); // 'list' | 'gantt'
+  const [createOpen, setCreateOpen] = useState(false);
+  const [savingTaskId, setSavingTaskId] = useState(null);
+  const [commentsFor, setCommentsFor] = useState(null); // { id, label } | null
+  const canManage = identity.role === 'Director' || experiment.meta.supervisorIds?.includes(identity.id);
+  const canComment = identity.role === 'Director' || identity.role === 'Supervisor';
+
+  useEffect(() => {
+    fetch(`/api/labs/${tenant}/users`)
+      .then((r) => r.json())
+      .then((d) => setUsers(d.users ?? []))
+      .catch(() => setUsers([]));
+  }, [tenant]);
+
+  const nameOf = (id) => users.find((u) => u.id === id)?.name ?? 'Sin asignar';
+
+  const toggleProgreso = async (task) => {
+    setSavingTaskId(task.id);
+    try {
+      await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/tasks/${task.id}/progreso`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ progreso: task.progreso >= 100 ? 0 : 100 }),
+      });
+      onUpdate();
+    } finally {
+      setSavingTaskId(null);
+    }
+  };
+
+  const canTogglePorTask = (task) => canManage || task.responsable === identity.id;
+  const commentsOf = (taskId) => experiment.feedback.filter((f) => f.targetType === 'tarea' && f.targetId === taskId);
+  const now = Date.now();
+  const isVencida = (t) => t.progreso < 100 && t.fechaFin && new Date(t.fechaFin).getTime() < now;
+
+  const grouped = [];
+  for (const t of experiment.tasks) {
+    const key = t.fase || 'Sin fase';
+    let g = grouped.find((x) => x.fase === key);
+    if (!g) { g = { fase: key, tasks: [] }; grouped.push(g); }
+    g.tasks.push(t);
+  }
+
+  const openComments = (t) => setCommentsFor({ id: t.id, label: t.nombre });
+
+  return (
+    <div className={`view${view === 'gantt' ? ' view-wide' : ''}`}>
+      <div className="view-header">
+        <span className="view-eyebrow">Cronograma · {experiment.meta.name}</span>
+        <div className="cron-title-row">
+          <h1 className="view-title">Tareas</h1>
+          {experiment.tasks.length > 0 && (
+            <div className="cron-view-toggle">
+              <button type="button" className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>Lista</button>
+              <button type="button" className={view === 'gantt' ? 'active' : ''} onClick={() => setView('gantt')}>Cronograma</button>
+            </div>
+          )}
+        </div>
+        <p className="view-sub">
+          {view === 'list'
+            ? 'Agrupadas por fase. El % de avance lo actualiza el responsable, o Director/Supervisor.'
+            : 'Barras posicionadas por fecha de inicio y fin. Haz clic en el control de la derecha para marcar una tarea como terminada.'}
+        </p>
+      </div>
+
+      {canManage && (
+        <button className="btn btn-primary" style={{ marginBottom: 16 }} onClick={() => setCreateOpen(true)}>+ Nueva tarea</button>
+      )}
+
+      {experiment.tasks.length === 0 && <p className="empty-note">Todavía no hay tareas cargadas.</p>}
+
+      {experiment.tasks.length > 0 && view === 'list' && (
+        <div className="cron-list">
+          {grouped.map((g) => (
+            <div key={g.fase} style={{ marginBottom: 20 }}>
+              <div className="divider-label"><span>{g.fase}</span></div>
+              {g.tasks.map((t) => {
+                const vencida = isVencida(t);
+                const saving = savingTaskId === t.id;
+                return (
+                  <div className="cron-row" key={t.id}>
+                    <div className="cron-row-info">
+                      <div className="cron-row-name">{t.nombre}</div>
+                      <div className="cron-row-meta">
+                        <span>{nameOf(t.responsable)}</span><span className="dim">·</span>
+                        <span>{formatShortDate(t.fechaInicio)} → {formatShortDate(t.fechaFin)}</span>
+                        {vencida && <><span className="dim">·</span><span className="cron-overdue">vencida</span></>}
+                      </div>
+                    </div>
+                    <div className="cron-row-actions">
+                      <TaskCommentButton count={commentsOf(t.id).length} onClick={() => openComments(t)} />
+                      <TaskStatusPill task={t} saving={saving} interactive={canTogglePorTask(t)} onToggle={() => toggleProgreso(t)} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {experiment.tasks.length > 0 && view === 'gantt' && (
+        <CronogramaGantt
+          grouped={grouped}
+          nameOf={nameOf}
+          isVencida={isVencida}
+          savingTaskId={savingTaskId}
+          canTogglePorTask={canTogglePorTask}
+          onToggle={toggleProgreso}
+          commentsOf={commentsOf}
+          onOpenComments={openComments}
+        />
+      )}
+
+      {createOpen && (
+        <CreateTaskModal
+          tenant={tenant}
+          experimentId={experiment.meta.id}
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => { setCreateOpen(false); onUpdate(); }}
+        />
+      )}
+
+      {commentsFor && (
+        <CommentsModal
+          tenant={tenant}
+          experimentId={experiment.meta.id}
+          identity={identity}
+          canComment={canComment}
+          targetType="tarea"
+          targetId={commentsFor.id}
+          targetLabel={commentsFor.label}
+          comments={commentsOf(commentsFor.id)}
+          onClose={() => setCommentsFor(null)}
+          onUpdate={onUpdate}
+        />
+      )}
+    </div>
+  );
+}
+
+const GANTT_PX_PER_DAY = 34;
+const GANTT_MIN_TRACK = 420;
+const GANTT_INFO_WIDTH = 220;
+
+function CronogramaGantt({ grouped, nameOf, isVencida, savingTaskId, canTogglePorTask, onToggle, commentsOf, onOpenComments }) {
+  const withDates = grouped.flatMap((g) => g.tasks).filter((t) => t.fechaInicio && t.fechaFin);
+  if (withDates.length === 0) {
+    return <p className="empty-note">Ninguna tarea tiene fecha de inicio y fin cargadas todavía — usa la vista Lista o edítalas para ver el cronograma.</p>;
+  }
+
+  const starts = withDates.map((t) => t.fechaInicio).sort();
+  const ends = withDates.map((t) => t.fechaFin).sort();
+  const domainStart = starts[0];
+  const domainEnd = ends[ends.length - 1];
+  const totalDays = Math.max(1, daysBetween(domainStart, domainEnd)) + 1;
+  const trackWidth = Math.max(GANTT_MIN_TRACK, totalDays * GANTT_PX_PER_DAY);
+
+  const tickEvery = totalDays <= 14 ? 1 : totalDays <= 45 ? 3 : totalDays <= 120 ? 7 : 14;
+  const ticks = [];
+  for (let d = 0; d <= totalDays; d += tickEvery) {
+    const date = new Date(`${domainStart}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + d);
+    const iso = date.toISOString().slice(0, 10);
+    ticks.push({ left: d * GANTT_PX_PER_DAY, label: formatShortDate(iso) });
+  }
+
+  return (
+    <div className="cron-gantt-scroll">
+      <div className="cron-gantt-wrap" style={{ width: GANTT_INFO_WIDTH + trackWidth + 190 }}>
+        <div className="cron-gantt-grid" style={{ left: GANTT_INFO_WIDTH, width: trackWidth }}>
+          {ticks.map((tk) => <div key={tk.left} style={{ left: tk.left }} />)}
+        </div>
+        <div className="cron-gantt-axisrow">
+          <div className="cron-gantt-corner" style={{ width: GANTT_INFO_WIDTH, flexShrink: 0 }} />
+          <div className="cron-gantt-axis" style={{ width: trackWidth }}>
+            {ticks.map((tk) => <span key={tk.left} style={{ left: Math.max(0, tk.left - 13) }}>{tk.label}</span>)}
+          </div>
+        </div>
+
+        {grouped.map((g) => (
+          <div key={g.fase}>
+            <div className="divider-label"><span>{g.fase}</span></div>
+            {g.tasks.map((t) => {
+              const hasDates = t.fechaInicio && t.fechaFin;
+              const vencida = isVencida(t);
+              const saving = savingTaskId === t.id;
+              const status = saving ? 'saving' : t.progreso >= 100 ? 'done' : vencida ? 'overdue' : 'pending';
+              const barLeft = hasDates ? Math.max(0, daysBetween(domainStart, t.fechaInicio)) * GANTT_PX_PER_DAY : 0;
+              const barWidth = hasDates ? Math.max(GANTT_PX_PER_DAY * 0.7, (daysBetween(t.fechaInicio, t.fechaFin) + 1) * GANTT_PX_PER_DAY) : 0;
+              const showLabel = barWidth >= 78;
+              return (
+                <div className="cron-gantt-row" key={t.id}>
+                  <div className="cron-gantt-info" style={{ width: GANTT_INFO_WIDTH }}>
+                    <div className="cron-row-name">{t.nombre}</div>
+                    <div className="cron-gantt-assignee">{nameOf(t.responsable)}</div>
+                  </div>
+                  <div className="cron-gantt-track" style={{ width: trackWidth }}>
+                    {hasDates ? (
+                      <div className={`cron-gantt-bar ${status}`} style={{ left: barLeft, width: barWidth }} title={`${formatShortDate(t.fechaInicio)} → ${formatShortDate(t.fechaFin)}`}>
+                        {status === 'done' && (
+                          <svg width="12" height="12" viewBox="0 0 16 16"><path d="M3.5 8.5l2.8 2.8L12.5 5" fill="none" stroke="var(--labs-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        )}
+                        {showLabel && <span>{TASK_STATUS_LABEL[status] || (vencida ? 'Vencida' : 'Pendiente')}</span>}
+                      </div>
+                    ) : (
+                      <span className="cron-gantt-nodate">Sin fechas</span>
+                    )}
+                  </div>
+                  <div className="cron-gantt-actions">
+                    <TaskCommentButton count={commentsOf(t.id).length} onClick={() => onOpenComments(t)} small />
+                    <TaskStatusPill task={t} saving={saving} interactive={canTogglePorTask(t)} onToggle={() => onToggle(t)} small />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CreateTaskModal({ tenant, experimentId, onClose, onCreated }) {
+  const [fase, setFase] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [responsableId, setResponsableId] = useState(null);
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [fechaFin, setFechaFin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!nombre.trim() || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/tasks`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fase, nombre, responsable: responsableId, fechaInicio: fechaInicio || null, fechaFin: fechaFin || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo crear.'); return; }
+      onCreated();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" style={{ position: 'relative' }}>
+        <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
+        <span className="eyebrow-mini on-dark">Nueva tarea</span>
+        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Cronograma</h2>
+        <form onSubmit={handleCreate}>
+          <label className="field-label">Fase</label>
+          <input type="text" value={fase} onChange={(e) => setFase(e.target.value)} style={{ marginBottom: 14 }} />
+          <label className="field-label">Nombre de la tarea</label>
+          <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} style={{ marginBottom: 14 }} required />
+          <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+            <div style={{ flex: 1 }}>
+              <label className="field-label">Fecha inicio</label>
+              <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="field-label">Fecha fin</label>
+              <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+            </div>
+          </div>
+          <label className="field-label">Responsable</label>
+          <ResponsableSelect tenant={tenant} selected={responsableId} onChange={setResponsableId} />
+          {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
+          <div className="modal-footer">
+            <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Creando…' : 'Crear tarea →'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ======================= Presupuesto (civil) ======================= */
+
+function ViewPresupuesto({ tenant, experiment, identity, onUpdate }) {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [savingPartidaId, setSavingPartidaId] = useState(null);
+  const [commentsFor, setCommentsFor] = useState(null); // { id, label } | null
+  const canManage = identity.role === 'Director' || experiment.meta.supervisorIds?.includes(identity.id);
+  const canComment = identity.role === 'Director' || identity.role === 'Supervisor';
+
+  const grouped = [];
+  for (const p of experiment.partidas) {
+    const key = p.etapa || 'Sin etapa';
+    let g = grouped.find((x) => x.etapa === key);
+    if (!g) { g = { etapa: key, partidas: [] }; grouped.push(g); }
+    g.partidas.push(p);
+  }
+
+  const totalImporte = experiment.civilMetrics?.totalImporte ?? 0;
+  const totalEjecutado = experiment.civilMetrics?.totalEjecutado ?? 0;
+  const commentsOf = (partidaId) => experiment.feedback.filter((f) => f.targetType === 'partida' && f.targetId === partidaId);
+
+  const updateEjecutado = async (partida, value) => {
+    setSavingPartidaId(partida.id);
+    try {
+      await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/partidas/${partida.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ejecutado: value }),
+      });
+      onUpdate();
+    } finally {
+      setSavingPartidaId(null);
+    }
+  };
+
+  return (
+    <div className="view">
+      <div className="view-header">
+        <span className="view-eyebrow">Presupuesto · {experiment.meta.name}</span>
+        <h1 className="view-title">Partidas</h1>
+        <p className="view-sub">Agrupadas por etapa. El % de adquisición se calcula solo.</p>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 13 }}>
+          <div><b style={{ color: 'var(--labs-cream)' }}>{totalImporte.toLocaleString('es-PE', { maximumFractionDigits: 2 })}</b> presupuestado</div>
+          <div><b style={{ color: 'var(--labs-cream)' }}>{totalEjecutado.toLocaleString('es-PE', { maximumFractionDigits: 2 })}</b> ejecutado</div>
+          <div><b style={{ color: 'var(--labs-living)' }}>{experiment.civilMetrics?.pctFinanciero ?? 0}%</b> de avance financiero</div>
+        </div>
+      </div>
+
+      {canManage && (
+        <button className="btn btn-primary" style={{ marginBottom: 16 }} onClick={() => setCreateOpen(true)}>+ Nueva partida</button>
+      )}
+
+      {experiment.partidas.length === 0 && <p className="empty-note">Todavía no hay partidas cargadas.</p>}
+
+      {grouped.map((g) => (
+        <div key={g.etapa} style={{ marginBottom: 20 }}>
+          <div className="divider-label"><span>{g.etapa}</span></div>
+          {g.partidas.map((p) => {
+            const pct = p.importe ? Math.round((p.ejecutado / p.importe) * 100) : 0;
+            const sobrecosto = p.importe > 0 && p.ejecutado > p.importe;
+            const saving = savingPartidaId === p.id;
+            const nComments = commentsOf(p.id).length;
+            return (
+              <div className="labs-tenant-row" key={p.id}>
+                <div>
+                  <div className="labs-tenant-name">{p.descripcion}</div>
+                  <div className="labs-tenant-meta">
+                    {p.cantidad ?? '—'} {p.unidad} · {p.importe.toLocaleString('es-PE')} presupuestado
+                    {sobrecosto && <span style={{ color: '#E19680', marginLeft: 6 }}>· sobrecosto</span>}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {saving && <span style={{ fontSize: 11.5, color: 'var(--labs-cream-faint)' }}>Guardando…</span>}
+                  <button className="chip-btn" onClick={() => setCommentsFor({ id: p.id, label: p.descripcion })}>💬 Comentarios{nComments ? ` (${nComments})` : ''}</button>
+                  {canManage ? (
+                    <input
+                      type="number"
+                      defaultValue={p.ejecutado}
+                      disabled={saving}
+                      onBlur={(e) => { if (Number(e.target.value) !== p.ejecutado) updateEjecutado(p, e.target.value); }}
+                      style={{ width: 90, fontSize: 12.5 }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: 12.5 }}>{p.ejecutado.toLocaleString('es-PE')}</span>
+                  )}
+                  <span className={`tag ${sobrecosto ? 'tag-alert' : 'tag-neutral'}`}>{pct}%</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+
+      {createOpen && (
+        <CreatePartidaModal
+          tenant={tenant}
+          experimentId={experiment.meta.id}
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => { setCreateOpen(false); onUpdate(); }}
+        />
+      )}
+
+      {commentsFor && (
+        <CommentsModal
+          tenant={tenant}
+          experimentId={experiment.meta.id}
+          identity={identity}
+          canComment={canComment}
+          targetType="partida"
+          targetId={commentsFor.id}
+          targetLabel={commentsFor.label}
+          comments={commentsOf(commentsFor.id)}
+          onClose={() => setCommentsFor(null)}
+          onUpdate={onUpdate}
+        />
+      )}
+    </div>
+  );
+}
+
+function CreatePartidaModal({ tenant, experimentId, onClose, onCreated }) {
+  const [etapa, setEtapa] = useState('');
+  const [descripcion, setDescripcion] = useState('');
+  const [cantidad, setCantidad] = useState('');
+  const [unidad, setUnidad] = useState('');
+  const [precioUnitario, setPrecioUnitario] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!descripcion.trim() || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/partidas`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ etapa, descripcion, cantidad, unidad, precioUnitario }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo crear.'); return; }
+      onCreated();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" style={{ position: 'relative' }}>
+        <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
+        <span className="eyebrow-mini on-dark">Nueva partida</span>
+        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Presupuesto</h2>
+        <form onSubmit={handleCreate}>
+          <label className="field-label">Etapa</label>
+          <input type="text" value={etapa} onChange={(e) => setEtapa(e.target.value)} style={{ marginBottom: 14 }} />
+          <label className="field-label">Descripción</label>
+          <input type="text" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} style={{ marginBottom: 14 }} required />
+          <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+            <input type="number" placeholder="Cantidad" value={cantidad} onChange={(e) => setCantidad(e.target.value)} style={{ flex: 1 }} />
+            <input type="text" placeholder="Unidad" value={unidad} onChange={(e) => setUnidad(e.target.value)} style={{ flex: 1 }} />
+            <input type="number" placeholder="Precio unit." value={precioUnitario} onChange={(e) => setPrecioUnitario(e.target.value)} style={{ flex: 1 }} />
+          </div>
+          {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
+          <div className="modal-footer">
+            <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Creando…' : 'Crear partida →'}</button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -1557,61 +2553,321 @@ function FeedbackItem({ f, tenant, experimentId, onUpdate }) {
 
 /* ======================= Reportes ======================= */
 
-function ViewReportes({ tenant, experiment, onUpdate }) {
-  const [generating, setGenerating] = useState(false);
+function ReportMeter({ label, pct, sublabel, tone = 'good' }) {
+  const clamped = Math.max(0, Math.min(100, pct));
+  return (
+    <div className="report-meter-row">
+      <div className="report-meter-top"><span>{label}</span><span>{pct}%</span></div>
+      <div className="report-meter-track"><div className={`report-meter-fill ${tone}`} style={{ width: `${clamped}%` }} /></div>
+      {sublabel && <div className="report-meter-sub">{sublabel}</div>}
+    </div>
+  );
+}
+
+function money(n) {
+  return `S/ ${Number(n || 0).toLocaleString('es-PE')}`;
+}
+
+// Fotos disponibles para curar el reporte civil: toda evidencia con imagen ya adjuntada en
+// comentarios de tareas/partidas (ver CommentsModal) — no hace falta subir nada de nuevo acá.
+function collectAvailablePhotos(experiment) {
+  const photos = [];
+  for (const f of experiment.feedback) {
+    if (f.targetType !== 'tarea' && f.targetType !== 'partida') continue;
+    for (const a of f.attachments || []) {
+      if (a.kind !== 'image') continue;
+      photos.push({ ...a, pickId: `${f.id}-${a.driveFileId || a.name}`, from: f.targetLabel, createdAt: f.createdAt });
+    }
+  }
+  return photos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function ReportPhotoGrid({ photos, caption }) {
+  if (!photos.length) return null;
+  return (
+    <div style={{ marginTop: 10 }}>
+      {caption && <div className="eyebrow-mini" style={{ marginBottom: 8 }}>{caption}</div>}
+      <div className="report-photo-grid">
+        {photos.map((p, i) => {
+          const href = p.driveUrl || (p.data ? `data:${p.mimeType};base64,${p.data}` : p.previewUrl);
+          return (
+            <a key={p.pickId || i} href={href || undefined} target="_blank" rel="noreferrer" className="report-photo-item">
+              <img src={p.previewUrl || href} alt={p.name} />
+              <span>{p.from || p.name}</span>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function GenerateCivilReportCard({ tenant, experiment, onUpdate }) {
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
-  const latest = experiment.reports[0];
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const availablePhotos = collectAvailablePhotos(experiment);
+  const [selected, setSelected] = useState(() => new Set(availablePhotos.slice(0, 6).map((p) => p.pickId)));
+
+  const togglePhoto = (pickId) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(pickId)) next.delete(pickId); else next.add(pickId);
+      return next;
+    });
+  };
 
   const handleGenerate = async () => {
-    setGenerating(true);
+    setBusy(true);
     setErr(null);
     try {
-      const res = await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/reports`, { method: 'POST' });
+      const photos = availablePhotos.filter((p) => selected.has(p.pickId)).map(({ pickId, from, createdAt, ...rest }) => rest);
+      const res = await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/reports`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photos }),
+      });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo generar.'); return; }
+      setPickerOpen(false);
       onUpdate();
     } catch {
       setErr('Error de conexión.');
     } finally {
-      setGenerating(false);
+      setBusy(false);
     }
   };
 
-  const handleApprove = async () => {
-    await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/reports`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reportId: latest.id }),
-    });
-    onUpdate();
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Reporte de {experiment.meta.name}</div>
+          <div style={{ fontSize: 12.5, color: 'var(--labs-cream-dim)' }}>{experiment.civilMetrics?.pctFinanciero ?? 0}% financiero · {experiment.civilMetrics?.pctTareas ?? 0}% tareas · {availablePhotos.length} fotos disponibles</div>
+        </div>
+        {!pickerOpen && <button className="btn btn-primary" onClick={() => setPickerOpen(true)}>Elegir fotos y generar →</button>}
+      </div>
+
+      {pickerOpen && (
+        <>
+          <p className="empty-note" style={{ marginTop: 14 }}>{availablePhotos.length === 0 ? 'Todavía no hay fotos de evidencia en los comentarios de tareas/partidas — el reporte igual se puede generar sin fotos.' : 'Elegí qué fotos de evidencia entran al reporte (preseleccioné las más recientes).'}</p>
+          {availablePhotos.length > 0 && (
+            <div className="report-photo-grid" style={{ marginTop: 10 }}>
+              {availablePhotos.map((p) => (
+                <button type="button" key={p.pickId} className={`report-photo-pick${selected.has(p.pickId) ? ' selected' : ''}`} onClick={() => togglePhoto(p.pickId)}>
+                  <img src={p.previewUrl || p.driveUrl} alt={p.name} />
+                  <span className="report-photo-check">{selected.has(p.pickId) ? '✓' : ''}</span>
+                  <span className="report-photo-caption">{p.from}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
+          <div className="modal-footer" style={{ marginTop: 14 }}>
+            <button type="button" className="btn btn-quiet" onClick={() => setPickerOpen(false)}>Cancelar</button>
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={handleGenerate}>{busy ? 'Sintetizando…' : `Generar borrador (${selected.size} fotos) →`}</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const REPORT_STATUS_LABEL = { borrador: 'Borrador', enviado: 'Esperando revisión', aprobado: 'Aprobado' };
+const REPORT_STATUS_TAG = { borrador: 'tag-neutral', enviado: 'tag-ember', aprobado: 'tag-living' };
+
+function ReportStatusTag({ status }) {
+  return <span className={`tag ${REPORT_STATUS_TAG[status] || 'tag-neutral'} on-paper`}>{REPORT_STATUS_LABEL[status] || status}</span>;
+}
+
+function ReportsHistoryList({ reports, activeId, onSelect }) {
+  if (reports.length < 2) return null;
+  return (
+    <div className="report-history">
+      <div className="eyebrow-mini on-dark" style={{ margin: '18px 0 8px' }}>Historial de reportes</div>
+      {reports.map((r) => (
+        <button type="button" key={r.id} className={`report-history-row${r.id === activeId ? ' active' : ''}`} onClick={() => onSelect(r.id)}>
+          <span>{formatDate(r.createdAt)}{r.generatedBy ? ` · ${r.generatedBy}` : ''}</span>
+          <ReportStatusTag status={r.status} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Comentarios + envío/aprobación son iguales para el reporte civil y el experimental — solo
+// cambia el contenido del cuerpo (children). Evita duplicar todo ese flujo en los dos.
+function ReportDocShell({ tenant, experiment, identity, latest, canApprove, canGenerate, onUpdate, children }) {
+  const [busy, setBusy] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const canComment = identity.role === 'Director' || identity.role === 'Supervisor';
+  const commentsOf = experiment.feedback.filter((f) => f.targetType === 'reporte' && f.targetId === latest.id);
+
+  const patch = async (body) => {
+    setBusy(true);
+    try {
+      await fetch(`/api/labs/${tenant}/experiments/${latest.experimentId}/reports`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId: latest.id, ...body }),
+      });
+      onUpdate();
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <div className="view">
-      <div className="view-header">
-        <span className="view-eyebrow">Reportes · {experiment.meta.name}</span>
-        <h1 className="view-title">El reporte, como subproducto</h1>
-        <p className="view-sub">No nace de cero — se sintetiza a partir de lo que ya quedó registrado.</p>
-      </div>
-
-      <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Reporte de {experiment.meta.name}</div>
-          <div style={{ fontSize: 12.5, color: 'var(--labs-cream-dim)' }}>{experiment.executions.length} ejecuciones · {experiment.feedback.length} feedback</div>
+    <div className="report-doc" style={{ marginTop: 16 }}>
+      <div className="report-meta-strip">
+        <span className="eyebrow-mini">{latest.generatedBy ? `Generado por ${latest.generatedBy}` : 'Generado por IA'} · {formatDate(latest.createdAt)}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {latest.driveUrl && <a href={latest.driveUrl} target="_blank" rel="noreferrer" className="tag tag-living on-paper" style={{ textDecoration: 'none' }}>📁 Ver en Drive ↗</a>}
+          <ReportStatusTag status={latest.status} />
         </div>
-        <button className="btn btn-primary" disabled={generating} onClick={handleGenerate}>{generating ? 'Sintetizando…' : 'Generar borrador →'}</button>
       </div>
-      {err && <p className="labs-login-error">{err}</p>}
 
-      {latest && (
-        <div className="report-doc" style={{ marginTop: 16 }}>
-          <div className="report-meta-strip">
-            <span className="eyebrow-mini">{latest.status === 'aprobado' ? 'Aprobado' : 'Borrador generado por IA'}</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {latest.driveUrl && <a href={latest.driveUrl} target="_blank" rel="noreferrer" className="tag tag-living on-paper" style={{ textDecoration: 'none' }}>📁 Ver en Drive ↗</a>}
-              <span className={`tag ${latest.status === 'aprobado' ? 'tag-living' : 'tag-ember'} on-paper`}>{latest.status}</span>
-            </div>
+      {children}
+
+      <div className="report-actions" style={{ justifyContent: 'space-between' }}>
+        <button type="button" className="chip-btn on-paper" onClick={() => setCommentsOpen(true)}>💬 Comentarios{commentsOf.length ? ` (${commentsOf.length})` : ''}</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {latest.status === 'borrador' && canGenerate && (
+            <button className="btn btn-primary" disabled={busy} onClick={() => patch({ action: 'submit' })}>{busy ? 'Enviando…' : 'Enviar a Director →'}</button>
+          )}
+          {latest.status === 'enviado' && canApprove && (
+            <button className="btn btn-primary" disabled={busy} onClick={() => patch({})}>{busy ? 'Aprobando…' : 'Aprobar y compartir'}</button>
+          )}
+        </div>
+      </div>
+
+      {commentsOpen && (
+        <CommentsModal
+          tenant={tenant}
+          experimentId={latest.experimentId}
+          identity={identity}
+          canComment={canComment}
+          targetType="reporte"
+          targetId={latest.id}
+          targetLabel={`Reporte del ${formatDate(latest.createdAt)}`}
+          comments={commentsOf}
+          onClose={() => setCommentsOpen(false)}
+          onUpdate={onUpdate}
+        />
+      )}
+    </div>
+  );
+}
+
+function CivilReportDoc({ tenant, experiment, identity, latest, canApprove, canGenerate, onUpdate }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(latest.analysis);
+  const [saving, setSaving] = useState(false);
+  const m = latest.metrics;
+  const overBudget = m.totalEjecutado > m.totalImporte;
+  const scheduleSlip = m.pctTiempo - m.pctTareas > 25;
+  const canEdit = latest.status === 'borrador' && canGenerate;
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await fetch(`/api/labs/${tenant}/experiments/${latest.experimentId}/reports`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId: latest.id, action: 'edit', analysis: draft }),
+      });
+      setEditing(false);
+      onUpdate();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ReportDocShell tenant={tenant} experiment={experiment} identity={identity} latest={latest} canApprove={canApprove} canGenerate={canGenerate} onUpdate={onUpdate}>
+      <h3>Avance general</h3>
+      <ReportMeter label="Financiero" pct={m.pctFinanciero} tone={overBudget ? 'critical' : 'good'} sublabel={`${money(m.totalEjecutado)} de ${money(m.totalImporte)} ejecutado${overBudget ? ' — supera lo presupuestado' : ''}`} />
+      <ReportMeter label="Tareas" pct={m.pctTareas} tone={scheduleSlip ? 'warning' : 'good'} sublabel={`${m.tareasTerminadas} de ${m.totalTareas} terminadas${scheduleSlip ? ' — por detrás del tiempo transcurrido' : ''}`} />
+      <ReportMeter label="Tiempo transcurrido" pct={m.pctTiempo} tone="good" />
+
+      {latest.breakdown?.financialByEtapa?.length > 0 && (
+        <>
+          <h3>Avance financiero por etapa</h3>
+          {latest.breakdown.financialByEtapa.map((e) => (
+            <ReportMeter key={e.etapa} label={e.etapa} pct={e.pct} tone={e.ejecutado > e.importe ? 'critical' : 'good'} sublabel={`${money(e.ejecutado)} de ${money(e.importe)}`} />
+          ))}
+        </>
+      )}
+
+      {latest.breakdown?.tasksByFase?.length > 0 && (
+        <>
+          <h3>Avance de tareas por fase</h3>
+          {latest.breakdown.tasksByFase.map((f) => (
+            <ReportMeter key={f.fase} label={f.fase} pct={f.pct} tone="good" sublabel={`${f.done}/${f.total} tareas`} />
+          ))}
+        </>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <h3 style={{ margin: 0 }}>Análisis</h3>
+        {canEdit && !editing && <button type="button" className="chip-btn on-paper" onClick={() => { setDraft(latest.analysis); setEditing(true); }}>Editar</button>}
+      </div>
+      {editing ? (
+        <>
+          <textarea rows={10} value={draft} onChange={(e) => setDraft(e.target.value)} style={{ marginTop: 8, background: 'var(--labs-paper)', color: 'var(--labs-ink)', border: '1px solid var(--labs-line)' }} />
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button type="button" className="chip-btn on-paper" onClick={() => setEditing(false)}>Cancelar</button>
+            <button type="button" className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving ? 'Guardando…' : 'Guardar cambios'}</button>
           </div>
-          <h3>Resumen</h3>
+        </>
+      ) : latest.analysis.split('\n\n').map((p, i) => <p key={i}>{p}</p>)}
+
+      <ReportPhotoGrid photos={latest.photos} caption={latest.photos?.length ? 'Evidencia fotográfica' : null} />
+    </ReportDocShell>
+  );
+}
+
+function ExperimentalReportDoc({ tenant, experiment, identity, latest, canApprove, canGenerate, onUpdate }) {
+  const canEdit = latest.status === 'borrador' && canGenerate;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ summary: latest.doc.summary, results: latest.doc.results, learnings: latest.doc.learnings, highlightedFeedback: latest.doc.highlightedFeedback });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await fetch(`/api/labs/${tenant}/experiments/${latest.experimentId}/reports`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId: latest.id, action: 'edit', doc: draft }),
+      });
+      setEditing(false);
+      onUpdate();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ReportDocShell tenant={tenant} experiment={experiment} identity={identity} latest={latest} canApprove={canApprove} canGenerate={canGenerate} onUpdate={onUpdate}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <h3 style={{ margin: 0 }}>Resumen, resultados y aprendizajes</h3>
+        {canEdit && !editing && <button type="button" className="chip-btn on-paper" onClick={() => setEditing(true)}>Editar</button>}
+      </div>
+
+      {editing ? (
+        <>
+          <label className="field-label" style={{ marginTop: 10 }}>Resumen</label>
+          <textarea rows={3} value={draft.summary} onChange={(e) => setDraft((d) => ({ ...d, summary: e.target.value }))} style={{ background: 'var(--labs-paper)', color: 'var(--labs-ink)', border: '1px solid var(--labs-line)' }} />
+          <label className="field-label" style={{ marginTop: 10 }}>Resultados</label>
+          <textarea rows={4} value={draft.results} onChange={(e) => setDraft((d) => ({ ...d, results: e.target.value }))} style={{ background: 'var(--labs-paper)', color: 'var(--labs-ink)', border: '1px solid var(--labs-line)' }} />
+          <label className="field-label" style={{ marginTop: 10 }}>Aprendizajes</label>
+          <textarea rows={4} value={draft.learnings} onChange={(e) => setDraft((d) => ({ ...d, learnings: e.target.value }))} style={{ background: 'var(--labs-paper)', color: 'var(--labs-ink)', border: '1px solid var(--labs-line)' }} />
+          <label className="field-label" style={{ marginTop: 10 }}>Feedback destacado</label>
+          <textarea rows={3} value={draft.highlightedFeedback} onChange={(e) => setDraft((d) => ({ ...d, highlightedFeedback: e.target.value }))} style={{ background: 'var(--labs-paper)', color: 'var(--labs-ink)', border: '1px solid var(--labs-line)' }} />
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button type="button" className="chip-btn on-paper" onClick={() => setEditing(false)}>Cancelar</button>
+            <button type="button" className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving ? 'Guardando…' : 'Guardar cambios'}</button>
+          </div>
+        </>
+      ) : (
+        <>
           <p>{latest.doc.summary}</p>
           <h3>Qué se probó</h3>
           <ul>{latest.doc.whatWasTested.map((w, i) => <li key={i}>{w}</li>)}</ul>
@@ -1622,13 +2878,66 @@ function ViewReportes({ tenant, experiment, onUpdate }) {
           {latest.doc.highlightedFeedback && (<><h3>Feedback destacado</h3><p>{latest.doc.highlightedFeedback}</p></>)}
           <h3>Próximos pasos sugeridos</h3>
           <ul>{latest.doc.nextSteps.map((n, i) => <li key={i}>{n}</li>)}</ul>
-          {latest.status !== 'aprobado' && (
-            <div className="report-actions">
-              <button className="btn btn-primary" onClick={handleApprove}>Aprobar y compartir</button>
-            </div>
-          )}
+        </>
+      )}
+    </ReportDocShell>
+  );
+}
+
+function ViewReportes({ tenant, experiment, identity, onUpdate }) {
+  const [generating, setGenerating] = useState(false);
+  const [err, setErr] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const isCivil = experiment.meta.projectKind === 'civil';
+  const reports = experiment.reports.map((r) => ({ ...r, experimentId: experiment.meta.id }));
+  const active = reports.find((r) => r.id === selectedId) || reports[0] || null;
+  const canGenerate = identity.role === 'Supervisor' && experiment.meta.supervisorIds?.includes(identity.id);
+  const canApprove = identity.role === 'Director';
+
+  const handleGenerateExperimental = async () => {
+    setGenerating(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/reports`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo generar.'); return; }
+      setSelectedId(null);
+      onUpdate();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <div className="view">
+      <div className="view-header">
+        <span className="view-eyebrow">Reportes · {experiment.meta.name}</span>
+        <h1 className="view-title">El reporte, como subproducto</h1>
+        <p className="view-sub">No nace de cero — se sintetiza a partir de lo que ya quedó registrado. El Supervisor genera y envía el borrador, el Director lo revisa y aprueba.</p>
+      </div>
+
+      {!canGenerate && !active && <p className="empty-note">Todavía no hay ningún reporte generado.</p>}
+
+      {canGenerate && isCivil && <GenerateCivilReportCard tenant={tenant} experiment={experiment} onUpdate={() => { setSelectedId(null); onUpdate(); }} />}
+
+      {canGenerate && !isCivil && (
+        <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Reporte de {experiment.meta.name}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--labs-cream-dim)' }}>{experiment.executions.length} ejecuciones · {experiment.feedback.length} feedback</div>
+          </div>
+          <button className="btn btn-primary" disabled={generating} onClick={handleGenerateExperimental}>{generating ? 'Sintetizando…' : 'Generar borrador →'}</button>
         </div>
       )}
+      {err && <p className="labs-login-error">{err}</p>}
+
+      {active && (active.kind === 'civil'
+        ? <CivilReportDoc key={active.id} tenant={tenant} experiment={experiment} identity={identity} latest={active} canApprove={canApprove} canGenerate={canGenerate} onUpdate={onUpdate} />
+        : <ExperimentalReportDoc key={active.id} tenant={tenant} experiment={experiment} identity={identity} latest={active} canApprove={canApprove} canGenerate={canGenerate} onUpdate={onUpdate} />)}
+
+      <ReportsHistoryList reports={reports} activeId={active?.id} onSelect={setSelectedId} />
     </div>
   );
 }
