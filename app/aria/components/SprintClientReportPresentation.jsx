@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react';
 
+const HEALTH_LABEL = { good: 'En orden', warning: 'Atención', critical: 'Crítico' };
+const HEALTH_CLASS = { good: 'aria-health-pill--good', warning: 'aria-health-pill--warning', critical: 'aria-health-pill--critical' };
+
 // Reporte de servicio con marca Bonsight, a demanda — el usuario elige cliente + qué sprints
 // entran (normalmente ~2 por mes) y arma un reporte mensual editable antes de exportarlo a
 // PDF. No depende de cerrar un sprint puntual (eso vive en SprintBoardPresentation).
@@ -13,8 +16,8 @@ export default function SprintClientReportPresentation({ tenant }) {
   const [selectedSprintIds, setSelectedSprintIds] = useState(() => new Set());
   const [generating, setGenerating] = useState(false);
 
-  const [meta, setMeta] = useState(null); // { clienteName, periodLabel, sprintTitles, metrics }
-  const [draft, setDraft] = useState(null); // { titulo, resumenEjecutivo, secciones, valorEntregado }
+  const [meta, setMeta] = useState(null); // { clienteName, periodLabel, sprintTitles, metrics, health }
+  const [draft, setDraft] = useState(null); // { titulo, resumenEjecutivo, hitos, secciones, valorEntregado, riesgos, proximosPasos }
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -45,7 +48,7 @@ export default function SprintClientReportPresentation({ tenant }) {
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo generar el reporte.'); return; }
-      setMeta({ clienteName: data.clienteName, periodLabel: data.periodLabel, sprintTitles: data.sprintTitles, metrics: data.metrics });
+      setMeta({ clienteName: data.clienteName, periodLabel: data.periodLabel, sprintTitles: data.sprintTitles, metrics: data.metrics, health: data.health });
       setDraft(data.draft);
     } catch {
       setErr('Error de conexión.');
@@ -67,7 +70,7 @@ export default function SprintClientReportPresentation({ tenant }) {
       const res = await fetch(`/api/aria/${tenant}/reports/sprint-client/pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...draft, clienteName: meta.clienteName, periodLabel: meta.periodLabel, metrics: meta.metrics }),
+        body: JSON.stringify({ ...draft, clienteName: meta.clienteName, periodLabel: meta.periodLabel, metrics: meta.metrics, health: meta.health }),
       });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
@@ -110,7 +113,16 @@ export default function SprintClientReportPresentation({ tenant }) {
           <input className="aria-report-input" value={draft.titulo} onChange={(e) => setDraft((d) => ({ ...d, titulo: e.target.value }))} />
 
           <label className="aria-report-label">Resumen ejecutivo</label>
-          <textarea className="aria-report-textarea" rows={5} value={draft.resumenEjecutivo} onChange={(e) => setDraft((d) => ({ ...d, resumenEjecutivo: e.target.value }))} />
+          <textarea className="aria-report-textarea" rows={3} value={draft.resumenEjecutivo} onChange={(e) => setDraft((d) => ({ ...d, resumenEjecutivo: e.target.value }))} />
+
+          <label className="aria-report-label">🏆 Hitos del período</label>
+          <textarea
+            className="aria-report-textarea"
+            rows={Math.max(3, draft.hitos.length)}
+            value={draft.hitos.join('\n')}
+            onChange={(e) => setDraft((d) => ({ ...d, hitos: e.target.value.split('\n') }))}
+            placeholder="Un hito por línea"
+          />
 
           <div className="aria-card-title" style={{ marginTop: 20 }}>Principales avances y temas abordados</div>
           {draft.secciones.map((sec, i) => (
@@ -136,9 +148,33 @@ export default function SprintClientReportPresentation({ tenant }) {
             placeholder="Un punto por línea"
           />
 
+          <label className="aria-report-label" style={{ marginTop: 16 }}>⚠ Riesgos y observaciones</label>
+          <textarea
+            className="aria-report-textarea"
+            rows={Math.max(2, draft.riesgos.length)}
+            value={draft.riesgos.join('\n')}
+            onChange={(e) => setDraft((d) => ({ ...d, riesgos: e.target.value.split('\n').filter((l) => l.trim()) }))}
+            placeholder="Vacío si no hay nada que señalar"
+          />
+
+          <label className="aria-report-label" style={{ marginTop: 16 }}>Próximos pasos</label>
+          <textarea
+            className="aria-report-textarea"
+            rows={Math.max(3, draft.proximosPasos.length)}
+            value={draft.proximosPasos.join('\n')}
+            onChange={(e) => setDraft((d) => ({ ...d, proximosPasos: e.target.value.split('\n') }))}
+            placeholder="Un punto por línea"
+          />
+
           <div className="aria-board-hint" style={{ marginTop: 14 }}>
-            {meta.metrics.completadas} tareas completadas de {meta.metrics.total} trabajadas · {meta.metrics.sprints} sprints incluidos
+            {meta.metrics.completadas} tareas completadas de {meta.metrics.total} trabajadas · {meta.metrics.sprints} sprints incluidos · {meta.metrics.iniciativas} frentes de trabajo
           </div>
+          {meta.health && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <span className={`aria-health-pill ${HEALTH_CLASS[meta.health.cronograma]}`}>Cronograma: {HEALTH_LABEL[meta.health.cronograma]}</span>
+              <span className={`aria-health-pill ${HEALTH_CLASS[meta.health.calidad]}`}>Calidad: {HEALTH_LABEL[meta.health.calidad]}</span>
+            </div>
+          )}
 
           {err && <p className="aria-canvas-error" style={{ marginTop: 10 }}>{err}</p>}
 

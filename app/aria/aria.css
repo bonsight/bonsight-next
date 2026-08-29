@@ -1394,6 +1394,11 @@
 .aria-report-btn-ghost { flex-shrink: 0; font-size: 0.78rem; font-weight: 600; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--aria-border); background: transparent; color: var(--aria-text-dim); cursor: pointer; }
 .aria-report-btn-ghost:hover { border-color: var(--aria-purple); color: var(--aria-text); }
 
+.aria-health-pill { display: inline-flex; align-items: center; font-size: 0.72rem; font-weight: 600; padding: 4px 9px; border-radius: 999px; }
+.aria-health-pill--good { background: rgba(32,201,151,0.14); color: #20C997; }
+.aria-health-pill--warning { background: rgba(217,119,6,0.14); color: #D97706; }
+.aria-health-pill--critical { background: rgba(220,38,38,0.16); color: #EF4444; }
+
 .aria-canvas-tabs {
   display: flex;
   gap: 6px;

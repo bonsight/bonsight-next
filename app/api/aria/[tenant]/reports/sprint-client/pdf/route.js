@@ -18,9 +18,13 @@ export async function POST(req, { params }) {
       clienteName: body.clienteName,
       periodLabel: body.periodLabel || '',
       resumenEjecutivo: body.resumenEjecutivo || '',
+      hitos: Array.isArray(body.hitos) ? body.hitos : [],
       secciones: Array.isArray(body.secciones) ? body.secciones : [],
       valorEntregado: Array.isArray(body.valorEntregado) ? body.valorEntregado : [],
+      riesgos: Array.isArray(body.riesgos) ? body.riesgos : [],
+      proximosPasos: Array.isArray(body.proximosPasos) ? body.proximosPasos : [],
       metrics: body.metrics || null,
+      health: body.health || null,
       generatedAtLabel: new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }),
     });
 
