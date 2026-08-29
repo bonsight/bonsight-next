@@ -51,6 +51,18 @@ const IconRefresh = () => (
   </svg>
 );
 
+const IconPencil = ({ className }) => (
+  <svg className={className} width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
+  </svg>
+);
+
+const IconCalendar = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+);
+
 const Spinner = () => <span className="aria-board-spinner" aria-hidden="true" />;
 
 const PRIORITIES = ['Alta', 'Media', 'Baja'];
@@ -89,13 +101,49 @@ function isOverdue(dueDate, status) {
 function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints, currentSprintId, talento }) {
   const [moveOpen, setMoveOpen] = useState(false);
   const [responsableOpen, setResponsableOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleDraft, setScheduleDraft] = useState(null);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleInput, setTitleInput] = useState(task.title);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [descriptionInput, setDescriptionInput] = useState(task.description ?? '');
   const otherColumns = viewMode === 'estado' ? columns.filter((c) => c.id !== task.status) : [];
   const otherSprints = sprints.filter((s) => s.id !== currentSprintId && s.status !== 'Cerrado');
   const hasMoveOptions = otherColumns.length > 0 || otherSprints.length > 0;
   const removeKey = `remove:${task.id}`;
   const movePrefix = `move:${task.id}:`;
   const responsableKey = `responsable:${task.id}`;
+  const scheduleKey = `schedule:${task.id}`;
   const isMoving = pendingKey?.startsWith(movePrefix);
+  const isSavingSchedule = pendingKey === scheduleKey;
+  const currentSprint = sprints.find((s) => s.id === currentSprintId);
+
+  const saveTitle = () => {
+    const trimmed = titleInput.trim();
+    setEditingTitle(false);
+    if (!trimmed || trimmed === task.title) { setTitleInput(task.title); return; }
+    onAction('update_task_details', { pageId: task.id, title: trimmed }, `details-title:${task.id}`);
+  };
+  const saveDescription = () => {
+    setEditingDescription(false);
+    const next = descriptionInput.trim();
+    if (next === (task.description ?? '')) return;
+    onAction('update_task_details', { pageId: task.id, description: next }, `details-desc:${task.id}`);
+  };
+
+  const openSchedule = () => {
+    setScheduleDraft({ startDate: task.startDate ?? '', endDate: task.dueDate ?? '', estimatedHours: task.estimatedHours ?? '' });
+    setScheduleOpen(true);
+  };
+  const saveSchedule = () => {
+    onAction('update_task_schedule', {
+      pageId: task.id,
+      startDate: scheduleDraft.startDate || null,
+      endDate: scheduleDraft.endDate || null,
+      estimatedHours: scheduleDraft.estimatedHours === '' ? null : scheduleDraft.estimatedHours,
+    }, scheduleKey);
+    setScheduleOpen(false);
+  };
 
   // Prioridad, severidad, tipo y cliente son clasificación de rutina — van en una sola
   // línea de texto. Un solo acento de color (el punto de prioridad) para no diluir la
@@ -130,6 +178,42 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
           <a href={task.url} target="_blank" rel="noopener noreferrer" className="aria-board-card-link" title="Abrir en Notion">
             <IconExternal />
           </a>
+          <div className="aria-board-responsable-anchor">
+            <button type="button" className="aria-canvas-icon-btn" aria-label="Planificación" title="Inicio, fin y horas estimadas" disabled={busy} onClick={openSchedule}>
+              {isSavingSchedule ? <Spinner /> : <IconCalendar />}
+            </button>
+            {scheduleOpen && (
+              <>
+                <div className="aria-canvas-col-menu-backdrop" onClick={() => setScheduleOpen(false)} />
+                <div className="aria-canvas-col-menu aria-board-schedule-menu">
+                  <label className="aria-board-schedule-label">
+                    Inicio
+                    <input
+                      type="date" value={scheduleDraft.startDate}
+                      min={currentSprint?.startDate || undefined} max={currentSprint?.endDate || undefined}
+                      onChange={(e) => setScheduleDraft((d) => ({ ...d, startDate: e.target.value }))}
+                    />
+                  </label>
+                  <label className="aria-board-schedule-label">
+                    Fin
+                    <input
+                      type="date" value={scheduleDraft.endDate}
+                      min={currentSprint?.startDate || undefined} max={currentSprint?.endDate || undefined}
+                      onChange={(e) => setScheduleDraft((d) => ({ ...d, endDate: e.target.value }))}
+                    />
+                  </label>
+                  <label className="aria-board-schedule-label">
+                    Estimación (hs)
+                    <input
+                      type="number" min="0" step="0.5" value={scheduleDraft.estimatedHours}
+                      onChange={(e) => setScheduleDraft((d) => ({ ...d, estimatedHours: e.target.value }))}
+                    />
+                  </label>
+                  <button type="button" className="aria-board-schedule-save" disabled={busy} onClick={saveSchedule}>Guardar</button>
+                </div>
+              </>
+            )}
+          </div>
           <button
             type="button"
             className="aria-board-card-remove"
@@ -146,7 +230,44 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
           )}
         </div>
       </div>
-      <p className="aria-canvas-item-text">{task.title}</p>
+      {editingTitle ? (
+        <input
+          className="aria-canvas-item-text-input"
+          value={titleInput}
+          onChange={(e) => setTitleInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && saveTitle()}
+          onBlur={saveTitle}
+          autoFocus
+        />
+      ) : (
+        <p className="aria-canvas-item-text aria-canvas-item-text--editable" onClick={() => { setTitleInput(task.title); setEditingTitle(true); }} title="Click para editar">
+          {task.title}
+          <IconPencil className="aria-canvas-col-name-pencil" />
+        </p>
+      )}
+
+      {editingDescription ? (
+        <textarea
+          className="aria-board-description-input"
+          rows={3}
+          value={descriptionInput}
+          onChange={(e) => setDescriptionInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveDescription(); } }}
+          onBlur={saveDescription}
+          placeholder="Descripción de la tarea…"
+          autoFocus
+        />
+      ) : task.description ? (
+        <p className="aria-board-description aria-board-description--editable" onClick={() => { setDescriptionInput(task.description ?? ''); setEditingDescription(true); }} title="Click para editar">
+          {task.description}
+          <IconPencil className="aria-canvas-col-name-pencil" />
+        </p>
+      ) : (
+        <button type="button" className="aria-board-add-description" onClick={() => { setDescriptionInput(''); setEditingDescription(true); }}>
+          + Agregar descripción
+        </button>
+      )}
+
       {task.parentName && <p className="aria-board-parent-tag">↳ {task.parentName}</p>}
       {task.previousSprintTitle && <p className="aria-board-parent-tag">↳ vino de {task.previousSprintTitle}</p>}
 
@@ -162,8 +283,11 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
 
       <div className="aria-board-card-tags">
         {task.outOfPlan && <span className="aria-board-tag aria-board-tag--outofplan">Fuera de plan</span>}
+        {task.startDate && task.dueDate && <span className="aria-board-tag">{formatDate(task.startDate)} → {formatDate(task.dueDate)}</span>}
+        {task.startDate && !task.dueDate && <span className="aria-board-tag">Desde {formatDate(task.startDate)}</span>}
         {isOverdue(task.dueDate, task.status) && <span className="aria-board-tag aria-board-tag--overdue">Vencida {formatDate(task.dueDate)}</span>}
-        {!isOverdue(task.dueDate, task.status) && task.dueDate && <span className="aria-board-tag">Vence {formatDate(task.dueDate)}</span>}
+        {!isOverdue(task.dueDate, task.status) && task.dueDate && !task.startDate && <span className="aria-board-tag">Vence {formatDate(task.dueDate)}</span>}
+        {task.estimatedHours != null && <span className="aria-board-tag">{task.estimatedHours}h est.</span>}
         {viewMode === 'tipo' && (
           <span className="aria-board-tag">{columns.find((c) => c.id === task.status)?.name ?? task.status}</span>
         )}
@@ -238,7 +362,7 @@ function BoardColumn({ column, tasks, columns, viewMode, busy, pendingKey, onAct
   );
 }
 
-function AddTaskForm({ proyectos, talento, iniciativas, columns, busy, pendingKey, initialTitle, onCreate, onClose }) {
+function AddTaskForm({ proyectos, talento, iniciativas, columns, busy, pendingKey, initialTitle, sprint, onCreate, onClose }) {
   const [title, setTitle] = useState(initialTitle ?? '');
   const [status, setStatus] = useState(columns[0]?.id ?? '');
   const [proyectoId, setProyectoId] = useState('');
@@ -247,6 +371,10 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, busy, pendingKe
   const [taskType, setTaskType] = useState('');
   const [severity, setSeverity] = useState('');
   const [iniciativaId, setIniciativaId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [estimatedHours, setEstimatedHours] = useState('');
+  const [description, setDescription] = useState('');
 
   const iniciativasDelProyecto = proyectoId ? iniciativas.filter((i) => i.proyectoId === proyectoId) : [];
 
@@ -261,8 +389,12 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, busy, pendingKe
       taskType: taskType || undefined,
       severity: severity || undefined,
       iniciativaId: iniciativaId || undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      estimatedHours: estimatedHours || undefined,
+      description: description || undefined,
     });
-    setTitle('');
+    setTitle(''); setStartDate(''); setEndDate(''); setEstimatedHours(''); setDescription('');
   };
 
   return (
@@ -352,6 +484,24 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, busy, pendingKe
           <option value="">Sin definir</option>
           {talento.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
+      </div>
+      <div className="aria-board-form-row">
+        <div className="aria-board-field">
+          <label className="aria-board-field-label">Inicio</label>
+          <input className="aria-board-input" type="date" value={startDate} min={sprint?.startDate || undefined} max={sprint?.endDate || undefined} onChange={(e) => setStartDate(e.target.value)} />
+        </div>
+        <div className="aria-board-field">
+          <label className="aria-board-field-label">Fin</label>
+          <input className="aria-board-input" type="date" value={endDate} min={sprint?.startDate || undefined} max={sprint?.endDate || undefined} onChange={(e) => setEndDate(e.target.value)} />
+        </div>
+      </div>
+      <div className="aria-board-field">
+        <label className="aria-board-field-label">Estimación (hs)</label>
+        <input className="aria-board-input" type="number" min="0" step="0.5" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} />
+      </div>
+      <div className="aria-board-field">
+        <label className="aria-board-field-label">Descripción</label>
+        <textarea className="aria-board-input" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Opcional" />
       </div>
       <div className="aria-canvas-newcol-actions">
         <button type="button" className="aria-canvas-mini aria-canvas-mini--primary" onClick={submit} disabled={busy || !title.trim()}>
@@ -795,6 +945,7 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
                       busy={busy}
                       pendingKey={pendingKey}
                       initialTitle={newTaskTitle}
+                      sprint={sprint}
                       onCreate={(p) => handleAction('create_task', p, 'create_task')}
                       onClose={() => setMode(null)}
                     />

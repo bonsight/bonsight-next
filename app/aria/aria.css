@@ -1716,11 +1716,140 @@
   overflow-y: auto;
 }
 
+.aria-board-schedule-menu {
+  top: 26px;
+  right: auto;
+  left: 0;
+  min-width: 190px;
+  padding: 10px;
+  gap: 8px;
+}
+
+.aria-board-schedule-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--aria-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.aria-board-schedule-label input {
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--aria-text);
+  background: var(--aria-bg);
+  border: 1px solid var(--aria-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.aria-board-schedule-label input:focus {
+  outline: 2px solid var(--aria-purple);
+  outline-offset: 1px;
+}
+
+.aria-board-schedule-save {
+  margin-top: 2px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: none;
+  background: var(--aria-purple);
+  color: #fff;
+  cursor: pointer;
+}
+
+.aria-board-schedule-save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .aria-canvas-item-text {
   font-size: 0.78rem;
   color: var(--aria-text);
   line-height: 1.4;
   margin: 0 0 8px;
+}
+
+.aria-canvas-item-text--editable {
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.aria-canvas-item-text--editable:hover {
+  border-bottom-color: var(--aria-text-dim);
+}
+
+.aria-canvas-item-text--editable:hover .aria-canvas-col-name-pencil {
+  opacity: 1;
+  color: var(--aria-purple);
+}
+
+.aria-canvas-item-text-input {
+  width: 100%;
+  font-size: 0.78rem;
+  font-family: inherit;
+  color: var(--aria-text);
+  background: var(--aria-bg-elevated);
+  border: 1px solid var(--aria-purple);
+  border-radius: 6px;
+  padding: 4px 7px;
+  margin: 0 0 8px;
+}
+
+.aria-board-description {
+  font-size: 0.74rem;
+  color: var(--aria-text-dim);
+  line-height: 1.45;
+  margin: -2px 0 8px;
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+}
+
+.aria-board-description:hover {
+  border-bottom-color: var(--aria-text-faint);
+}
+
+.aria-board-description:hover .aria-canvas-col-name-pencil {
+  opacity: 1;
+  color: var(--aria-purple);
+}
+
+.aria-board-description-input {
+  width: 100%;
+  font-size: 0.74rem;
+  font-family: inherit;
+  color: var(--aria-text);
+  background: var(--aria-bg-elevated);
+  border: 1px solid var(--aria-purple);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin: -2px 0 8px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.aria-board-add-description {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--aria-text-faint);
+  background: none;
+  border: none;
+  padding: 0;
+  margin: -2px 0 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.aria-board-add-description:hover {
+  color: var(--aria-purple);
 }
 
 .aria-canvas-move-select {
