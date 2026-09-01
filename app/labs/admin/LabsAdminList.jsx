@@ -42,6 +42,7 @@ export default function LabsAdminList() {
   };
 
   return (
+    <div className="labs-page-shell">
     <div className="labs-admin-wrap">
       <h1 className="labs-admin-title">Labs <span className="living-word" style={{ color: 'var(--labs-living)', fontStyle: 'italic', fontWeight: 500 }}>· admin</span></h1>
       <p style={{ fontSize: 13.5, color: 'var(--labs-cream-dim)', marginBottom: 28 }}>
@@ -73,6 +74,12 @@ export default function LabsAdminList() {
           </div>
         </div>
       ))}
+    </div>
+
+      <div className="labs-powered-by">
+        <img src="/assets/bonsight-isotipo.png" alt="Bonsight" />
+        <span>Powered by Bonsight</span>
+      </div>
     </div>
   );
 }

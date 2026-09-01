@@ -1,5 +1,5 @@
 import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
-import { getExperimentMeta, addPartida } from '@/lib/labs/experiments';
+import { getExperimentMeta, addPartida, projectInactiveMessage } from '@/lib/labs/experiments';
 
 // Crear una partida: Director, o Supervisor asignado a este proyecto.
 export async function POST(req, { params }) {
@@ -17,6 +17,8 @@ export async function POST(req, { params }) {
   if (user.role !== 'Director' && !isSupervisorOnProject) {
     return Response.json({ error: 'Solo el Director o un Supervisor asignado a este proyecto puede crear partidas.' }, { status: 403 });
   }
+  const inactiveMsg = projectInactiveMessage(meta);
+  if (inactiveMsg) return Response.json({ error: inactiveMsg }, { status: 409 });
 
   const { etapa, descripcion, cantidad, unidad, precioUnitario, proveedor, comentarios } = await req.json();
   try {

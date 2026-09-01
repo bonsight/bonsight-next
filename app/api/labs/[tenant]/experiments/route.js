@@ -1,5 +1,5 @@
 import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
-import { listExperimentsForUser, createExperiment } from '@/lib/labs/experiments';
+import { listExperimentsForUser, createExperiment, summarizeExperiment } from '@/lib/labs/experiments';
 import { getUserById } from '@/lib/labs/users';
 
 export async function GET(req, { params }) {
@@ -10,7 +10,8 @@ export async function GET(req, { params }) {
   const user = await getCurrentLabsUser(tenant);
   if (!user) return Response.json({ error: 'No autorizado.' }, { status: 401 });
   const experiments = await listExperimentsForUser(tenant, user);
-  return Response.json({ experiments });
+  const enriched = await Promise.all(experiments.map((m) => summarizeExperiment(tenant, m)));
+  return Response.json({ experiments: enriched });
 }
 
 export async function POST(req, { params }) {

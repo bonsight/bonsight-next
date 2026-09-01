@@ -26,9 +26,9 @@ export async function PATCH(req, { params }) {
   const { error, user } = await requireDirector(tenant);
   if (error) return error;
 
-  const { code, type, hasBudget, budgetAmount, budgetCurrency } = await req.json();
+  const { code, type, hasBudget, budgetAmount, budgetCurrency, status } = await req.json();
   try {
-    const { meta } = await updateProjectDetails(tenant, id, { code, type, hasBudget, budgetAmount, budgetCurrency }, user.name);
+    const { meta } = await updateProjectDetails(tenant, id, { code, type, hasBudget, budgetAmount, budgetCurrency, status }, user.name);
     return Response.json({ ok: true, meta });
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo actualizar.' }, { status: 400 });

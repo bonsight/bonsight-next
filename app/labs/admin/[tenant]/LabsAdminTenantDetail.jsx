@@ -13,6 +13,7 @@ export default function LabsAdminTenantDetail({ tenant, tenantMeta }) {
   const tenantUrl = `https://labs.bonsight.co/${tenant}`;
 
   return (
+    <div className="labs-page-shell">
     <div className="labs-admin-wrap">
       <a href="/admin" className="chip-btn" style={{ marginBottom: 18, display: 'inline-block', textDecoration: 'none' }}>← Todos los tenants</a>
       <h1 className="labs-admin-title">{tenantMeta.name}</h1>
@@ -30,6 +31,12 @@ export default function LabsAdminTenantDetail({ tenant, tenantMeta }) {
       <TeamPanel tenant={tenant} />
 
       <DriveConnectPanel tenant={tenant} />
+    </div>
+
+      <div className="labs-powered-by">
+        <img src="/assets/bonsight-isotipo.png" alt="Bonsight" />
+        <span>Powered by Bonsight</span>
+      </div>
     </div>
   );
 }

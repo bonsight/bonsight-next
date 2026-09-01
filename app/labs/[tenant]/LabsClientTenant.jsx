@@ -255,7 +255,7 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
           <div className="pulse-wrap"><div className="pulse-dot"></div></div>
           <div className="brand-text">
             <span className="brand-eyebrow">{tenantMeta.name}</span>
-            <span className="brand-name">{experiment.meta.name} <span className="living-word">· vivo</span></span>
+            <span className="brand-name">{experiment.meta.name}</span>
           </div>
         </div>
         <div className="role-switch" role="tablist" aria-label="Tu identidad">
@@ -312,20 +312,86 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
           )}
         </main>
       </div>
+
+      <div className="labs-powered-by">
+        <img src="/assets/bonsight-isotipo.png" alt="Bonsight" />
+        <span>Powered by Bonsight</span>
+      </div>
     </div>
   );
 }
 
 /* ======================= Experiment picker + create ======================= */
 
+const PROJECT_STATUS_TAG_CLASS = { activo: 'tag-living', pausado: 'tag-ember', completado: 'tag-neutral' };
+
+function ProjectCard({ exp, nameOf, onSelect }) {
+  const status = exp.status || 'activo';
+  const team = (exp.teamIds || []).slice(0, 4);
+  const moreCount = (exp.teamIds || []).length - team.length;
+  return (
+    <div className="labs-project-card" onClick={onSelect} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onSelect()}>
+      <div className="labs-project-card-top">
+        <div className="labs-project-card-name">{exp.name}</div>
+        <span className={`tag ${PROJECT_STATUS_TAG_CLASS[status]}`}>{PROJECT_STATUS_LABEL[status]}</span>
+      </div>
+      <div className="labs-project-card-meta">Actualizado {formatDate(exp.updatedAt)}</div>
+
+      {exp.progressPct != null && (
+        <div className="labs-project-card-progress">
+          <div className="dim-bar"><div className="dim-fill" style={{ width: `${exp.progressPct}%` }} /></div>
+          <span>{exp.progressPct}%</span>
+        </div>
+      )}
+
+      {exp.presupuesto != null && (
+        <div className="labs-project-card-budget">
+          Ejecutado <b>{exp.ejecutado.toLocaleString('es-PE')}</b> de <b>{exp.presupuesto.toLocaleString('es-PE')}</b>
+        </div>
+      )}
+
+      <div className="labs-project-card-foot">
+        <div className="labs-avatar-stack">
+          {team.map((id) => <span key={id} className="labs-avatar-sm" title={nameOf(id)}>{initials(nameOf(id))}</span>)}
+          {moreCount > 0 && <span className="labs-avatar-sm labs-avatar-more">+{moreCount}</span>}
+        </div>
+        <span className="chip-btn">Entrar →</span>
+      </div>
+    </div>
+  );
+}
+
 function ExperimentPicker({ tenant, tenantMeta, identity, experiments, onSelect, onCreated, onLogout }) {
   const [open, setOpen] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('todos');
+  const [sortBy, setSortBy] = useState('recientes');
   const canCreate = identity.role === 'Director';
 
+  useEffect(() => {
+    fetch(`/api/labs/${tenant}/users`)
+      .then((r) => r.json())
+      .then((d) => setUsers(d.users ?? []))
+      .catch(() => setUsers([]));
+  }, [tenant]);
+
+  const nameOf = (id) => users.find((u) => u.id === id)?.name ?? '?';
+
+  let list = experiments.filter((e) => {
+    const matchQ = e.name.toLowerCase().includes(query.trim().toLowerCase());
+    const matchS = statusFilter === 'todos' || (e.status || 'activo') === statusFilter;
+    return matchQ && matchS;
+  });
+  if (sortBy === 'avance') list = [...list].sort((a, b) => (b.progressPct ?? -1) - (a.progressPct ?? -1));
+  else if (sortBy === 'nombre') list = [...list].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  else list = [...list].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
   return (
-    <div className="labs-admin-wrap">
+    <div className="labs-page-shell">
+    <div className="labs-admin-wrap labs-admin-wrap--wide">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-        <h1 className="labs-admin-title">{tenantMeta.name} <span className="living-word" style={{ color: 'var(--labs-living)', fontStyle: 'italic', fontWeight: 500 }}>· vivo</span></h1>
+        <h1 className="labs-admin-title">{tenantMeta.name}</h1>
         <button className="chip-btn" onClick={onLogout}>Salir</button>
       </div>
       <p style={{ fontSize: 13.5, color: 'var(--labs-cream-dim)', marginBottom: 24 }}>
@@ -345,17 +411,35 @@ function ExperimentPicker({ tenant, tenantMeta, identity, experiments, onSelect,
               : 'Todavía no te asignaron a ninguna prueba en ningún proyecto.'}
         </p>
       )}
-      {experiments.map((e) => (
-        <div className="labs-tenant-row" key={e.id} style={{ cursor: 'pointer' }} onClick={() => onSelect(e.id)}>
-          <div>
-            <div className="labs-tenant-name">{e.name}</div>
-            <div className="labs-tenant-meta">{e.status} · actualizado {formatDate(e.updatedAt)}</div>
-          </div>
-          <span className="chip-btn">Entrar →</span>
+
+      {experiments.length > 1 && (
+        <div className="labs-picker-filters">
+          <input type="text" placeholder="Buscar por nombre de proyecto…" value={query} onChange={(e) => setQuery(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="todos">Todos los estados</option>
+            {Object.entries(PROJECT_STATUS_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          </select>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            <option value="recientes">Ordenar: más recientes</option>
+            <option value="avance">Ordenar: mayor avance</option>
+            <option value="nombre">Ordenar: nombre (A-Z)</option>
+          </select>
         </div>
-      ))}
+      )}
+
+      {experiments.length > 0 && list.length === 0 && <p className="empty-note">No hay proyectos que coincidan con el filtro.</p>}
+
+      <div className="labs-project-grid">
+        {list.map((e) => <ProjectCard key={e.id} exp={e} nameOf={nameOf} onSelect={() => onSelect(e.id)} />)}
+      </div>
 
       {open && <CreateExperimentModal tenant={tenant} allowedProjectKinds={tenantMeta.allowedProjectKinds} onClose={() => setOpen(false)} onCreated={(id) => { setOpen(false); onCreated(id); }} />}
+    </div>
+
+      <div className="labs-powered-by">
+        <img src="/assets/bonsight-isotipo.png" alt="Bonsight" />
+        <span>Powered by Bonsight</span>
+      </div>
     </div>
   );
 }
@@ -922,9 +1006,20 @@ function ProjectDetailsCard({ tenant, experiment, onUpdate }) {
   );
 }
 
+const PROJECT_STATUS_LABEL = { activo: 'Activo', pausado: 'Pausado', completado: 'Completado' };
+
+// Mismo criterio que lib/labs/experiments.js#projectInactiveMessage (server-only ahí por el
+// import de Redis, así que se replica acá para el aviso en cliente).
+function projectInactiveMessage(meta) {
+  if (!meta.status || meta.status === 'activo') return null;
+  const label = meta.status === 'pausado' ? 'pausado' : 'completado';
+  return `Este proyecto está ${label} — reactivalo desde "Editar detalles" para poder gestionar tareas o presupuesto.`;
+}
+
 function EditProjectDetailsModal({ tenant, experimentId, current, onClose, onSaved }) {
   const [code, setCode] = useState(current.code || '');
   const [type, setType] = useState(current.type || '');
+  const [status, setStatus] = useState(current.status || 'activo');
   const [hasBudget, setHasBudget] = useState(!!current.hasBudget);
   const [budgetAmount, setBudgetAmount] = useState(current.budgetAmount ?? '');
   const [budgetCurrency, setBudgetCurrency] = useState(current.budgetCurrency || '');
@@ -939,7 +1034,7 @@ function EditProjectDetailsModal({ tenant, experimentId, current, onClose, onSav
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          code, type, hasBudget,
+          code, type, status, hasBudget,
           budgetAmount: hasBudget && budgetAmount !== '' ? Number(budgetAmount) : null,
           budgetCurrency: hasBudget ? budgetCurrency : '',
         }),
@@ -964,6 +1059,12 @@ function EditProjectDetailsModal({ tenant, experimentId, current, onClose, onSav
         <input type="text" value={code} onChange={(e) => setCode(e.target.value)} style={{ marginBottom: 14 }} />
         <label className="field-label">Tipo</label>
         <input type="text" value={type} onChange={(e) => setType(e.target.value)} style={{ marginBottom: 14 }} />
+        <label className="field-label">Estado</label>
+        <div className="labs-entry-role-grid" style={{ marginBottom: 14 }}>
+          {Object.entries(PROJECT_STATUS_LABEL).map(([id, label]) => (
+            <button key={id} type="button" className={`labs-entry-role-btn${status === id ? ' active' : ''}`} onClick={() => setStatus(id)}>{label}</button>
+          ))}
+        </div>
         <label className="field-label">¿Tiene presupuesto asignado?</label>
         <div className="labs-entry-role-grid" style={{ marginBottom: hasBudget ? 10 : 14 }}>
           <button type="button" className={`labs-entry-role-btn${hasBudget ? ' active' : ''}`} onClick={() => setHasBudget(true)}>Sí</button>
@@ -1781,7 +1882,11 @@ function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [savingTaskId, setSavingTaskId] = useState(null);
   const [commentsFor, setCommentsFor] = useState(null); // { id, label } | null
+  // Pausado/completado bloquea gestión de verdad (el backend también lo rechaza) — no es
+  // solo una etiqueta. canManage sigue siendo "por rol" puro, se usa aparte para mensajes.
+  const isActive = (experiment.meta.status || 'activo') === 'activo';
   const canManage = identity.role === 'Director' || experiment.meta.supervisorIds?.includes(identity.id);
+  const canManageActive = canManage && isActive;
   const canComment = identity.role === 'Director' || identity.role === 'Supervisor';
 
   useEffect(() => {
@@ -1819,7 +1924,7 @@ function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
     }
   };
 
-  const canTogglePorTask = (task) => canManage || task.responsable === identity.id;
+  const canTogglePorTask = (task) => isActive && (canManage || task.responsable === identity.id);
   const commentsOf = (taskId) => experiment.feedback.filter((f) => f.targetType === 'tarea' && f.targetId === taskId);
   const now = Date.now();
   const isVencida = (t) => t.progreso < 100 && t.fechaFin && new Date(t.fechaFin).getTime() < now;
@@ -1855,7 +1960,13 @@ function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
         </p>
       </div>
 
-      {canManage && (
+      {!isActive && (
+        <p className="cron-inactive-note">
+          {projectInactiveMessage(experiment.meta)}
+        </p>
+      )}
+
+      {canManageActive && (
         <button className="btn btn-primary" style={{ marginBottom: 16 }} onClick={() => setCreateOpen(true)}>+ Nueva tarea</button>
       )}
 
@@ -1875,7 +1986,7 @@ function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
                   nameOf={nameOf}
                   vencida={isVencida(t)}
                   saving={savingTaskId === t.id}
-                  canManage={canManage}
+                  canManage={canManageActive}
                   canToggle={canTogglePorTask(t)}
                   onToggleProgreso={() => toggleProgreso(t)}
                   commentsCount={commentsOf(t.id).length}
@@ -2048,7 +2159,7 @@ function CronogramaCanvas({ tasks, nameOf, savingTaskId, canTogglePorTask, onMov
               const vencida = col.id !== 'done' && t.fechaFin && new Date(t.fechaFin).getTime() < now;
               const canMove = canTogglePorTask(t);
               return (
-                <div className="cron-canvas-card" key={t.id}>
+                <div className={`cron-canvas-card${saving ? ' saving' : ''}`} key={t.id}>
                   {t.fase && <span className="cron-canvas-card-fase">{t.fase}</span>}
                   <div className="cron-canvas-card-name">{t.nombre}</div>
                   <div className="cron-canvas-card-meta">
@@ -2059,8 +2170,14 @@ function CronogramaCanvas({ tasks, nameOf, savingTaskId, canTogglePorTask, onMov
                     <TaskCommentButton count={commentsOf(t.id).length} onClick={() => onOpenComments(t)} small />
                     {canMove && (
                       <div className="cron-canvas-move">
-                        <button type="button" disabled={colIdx === 0 || saving} title="Mover atrás" onClick={() => onMove(t, CANVAS_COLUMNS[colIdx - 1].id)}>←</button>
-                        <button type="button" disabled={colIdx === CANVAS_COLUMNS.length - 1 || saving} title="Mover adelante" onClick={() => onMove(t, CANVAS_COLUMNS[colIdx + 1].id)}>→</button>
+                        {saving ? (
+                          <TaskStatusIcon status="saving" />
+                        ) : (
+                          <>
+                            <button type="button" disabled={colIdx === 0} title="Mover atrás" onClick={() => onMove(t, CANVAS_COLUMNS[colIdx - 1].id)}>←</button>
+                            <button type="button" disabled={colIdx === CANVAS_COLUMNS.length - 1} title="Mover adelante" onClick={() => onMove(t, CANVAS_COLUMNS[colIdx + 1].id)}>→</button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2139,12 +2256,52 @@ function CreateTaskModal({ tenant, experimentId, onClose, onCreated }) {
 
 /* ======================= Presupuesto (civil) ======================= */
 
+// El % y el tag de "sobrecosto" se recalculan al tipear (estado local liveValue), no recién
+// después de guardar — antes había un delay real hasta que volvía el fetch. El guardado en
+// sí sigue pasando en onBlur, mismo mecanismo de antes.
+function PartidaRow({ tenant, experimentId, partida, saving, canManage, commentsCount, onOpenComments, onSave }) {
+  const [liveValue, setLiveValue] = useState(partida.ejecutado);
+  const pct = partida.importe ? Math.round((liveValue / partida.importe) * 100) : 0;
+  const sobrecosto = partida.importe > 0 && liveValue > partida.importe;
+
+  return (
+    <div className="labs-tenant-row">
+      <div>
+        <div className="labs-tenant-name">{partida.descripcion}</div>
+        <div className="labs-tenant-meta">
+          {partida.cantidad ?? '—'} {partida.unidad} · {partida.importe.toLocaleString('es-PE')} presupuestado
+          {sobrecosto && <span style={{ color: '#E19680', marginLeft: 6 }}>· sobrecosto</span>}
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {saving && <span style={{ fontSize: 11.5, color: 'var(--labs-cream-faint)' }}>Guardando…</span>}
+        <button className="chip-btn" onClick={onOpenComments}>💬 Comentarios{commentsCount ? ` (${commentsCount})` : ''}</button>
+        {canManage ? (
+          <input
+            type="number"
+            value={liveValue}
+            disabled={saving}
+            onChange={(e) => setLiveValue(e.target.value === '' ? 0 : Number(e.target.value))}
+            onBlur={(e) => { if (Number(e.target.value) !== partida.ejecutado) onSave(e.target.value); }}
+            style={{ width: 90, fontSize: 12.5 }}
+          />
+        ) : (
+          <span style={{ fontSize: 12.5 }}>{partida.ejecutado.toLocaleString('es-PE')}</span>
+        )}
+        <span className={`tag ${sobrecosto ? 'tag-alert' : 'tag-neutral'}`}>{pct}%</span>
+      </div>
+    </div>
+  );
+}
+
 function ViewPresupuesto({ tenant, experiment, identity, onUpdate }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [savingPartidaId, setSavingPartidaId] = useState(null);
   const [commentsFor, setCommentsFor] = useState(null); // { id, label } | null
   const canManage = identity.role === 'Director' || experiment.meta.supervisorIds?.includes(identity.id);
   const canComment = identity.role === 'Director' || identity.role === 'Supervisor';
+  const isActive = (experiment.meta.status || 'activo') === 'activo';
+  const canManageActive = canManage && isActive;
 
   const grouped = [];
   for (const p of experiment.partidas) {
@@ -2187,7 +2344,13 @@ function ViewPresupuesto({ tenant, experiment, identity, onUpdate }) {
         </div>
       </div>
 
-      {canManage && (
+      {!isActive && (
+        <p className="cron-inactive-note">
+          {projectInactiveMessage(experiment.meta)}
+        </p>
+      )}
+
+      {canManageActive && (
         <button className="btn btn-primary" style={{ marginBottom: 16 }} onClick={() => setCreateOpen(true)}>+ Nueva partida</button>
       )}
 
@@ -2196,39 +2359,19 @@ function ViewPresupuesto({ tenant, experiment, identity, onUpdate }) {
       {grouped.map((g) => (
         <div key={g.etapa} style={{ marginBottom: 20 }}>
           <div className="divider-label"><span>{g.etapa}</span></div>
-          {g.partidas.map((p) => {
-            const pct = p.importe ? Math.round((p.ejecutado / p.importe) * 100) : 0;
-            const sobrecosto = p.importe > 0 && p.ejecutado > p.importe;
-            const saving = savingPartidaId === p.id;
-            const nComments = commentsOf(p.id).length;
-            return (
-              <div className="labs-tenant-row" key={p.id}>
-                <div>
-                  <div className="labs-tenant-name">{p.descripcion}</div>
-                  <div className="labs-tenant-meta">
-                    {p.cantidad ?? '—'} {p.unidad} · {p.importe.toLocaleString('es-PE')} presupuestado
-                    {sobrecosto && <span style={{ color: '#E19680', marginLeft: 6 }}>· sobrecosto</span>}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {saving && <span style={{ fontSize: 11.5, color: 'var(--labs-cream-faint)' }}>Guardando…</span>}
-                  <button className="chip-btn" onClick={() => setCommentsFor({ id: p.id, label: p.descripcion })}>💬 Comentarios{nComments ? ` (${nComments})` : ''}</button>
-                  {canManage ? (
-                    <input
-                      type="number"
-                      defaultValue={p.ejecutado}
-                      disabled={saving}
-                      onBlur={(e) => { if (Number(e.target.value) !== p.ejecutado) updateEjecutado(p, e.target.value); }}
-                      style={{ width: 90, fontSize: 12.5 }}
-                    />
-                  ) : (
-                    <span style={{ fontSize: 12.5 }}>{p.ejecutado.toLocaleString('es-PE')}</span>
-                  )}
-                  <span className={`tag ${sobrecosto ? 'tag-alert' : 'tag-neutral'}`}>{pct}%</span>
-                </div>
-              </div>
-            );
-          })}
+          {g.partidas.map((p) => (
+            <PartidaRow
+              key={p.id}
+              tenant={tenant}
+              experimentId={experiment.meta.id}
+              partida={p}
+              saving={savingPartidaId === p.id}
+              canManage={canManageActive}
+              commentsCount={commentsOf(p.id).length}
+              onOpenComments={() => setCommentsFor({ id: p.id, label: p.descripcion })}
+              onSave={(value) => updateEjecutado(p, value)}
+            />
+          ))}
         </div>
       ))}
 

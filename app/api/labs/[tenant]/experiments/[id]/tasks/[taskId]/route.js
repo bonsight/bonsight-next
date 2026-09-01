@@ -1,5 +1,5 @@
 import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
-import { getExperimentMeta, updateTask, deleteTask } from '@/lib/labs/experiments';
+import { getExperimentMeta, updateTask, deleteTask, projectInactiveMessage } from '@/lib/labs/experiments';
 import { getUserById } from '@/lib/labs/users';
 
 // Editar/reasignar una tarea (fase, nombre, responsable, fechas, link a partida): mismo
@@ -19,6 +19,8 @@ export async function PATCH(req, { params }) {
   if (user.role !== 'Director' && !isSupervisorOnProject) {
     return Response.json({ error: 'Solo el Director o un Supervisor asignado a este proyecto puede editar tareas.' }, { status: 403 });
   }
+  const inactiveMsg = projectInactiveMessage(meta);
+  if (inactiveMsg) return Response.json({ error: inactiveMsg }, { status: 409 });
 
   const patch = await req.json();
   if (patch.responsable !== undefined && patch.responsable) {
@@ -52,6 +54,8 @@ export async function DELETE(req, { params }) {
   if (user.role !== 'Director' && !isSupervisorOnProject) {
     return Response.json({ error: 'Solo el Director o un Supervisor asignado a este proyecto puede eliminar tareas.' }, { status: 403 });
   }
+  const inactiveMsg = projectInactiveMessage(meta);
+  if (inactiveMsg) return Response.json({ error: inactiveMsg }, { status: 409 });
 
   try {
     await deleteTask(tenant, id, taskId);

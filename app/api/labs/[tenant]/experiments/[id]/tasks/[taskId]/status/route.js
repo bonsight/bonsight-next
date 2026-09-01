@@ -1,5 +1,5 @@
 import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
-import { getExperimentMeta, getTasksList, setTaskStatus } from '@/lib/labs/experiments';
+import { getExperimentMeta, getTasksList, setTaskStatus, projectInactiveMessage } from '@/lib/labs/experiments';
 
 // Mover una tarea en el Canvas (Por hacer/Haciendo/Terminado) — mismo criterio de permisos
 // que el toggle de progreso en Lista/Gantt: el responsable de la tarea, o Director/Supervisor
@@ -23,6 +23,9 @@ export async function PATCH(req, { params }) {
       return Response.json({ error: 'Solo el responsable de esta tarea, o el Director/Supervisor del proyecto, puede moverla.' }, { status: 403 });
     }
   }
+
+  const inactiveMsg = projectInactiveMessage(meta);
+  if (inactiveMsg) return Response.json({ error: inactiveMsg }, { status: 409 });
 
   const { status } = await req.json();
   try {

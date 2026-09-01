@@ -1,5 +1,5 @@
 import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
-import { getExperimentMeta, addTask } from '@/lib/labs/experiments';
+import { getExperimentMeta, addTask, projectInactiveMessage } from '@/lib/labs/experiments';
 import { getUserById } from '@/lib/labs/users';
 
 // Crear una tarea: Director, o Supervisor asignado a este proyecto (mismo criterio que crear
@@ -20,6 +20,8 @@ export async function POST(req, { params }) {
   if (user.role !== 'Director' && !isSupervisorOnProject) {
     return Response.json({ error: 'Solo el Director o un Supervisor asignado a este proyecto puede crear tareas.' }, { status: 403 });
   }
+  const inactiveMsg = projectInactiveMessage(meta);
+  if (inactiveMsg) return Response.json({ error: inactiveMsg }, { status: 409 });
 
   const { fase, nombre, responsable, fechaInicio, fechaFin, duracionDias, partidaId } = await req.json();
 

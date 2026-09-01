@@ -50,14 +50,20 @@ export default async function LabsTenantPage({ params, searchParams }) {
 
     return (
       <div className="labs-entry-wrap">
-        <div className="labs-entry-card">
-          <h1 className="labs-entry-title">Labs <span className="living-word">· vivo</span></h1>
-          <p className="labs-entry-subtitle">{meta.name}</p>
-          {hasError && <p className="labs-login-error">Código incorrecto.</p>}
-          <form action={doEnter}>
-            <input type="password" name="code" placeholder="Código de acceso" className="labs-entry-input" autoFocus required />
-            <button type="submit" className="labs-entry-button">Entrar</button>
-          </form>
+        <div className="labs-entry-center">
+          <div className="labs-entry-card">
+            <h1 className="labs-entry-title">Labs</h1>
+            <p className="labs-entry-subtitle">{meta.name}</p>
+            {hasError && <p className="labs-login-error">Código incorrecto.</p>}
+            <form action={doEnter}>
+              <input type="password" name="code" placeholder="Código de acceso" className="labs-entry-input" autoFocus required />
+              <button type="submit" className="labs-entry-button">Entrar</button>
+            </form>
+          </div>
+        </div>
+        <div className="labs-powered-by">
+          <img src="/assets/bonsight-isotipo.png" alt="Bonsight" />
+          <span>Powered by Bonsight</span>
         </div>
       </div>
     );
@@ -90,14 +96,20 @@ export default async function LabsTenantPage({ params, searchParams }) {
 
     return (
       <div className="labs-entry-wrap">
-        <div className="labs-entry-card">
-          <h1 className="labs-entry-title">{meta.name} <span className="living-word">· vivo</span></h1>
-          <p className="labs-entry-subtitle">Tu código personal</p>
-          {hasUserError && <p className="labs-login-error">Código incorrecto.</p>}
-          <form action={doUserEnter}>
-            <input type="password" name="userCode" placeholder="Código personal" className="labs-entry-input" autoFocus required />
-            <button type="submit" className="labs-entry-button">Entrar</button>
-          </form>
+        <div className="labs-entry-center">
+          <div className="labs-entry-card">
+            <h1 className="labs-entry-title">{meta.name}</h1>
+            <p className="labs-entry-subtitle">Tu código personal</p>
+            {hasUserError && <p className="labs-login-error">Código incorrecto.</p>}
+            <form action={doUserEnter}>
+              <input type="password" name="userCode" placeholder="Código personal" className="labs-entry-input" autoFocus required />
+              <button type="submit" className="labs-entry-button">Entrar</button>
+            </form>
+          </div>
+        </div>
+        <div className="labs-powered-by">
+          <img src="/assets/bonsight-isotipo.png" alt="Bonsight" />
+          <span>Powered by Bonsight</span>
         </div>
       </div>
     );

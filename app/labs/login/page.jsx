@@ -29,21 +29,27 @@ export default async function LabsLoginPage({ searchParams }) {
 
   return (
     <div className="labs-login-wrap">
-      <div className="labs-login-card">
-        <h1 className="labs-login-title">Labs <span className="living-word">· vivo</span></h1>
-        <p className="labs-login-subtitle">Admin de Bonsight</p>
-        {hasError && <p className="labs-login-error">Código incorrecto.</p>}
-        <form action={loginAction}>
-          <input
-            type="password"
-            name="code"
-            placeholder="Código de acceso"
-            className="labs-login-input"
-            autoFocus
-            required
-          />
-          <button type="submit" className="labs-login-button">Entrar</button>
-        </form>
+      <div className="labs-login-center">
+        <div className="labs-login-card">
+          <h1 className="labs-login-title">Labs</h1>
+          <p className="labs-login-subtitle">Admin de Bonsight</p>
+          {hasError && <p className="labs-login-error">Código incorrecto.</p>}
+          <form action={loginAction}>
+            <input
+              type="password"
+              name="code"
+              placeholder="Código de acceso"
+              className="labs-login-input"
+              autoFocus
+              required
+            />
+            <button type="submit" className="labs-login-button">Entrar</button>
+          </form>
+        </div>
+      </div>
+      <div className="labs-powered-by">
+        <img src="/assets/bonsight-isotipo.png" alt="Bonsight" />
+        <span>Powered by Bonsight</span>
       </div>
     </div>
   );
