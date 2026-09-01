@@ -72,6 +72,7 @@ const TASK_TYPES = ['Desarrollo', 'Soporte', 'Bug', 'Mejora', 'Reunión'];
 // en tareas de Soporte/Bug. Prioridad (el orden de trabajo) sigue aplicando siempre.
 const SEVERITY_APPLIES_TO = new Set(['Soporte', 'Bug']);
 const SIN_TIPO = '__sin_tipo__';
+const SIN_RESPONSABLE = '__sin_responsable__';
 
 function initials(name) {
   return String(name ?? '?').slice(0, 2).toUpperCase();
@@ -813,6 +814,14 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
   const [mode, setMode] = useState(null); // null | 'add' | 'import' | 'new_sprint'
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [viewMode, setViewMode] = useState('estado'); // 'estado' | 'tipo'
+  const [responsableFilter, setResponsableFilter] = useState(''); // '' = todos
+
+  // Cambiar de sprint invalida el filtro anterior — el responsable elegido puede no tener
+  // ninguna tarea en el sprint nuevo (ver responsablesConTareas más abajo).
+  useEffect(() => {
+    setResponsableFilter('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.sprint?.id]);
 
   const load = async (opts = {}) => {
     const silent = opts.silent;
@@ -896,9 +905,20 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
     ? columns
     : [...typeColumns.map((t) => ({ id: t, name: t })), { id: SIN_TIPO, name: 'Sin tipo' }];
 
+  const responsablesConTareas = [...new Map(
+    tasks.filter((t) => t.responsableId).map((t) => [t.responsableId, t.responsableName])
+  ).entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  const hayTareasSinResponsable = tasks.some((t) => !t.responsableId);
+
+  const visibleTasks = responsableFilter
+    ? tasks.filter((t) => (responsableFilter === SIN_RESPONSABLE ? !t.responsableId : t.responsableId === responsableFilter))
+    : tasks;
+
   const tasksForColumn = (col) => (viewMode === 'estado'
-    ? tasks.filter((t) => t.status === col.id)
-    : tasks.filter((t) => (t.taskType ?? SIN_TIPO) === col.id));
+    ? visibleTasks.filter((t) => t.status === col.id)
+    : visibleTasks.filter((t) => (t.taskType ?? SIN_TIPO) === col.id));
 
   return (
     <div className="aria-presentation">
@@ -971,10 +991,19 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
         <div className="aria-canvas-stats-row">
           <div className="aria-canvas-stat aria-canvas-stat--main">
             <div>
-              <p className="aria-canvas-stat-num">{tasks.length}</p>
-              <p className="aria-canvas-stat-label">Tareas en tablero</p>
+              <p className="aria-canvas-stat-num">{visibleTasks.length}</p>
+              <p className="aria-canvas-stat-label">Tareas en tablero{responsableFilter ? ` (de ${tasks.length})` : ''}</p>
             </div>
           </div>
+          <select
+            className={`aria-board-responsable-filter${responsableFilter ? ' aria-board-responsable-filter--active' : ''}`}
+            value={responsableFilter}
+            onChange={(e) => setResponsableFilter(e.target.value)}
+          >
+            <option value="">Todos los responsables</option>
+            {responsablesConTareas.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {hayTareasSinResponsable && <option value={SIN_RESPONSABLE}>Sin responsable</option>}
+          </select>
           <div className="aria-board-view-toggle">
             <button type="button" className={`aria-board-view-btn${viewMode === 'estado' ? ' aria-board-view-btn--active' : ''}`} onClick={() => setViewMode('estado')}>
               Por estado
