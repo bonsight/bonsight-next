@@ -56,10 +56,41 @@ const NAV = {
       { id: 'reportes', label: 'Reportes', ic: '▤' },
     ],
   },
+  // Seguimiento = mismo Cronograma que civil (Lista/Gantt/Canvas), sin Presupuesto — clientes
+  // que necesitan seguimiento de tareas tipo Basecamp, no obra civil con partidas.
+  seguimiento: {
+    Registrador: [
+      { id: 'resumen', label: 'Resumen', ic: '◈' },
+      { id: 'cronograma', label: 'Cronograma', ic: '⬢' },
+      { id: 'historia', label: 'Historia', ic: '~' },
+    ],
+    Supervisor: [
+      { id: 'resumen', label: 'Resumen', ic: '◈' },
+      { id: 'cronograma', label: 'Cronograma', ic: '⬢' },
+      { id: 'documentacion', label: 'Documentación', ic: '▧' },
+      { id: 'historia', label: 'Historia', ic: '~' },
+      { id: 'reportes', label: 'Reportes', ic: '▤' },
+    ],
+    Director: [
+      { id: 'resumen', label: 'Resumen', ic: '◈' },
+      { id: 'cronograma', label: 'Cronograma', ic: '⬢' },
+      { id: 'documentacion', label: 'Documentación', ic: '▧' },
+      { id: 'historia', label: 'Historia', ic: '~' },
+      { id: 'reportes', label: 'Reportes', ic: '▤' },
+    ],
+  },
 };
 
 function getNav(role, projectKind) {
-  return NAV[projectKind === 'civil' ? 'civil' : 'experimental'][role];
+  const key = projectKind === 'civil' ? 'civil' : projectKind === 'seguimiento' ? 'seguimiento' : 'experimental';
+  return NAV[key][role];
+}
+
+// 'civil' y 'seguimiento' comparten Cronograma/Documentación/Historia/Reportes — solo civil
+// suma Presupuesto encima. Se usa en los puntos donde la diferencia real es "¿tiene tareas
+// con fase/fechas?" y no "¿es específicamente obra civil?".
+function isTaskTrackingKind(projectKind) {
+  return projectKind === 'civil' || projectKind === 'seguimiento';
 }
 
 const FIELD_TYPES = [
@@ -324,13 +355,23 @@ function ExperimentPicker({ tenant, tenantMeta, identity, experiments, onSelect,
         </div>
       ))}
 
-      {open && <CreateExperimentModal tenant={tenant} onClose={() => setOpen(false)} onCreated={(id) => { setOpen(false); onCreated(id); }} />}
+      {open && <CreateExperimentModal tenant={tenant} allowedProjectKinds={tenantMeta.allowedProjectKinds} onClose={() => setOpen(false)} onCreated={(id) => { setOpen(false); onCreated(id); }} />}
     </div>
   );
 }
 
-function CreateExperimentModal({ tenant, onClose, onCreated }) {
-  const [projectKind, setProjectKind] = useState('experimental');
+const ALL_PROJECT_KIND_OPTIONS = [
+  { id: 'experimental', label: 'Experimental' },
+  { id: 'civil', label: 'Civil' },
+  { id: 'seguimiento', label: 'Seguimiento' },
+];
+
+function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated }) {
+  // Vacío/ausente = sin restricción (mismo criterio que el backend, ver lib/labs/tenants.js).
+  const kindOptions = allowedProjectKinds?.length
+    ? ALL_PROJECT_KIND_OPTIONS.filter((k) => allowedProjectKinds.includes(k.id))
+    : ALL_PROJECT_KIND_OPTIONS;
+  const [projectKind, setProjectKind] = useState(kindOptions[0]?.id ?? 'experimental');
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
   const [hypothesis, setHypothesis] = useState('');
@@ -393,18 +434,25 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
     setBusy(true);
     setErr(null);
     try {
-      const body = projectKind === 'civil'
-        ? {
-            name, code, type, supervisorIds, projectKind: 'civil',
-            tasks: (civilTasks ?? []).map((t) => ({ fase: t.fase, nombre: t.nombre, responsable: t.responsable, fechaInicio: t.fechaInicio, fechaFin: t.fechaFin, duracionDias: t.duracionDias, progreso: t.progreso })),
-            partidas: (civilPartidas ?? []).map((p) => ({ etapa: p.etapa, descripcion: p.descripcion, cantidad: p.cantidad, unidad: p.unidad, precioUnitario: p.precioUnitario, proveedor: p.proveedor, comentarios: p.comentarios })),
-          }
-        : {
-            name, purpose, hypothesis, supervisorIds, code, type, hasBudget,
-            successCriteria: criteriaText.split('\n').map((l) => l.trim()).filter(Boolean),
-            budgetAmount: hasBudget && budgetAmount !== '' ? Number(budgetAmount) : null,
-            budgetCurrency: hasBudget ? budgetCurrency : '',
-          };
+      let body;
+      if (projectKind === 'civil') {
+        body = {
+          name, code, type, supervisorIds, projectKind: 'civil',
+          tasks: (civilTasks ?? []).map((t) => ({ fase: t.fase, nombre: t.nombre, responsable: t.responsable, fechaInicio: t.fechaInicio, fechaFin: t.fechaFin, duracionDias: t.duracionDias, progreso: t.progreso })),
+          partidas: (civilPartidas ?? []).map((p) => ({ etapa: p.etapa, descripcion: p.descripcion, cantidad: p.cantidad, unidad: p.unidad, precioUnitario: p.precioUnitario, proveedor: p.proveedor, comentarios: p.comentarios })),
+        };
+      } else if (projectKind === 'seguimiento') {
+        // Arranca sin tareas — se cargan a mano desde el Cronograma una vez creado, no hay
+        // import de Excel para este tipo (eso es específico del flujo civil de Sesuveca).
+        body = { name, code, type, supervisorIds, projectKind: 'seguimiento' };
+      } else {
+        body = {
+          name, purpose, hypothesis, supervisorIds, code, type, hasBudget,
+          successCriteria: criteriaText.split('\n').map((l) => l.trim()).filter(Boolean),
+          budgetAmount: hasBudget && budgetAmount !== '' ? Number(budgetAmount) : null,
+          budgetCurrency: hasBudget ? budgetCurrency : '',
+        };
+      }
       const res = await fetch(`/api/labs/${tenant}/experiments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -427,11 +475,16 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
         <span className="eyebrow-mini on-dark">Crear proyecto</span>
         <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Nuevo proyecto</h2>
 
-        <label className="field-label">Tipo de proyecto</label>
-        <div className="labs-entry-role-grid" style={{ marginBottom: 14 }}>
-          <button type="button" className={`labs-entry-role-btn${projectKind === 'experimental' ? ' active' : ''}`} onClick={() => setProjectKind('experimental')}>Experimental</button>
-          <button type="button" className={`labs-entry-role-btn${projectKind === 'civil' ? ' active' : ''}`} onClick={() => setProjectKind('civil')}>Civil</button>
-        </div>
+        {kindOptions.length > 1 && (
+          <>
+            <label className="field-label">Tipo de proyecto</label>
+            <div className="labs-entry-role-grid" style={{ marginBottom: 14 }}>
+              {kindOptions.map((k) => (
+                <button key={k.id} type="button" className={`labs-entry-role-btn${projectKind === k.id ? ' active' : ''}`} onClick={() => setProjectKind(k.id)}>{k.label}</button>
+              ))}
+            </div>
+          </>
+        )}
 
         <form onSubmit={handleCreate}>
           <label className="field-label">Nombre</label>
@@ -581,7 +634,7 @@ function CreateExperimentModal({ tenant, onClose, onCreated }) {
 /* ======================= Resumen ======================= */
 
 function ViewResumen({ tenant, experiment, identity, onGo, onUpdate }) {
-  if (experiment.meta.projectKind === 'civil') {
+  if (isTaskTrackingKind(experiment.meta.projectKind)) {
     return <ViewResumenCivil tenant={tenant} experiment={experiment} identity={identity} onUpdate={onUpdate} />;
   }
   if (identity.role === 'Director') return <ViewResumenDirector tenant={tenant} experiment={experiment} onGo={onGo} onUpdate={onUpdate} />;
@@ -632,16 +685,20 @@ function ViewResumenCivil({ tenant, experiment, identity, onUpdate }) {
           <div className="dim-bar"><div className="dim-fill" style={{ width: `${m.pctTareas}%` }} /></div>
           <div className="dim-label">{m.pctTareas}% — {m.tareasTerminadas}/{m.totalTareas} terminadas</div>
         </div>
-        <div className="dim-item">
-          <div className="dim-name">Financiero</div>
-          <div className="dim-bar"><div className="dim-fill" style={{ width: `${Math.min(100, m.pctFinanciero)}%` }} /></div>
-          <div className="dim-label">{m.pctFinanciero}% ejecutado</div>
-        </div>
-        <div className="dim-item">
-          <div className="dim-name">Tiempo</div>
-          <div className="dim-bar"><div className="dim-fill" style={{ width: `${Math.min(100, m.pctTiempo)}%` }} /></div>
-          <div className="dim-label">{m.pctTiempo}% transcurrido</div>
-        </div>
+        {experiment.meta.projectKind === 'civil' && (
+          <>
+            <div className="dim-item">
+              <div className="dim-name">Financiero</div>
+              <div className="dim-bar"><div className="dim-fill" style={{ width: `${Math.min(100, m.pctFinanciero)}%` }} /></div>
+              <div className="dim-label">{m.pctFinanciero}% ejecutado</div>
+            </div>
+            <div className="dim-item">
+              <div className="dim-name">Tiempo</div>
+              <div className="dim-bar"><div className="dim-fill" style={{ width: `${Math.min(100, m.pctTiempo)}%` }} /></div>
+              <div className="dim-label">{m.pctTiempo}% transcurrido</div>
+            </div>
+          </>
+        )}
       </div>
 
       {alerts.length > 0 && (
@@ -1272,10 +1329,14 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
 
 /* ======================= Documentación ======================= */
 
-// Civil ya tiene Cronograma y Presupuesto como datos estructurados (ver ViewCronograma/
-// ViewPresupuesto) — acá quedan categorías que solo tienen sentido como archivo suelto.
+// Civil y experimental ya tienen Cronograma/Presupuesto (o Pruebas) como datos
+// estructurados — acá quedan categorías que solo tienen sentido como archivo suelto.
+// Seguimiento hoy es Go Invest (inmobiliaria de asesoría/venta/arriendo/administración de
+// propiedades, no constructora) — categorías pensadas para eso, no para obra.
 function getDocCategories(projectKind) {
-  return projectKind === 'civil' ? ['Planos', 'Contratos', 'Permisos', 'Otro'] : ['Cronograma', 'Presupuesto', 'Otro'];
+  if (projectKind === 'civil') return ['Planos', 'Contratos', 'Permisos', 'Otro'];
+  if (projectKind === 'seguimiento') return ['Contratos', 'Clientes e Inversionistas', 'Financiero', 'Legal', 'Otro'];
+  return ['Cronograma', 'Presupuesto', 'Otro'];
 }
 
 // Cronogramas, presupuestos y otros adjuntos de referencia del proyecto — no se analizan con
@@ -1616,9 +1677,107 @@ function TaskStatusPill({ task, saving, interactive, onToggle, small }) {
   );
 }
 
+function taskStatus(t) {
+  // Compatibilidad con tareas creadas antes de que existiera Canvas — no tienen `status`
+  // guardado, se infiere de `progreso` (siempre 0 o 100 en tareas viejas).
+  return t.status || (t.progreso >= 100 ? 'done' : 'todo');
+}
+
+// Fila de Lista con edición inline (nombre/fase/fechas) y eliminación — solo Director/
+// Supervisor del proyecto (mismo permiso que exige el backend). Eliminar pide confirmar con
+// un segundo click, sin modal — se resetea si el botón pierde el foco.
+function CronRow({ tenant, experimentId, task, nameOf, vencida, saving, canManage, canToggle, onToggleProgreso, commentsCount, onOpenComments, onUpdate }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const openEdit = () => {
+    setDraft({ nombre: task.nombre, fase: task.fase || '', fechaInicio: task.fechaInicio || '', fechaFin: task.fechaFin || '' });
+    setEditing(true);
+  };
+
+  const save = async () => {
+    if (!draft.nombre.trim()) return;
+    setBusy(true);
+    try {
+      await fetch(`/api/labs/${tenant}/experiments/${experimentId}/tasks/${task.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre: draft.nombre.trim(), fase: draft.fase, fechaInicio: draft.fechaInicio || null, fechaFin: draft.fechaFin || null }),
+      });
+      setEditing(false);
+      onUpdate();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    setBusy(true);
+    try {
+      await fetch(`/api/labs/${tenant}/experiments/${experimentId}/tasks/${task.id}`, { method: 'DELETE' });
+      onUpdate();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="cron-row cron-row-editing">
+        <div className="cron-row-edit-form">
+          <input className="cron-row-edit-input" value={draft.nombre} onChange={(e) => setDraft((d) => ({ ...d, nombre: e.target.value }))} placeholder="Nombre de la tarea" autoFocus />
+          <input className="cron-row-edit-input" value={draft.fase} onChange={(e) => setDraft((d) => ({ ...d, fase: e.target.value }))} placeholder="Fase" />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input className="cron-row-edit-input" type="date" value={draft.fechaInicio} onChange={(e) => setDraft((d) => ({ ...d, fechaInicio: e.target.value }))} />
+            <input className="cron-row-edit-input" type="date" value={draft.fechaFin} onChange={(e) => setDraft((d) => ({ ...d, fechaFin: e.target.value }))} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button type="button" className="chip-btn" onClick={() => setEditing(false)}>Cancelar</button>
+            <button type="button" className="btn btn-primary" disabled={busy || !draft.nombre.trim()} onClick={save}>{busy ? 'Guardando…' : 'Guardar'}</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="cron-row">
+      <div className="cron-row-info">
+        <div className="cron-row-name">{task.nombre}</div>
+        <div className="cron-row-meta">
+          <span>{nameOf(task.responsable)}</span><span className="dim">·</span>
+          <span>{formatShortDate(task.fechaInicio)} → {formatShortDate(task.fechaFin)}</span>
+          {vencida && <><span className="dim">·</span><span className="cron-overdue">vencida</span></>}
+        </div>
+      </div>
+      <div className="cron-row-actions">
+        <TaskCommentButton count={commentsCount} onClick={onOpenComments} />
+        <TaskStatusPill task={task} saving={saving} interactive={canToggle} onToggle={onToggleProgreso} />
+        {canManage && (
+          <>
+            <button type="button" className="cron-icon-btn" title="Editar" disabled={busy} onClick={openEdit}>✎</button>
+            <button
+              type="button"
+              className={`cron-icon-btn${confirmDelete ? ' cron-icon-btn--danger' : ''}`}
+              title={confirmDelete ? 'Click de nuevo para confirmar' : 'Eliminar'}
+              disabled={busy}
+              onClick={remove}
+              onBlur={() => setConfirmDelete(false)}
+            >
+              {confirmDelete ? '✓' : '🗑'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
   const [users, setUsers] = useState([]);
-  const [view, setView] = useState('list'); // 'list' | 'gantt'
+  const [view, setView] = useState('list'); // 'list' | 'gantt' | 'canvas'
   const [createOpen, setCreateOpen] = useState(false);
   const [savingTaskId, setSavingTaskId] = useState(null);
   const [commentsFor, setCommentsFor] = useState(null); // { id, label } | null
@@ -1647,6 +1806,19 @@ function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
     }
   };
 
+  const moveTaskStatus = async (task, status) => {
+    setSavingTaskId(task.id);
+    try {
+      await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/tasks/${task.id}/status`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      onUpdate();
+    } finally {
+      setSavingTaskId(null);
+    }
+  };
+
   const canTogglePorTask = (task) => canManage || task.responsable === identity.id;
   const commentsOf = (taskId) => experiment.feedback.filter((f) => f.targetType === 'tarea' && f.targetId === taskId);
   const now = Date.now();
@@ -1663,7 +1835,7 @@ function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
   const openComments = (t) => setCommentsFor({ id: t.id, label: t.nombre });
 
   return (
-    <div className={`view${view === 'gantt' ? ' view-wide' : ''}`}>
+    <div className={`view${view === 'gantt' || view === 'canvas' ? ' view-wide' : ''}`}>
       <div className="view-header">
         <span className="view-eyebrow">Cronograma · {experiment.meta.name}</span>
         <div className="cron-title-row">
@@ -1672,13 +1844,14 @@ function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
             <div className="cron-view-toggle">
               <button type="button" className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>Lista</button>
               <button type="button" className={view === 'gantt' ? 'active' : ''} onClick={() => setView('gantt')}>Cronograma</button>
+              <button type="button" className={view === 'canvas' ? 'active' : ''} onClick={() => setView('canvas')}>Canvas</button>
             </div>
           )}
         </div>
         <p className="view-sub">
-          {view === 'list'
-            ? 'Agrupadas por fase. El % de avance lo actualiza el responsable, o Director/Supervisor.'
-            : 'Barras posicionadas por fecha de inicio y fin. Haz clic en el control de la derecha para marcar una tarea como terminada.'}
+          {view === 'list' && 'Agrupadas por fase. El % de avance lo actualiza el responsable, o Director/Supervisor.'}
+          {view === 'gantt' && 'Barras posicionadas por fecha de inicio y fin. Haz clic en el control de la derecha para marcar una tarea como terminada.'}
+          {view === 'canvas' && 'Por hacer, Haciendo, Terminado — movela con las flechas de la tarjeta.'}
         </p>
       </div>
 
@@ -1693,26 +1866,23 @@ function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
           {grouped.map((g) => (
             <div key={g.fase} style={{ marginBottom: 20 }}>
               <div className="divider-label"><span>{g.fase}</span></div>
-              {g.tasks.map((t) => {
-                const vencida = isVencida(t);
-                const saving = savingTaskId === t.id;
-                return (
-                  <div className="cron-row" key={t.id}>
-                    <div className="cron-row-info">
-                      <div className="cron-row-name">{t.nombre}</div>
-                      <div className="cron-row-meta">
-                        <span>{nameOf(t.responsable)}</span><span className="dim">·</span>
-                        <span>{formatShortDate(t.fechaInicio)} → {formatShortDate(t.fechaFin)}</span>
-                        {vencida && <><span className="dim">·</span><span className="cron-overdue">vencida</span></>}
-                      </div>
-                    </div>
-                    <div className="cron-row-actions">
-                      <TaskCommentButton count={commentsOf(t.id).length} onClick={() => openComments(t)} />
-                      <TaskStatusPill task={t} saving={saving} interactive={canTogglePorTask(t)} onToggle={() => toggleProgreso(t)} />
-                    </div>
-                  </div>
-                );
-              })}
+              {g.tasks.map((t) => (
+                <CronRow
+                  key={t.id}
+                  tenant={tenant}
+                  experimentId={experiment.meta.id}
+                  task={t}
+                  nameOf={nameOf}
+                  vencida={isVencida(t)}
+                  saving={savingTaskId === t.id}
+                  canManage={canManage}
+                  canToggle={canTogglePorTask(t)}
+                  onToggleProgreso={() => toggleProgreso(t)}
+                  commentsCount={commentsOf(t.id).length}
+                  onOpenComments={() => openComments(t)}
+                  onUpdate={onUpdate}
+                />
+              ))}
             </div>
           ))}
         </div>
@@ -1726,6 +1896,18 @@ function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
           savingTaskId={savingTaskId}
           canTogglePorTask={canTogglePorTask}
           onToggle={toggleProgreso}
+          commentsOf={commentsOf}
+          onOpenComments={openComments}
+        />
+      )}
+
+      {experiment.tasks.length > 0 && view === 'canvas' && (
+        <CronogramaCanvas
+          tasks={experiment.tasks}
+          nameOf={nameOf}
+          savingTaskId={savingTaskId}
+          canTogglePorTask={canTogglePorTask}
+          onMove={moveTaskStatus}
           commentsOf={commentsOf}
           onOpenComments={openComments}
         />
@@ -1836,6 +2018,58 @@ function CronogramaGantt({ grouped, nameOf, isVencida, savingTaskId, canTogglePo
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+const CANVAS_COLUMNS = [
+  { id: 'todo', label: 'Por hacer' },
+  { id: 'doing', label: 'Haciendo' },
+  { id: 'done', label: 'Terminado' },
+];
+
+// Sin drag&drop (no hay librería de eso en este codebase) — mover una tarjeta es click en
+// ← o → a la columna vecina, alcanza para un tablero de 3 columnas.
+function CronogramaCanvas({ tasks, nameOf, savingTaskId, canTogglePorTask, onMove, commentsOf, onOpenComments }) {
+  const now = Date.now();
+  return (
+    <div className="cron-canvas">
+      {CANVAS_COLUMNS.map((col, colIdx) => {
+        const colTasks = tasks.filter((t) => taskStatus(t) === col.id);
+        return (
+          <div className="cron-canvas-col" key={col.id}>
+            <div className="cron-canvas-col-head">
+              <span>{col.label}</span>
+              <span className="cron-canvas-col-count">{colTasks.length}</span>
+            </div>
+            {colTasks.length === 0 && <p className="empty-note" style={{ padding: '4px 2px' }}>—</p>}
+            {colTasks.map((t) => {
+              const saving = savingTaskId === t.id;
+              const vencida = col.id !== 'done' && t.fechaFin && new Date(t.fechaFin).getTime() < now;
+              const canMove = canTogglePorTask(t);
+              return (
+                <div className="cron-canvas-card" key={t.id}>
+                  {t.fase && <span className="cron-canvas-card-fase">{t.fase}</span>}
+                  <div className="cron-canvas-card-name">{t.nombre}</div>
+                  <div className="cron-canvas-card-meta">
+                    {nameOf(t.responsable)}
+                    {t.fechaFin && <><span className="dim"> · </span><span className={vencida ? 'cron-overdue' : ''}>{formatShortDate(t.fechaFin)}</span></>}
+                  </div>
+                  <div className="cron-canvas-card-actions">
+                    <TaskCommentButton count={commentsOf(t.id).length} onClick={() => onOpenComments(t)} small />
+                    {canMove && (
+                      <div className="cron-canvas-move">
+                        <button type="button" disabled={colIdx === 0 || saving} title="Mover atrás" onClick={() => onMove(t, CANVAS_COLUMNS[colIdx - 1].id)}>←</button>
+                        <button type="button" disabled={colIdx === CANVAS_COLUMNS.length - 1 || saving} title="Mover adelante" onClick={() => onMove(t, CANVAS_COLUMNS[colIdx + 1].id)}>→</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -2783,7 +3017,9 @@ function CivilReportDoc({ tenant, experiment, identity, latest, canApprove, canG
   return (
     <ReportDocShell tenant={tenant} experiment={experiment} identity={identity} latest={latest} canApprove={canApprove} canGenerate={canGenerate} onUpdate={onUpdate}>
       <h3>Avance general</h3>
-      <ReportMeter label="Financiero" pct={m.pctFinanciero} tone={overBudget ? 'critical' : 'good'} sublabel={`${money(m.totalEjecutado)} de ${money(m.totalImporte)} ejecutado${overBudget ? ' — supera lo presupuestado' : ''}`} />
+      {m.totalImporte > 0 && (
+        <ReportMeter label="Financiero" pct={m.pctFinanciero} tone={overBudget ? 'critical' : 'good'} sublabel={`${money(m.totalEjecutado)} de ${money(m.totalImporte)} ejecutado${overBudget ? ' — supera lo presupuestado' : ''}`} />
+      )}
       <ReportMeter label="Tareas" pct={m.pctTareas} tone={scheduleSlip ? 'warning' : 'good'} sublabel={`${m.tareasTerminadas} de ${m.totalTareas} terminadas${scheduleSlip ? ' — por detrás del tiempo transcurrido' : ''}`} />
       <ReportMeter label="Tiempo transcurrido" pct={m.pctTiempo} tone="good" />
 
@@ -2888,7 +3124,7 @@ function ViewReportes({ tenant, experiment, identity, onUpdate }) {
   const [generating, setGenerating] = useState(false);
   const [err, setErr] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
-  const isCivil = experiment.meta.projectKind === 'civil';
+  const isCivil = isTaskTrackingKind(experiment.meta.projectKind);
   const reports = experiment.reports.map((r) => ({ ...r, experimentId: experiment.meta.id }));
   const active = reports.find((r) => r.id === selectedId) || reports[0] || null;
   const canGenerate = identity.role === 'Supervisor' && experiment.meta.supervisorIds?.includes(identity.id);

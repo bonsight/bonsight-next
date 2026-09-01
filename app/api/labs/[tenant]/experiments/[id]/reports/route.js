@@ -1,5 +1,5 @@
 import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
-import { getExperiment, addReportDraft, updateReportDraft, submitReport, approveReport, computeCivilReportBreakdown } from '@/lib/labs/experiments';
+import { getExperiment, addReportDraft, updateReportDraft, submitReport, approveReport, computeCivilReportBreakdown, TASK_TRACKING_KINDS } from '@/lib/labs/experiments';
 import { generateReportDraft, generateCivilReportDraft } from '@/lib/labs/reports';
 
 export async function POST(req, { params }) {
@@ -26,8 +26,10 @@ export async function POST(req, { params }) {
     const periodFrom = experiment.meta.createdAt;
     const periodTo = new Date().toISOString();
 
-    if (experiment.meta.projectKind === 'civil') {
+    if (TASK_TRACKING_KINDS.includes(experiment.meta.projectKind)) {
       const { photos } = await req.json().catch(() => ({ photos: [] }));
+      // breakdown.financialByEtapa sale vacío si el proyecto no tiene partidas (seguimiento
+      // nunca las tiene) — el resto del pipeline y el render ya lo manejan sin romperse.
       const breakdown = computeCivilReportBreakdown(experiment.tasks, experiment.partidas);
       const analysis = await generateCivilReportDraft(experiment, breakdown);
       const report = await addReportDraft(tenant, id, {

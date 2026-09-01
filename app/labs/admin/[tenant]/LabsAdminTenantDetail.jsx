@@ -3,6 +3,11 @@
 import { useEffect, useState } from 'react';
 
 const SA_EMAIL = 'id-aria-platform@bonsight-web.iam.gserviceaccount.com';
+const PROJECT_KINDS = [
+  { id: 'experimental', label: 'Experimental', hint: 'Pruebas y aportes tipo lab de innovación.' },
+  { id: 'civil', label: 'Civil', hint: 'Obra civil — Cronograma, Presupuesto, partidas.' },
+  { id: 'seguimiento', label: 'Seguimiento', hint: 'Seguimiento de tareas genérico — Cronograma sin presupuesto.' },
+];
 
 export default function LabsAdminTenantDetail({ tenant, tenantMeta }) {
   const tenantUrl = `https://labs.bonsight.co/${tenant}`;
@@ -20,9 +25,65 @@ export default function LabsAdminTenantDetail({ tenant, tenantMeta }) {
         </div>
       </div>
 
+      <ProjectKindsPanel tenant={tenant} initialAllowed={tenantMeta.allowedProjectKinds} />
+
       <TeamPanel tenant={tenant} />
 
       <DriveConnectPanel tenant={tenant} />
+    </div>
+  );
+}
+
+// allowedProjectKinds vacío/ausente = sin restricción — se muestra todo tildado por defecto,
+// consistente con cómo lo interpreta el backend (ver lib/labs/tenants.js).
+function ProjectKindsPanel({ tenant, initialAllowed }) {
+  const [allowed, setAllowed] = useState(new Set(initialAllowed?.length ? initialAllowed : PROJECT_KINDS.map((k) => k.id)));
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const toggle = (id) => {
+    setSaved(false);
+    setAllowed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await fetch(`/api/labs/${tenant}/meta`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allowedProjectKinds: [...allowed] }),
+      });
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="card">
+      <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Tipos de proyecto habilitados</div>
+      <p style={{ fontSize: 12.5, color: 'var(--labs-cream-faint)', marginTop: 4, marginBottom: 12 }}>
+        Define qué opciones ve el Director de este cliente al crear un proyecto nuevo.
+      </p>
+      {PROJECT_KINDS.map((k) => (
+        <label key={k.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0', cursor: 'pointer' }}>
+          <input type="checkbox" checked={allowed.has(k.id)} onChange={() => toggle(k.id)} style={{ marginTop: 3 }} />
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--labs-cream)' }}>{k.label}</div>
+            <div style={{ fontSize: 12, color: 'var(--labs-cream-faint)' }}>{k.hint}</div>
+          </div>
+        </label>
+      ))}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+        <button className="btn btn-primary" disabled={saving || allowed.size === 0} onClick={save}>{saving ? 'Guardando…' : 'Guardar'}</button>
+        {saved && <span style={{ fontSize: 12, color: 'var(--labs-living)' }}>Guardado.</span>}
+      </div>
     </div>
   );
 }
