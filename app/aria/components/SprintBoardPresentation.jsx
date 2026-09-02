@@ -271,6 +271,11 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
 
       {task.parentName && <p className="aria-board-parent-tag">↳ {task.parentName}</p>}
       {task.previousSprintTitle && <p className="aria-board-parent-tag">↳ vino de {task.previousSprintTitle}</p>}
+      {task.children.length > 0 && (
+        <p className={`aria-board-children-tag${task.childrenPct === 100 ? ' aria-board-children-tag--done' : ''}`} title={task.children.map((c) => `${c.status === 'Done' ? '✓' : '·'} ${c.title}`).join('\n')}>
+          {task.childrenDoneCount}/{task.children.length} subtareas · {task.childrenPct}%
+        </p>
+      )}
 
       {(task.priority || metaParts.length > 0) && (
         <p className="aria-board-meta-line">
@@ -363,7 +368,7 @@ function BoardColumn({ column, tasks, columns, viewMode, busy, pendingKey, onAct
   );
 }
 
-function AddTaskForm({ proyectos, talento, iniciativas, columns, busy, pendingKey, initialTitle, sprint, onCreate, onClose }) {
+function AddTaskForm({ proyectos, talento, iniciativas, columns, tasks, busy, pendingKey, initialTitle, sprint, onCreate, onClose }) {
   const [title, setTitle] = useState(initialTitle ?? '');
   const [status, setStatus] = useState(columns[0]?.id ?? '');
   const [proyectoId, setProyectoId] = useState('');
@@ -372,6 +377,7 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, busy, pendingKe
   const [taskType, setTaskType] = useState('');
   const [severity, setSeverity] = useState('');
   const [iniciativaId, setIniciativaId] = useState('');
+  const [parentId, setParentId] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [estimatedHours, setEstimatedHours] = useState('');
@@ -390,12 +396,13 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, busy, pendingKe
       taskType: taskType || undefined,
       severity: severity || undefined,
       iniciativaId: iniciativaId || undefined,
+      parentId: parentId || undefined,
       startDate: startDate || undefined,
       endDate: endDate || undefined,
       estimatedHours: estimatedHours || undefined,
       description: description || undefined,
     });
-    setTitle(''); setStartDate(''); setEndDate(''); setEstimatedHours(''); setDescription('');
+    setTitle(''); setParentId(''); setStartDate(''); setEndDate(''); setEstimatedHours(''); setDescription('');
   };
 
   return (
@@ -479,6 +486,14 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, busy, pendingKe
       {proyectoId && iniciativasDelProyecto.length === 0 && (
         <p className="aria-board-hint">Sin iniciativas para este proyecto — créala en Notion.</p>
       )}
+      <div className="aria-board-field">
+        <label className="aria-board-field-label">Tarea padre</label>
+        <select className={`aria-board-select${parentId ? '' : ' aria-canvas-meta-select--empty'}`} value={parentId} onChange={(e) => setParentId(e.target.value)}>
+          <option value="">Ninguna</option>
+          {tasks.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+        </select>
+        <p className="aria-board-hint">Elegí una si esta tarea es una subtarea de otra ya en el sprint.</p>
+      </div>
       <div className="aria-board-field">
         <label className="aria-board-field-label">Responsable</label>
         <select className={`aria-board-select${responsableId ? '' : ' aria-canvas-meta-select--empty'}`} value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
@@ -962,6 +977,7 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
                       talento={talento}
                       iniciativas={iniciativas}
                       columns={columns}
+                      tasks={tasks}
                       busy={busy}
                       pendingKey={pendingKey}
                       initialTitle={newTaskTitle}
