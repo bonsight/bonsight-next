@@ -97,6 +97,58 @@ function ProjectKindsPanel({ tenant, initialAllowed }) {
 
 const ROLES = ['Registrador', 'Supervisor', 'Director'];
 
+const IconPencil = ({ className }) => (
+  <svg className={className} width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
+  </svg>
+);
+
+// Autoservicio inverso: acá edita el admin (a diferencia de PATCH .../users/me, que es la
+// propia persona editando su nombre desde adentro de Labs) — mismo patrón de lapicito que
+// los títulos de tarea en el Sprint board de Aria.
+function EditableUserName({ tenant, user, onRenamed }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(user.name);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === user.name) { setEditing(false); return; }
+    setSaving(true);
+    try {
+      await fetch(`/api/labs/${tenant}/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      onRenamed();
+    } finally {
+      setSaving(false);
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <input
+        className="labs-tenant-name-input"
+        value={value}
+        autoFocus
+        disabled={saving}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+        onBlur={save}
+      />
+    );
+  }
+  return (
+    <button type="button" className="labs-tenant-name labs-name-edit-trigger" onClick={() => { setValue(user.name); setEditing(true); }} title="Editar nombre">
+      {user.name}
+      <IconPencil className="labs-name-edit-pencil" />
+    </button>
+  );
+}
+
 function TeamPanel({ tenant }) {
   const [users, setUsers] = useState(undefined); // undefined = cargando
   const [name, setName] = useState('');
@@ -170,7 +222,7 @@ function TeamPanel({ tenant }) {
       {users?.map((u) => (
         <div key={u.id} className="labs-tenant-row" style={{ alignItems: 'center' }}>
           <div>
-            <div className="labs-tenant-name">{u.name}</div>
+            <EditableUserName tenant={tenant} user={u} onRenamed={load} />
             <div className="labs-tenant-meta">
               Código: <span style={{ fontFamily: 'var(--labs-mono)' }}>{u.accessCode}</span>
             </div>
