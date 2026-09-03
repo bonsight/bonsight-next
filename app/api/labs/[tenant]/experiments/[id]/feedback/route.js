@@ -1,11 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
 import { addFeedback, dismissFeedbackSuggestion, getExperiment, TASK_TRACKING_KINDS } from '@/lib/labs/experiments';
+import { trackUsage } from '@/lib/kai/usage';
 
 const MODEL = 'claude-sonnet-4-6';
 
 // Best-effort — si esto falla, el feedback igual se guarda sin sugerencia. No bloquea nada.
-async function suggestConversion(experimentName, targetLabel, text) {
+async function suggestConversion(tenant, experimentName, targetLabel, text) {
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const prompt = `Un feedback sobre el experimento "${experimentName}" (respecto a: ${targetLabel}) dice:\n"""${text}"""\n\n¿Este feedback pide o implica claramente una nueva ejecución de prueba (ej. repetir algo con otras condiciones, probar a mayor escala)? Si sí, respondé con UNA frase corta describiendo qué ejecución nueva sugiere, en español, sin comillas. Si no lo implica claramente, respondé exactamente: NINGUNA`;
@@ -14,6 +15,7 @@ async function suggestConversion(experimentName, targetLabel, text) {
       max_tokens: 150,
       messages: [{ role: 'user', content: prompt }],
     });
+    trackUsage({ tenant, product: 'labs', feature: 'feedback_conversion_suggestion', model: MODEL, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }).catch(() => null);
     const text_ = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
     if (!text_ || text_.toUpperCase().includes('NINGUNA')) return null;
     return text_;
@@ -128,7 +130,7 @@ export async function POST(req, { params }) {
   // La sugerencia de "convertir en una nueva ejecución" solo tiene sentido para proyectos
   // experimentales (pruebas/aportes) — no aplica al vocabulario de tareas/partidas de civil.
   const suggestion = ['proyecto', 'prueba', 'aporte'].includes(targetType)
-    ? await suggestConversion(experiment.meta.name, targetLabel, text)
+    ? await suggestConversion(tenant, experiment.meta.name, targetLabel, text)
     : null;
   const entry = await addFeedback(tenant, id, {
     who: user.name, whoRole: user.role, targetType, targetId: resolvedTargetId, targetLabel, text, visibility, suggestion,

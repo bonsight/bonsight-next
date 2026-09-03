@@ -82,6 +82,7 @@ export default async function CostsDashboardPage() {
           {[
             { key: 'kai',  label: 'Kai',  color: '#1D9E75' },
             { key: 'aria', label: 'Aria', color: '#7C3AED' },
+            { key: 'labs', label: 'Labs', color: '#3F9E73' },
           ].map(({ key, label, color }) => {
             const d = byProduct[key];
             const totalT = (d.input_tokens ?? 0) + (d.output_tokens ?? 0);

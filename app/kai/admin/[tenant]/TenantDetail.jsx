@@ -1990,7 +1990,10 @@ function TokenBar({ input, output }) {
   );
 }
 
-const FEAT_LABELS = { chat: 'Discovery Chat', executive_summary: 'Executive Summary', diagnosis: 'Diagnóstico', summary: 'Resumen', insights: 'Insights', transversals: 'Patrones Transversales' };
+const FEAT_LABELS = {
+  chat: 'Discovery Chat', executive_summary: 'Executive Summary', diagnosis: 'Diagnóstico', summary: 'Resumen', insights: 'Insights', transversals: 'Patrones Transversales',
+  supervisor_summary: 'Resumen Supervisor', director_brief: 'Brief Director', contribution_interpret: 'Interpretar Aporte', report_draft: 'Borrador de Reporte', civil_report_draft: 'Borrador de Reporte (Civil/Seguimiento)', feedback_conversion_suggestion: 'Sugerencia de Conversión',
+};
 
 function isoToday() {
   return new Date().toISOString().slice(0, 10);

@@ -31,7 +31,7 @@ export async function POST(req, { params }) {
       // breakdown.financialByEtapa sale vacío si el proyecto no tiene partidas (seguimiento
       // nunca las tiene) — el resto del pipeline y el render ya lo manejan sin romperse.
       const breakdown = computeCivilReportBreakdown(experiment.tasks, experiment.partidas);
-      const analysis = await generateCivilReportDraft(experiment, breakdown);
+      const analysis = await generateCivilReportDraft(tenant, experiment, breakdown);
       const report = await addReportDraft(tenant, id, {
         kind: 'civil',
         metrics: experiment.civilMetrics,
@@ -44,7 +44,7 @@ export async function POST(req, { params }) {
       return Response.json({ ok: true, report });
     }
 
-    const doc = await generateReportDraft(experiment);
+    const doc = await generateReportDraft(tenant, experiment);
     const report = await addReportDraft(tenant, id, { kind: 'experimental', doc, generatedBy: user.name, periodFrom, periodTo });
     return Response.json({ ok: true, report });
   } catch (err) {

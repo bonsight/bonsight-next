@@ -113,6 +113,18 @@
 .labs-root .role-btn:not(.active):hover{ color:var(--labs-cream); }
 .labs-root .role-btn:focus-visible{ outline:2px solid var(--labs-living); outline-offset:2px; }
 
+.labs-root .labs-name-edit-trigger{
+  border:none; background:transparent; color:inherit; font:inherit; font-weight:inherit;
+  padding:0; cursor:pointer; display:inline-flex; align-items:center; gap:4px;
+}
+.labs-root .labs-name-edit-pencil{ opacity:0; font-size:11px; transition:opacity .15s var(--labs-ease); }
+.labs-root .labs-name-edit-trigger:hover .labs-name-edit-pencil,
+.labs-root .labs-name-edit-trigger:focus-visible .labs-name-edit-pencil{ opacity:.6; }
+.labs-root .labs-name-edit-input{
+  font:inherit; font-weight:inherit; color:inherit; background:var(--labs-dark-3);
+  border:1px solid var(--labs-living); border-radius:6px; padding:1px 6px; width:11ch;
+}
+
 .labs-root .topbar-actions{ display:flex; align-items:center; gap:10px; }
 .labs-root .btn-ghost-top{
   border:1px solid var(--labs-line-dark); background:transparent; color:var(--labs-cream-dim);

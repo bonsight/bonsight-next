@@ -13,10 +13,10 @@ export async function POST(req, { params }) {
 
   try {
     if (role === 'Director') {
-      const brief = await generateDirectorBrief(experiment);
+      const brief = await generateDirectorBrief(tenant, experiment);
       return Response.json({ ok: true, brief });
     }
-    const summary = await generateSupervisorSummary(experiment);
+    const summary = await generateSupervisorSummary(tenant, experiment);
     return Response.json({ ok: true, summary });
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo generar el resumen.' }, { status: 400 });

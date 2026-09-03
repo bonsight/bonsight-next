@@ -196,7 +196,8 @@ function UserMultiSelect({ tenant, role, selected, onChange }) {
   );
 }
 
-export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
+export default function LabsClientTenant({ tenant, tenantMeta, identity: initialIdentity }) {
+  const [identity, setIdentity] = useState(initialIdentity);
   const [experiments, setExperiments] = useState(null);
   const [experimentId, setExperimentId] = useState(null);
   const [experiment, setExperiment] = useState(null);
@@ -237,6 +238,7 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
         tenant={tenant}
         tenantMeta={tenantMeta}
         identity={identity}
+        onIdentityUpdate={setIdentity}
         experiments={experiments}
         onSelect={setExperimentId}
         onCreated={(id) => { loadExperiments(); setExperimentId(id); }}
@@ -259,7 +261,7 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity }) {
           </div>
         </div>
         <div className="role-switch" role="tablist" aria-label="Tu identidad">
-          <span className="role-btn active"><span className="dot"></span>{identity.name} · {identity.role}</span>
+          <span className="role-btn active"><span className="dot"></span><EditableName tenant={tenant} identity={identity} onUpdated={setIdentity} /> · {identity.role}</span>
         </div>
         <div className="topbar-actions">
           <button className="btn-ghost-top" onClick={() => { setExperimentId(null); setExperiment(null); }}>Otros proyectos</button>
@@ -361,7 +363,7 @@ function ProjectCard({ exp, nameOf, onSelect }) {
   );
 }
 
-function ExperimentPicker({ tenant, tenantMeta, identity, experiments, onSelect, onCreated, onLogout }) {
+function ExperimentPicker({ tenant, tenantMeta, identity, onIdentityUpdate, experiments, onSelect, onCreated, onLogout }) {
   const [open, setOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [query, setQuery] = useState('');
@@ -395,7 +397,7 @@ function ExperimentPicker({ tenant, tenantMeta, identity, experiments, onSelect,
         <button className="chip-btn" onClick={onLogout}>Salir</button>
       </div>
       <p style={{ fontSize: 13.5, color: 'var(--labs-cream-dim)', marginBottom: 24 }}>
-        Hola {identity.name} · {identity.role} — elegí un proyecto{canCreate ? ' o creá uno nuevo' : ''}.
+        Hola <EditableName tenant={tenant} identity={identity} onUpdated={onIdentityUpdate} /> · {identity.role} — elegí un proyecto{canCreate ? ' o creá uno nuevo' : ''}.
       </p>
 
       {canCreate && (
@@ -441,6 +443,56 @@ function ExperimentPicker({ tenant, tenantMeta, identity, experiments, onSelect,
         <span>Powered by Bonsight</span>
       </div>
     </div>
+  );
+}
+
+// Autoservicio: cualquier usuario logueado puede renombrarse a sí mismo (PATCH .../users/me),
+// a diferencia del roster del admin que sí puede tocar rol/estado de cualquiera.
+function EditableName({ tenant, identity, onUpdated }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(identity.name);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === identity.name) { setEditing(false); return; }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/labs/${tenant}/users/me`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const data = await res.json();
+      if (res.ok) onUpdated?.((prev) => ({ ...prev, name: data.user.name }));
+    } finally {
+      setSaving(false);
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <input
+        className="labs-name-edit-input"
+        value={value}
+        autoFocus
+        disabled={saving}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+        onBlur={save}
+        onClick={(e) => e.stopPropagation()}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="labs-name-edit-trigger"
+      title="Editar tu nombre"
+      onClick={(e) => { e.stopPropagation(); setValue(identity.name); setEditing(true); }}
+    >
+      {identity.name}<span className="labs-name-edit-pencil">✎</span>
+    </button>
   );
 }
 

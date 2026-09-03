@@ -20,7 +20,7 @@ export async function POST(req, { params }) {
   if (!test) return Response.json({ error: 'Prueba no encontrada.' }, { status: 404 });
 
   try {
-    const interpreted = await interpretContribution(test, freeText, evidence);
+    const interpreted = await interpretContribution(tenant, test, freeText, evidence);
     return Response.json({ ok: true, ...interpreted });
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo interpretar el aporte.' }, { status: 400 });
