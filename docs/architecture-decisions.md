@@ -192,3 +192,38 @@ i18n manual basado en rutas `/es/*` y `/en/*`. El middleware detecta el locale y
 - `defaultLocale = 'en'`. Paths sin locale redirigen a `/en/*`.
 - Objetos `T = { es: {...}, en: {...} }` en cada componente que necesita traducciones.
 - Sin archivos de mensajes ni namespaces de i18n.
+
+---
+
+## ADR-010: Kai absorbe a Aria — fusión en una sola entidad
+**Fecha:** 2026-09-03  
+**Estado:** Propuesta — en discusión, sin implementación iniciada
+
+**Contexto:**  
+Hoy Kai y Aria son dos superficies separadas (`kai.bonsight.co`, `aria.bonsight.co`) resolviendo necesidades relacionadas del mismo cliente: Kai hace discovery estratégico y mantiene un Business Profile persistente; Aria hace business intelligence sobre datos conectados (GA4, Search Console, Google Ads) y gestiona el Sprint board interno de Bonsight. Mantenerlos separados obliga a moverse entre dos herramientas para tareas relacionadas del mismo cliente.
+
+**Decisión (propuesta):**  
+Kai absorbe a Aria — no es una fusión simétrica. Kai queda como la única entidad; las funcionalidades, skills y conexiones de Aria se incorporan a Kai. El Business Profile de Kai es la fuente de verdad de estado compartido; lo que hoy es una investigación de Aria se convierte en un skill que, además de generar su salida, puede escribir aprendizajes al profile (como ya hace `update_business_profile`).
+
+Modelo mental de referencia: el patrón de skills+salidas de Claude — el agente invoca "habilidades" (las features de hoy) y la UI muestra qué corrió y qué generó, en vez de forzar todo a un menú fijo de secciones.
+
+**Qué se incorpora de cada producto:**
+- De Aria: chat con tools de consulta a fuentes conectadas (GA4, Search Console, Google Ads), generación de PDF (`@react-pdf/renderer`), cards de análisis/tablas (`present_analysis`/`present_advisory`), Sprint board completo (sprints, reportes de cliente, activities).
+- De Labs: exportación a Google Drive (`lib/labs/googleDrive.js` — `ensureSubfolder`/`uploadFile`/`uploadTextAsDoc`, subida idempotente).
+- Combinado (nuevo, de piezas ya existentes): generar PDF y subirlo a Drive — Aria aporta el render, Labs aporta el transporte; hoy no se pisan (Aria no toca Drive, Labs no genera PDF).
+- A construir de cero: exportación a Excel — ningún producto lo tiene hoy.
+
+**Gaps de arquitectura identificados (bloquean la fusión, no son detalle menor):**
+1. **Loop agéntico**: Kai resuelve en un paso por turno; Aria corre un loop iterativo (hasta `MAX_ITERATIONS = 3`) para poder consultar fuentes de datos antes de responder. El loop de Kai necesita evolucionar hacia el patrón iterativo de Aria para poder absorber sus tools de conexión.
+2. **Salidas visibles**: Kai hoy no tiene ningún concepto de salida visible/descargable — todo lo que hace es invisible (edita el profile). Necesita ganar ese concepto (reporte, PDF, tabla), hoy exclusivo de Aria.
+3. **Config de conexiones por tenant**: traer GA4/Search Console/Google Ads implica traer también el sistema de Intelligence Sources (hoy en el admin de Aria: credenciales, toggles por fuente), no solo las funciones de query.
+
+**Mecanismo de rollout — tiers por capacidad:**  
+Reusar el patrón ya probado en Labs (`allowedProjectKinds`, `lib/labs/tenants.js`): un array de capacidades habilitadas en la metadata del tenant, con UI de admin para tildar/destildar. Aplicar la misma forma para qué skills del Kai unificado tiene prendidos cada cliente (chat, conexión GA4, exportar PDF, exportar a Drive, Sprint board, etc.). Esto también es la estrategia de des-riesgo: construir capability por capability, no un big-bang.
+
+**Consecuencias (si se avanza):**
+- Aria como producto/subdominio independiente eventualmente se retira — todo vive bajo Kai.
+- El Sprint board (hoy interno, para el equipo de Bonsight) pasa a ser una capacidad más de Kai, con su propio tier/flag.
+- Requiere decidir el orden de migración de las fuentes de datos + el Sprint board + el PDF/Drive export — no está definido en esta discusión, queda como siguiente paso cuando se decida avanzar.
+
+**Estado de este documento:** Solo visión, capturada tal como se discutió — no se tocó código de producto ni se decidió fecha de inicio.
