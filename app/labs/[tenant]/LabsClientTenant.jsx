@@ -98,6 +98,22 @@ const FIELD_TYPES = [
   { value: 'number', label: 'Número' },
 ];
 
+const CRITERIA_OPERATORS = [
+  { value: '>', label: '>' },
+  { value: '<', label: '<' },
+  { value: '=', label: '=' },
+  { value: '>=', label: '≥' },
+  { value: '<=', label: '≤' },
+];
+
+// Mismo criterio que lib/labs/experiments.js#formatSuccessCriterion (server-only ahí por el
+// import de Redis, así que se replica acá para mostrarlo en cliente).
+function formatSuccessCriterion(c) {
+  if (typeof c === 'string') return c;
+  const op = CRITERIA_OPERATORS.find((o) => o.value === c.operator)?.label ?? c.operator ?? '';
+  return `${c.label || ''} ${op} ${c.value ?? ''}${c.unit ? ` ${c.unit}` : ''}`.trim();
+}
+
 function tagClass(tag) {
   if (tag === 'éxito') return 'tag-living';
   if (tag === 'parcial') return 'tag-ember';
@@ -130,6 +146,7 @@ function formatDateTime(iso) {
 }
 
 const EVIDENCE_ACCEPT = 'image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.dxf';
+const INVOICE_ACCEPT = 'image/*,.pdf,.doc,.docx,.xls,.xlsx';
 const VIDEO_MAX_MB = 500;
 const DOC_MAX_MB = 10;
 
@@ -511,7 +528,10 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
   const [name, setName] = useState('');
   const [purpose, setPurpose] = useState('');
   const [hypothesis, setHypothesis] = useState('');
-  const [criteriaText, setCriteriaText] = useState('');
+  const [criteria, setCriteria] = useState([{ label: '', operator: '>=', value: '', unit: '' }]);
+  const updateCriterion = (i, patch) => setCriteria((prev) => prev.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  const addCriterion = () => setCriteria((prev) => [...prev, { label: '', operator: '>=', value: '', unit: '' }]);
+  const removeCriterion = (i) => setCriteria((prev) => prev.filter((_, idx) => idx !== i));
   const [supervisorIds, setSupervisorIds] = useState([]);
   const [code, setCode] = useState('');
   const [type, setType] = useState('');
@@ -527,13 +547,17 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
   const [civilTasks, setCivilTasks] = useState(null); // null = todavía no se importó nada
   const [civilPartidas, setCivilPartidas] = useState(null);
   const [civilWarnings, setCivilWarnings] = useState([]);
+  const [civilTab, setCivilTab] = useState('tareas'); // 'tareas' | 'presupuesto'
+  const [warningsOpen, setWarningsOpen] = useState(false);
+  const [collapsedTaskGroups, setCollapsedTaskGroups] = useState(new Set());
+  const [collapsedPartidaGroups, setCollapsedPartidaGroups] = useState(new Set());
   const excelInputRef = useRef(null);
 
   useEffect(() => {
     if (projectKind !== 'civil') return;
     fetch(`/api/labs/${tenant}/users`)
       .then((r) => r.json())
-      .then((d) => setRoster((d.users ?? []).filter((u) => (u.role === 'Supervisor' || u.role === 'Registrador') && u.active !== false)))
+      .then((d) => setRoster((d.users ?? []).filter((u) => u.active !== false)))
       .catch(() => setRoster([]));
   }, [projectKind, tenant]);
 
@@ -549,9 +573,16 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
       });
       const resData = await res.json();
       if (!res.ok) { setErr(resData.error || 'No se pudo interpretar el archivo.'); return; }
-      setCivilTasks(resData.tasks ?? []);
-      setCivilPartidas(resData.partidas ?? []);
+      // __groupFase/__groupEtapa quedan fijos al momento del import — el acordeón agrupa por
+      // ahí, no por el valor en vivo de fase/etapa, así que corregir el texto de una fila no la
+      // hace saltar de grupo en cada tecla (perdería foco todo el tiempo).
+      setCivilTasks((resData.tasks ?? []).map((t) => ({ ...t, __groupFase: t.fase || 'Sin fase' })));
+      setCivilPartidas((resData.partidas ?? []).map((p) => ({ ...p, __groupEtapa: p.etapa || 'Sin etapa' })));
       setCivilWarnings(resData.warnings ?? []);
+      setCivilTab('tareas');
+      setWarningsOpen(false);
+      setCollapsedTaskGroups(new Set());
+      setCollapsedPartidaGroups(new Set());
     } catch {
       setErr('Error de conexión.');
     } finally {
@@ -564,6 +595,37 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
   const updateCivilPartida = (i, patch) => setCivilPartidas((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
   const removeCivilPartida = (i) => setCivilPartidas((prev) => prev.filter((_, idx) => idx !== i));
 
+  const toggleTaskGroup = (key) => setCollapsedTaskGroups((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const togglePartidaGroup = (key) => setCollapsedPartidaGroups((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+
+  // Agrupa preservando el índice original del array plano (__idx) — updateCivilTask/
+  // removeCivilTask siguen operando por índice, la agrupación es solo de presentación.
+  const taskGroups = [];
+  (civilTasks ?? []).forEach((t, i) => {
+    const key = t.__groupFase;
+    let g = taskGroups.find((x) => x.key === key);
+    if (!g) { g = { key, items: [] }; taskGroups.push(g); }
+    g.items.push({ ...t, __idx: i });
+  });
+  const partidaGroups = [];
+  (civilPartidas ?? []).forEach((p, i) => {
+    const key = p.__groupEtapa;
+    let g = partidaGroups.find((x) => x.key === key);
+    if (!g) { g = { key, items: [], subtotal: 0 }; partidaGroups.push(g); }
+    g.items.push({ ...p, __idx: i });
+    g.subtotal += (Number(p.cantidad) || 0) * (Number(p.precioUnitario) || 0);
+  });
+  const civilBudgetTotal = partidaGroups.reduce((s, g) => s + g.subtotal, 0);
+  const civilUnassignedCount = (civilTasks ?? []).filter((t) => !(t.responsables?.length)).length;
+
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!name.trim() || busy) return;
@@ -574,7 +636,7 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
       if (projectKind === 'civil') {
         body = {
           name, code, type, supervisorIds, projectKind: 'civil',
-          tasks: (civilTasks ?? []).map((t) => ({ fase: t.fase, nombre: t.nombre, responsable: t.responsable, fechaInicio: t.fechaInicio, fechaFin: t.fechaFin, duracionDias: t.duracionDias, progreso: t.progreso })),
+          tasks: (civilTasks ?? []).map((t) => ({ fase: t.fase, nombre: t.nombre, responsables: t.responsables ?? [], fechaInicio: t.fechaInicio, fechaFin: t.fechaFin, duracionDias: t.duracionDias, progreso: t.progreso })),
           partidas: (civilPartidas ?? []).map((p) => ({ etapa: p.etapa, descripcion: p.descripcion, cantidad: p.cantidad, unidad: p.unidad, precioUnitario: p.precioUnitario, proveedor: p.proveedor, comentarios: p.comentarios })),
         };
       } else if (projectKind === 'seguimiento') {
@@ -584,7 +646,7 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
       } else {
         body = {
           name, purpose, hypothesis, supervisorIds, code, type, hasBudget,
-          successCriteria: criteriaText.split('\n').map((l) => l.trim()).filter(Boolean),
+          successCriteria: criteria.filter((c) => c.label.trim() && c.value !== '').map((c) => ({ label: c.label.trim(), operator: c.operator, value: Number(c.value), unit: c.unit.trim() })),
           budgetAmount: hasBudget && budgetAmount !== '' ? Number(budgetAmount) : null,
           budgetCurrency: hasBudget ? budgetCurrency : '',
         };
@@ -606,7 +668,7 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
 
   return (
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-card" style={{ position: 'relative', maxWidth: projectKind === 'civil' ? 720 : undefined }}>
+      <div className="modal-card" style={{ position: 'relative', maxWidth: projectKind === 'civil' ? 820 : undefined }}>
         <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
         <span className="eyebrow-mini on-dark">Crear proyecto</span>
         <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Nuevo proyecto</h2>
@@ -632,8 +694,19 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
               <textarea rows={3} value={purpose} onChange={(e) => setPurpose(e.target.value)} style={{ marginBottom: 14 }} />
               <label className="field-label">Hipótesis a validar o refutar</label>
               <textarea rows={2} value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} style={{ marginBottom: 14 }} />
-              <label className="field-label">Criterios de éxito (uno por línea)</label>
-              <textarea rows={3} value={criteriaText} onChange={(e) => setCriteriaText(e.target.value)} placeholder={'Resistencia ≥ 45 kgf\nTiempo de secado ≤ 10 horas'} style={{ marginBottom: 14 }} />
+              <label className="field-label">Criterios de éxito</label>
+              {criteria.map((c, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <input type="text" placeholder="Nombre (ej. Resistencia)" value={c.label} onChange={(e) => updateCriterion(i, { label: e.target.value })} style={{ flex: 2 }} />
+                  <select value={c.operator} onChange={(e) => updateCriterion(i, { operator: e.target.value })} style={{ background: 'var(--labs-dark-3)', border: '1px solid var(--labs-line-dark)', color: 'var(--labs-cream)', borderRadius: 8, padding: '0 10px' }}>
+                    {CRITERIA_OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  <input type="number" placeholder="Valor" value={c.value} onChange={(e) => updateCriterion(i, { value: e.target.value })} style={{ flex: 1, minWidth: 70 }} />
+                  <input type="text" placeholder="Unidad" value={c.unit} onChange={(e) => updateCriterion(i, { unit: e.target.value })} style={{ flex: 1, minWidth: 70 }} />
+                  {criteria.length > 1 && <button type="button" className="chip-btn" onClick={() => removeCriterion(i)}>✕</button>}
+                </div>
+              ))}
+              <button type="button" className="chip-btn" onClick={addCriterion} style={{ marginBottom: 14 }}>+ Agregar criterio</button>
             </>
           )}
 
@@ -682,73 +755,99 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
               </button>
 
               {civilWarnings.length > 0 && (
-                <div className="callout" style={{ marginBottom: 14 }}>
-                  {civilWarnings.map((w, i) => <div key={i} style={{ fontSize: 12.5 }}>{w}</div>)}
+                <div className={`excel-warn-summary${warningsOpen ? ' open' : ''}`} style={{ marginBottom: 14 }}>
+                  <button type="button" className="excel-warn-head" onClick={() => setWarningsOpen((o) => !o)}>
+                    <span className="excel-warn-icon">⚠</span>
+                    <span className="excel-warn-label"><b>{civilWarnings.length}</b> {civilWarnings.length === 1 ? 'aviso' : 'avisos'} — revisalos antes de crear el proyecto</span>
+                    <span className="excel-warn-chev">▶</span>
+                  </button>
+                  {warningsOpen && (
+                    <div className="excel-warn-list">
+                      {civilWarnings.map((w, i) => <div key={i}>{w}</div>)}
+                    </div>
+                  )}
                 </div>
               )}
 
               {civilTasks && (
                 <>
-                  <label className="field-label">Tareas ({civilTasks.length})</label>
-                  <div style={{ maxHeight: 260, overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--labs-line-dark)', borderRadius: 8, marginBottom: 14 }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                      <thead>
-                        <tr style={{ position: 'sticky', top: 0, background: 'var(--labs-dark-3)' }}>
-                          <th style={{ textAlign: 'left', padding: 6 }}>Fase</th>
-                          <th style={{ textAlign: 'left', padding: 6 }}>Tarea</th>
-                          <th style={{ textAlign: 'left', padding: 6 }}>Responsable</th>
-                          <th style={{ textAlign: 'left', padding: 6 }}>Inicio</th>
-                          <th style={{ textAlign: 'left', padding: 6 }}>Fin</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {civilTasks.map((t, i) => (
-                          <tr key={i} style={{ borderTop: '1px solid var(--labs-line-dark)' }}>
-                            <td style={{ padding: 6 }}><input value={t.fase} onChange={(e) => updateCivilTask(i, { fase: e.target.value })} style={{ width: 90, fontSize: 12 }} /></td>
-                            <td style={{ padding: 6 }}><input value={t.nombre} onChange={(e) => updateCivilTask(i, { nombre: e.target.value })} style={{ width: 160, fontSize: 12 }} /></td>
-                            <td style={{ padding: 6 }}>
-                              <select value={t.responsable ?? ''} onChange={(e) => updateCivilTask(i, { responsable: e.target.value || null })} style={{ fontSize: 12, background: 'var(--labs-dark-3)', color: 'var(--labs-cream)', border: '1px solid var(--labs-line-dark)', borderRadius: 6 }}>
-                                <option value="">{t.responsableNombreOriginal ? `⚠ ${t.responsableNombreOriginal}` : '— Elegir —'}</option>
-                                {roster.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
-                              </select>
-                            </td>
-                            <td style={{ padding: 6 }}><input type="date" value={t.fechaInicio || ''} onChange={(e) => updateCivilTask(i, { fechaInicio: e.target.value })} style={{ fontSize: 12 }} /></td>
-                            <td style={{ padding: 6 }}><input type="date" value={t.fechaFin || ''} onChange={(e) => updateCivilTask(i, { fechaFin: e.target.value })} style={{ fontSize: 12 }} /></td>
-                            <td style={{ padding: 6 }}><button type="button" className="labs-attach-remove" onClick={() => removeCivilTask(i)}>✕</button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="excel-tabs" style={{ marginBottom: 14 }}>
+                    <button type="button" className={`excel-tab${civilTab === 'tareas' ? ' active' : ''}`} onClick={() => setCivilTab('tareas')}>Tareas <span className="count">({civilTasks.length})</span></button>
+                    <button type="button" className={`excel-tab${civilTab === 'presupuesto' ? ' active' : ''}`} onClick={() => setCivilTab('presupuesto')}>Presupuesto <span className="count">({civilPartidas.length})</span></button>
                   </div>
 
-                  <label className="field-label">Partidas de presupuesto ({civilPartidas.length})</label>
-                  <div style={{ maxHeight: 260, overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--labs-line-dark)', borderRadius: 8, marginBottom: 14 }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                      <thead>
-                        <tr style={{ position: 'sticky', top: 0, background: 'var(--labs-dark-3)' }}>
-                          <th style={{ textAlign: 'left', padding: 6 }}>Etapa</th>
-                          <th style={{ textAlign: 'left', padding: 6 }}>Descripción</th>
-                          <th style={{ textAlign: 'right', padding: 6 }}>Cant.</th>
-                          <th style={{ textAlign: 'left', padding: 6 }}>Unidad</th>
-                          <th style={{ textAlign: 'right', padding: 6 }}>P. Unit.</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {civilPartidas.map((p, i) => (
-                          <tr key={i} style={{ borderTop: '1px solid var(--labs-line-dark)' }}>
-                            <td style={{ padding: 6 }}><input value={p.etapa} onChange={(e) => updateCivilPartida(i, { etapa: e.target.value })} style={{ width: 90, fontSize: 12 }} /></td>
-                            <td style={{ padding: 6 }}><input value={p.descripcion} onChange={(e) => updateCivilPartida(i, { descripcion: e.target.value })} style={{ width: 160, fontSize: 12 }} /></td>
-                            <td style={{ padding: 6 }}><input type="number" value={p.cantidad ?? ''} onChange={(e) => updateCivilPartida(i, { cantidad: e.target.value })} style={{ width: 60, fontSize: 12, textAlign: 'right' }} /></td>
-                            <td style={{ padding: 6 }}><input value={p.unidad} onChange={(e) => updateCivilPartida(i, { unidad: e.target.value })} style={{ width: 50, fontSize: 12 }} /></td>
-                            <td style={{ padding: 6 }}><input type="number" value={p.precioUnitario ?? ''} onChange={(e) => updateCivilPartida(i, { precioUnitario: e.target.value })} style={{ width: 70, fontSize: 12, textAlign: 'right' }} /></td>
-                            <td style={{ padding: 6 }}><button type="button" className="labs-attach-remove" onClick={() => removeCivilPartida(i)}>✕</button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  {civilTab === 'tareas' && (
+                    <div style={{ marginBottom: 14 }}>
+                      {taskGroups.map((g) => {
+                        const collapsed = collapsedTaskGroups.has(g.key);
+                        return (
+                          <div className="excel-group" key={g.key}>
+                            <button type="button" className="excel-group-head" onClick={() => toggleTaskGroup(g.key)}>
+                              <span className={`excel-group-chev${collapsed ? '' : ' open'}`}>▶</span>
+                              <span className="excel-group-name">{g.key}</span>
+                              <span className="excel-group-meta">{g.items.length} tarea{g.items.length !== 1 ? 's' : ''}</span>
+                            </button>
+                            {!collapsed && (
+                              <div className="excel-group-rows">
+                                {g.items.map((t) => (
+                                  <div className="excel-row" key={t.__idx}>
+                                    <div className="excel-row-top">
+                                      <input className="excel-ghost-input" value={t.nombre} onChange={(e) => updateCivilTask(t.__idx, { nombre: e.target.value })} placeholder="Nombre de la tarea" />
+                                      <button type="button" className="labs-attach-remove" onClick={() => removeCivilTask(t.__idx)}>✕</button>
+                                    </div>
+                                    <div className="excel-row-chips">
+                                      <MultiUserPicker
+                                        roster={roster}
+                                        selected={t.responsables ?? []}
+                                        onChange={(ids) => updateCivilTask(t.__idx, { responsables: ids })}
+                                        warningLabel={t.responsableNombreOriginal}
+                                      />
+                                      <DateRangePicker
+                                        fechaInicio={t.fechaInicio}
+                                        fechaFin={t.fechaFin}
+                                        onChange={({ fechaInicio, fechaFin }) => updateCivilTask(t.__idx, { fechaInicio, fechaFin })}
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {civilTab === 'presupuesto' && (
+                    <div style={{ marginBottom: 14 }}>
+                      {partidaGroups.map((g) => {
+                        const collapsed = collapsedPartidaGroups.has(g.key);
+                        return (
+                          <div className="excel-group" key={g.key}>
+                            <button type="button" className="excel-group-head" onClick={() => togglePartidaGroup(g.key)}>
+                              <span className={`excel-group-chev${collapsed ? '' : ' open'}`}>▶</span>
+                              <span className="excel-group-name">{g.key}</span>
+                              <span className="excel-group-meta">{g.items.length} partida{g.items.length !== 1 ? 's' : ''} · {money(g.subtotal)}</span>
+                            </button>
+                            {!collapsed && (
+                              <div className="excel-group-rows">
+                                {g.items.map((p) => (
+                                  <div className="excel-brow" key={p.__idx}>
+                                    <input className="excel-ghost-input" value={p.descripcion} onChange={(e) => updateCivilPartida(p.__idx, { descripcion: e.target.value })} placeholder="Descripción" />
+                                    <input type="number" value={p.cantidad ?? ''} onChange={(e) => updateCivilPartida(p.__idx, { cantidad: e.target.value })} placeholder="Cant." style={{ textAlign: 'right' }} />
+                                    <input value={p.unidad} onChange={(e) => updateCivilPartida(p.__idx, { unidad: e.target.value })} placeholder="Unidad" />
+                                    <input type="number" value={p.precioUnitario ?? ''} onChange={(e) => updateCivilPartida(p.__idx, { precioUnitario: e.target.value })} placeholder="P. Unit." style={{ textAlign: 'right' }} />
+                                    <div className="excel-brow-subtotal">{money((Number(p.cantidad) || 0) * (Number(p.precioUnitario) || 0))}</div>
+                                    <button type="button" className="labs-attach-remove" onClick={() => removeCivilPartida(p.__idx)}>✕</button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </>
               )}
             </>
@@ -758,6 +857,13 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
           <UserMultiSelect tenant={tenant} role="Supervisor" selected={supervisorIds} onChange={setSupervisorIds} />
           {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
           <div className="modal-footer">
+            {projectKind === 'civil' && civilTasks && (
+              <div className="excel-totals">
+                <div className="excel-totals-item">Tareas<b>{civilTasks.length}</b></div>
+                <div className="excel-totals-item">Presupuesto total<b>{money(civilBudgetTotal)}</b></div>
+                <div className="excel-totals-item">Sin asignar<b style={{ color: civilUnassignedCount > 0 ? 'var(--labs-ember)' : undefined }}>{civilUnassignedCount}</b></div>
+              </div>
+            )}
             <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
             <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Creando…' : 'Crear proyecto →'}</button>
           </div>
@@ -1041,6 +1147,13 @@ function ProjectDetailsCard({ tenant, experiment, onUpdate }) {
         <div>Código: <b style={{ color: 'var(--labs-cream)' }}>{m.code || '—'}</b></div>
         <div>Tipo: <b style={{ color: 'var(--labs-cream)' }}>{m.type || '—'}</b></div>
         <div>Presupuesto asignado: <b style={{ color: 'var(--labs-cream)' }}>{budgetLabel}</b></div>
+        {m.projectKind === 'experimental' && (
+          <>
+            <div>Objetivo: <b style={{ color: 'var(--labs-cream)' }}>{m.purpose || '—'}</b></div>
+            <div>Hipótesis: <b style={{ color: 'var(--labs-cream)' }}>{m.hypothesis || '—'}</b></div>
+            <div>Criterios de éxito: <b style={{ color: 'var(--labs-cream)' }}>{m.successCriteria?.length ? m.successCriteria.map(formatSuccessCriterion).join(' · ') : '—'}</b></div>
+          </>
+        )}
       </div>
       {editOpen && (
         <EditProjectDetailsModal
@@ -1069,12 +1182,20 @@ function projectInactiveMessage(meta) {
 }
 
 function EditProjectDetailsModal({ tenant, experimentId, current, onClose, onSaved }) {
+  const isExperimental = current.projectKind === 'experimental';
   const [code, setCode] = useState(current.code || '');
   const [type, setType] = useState(current.type || '');
   const [status, setStatus] = useState(current.status || 'activo');
   const [hasBudget, setHasBudget] = useState(!!current.hasBudget);
   const [budgetAmount, setBudgetAmount] = useState(current.budgetAmount ?? '');
   const [budgetCurrency, setBudgetCurrency] = useState(current.budgetCurrency || '');
+  const [purpose, setPurpose] = useState(current.purpose || '');
+  const [hypothesis, setHypothesis] = useState(current.hypothesis || '');
+  const initialCriteria = (current.successCriteria || []).filter((c) => typeof c === 'object');
+  const [criteria, setCriteria] = useState(initialCriteria.length ? initialCriteria.map((c) => ({ label: c.label || '', operator: c.operator || '>=', value: c.value ?? '', unit: c.unit || '' })) : [{ label: '', operator: '>=', value: '', unit: '' }]);
+  const updateCriterion = (i, patch) => setCriteria((prev) => prev.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  const addCriterion = () => setCriteria((prev) => [...prev, { label: '', operator: '>=', value: '', unit: '' }]);
+  const removeCriterion = (i) => setCriteria((prev) => prev.filter((_, idx) => idx !== i));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -1082,14 +1203,20 @@ function EditProjectDetailsModal({ tenant, experimentId, current, onClose, onSav
     setBusy(true);
     setErr(null);
     try {
+      const body = {
+        code, type, status, hasBudget,
+        budgetAmount: hasBudget && budgetAmount !== '' ? Number(budgetAmount) : null,
+        budgetCurrency: hasBudget ? budgetCurrency : '',
+      };
+      if (isExperimental) {
+        body.purpose = purpose;
+        body.hypothesis = hypothesis;
+        body.successCriteria = criteria.filter((c) => c.label.trim() && c.value !== '').map((c) => ({ label: c.label.trim(), operator: c.operator, value: Number(c.value), unit: c.unit.trim() }));
+      }
       const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/details`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code, type, status, hasBudget,
-          budgetAmount: hasBudget && budgetAmount !== '' ? Number(budgetAmount) : null,
-          budgetCurrency: hasBudget ? budgetCurrency : '',
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo guardar.'); return; }
@@ -1128,6 +1255,27 @@ function EditProjectDetailsModal({ tenant, experimentId, current, onClose, onSav
             <input type="text" placeholder="Moneda (ej. USD)" value={budgetCurrency} onChange={(e) => setBudgetCurrency(e.target.value)} style={{ flex: 1 }} />
           </div>
         )}
+        {isExperimental && (
+          <>
+            <label className="field-label">¿Qué queremos conseguir o descubrir?</label>
+            <textarea rows={3} value={purpose} onChange={(e) => setPurpose(e.target.value)} style={{ marginBottom: 14 }} />
+            <label className="field-label">Hipótesis a validar o refutar</label>
+            <textarea rows={2} value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} style={{ marginBottom: 14 }} />
+            <label className="field-label">Criterios de éxito</label>
+            {criteria.map((c, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <input type="text" placeholder="Nombre (ej. Resistencia)" value={c.label} onChange={(e) => updateCriterion(i, { label: e.target.value })} style={{ flex: 2 }} />
+                <select value={c.operator} onChange={(e) => updateCriterion(i, { operator: e.target.value })} style={{ background: 'var(--labs-dark-3)', border: '1px solid var(--labs-line-dark)', color: 'var(--labs-cream)', borderRadius: 8, padding: '0 10px' }}>
+                  {CRITERIA_OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <input type="number" placeholder="Valor" value={c.value} onChange={(e) => updateCriterion(i, { value: e.target.value })} style={{ flex: 1, minWidth: 70 }} />
+                <input type="text" placeholder="Unidad" value={c.unit} onChange={(e) => updateCriterion(i, { unit: e.target.value })} style={{ flex: 1, minWidth: 70 }} />
+                {criteria.length > 1 && <button type="button" className="chip-btn" onClick={() => removeCriterion(i)}>✕</button>}
+              </div>
+            ))}
+            <button type="button" className="chip-btn" onClick={addCriterion} style={{ marginBottom: 14 }}>+ Agregar criterio</button>
+          </>
+        )}
         {err && <p className="labs-login-error">{err}</p>}
         <div className="modal-footer">
           <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
@@ -1148,7 +1296,7 @@ function ProjectDetailsHistoryModal({ tenant, experimentId, onClose }) {
       .catch(() => setHistory([]));
   }, [tenant, experimentId]);
 
-  const fieldLabel = { code: 'Código', type: 'Tipo', hasBudget: 'Presupuesto asignado', budgetAmount: 'Monto', budgetCurrency: 'Moneda' };
+  const fieldLabel = { code: 'Código', type: 'Tipo', hasBudget: 'Presupuesto asignado', budgetAmount: 'Monto', budgetCurrency: 'Moneda', status: 'Estado', purpose: 'Objetivo', hypothesis: 'Hipótesis', successCriteria: 'Criterios de éxito' };
   const fmt = (v) => (v === null || v === undefined || v === '' ? '—' : (typeof v === 'boolean' ? (v ? 'Sí' : 'No') : String(v)));
 
   return (
@@ -1185,6 +1333,7 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
   const [freeText, setFreeText] = useState('');
   const [attachments, setAttachments] = useState([]);
   const [interpreted, setInterpreted] = useState(null);
+  const [editedValues, setEditedValues] = useState({}); // lo que arma la IA es el punto de partida, no la última palabra — se puede completar/corregir a mano antes de confirmar
   const [err, setErr] = useState(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
@@ -1196,7 +1345,7 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
   const test = experiment.tests.find((t) => t.id === testId);
 
   const resetAportar = () => {
-    setStep(0); setTestId(null); setFreeText(''); setAttachments([]); setInterpreted(null); setErr(null);
+    setStep(0); setTestId(null); setFreeText(''); setAttachments([]); setInterpreted(null); setEditedValues({}); setErr(null);
   };
 
   const processFile = async (file) => {
@@ -1291,6 +1440,7 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo interpretar.'); setStep(1); return; }
       setInterpreted(data);
+      setEditedValues(data.values || {});
       setStep(3);
     } catch {
       setErr('Error de conexión.');
@@ -1301,13 +1451,14 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
   const handleConfirm = async () => {
     setErr(null);
     try {
+      const missingFields = test.fields.filter((f) => editedValues[f.key] === undefined || editedValues[f.key] === '').map((f) => f.key);
       const res = await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/executions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           testId,
-          values: interpreted.values, tag: interpreted.tag,
-          missingFields: interpreted.missingFields, note: interpreted.note,
+          values: editedValues, tag: interpreted.tag,
+          missingFields, note: interpreted.note,
           evidence: attachments.map(({ name, mimeType, data, previewUrl, driveFileId, driveUrl, kind }) => ({ name, mimeType, data, previewUrl, driveFileId, driveUrl, kind })),
         }),
       });
@@ -1354,6 +1505,18 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
 
       {step === 1 && test && (
         <div>
+          {test.fields.length > 0 && (
+            <>
+              <label className="field-label">Esta prueba registra</label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+                {test.fields.map((f) => (
+                  <span key={f.key} className="tag tag-neutral">
+                    {f.operator ? formatSuccessCriterion(f) : `${f.label}${f.type === 'number' ? ' · número' : ''}`}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
           <div className="voice-sim" style={{ cursor: 'pointer' }} onClick={recording ? stopRecording : startRecording}>
             {recording ? (
               <div className="wave"><span></span><span></span><span></span><span></span><span></span><span></span></div>
@@ -1365,7 +1528,7 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
             </div>
           </div>
           <label className="field-label">Qué pasó en "{test.name}"</label>
-          <textarea rows={6} value={freeText} onChange={(e) => setFreeText(e.target.value)} placeholder="Contá los resultados, condiciones, y cualquier cosa que valga la pena registrar…" />
+          <textarea rows={6} value={freeText} onChange={(e) => setFreeText(e.target.value)} placeholder="Contá los resultados, condiciones, y cualquier cosa que valga la pena registrar… (podés adjuntar una foto o documento con los resultados y la IA completa los campos sola)" />
 
           <input
             ref={fileInputRef}
@@ -1427,16 +1590,25 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
           <div className="structured-preview">
             <div className="sp-head">
               <span style={{ fontSize: 13, fontWeight: 600 }}>{test.name}</span>
-              <span className="ai-badge"><span className="dot"></span>Interpretado por IA</span>
+              <span className="ai-badge"><span className="dot"></span>Interpretado por IA — editable</span>
             </div>
-            {test.fields.map((f, i) => (
-              <div className={`sp-row ${i % 2 ? 'dark-bg' : ''}`} key={f.key}>
-                <div className="k">{f.label}</div>
-                <div className={`v ${interpreted.missingFields.includes(f.key) ? 'missing' : ''}`}>
-                  {interpreted.values[f.key] ?? 'Sin especificar'}
+            {test.fields.map((f, i) => {
+              const val = editedValues[f.key] ?? '';
+              const isMissing = val === '';
+              return (
+                <div className={`sp-row ${i % 2 ? 'dark-bg' : ''}`} key={f.key}>
+                  <div className="k">{f.label}</div>
+                  <div className={`v ${isMissing ? 'missing' : ''}`}>
+                    <input
+                      type={f.type === 'number' ? 'number' : 'text'}
+                      value={val}
+                      placeholder="Sin especificar — completá a mano"
+                      onChange={(e) => setEditedValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div className="sp-row dark-bg"><div className="k">Etiqueta</div><div className="v"><span className={`tag ${tagClass(interpreted.tag)}`}>{interpreted.tag}</span></div></div>
             {interpreted.note && <div className="sp-row"><div className="k">Nota</div><div className="v">{interpreted.note}</div></div>}
             {attachments.length > 0 && (
@@ -1593,19 +1765,88 @@ function ViewDocumentacion({ tenant, experiment, identity, onUpdate }) {
 
 /* ======================= Cronograma (civil) ======================= */
 
-function ResponsableSelect({ tenant, selected, onChange }) {
-  const [users, setUsers] = useState([]);
+// Selector de varios responsables por tarea (una tarea puede tener más de uno, ej. "Percy C.
+// / Anthony M." en el Excel importado) — botón compacto con los nombres elegidos que abre un
+// panel de checkboxes. `roster` opcional: si no viene, lo busca por su cuenta (cualquier
+// persona activa del tenant, sin importar el rol — Director, Supervisor o Registrador).
+function MultiUserPicker({ tenant, roster: rosterProp, selected, onChange, placeholder = '— Elegir —', warningLabel }) {
+  const [fetchedRoster, setFetchedRoster] = useState(null);
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const roster = rosterProp ?? fetchedRoster ?? [];
+
   useEffect(() => {
+    if (rosterProp) return;
     fetch(`/api/labs/${tenant}/users`)
       .then((r) => r.json())
-      .then((d) => setUsers((d.users ?? []).filter((u) => (u.role === 'Supervisor' || u.role === 'Registrador') && u.active !== false)))
-      .catch(() => setUsers([]));
-  }, [tenant]);
+      .then((d) => setFetchedRoster((d.users ?? []).filter((u) => u.active !== false)))
+      .catch(() => setFetchedRoster([]));
+  }, [tenant, rosterProp]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  const toggle = (id) => onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
+  const names = roster.filter((u) => selected.includes(u.id)).map((u) => u.name);
+  const hasWarning = !names.length && warningLabel;
+  const label = names.length ? names.join(', ') : (warningLabel || placeholder);
+
   return (
-    <select value={selected ?? ''} onChange={(e) => onChange(e.target.value || null)} style={{ width: '100%', marginBottom: 14 }}>
-      <option value="">— Sin asignar —</option>
-      {users.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
-    </select>
+    <div ref={wrapRef} className="labs-multiuser" style={{ position: 'relative' }}>
+      <button type="button" className="labs-multiuser-trigger" onClick={() => setOpen((o) => !o)} title={label}>
+        <span>{hasWarning ? '⚠' : '👤'} {label}</span><span className="chev">⌄</span>
+      </button>
+      {open && (
+        <div className="labs-multiuser-panel">
+          {roster.length === 0 && <p className="empty-note" style={{ padding: 8 }}>Sin equipo.</p>}
+          {roster.map((u) => (
+            <label key={u.id} className="labs-multiuser-option">
+              <input type="checkbox" checked={selected.includes(u.id)} onChange={() => toggle(u.id)} />
+              <span>{u.name} <span className="dim">({u.role})</span></span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Rango de fechas como un chip de una sola línea ("11 may → 12 may") que nunca desborda su
+// columna — los <input type=date> reales (los que sí necesitan ancho) solo aparecen en un
+// popover chiquito al hacer click, en vez de en línea dentro de la fila.
+function DateRangePicker({ fechaInicio, fechaFin, onChange }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  const label = fechaInicio || fechaFin ? `${formatShortDate(fechaInicio)} → ${formatShortDate(fechaFin)}` : 'Sin fechas';
+  const duracion = fechaInicio && fechaFin ? daysBetween(fechaInicio, fechaFin) + 1 : null;
+
+  return (
+    <div ref={wrapRef} className="labs-multiuser" style={{ position: 'relative' }}>
+      <button type="button" className="labs-multiuser-trigger" onClick={() => setOpen((o) => !o)} title={label}>
+        <span>📅 {label}</span><span className="chev">⌄</span>
+      </button>
+      {open && (
+        <div className="labs-multiuser-panel excel-date-panel">
+          <label className="field-label" style={{ marginBottom: 4 }}>Inicio</label>
+          <input type="date" value={fechaInicio || ''} onChange={(e) => onChange({ fechaInicio: e.target.value, fechaFin })} style={{ marginBottom: 10 }} />
+          <label className="field-label" style={{ marginBottom: 4 }}>Fin</label>
+          <input type="date" value={fechaFin || ''} onChange={(e) => onChange({ fechaInicio, fechaFin: e.target.value })} />
+          {duracion != null && <p style={{ fontSize: 11.5, color: 'var(--labs-cream-faint)', margin: '8px 0 0' }}>Duración: {duracion} día{duracion !== 1 ? 's' : ''}</p>}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1773,8 +2014,9 @@ function CommentsModal({ tenant, experimentId, canComment, targetType, targetId,
   );
 }
 
-// Director asigna tareas (nunca a sí mismo) — Supervisor se autoasigna o asigna a Registrador.
-// El % de avance lo actualiza el responsable de la tarea, o el Director/Supervisor del proyecto.
+// Una tarea puede tener cualquier combinación de responsables (Director, Supervisor,
+// Registrador). El % de avance lo actualiza cualquiera de sus responsables, o el
+// Director/Supervisor del proyecto.
 function TaskCommentButton({ count, onClick, small }) {
   const size = small ? 13 : 15;
   return (
@@ -1836,17 +2078,24 @@ function taskStatus(t) {
   return t.status || (t.progreso >= 100 ? 'done' : 'todo');
 }
 
+// Compatibilidad con tareas viejas que guardaban un solo `responsable` (string|null) en vez
+// de `responsables` (array) — mismo helper que taskResponsables() en lib/labs/experiments.js,
+// duplicado acá porque este archivo corre en el browser.
+function taskResponsablesArr(t) {
+  return Array.isArray(t?.responsables) ? t.responsables : (t?.responsable ? [t.responsable] : []);
+}
+
 // Fila de Lista con edición inline (nombre/fase/fechas) y eliminación — solo Director/
 // Supervisor del proyecto (mismo permiso que exige el backend). Eliminar pide confirmar con
 // un segundo click, sin modal — se resetea si el botón pierde el foco.
-function CronRow({ tenant, experimentId, task, nameOf, vencida, saving, canManage, canToggle, onToggleProgreso, commentsCount, onOpenComments, onUpdate }) {
+function CronRow({ tenant, experimentId, task, nameOf, roster, vencida, saving, canManage, canToggle, onToggleProgreso, commentsCount, onOpenComments, onUpdate }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const openEdit = () => {
-    setDraft({ nombre: task.nombre, fase: task.fase || '', fechaInicio: task.fechaInicio || '', fechaFin: task.fechaFin || '' });
+    setDraft({ nombre: task.nombre, fase: task.fase || '', fechaInicio: task.fechaInicio || '', fechaFin: task.fechaFin || '', responsables: taskResponsablesArr(task) });
     setEditing(true);
   };
 
@@ -1856,7 +2105,7 @@ function CronRow({ tenant, experimentId, task, nameOf, vencida, saving, canManag
     try {
       await fetch(`/api/labs/${tenant}/experiments/${experimentId}/tasks/${task.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: draft.nombre.trim(), fase: draft.fase, fechaInicio: draft.fechaInicio || null, fechaFin: draft.fechaFin || null }),
+        body: JSON.stringify({ nombre: draft.nombre.trim(), fase: draft.fase, fechaInicio: draft.fechaInicio || null, fechaFin: draft.fechaFin || null, responsables: draft.responsables }),
       });
       setEditing(false);
       onUpdate();
@@ -1886,6 +2135,7 @@ function CronRow({ tenant, experimentId, task, nameOf, vencida, saving, canManag
             <input className="cron-row-edit-input" type="date" value={draft.fechaInicio} onChange={(e) => setDraft((d) => ({ ...d, fechaInicio: e.target.value }))} />
             <input className="cron-row-edit-input" type="date" value={draft.fechaFin} onChange={(e) => setDraft((d) => ({ ...d, fechaFin: e.target.value }))} />
           </div>
+          <MultiUserPicker roster={roster} selected={draft.responsables} onChange={(ids) => setDraft((d) => ({ ...d, responsables: ids }))} placeholder="— Sin asignar —" />
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button type="button" className="chip-btn" onClick={() => setEditing(false)}>Cancelar</button>
             <button type="button" className="btn btn-primary" disabled={busy || !draft.nombre.trim()} onClick={save}>{busy ? 'Guardando…' : 'Guardar'}</button>
@@ -1900,7 +2150,7 @@ function CronRow({ tenant, experimentId, task, nameOf, vencida, saving, canManag
       <div className="cron-row-info">
         <div className="cron-row-name">{task.nombre}</div>
         <div className="cron-row-meta">
-          <span>{nameOf(task.responsable)}</span><span className="dim">·</span>
+          <span>{taskResponsablesArr(task).length ? taskResponsablesArr(task).map(nameOf).join(', ') : 'Sin asignar'}</span><span className="dim">·</span>
           <span>{formatShortDate(task.fechaInicio)} → {formatShortDate(task.fechaFin)}</span>
           {vencida && <><span className="dim">·</span><span className="cron-overdue">vencida</span></>}
         </div>
@@ -1949,6 +2199,7 @@ function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
   }, [tenant]);
 
   const nameOf = (id) => users.find((u) => u.id === id)?.name ?? 'Sin asignar';
+  const roster = users.filter((u) => u.active !== false);
 
   const toggleProgreso = async (task) => {
     setSavingTaskId(task.id);
@@ -1976,7 +2227,7 @@ function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
     }
   };
 
-  const canTogglePorTask = (task) => isActive && (canManage || task.responsable === identity.id);
+  const canTogglePorTask = (task) => isActive && (canManage || taskResponsablesArr(task).includes(identity.id));
   const commentsOf = (taskId) => experiment.feedback.filter((f) => f.targetType === 'tarea' && f.targetId === taskId);
   const now = Date.now();
   const isVencida = (t) => t.progreso < 100 && t.fechaFin && new Date(t.fechaFin).getTime() < now;
@@ -2036,6 +2287,7 @@ function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
                   experimentId={experiment.meta.id}
                   task={t}
                   nameOf={nameOf}
+                  roster={roster}
                   vencida={isVencida(t)}
                   saving={savingTaskId === t.id}
                   canManage={canManageActive}
@@ -2157,7 +2409,7 @@ function CronogramaGantt({ grouped, nameOf, isVencida, savingTaskId, canTogglePo
                 <div className="cron-gantt-row" key={t.id}>
                   <div className="cron-gantt-info" style={{ width: GANTT_INFO_WIDTH }}>
                     <div className="cron-row-name">{t.nombre}</div>
-                    <div className="cron-gantt-assignee">{nameOf(t.responsable)}</div>
+                    <div className="cron-gantt-assignee">{taskResponsablesArr(t).length ? taskResponsablesArr(t).map(nameOf).join(', ') : 'Sin asignar'}</div>
                   </div>
                   <div className="cron-gantt-track" style={{ width: trackWidth }}>
                     {hasDates ? (
@@ -2215,7 +2467,7 @@ function CronogramaCanvas({ tasks, nameOf, savingTaskId, canTogglePorTask, onMov
                   {t.fase && <span className="cron-canvas-card-fase">{t.fase}</span>}
                   <div className="cron-canvas-card-name">{t.nombre}</div>
                   <div className="cron-canvas-card-meta">
-                    {nameOf(t.responsable)}
+                    {taskResponsablesArr(t).length ? taskResponsablesArr(t).map(nameOf).join(', ') : 'Sin asignar'}
                     {t.fechaFin && <><span className="dim"> · </span><span className={vencida ? 'cron-overdue' : ''}>{formatShortDate(t.fechaFin)}</span></>}
                   </div>
                   <div className="cron-canvas-card-actions">
@@ -2246,7 +2498,7 @@ function CronogramaCanvas({ tasks, nameOf, savingTaskId, canTogglePorTask, onMov
 function CreateTaskModal({ tenant, experimentId, onClose, onCreated }) {
   const [fase, setFase] = useState('');
   const [nombre, setNombre] = useState('');
-  const [responsableId, setResponsableId] = useState(null);
+  const [responsableIds, setResponsableIds] = useState([]);
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   const [busy, setBusy] = useState(false);
@@ -2260,7 +2512,7 @@ function CreateTaskModal({ tenant, experimentId, onClose, onCreated }) {
     try {
       const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/tasks`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fase, nombre, responsable: responsableId, fechaInicio: fechaInicio || null, fechaFin: fechaFin || null }),
+        body: JSON.stringify({ fase, nombre, responsables: responsableIds, fechaInicio: fechaInicio || null, fechaFin: fechaFin || null }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo crear.'); return; }
@@ -2293,8 +2545,10 @@ function CreateTaskModal({ tenant, experimentId, onClose, onCreated }) {
               <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
             </div>
           </div>
-          <label className="field-label">Responsable</label>
-          <ResponsableSelect tenant={tenant} selected={responsableId} onChange={setResponsableId} />
+          <label className="field-label">Responsables</label>
+          <div style={{ marginBottom: 14 }}>
+            <MultiUserPicker tenant={tenant} selected={responsableIds} onChange={setResponsableIds} placeholder="— Sin asignar —" />
+          </div>
           {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
           <div className="modal-footer">
             <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
@@ -2308,13 +2562,11 @@ function CreateTaskModal({ tenant, experimentId, onClose, onCreated }) {
 
 /* ======================= Presupuesto (civil) ======================= */
 
-// El % y el tag de "sobrecosto" se recalculan al tipear (estado local liveValue), no recién
-// después de guardar — antes había un delay real hasta que volvía el fetch. El guardado en
-// sí sigue pasando en onBlur, mismo mecanismo de antes.
-function PartidaRow({ tenant, experimentId, partida, saving, canManage, commentsCount, onOpenComments, onSave }) {
-  const [liveValue, setLiveValue] = useState(partida.ejecutado);
-  const pct = partida.importe ? Math.round((liveValue / partida.importe) * 100) : 0;
-  const sobrecosto = partida.importe > 0 && liveValue > partida.importe;
+// "Ejecutado" ya no se edita acá — es la suma de los gastos de la partida (cada uno con su
+// factura de respaldo), cargados desde el modal de Gastos.
+function PartidaRow({ partida, gastosCount, commentsCount, canManage, onOpenComments, onOpenGastos, onEdit }) {
+  const pct = partida.importe ? Math.round((partida.ejecutado / partida.importe) * 100) : 0;
+  const sobrecosto = partida.importe > 0 && partida.ejecutado > partida.importe;
 
   return (
     <div className="labs-tenant-row">
@@ -2326,21 +2578,139 @@ function PartidaRow({ tenant, experimentId, partida, saving, canManage, comments
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {saving && <span style={{ fontSize: 11.5, color: 'var(--labs-cream-faint)' }}>Guardando…</span>}
+        {canManage && <button className="chip-btn" onClick={onEdit}>✎ Editar</button>}
         <button className="chip-btn" onClick={onOpenComments}>💬 Comentarios{commentsCount ? ` (${commentsCount})` : ''}</button>
-        {canManage ? (
-          <input
-            type="number"
-            value={liveValue}
-            disabled={saving}
-            onChange={(e) => setLiveValue(e.target.value === '' ? 0 : Number(e.target.value))}
-            onBlur={(e) => { if (Number(e.target.value) !== partida.ejecutado) onSave(e.target.value); }}
-            style={{ width: 90, fontSize: 12.5 }}
-          />
-        ) : (
-          <span style={{ fontSize: 12.5 }}>{partida.ejecutado.toLocaleString('es-PE')}</span>
-        )}
+        <button className="chip-btn" onClick={onOpenGastos}>🧾 Gastos{gastosCount ? ` (${gastosCount})` : ''} — {partida.ejecutado.toLocaleString('es-PE')}</button>
         <span className={`tag ${sobrecosto ? 'tag-alert' : 'tag-neutral'}`}>{pct}%</span>
+      </div>
+    </div>
+  );
+}
+
+function GastosModal({ tenant, experimentId, partidaId, partidaLabel, gastos, canManage, onClose, onUpdate }) {
+  const [monto, setMonto] = useState('');
+  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [proveedor, setProveedor] = useState('');
+  const [nota, setNota] = useState('');
+  const [attachments, setAttachments] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const uploading = attachments.some((a) => a.uploading);
+  const total = gastos.reduce((s, g) => s + (g.monto || 0), 0);
+  const montoNum = Number(monto);
+
+  const handleAdd = async () => {
+    if (!montoNum || montoNum <= 0 || busy || uploading) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/partidas/${partidaId}/gastos`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          monto: montoNum, fecha, proveedor, nota,
+          attachments: attachments.map(({ name, mimeType, data, previewUrl, driveFileId, driveUrl, kind }) => ({ name, mimeType, data, previewUrl, driveFileId, driveUrl, kind })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo agregar el gasto.'); return; }
+      setMonto(''); setProveedor(''); setNota(''); setAttachments([]);
+      onUpdate();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (gastoId) => {
+    if (confirmDeleteId !== gastoId) { setConfirmDeleteId(gastoId); return; }
+    await fetch(`/api/labs/${tenant}/experiments/${experimentId}/partidas/${partidaId}/gastos/${gastoId}`, { method: 'DELETE' });
+    setConfirmDeleteId(null);
+    onUpdate();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" style={{ position: 'relative' }}>
+        <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
+        <span className="eyebrow-mini on-dark">Gastos</span>
+        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 20, fontWeight: 600, margin: '6px 0 4px' }}>{partidaLabel}</h2>
+        <p style={{ fontSize: 13, color: 'var(--labs-cream-dim)', marginBottom: 16 }}>Total ejecutado: <b style={{ color: 'var(--labs-cream)' }}>{total.toLocaleString('es-PE')}</b></p>
+
+        {gastos.length === 0 && <p className="empty-note">Todavía no hay gastos cargados.</p>}
+        {gastos.map((g) => (
+          <div className="feedback-item" key={g.id}>
+            <div className="fb-top">
+              <div className="fb-who">
+                <span className="recent-avatar" style={{ width: 24, height: 24, fontSize: 10.5 }}>{initials(g.createdBy)}</span>
+                {g.createdBy}{g.imported ? ' · importado' : ''}
+              </div>
+              <span className="recent-time">{formatDate(g.fecha)}</span>
+            </div>
+            <div className="fb-text"><b>{g.monto.toLocaleString('es-PE')}</b>{g.proveedor ? ` — ${g.proveedor}` : ''}{g.nota ? ` — ${g.nota}` : ''}</div>
+            {g.attachments?.length > 0 ? (
+              <div className="labs-attach-strip" style={{ marginTop: 10 }}>
+                {g.attachments.map((a, i) => <CommentAttachment att={a} key={i} />)}
+              </div>
+            ) : (
+              <p style={{ fontSize: 11.5, color: 'var(--labs-cream-faint)', marginTop: 6 }}>Sin factura adjunta.</p>
+            )}
+            {canManage && (
+              <button
+                type="button" className="chip-btn" style={{ marginTop: 8, ...(confirmDeleteId === g.id ? { borderColor: '#E19680', color: '#E19680' } : null) }}
+                onClick={() => handleDelete(g.id)}
+              >
+                {confirmDeleteId === g.id ? '¿Confirmar borrado?' : 'Eliminar'}
+              </button>
+            )}
+          </div>
+        ))}
+
+        {canManage && (
+          <>
+            <div className="divider-label" style={{ marginTop: 18 }}><span>Agregar gasto</span></div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <input type="number" placeholder="Monto" value={monto} onChange={(e) => setMonto(e.target.value)} style={{ flex: 1, minWidth: 100 }} />
+              <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+              <input type="text" placeholder="Proveedor (opcional)" value={proveedor} onChange={(e) => setProveedor(e.target.value)} style={{ flex: 1, minWidth: 140 }} />
+            </div>
+            <textarea rows={2} placeholder="Nota (opcional)" value={nota} onChange={(e) => setNota(e.target.value)} style={{ marginTop: 10 }} />
+
+            <input
+              ref={fileInputRef} type="file" accept={INVOICE_ACCEPT} style={{ display: 'none' }}
+              onChange={(e) => { Array.from(e.target.files).forEach((f) => processFeedbackFile(f, { tenant, experimentId, setAttachments, setErr })); e.target.value = ''; }}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button type="button" className="labs-attach-btn" onClick={() => fileInputRef.current?.click()}>📎 Adjuntar factura (opcional)</button>
+            </div>
+
+            {attachments.length > 0 && (
+              <div className="labs-attach-strip">
+                {attachments.map((att) => (
+                  <div key={att.id} className="labs-attach-chip">
+                    {att.previewUrl ? <img src={att.previewUrl} className="labs-attach-thumb" alt={att.name} /> : <div className="labs-attach-icon">📄</div>}
+                    <span className="labs-attach-name">{att.name}</span>
+                    <button type="button" className="labs-attach-remove" onClick={() => setAttachments((p) => p.filter((a) => a.id !== att.id))}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {err && <p className="labs-login-error" style={{ marginTop: 8 }}>{err}</p>}
+            <div className="modal-footer">
+              <button type="button" className="btn btn-quiet" onClick={onClose}>Cerrar</button>
+              <button type="button" className="btn btn-primary" disabled={busy || uploading || !montoNum || montoNum <= 0} onClick={handleAdd}>{busy ? 'Guardando…' : 'Agregar gasto →'}</button>
+            </div>
+          </>
+        )}
+        {!canManage && (
+          <div className="modal-footer">
+            <button type="button" className="btn btn-quiet" onClick={onClose}>Cerrar</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2348,8 +2718,10 @@ function PartidaRow({ tenant, experimentId, partida, saving, canManage, comments
 
 function ViewPresupuesto({ tenant, experiment, identity, onUpdate }) {
   const [createOpen, setCreateOpen] = useState(false);
-  const [savingPartidaId, setSavingPartidaId] = useState(null);
+  const [editingPartida, setEditingPartida] = useState(null); // partida | null
   const [commentsFor, setCommentsFor] = useState(null); // { id, label } | null
+  const [gastosFor, setGastosFor] = useState(null); // { id, label } | null
+  const [allGastosOpen, setAllGastosOpen] = useState(false);
   const canManage = identity.role === 'Director' || experiment.meta.supervisorIds?.includes(identity.id);
   const canComment = identity.role === 'Director' || identity.role === 'Supervisor';
   const isActive = (experiment.meta.status || 'activo') === 'activo';
@@ -2365,20 +2737,13 @@ function ViewPresupuesto({ tenant, experiment, identity, onUpdate }) {
 
   const totalImporte = experiment.civilMetrics?.totalImporte ?? 0;
   const totalEjecutado = experiment.civilMetrics?.totalEjecutado ?? 0;
+  const totalImportePlanificado = experiment.civilMetrics?.totalImportePlanificado ?? 0;
+  const totalImporteAgregado = experiment.civilMetrics?.totalImporteAgregado ?? 0;
+  const totalEjecutadoPlanificado = experiment.civilMetrics?.totalEjecutadoPlanificado ?? 0;
+  const totalEjecutadoAgregado = experiment.civilMetrics?.totalEjecutadoAgregado ?? 0;
   const commentsOf = (partidaId) => experiment.feedback.filter((f) => f.targetType === 'partida' && f.targetId === partidaId);
-
-  const updateEjecutado = async (partida, value) => {
-    setSavingPartidaId(partida.id);
-    try {
-      await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/partidas/${partida.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ejecutado: value }),
-      });
-      onUpdate();
-    } finally {
-      setSavingPartidaId(null);
-    }
-  };
+  const gastosOf = (partidaId) => (experiment.gastos ?? []).filter((g) => g.partidaId === partidaId);
+  const partidaLabelOf = (partidaId) => experiment.partidas.find((p) => p.id === partidaId)?.descripcion ?? 'Partida eliminada';
 
   return (
     <div className="view">
@@ -2394,6 +2759,12 @@ function ViewPresupuesto({ tenant, experiment, identity, onUpdate }) {
           <div><b style={{ color: 'var(--labs-cream)' }}>{totalEjecutado.toLocaleString('es-PE', { maximumFractionDigits: 2 })}</b> ejecutado</div>
           <div><b style={{ color: 'var(--labs-living)' }}>{experiment.civilMetrics?.pctFinanciero ?? 0}%</b> de avance financiero</div>
         </div>
+        {totalImporteAgregado > 0 && (
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--labs-cream-faint)', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--labs-line-dark)' }}>
+            <div>Planificado: <b style={{ color: 'var(--labs-cream-dim)' }}>{totalImportePlanificado.toLocaleString('es-PE', { maximumFractionDigits: 2 })}</b> presupuestado · <b style={{ color: 'var(--labs-cream-dim)' }}>{totalEjecutadoPlanificado.toLocaleString('es-PE', { maximumFractionDigits: 2 })}</b> ejecutado</div>
+            <div>Agregado después: <b style={{ color: 'var(--labs-cream-dim)' }}>{totalImporteAgregado.toLocaleString('es-PE', { maximumFractionDigits: 2 })}</b> presupuestado · <b style={{ color: 'var(--labs-cream-dim)' }}>{totalEjecutadoAgregado.toLocaleString('es-PE', { maximumFractionDigits: 2 })}</b> ejecutado</div>
+          </div>
+        )}
       </div>
 
       {!isActive && (
@@ -2402,9 +2773,14 @@ function ViewPresupuesto({ tenant, experiment, identity, onUpdate }) {
         </p>
       )}
 
-      {canManageActive && (
-        <button className="btn btn-primary" style={{ marginBottom: 16 }} onClick={() => setCreateOpen(true)}>+ Nueva partida</button>
-      )}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        {canManageActive && (
+          <button className="btn btn-primary" onClick={() => setCreateOpen(true)}>+ Nueva partida</button>
+        )}
+        {(experiment.gastos ?? []).length > 0 && (
+          <button className="chip-btn" onClick={() => setAllGastosOpen(true)}>🧾 Ver todos los gastos ({experiment.gastos.length})</button>
+        )}
+      </div>
 
       {experiment.partidas.length === 0 && <p className="empty-note">Todavía no hay partidas cargadas.</p>}
 
@@ -2414,14 +2790,13 @@ function ViewPresupuesto({ tenant, experiment, identity, onUpdate }) {
           {g.partidas.map((p) => (
             <PartidaRow
               key={p.id}
-              tenant={tenant}
-              experimentId={experiment.meta.id}
               partida={p}
-              saving={savingPartidaId === p.id}
-              canManage={canManageActive}
+              gastosCount={gastosOf(p.id).length}
               commentsCount={commentsOf(p.id).length}
+              canManage={canManageActive}
               onOpenComments={() => setCommentsFor({ id: p.id, label: p.descripcion })}
-              onSave={(value) => updateEjecutado(p, value)}
+              onOpenGastos={() => setGastosFor({ id: p.id, label: p.descripcion })}
+              onEdit={() => setEditingPartida(p)}
             />
           ))}
         </div>
@@ -2433,6 +2808,16 @@ function ViewPresupuesto({ tenant, experiment, identity, onUpdate }) {
           experimentId={experiment.meta.id}
           onClose={() => setCreateOpen(false)}
           onCreated={() => { setCreateOpen(false); onUpdate(); }}
+        />
+      )}
+
+      {editingPartida && (
+        <CreatePartidaModal
+          tenant={tenant}
+          experimentId={experiment.meta.id}
+          partida={editingPartida}
+          onClose={() => setEditingPartida(null)}
+          onCreated={() => { setEditingPartida(null); onUpdate(); }}
         />
       )}
 
@@ -2450,31 +2835,106 @@ function ViewPresupuesto({ tenant, experiment, identity, onUpdate }) {
           onUpdate={onUpdate}
         />
       )}
+
+      {gastosFor && (
+        <GastosModal
+          tenant={tenant}
+          experimentId={experiment.meta.id}
+          partidaId={gastosFor.id}
+          partidaLabel={gastosFor.label}
+          gastos={gastosOf(gastosFor.id)}
+          canManage={canManageActive}
+          onClose={() => setGastosFor(null)}
+          onUpdate={onUpdate}
+        />
+      )}
+
+      {allGastosOpen && (
+        <AllGastosModal
+          gastos={experiment.gastos ?? []}
+          partidaLabelOf={partidaLabelOf}
+          onClose={() => setAllGastosOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
-function CreatePartidaModal({ tenant, experimentId, onClose, onCreated }) {
-  const [etapa, setEtapa] = useState('');
-  const [descripcion, setDescripcion] = useState('');
-  const [cantidad, setCantidad] = useState('');
-  const [unidad, setUnidad] = useState('');
-  const [precioUnitario, setPrecioUnitario] = useState('');
+// Vista consolidada, de solo lectura — todos los gastos del proyecto en un mismo lugar (con
+// sus facturas), sin importar de qué partida son. Editar/borrar sigue siendo por partida
+// (GastosModal), acá es para auditar de un vistazo.
+function AllGastosModal({ gastos, partidaLabelOf, onClose }) {
+  const sorted = [...gastos].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  const total = gastos.reduce((s, g) => s + (g.monto || 0), 0);
+
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" style={{ position: 'relative' }}>
+        <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
+        <span className="eyebrow-mini on-dark">Gastos del proyecto</span>
+        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 20, fontWeight: 600, margin: '6px 0 4px' }}>Todos los gastos</h2>
+        <p style={{ fontSize: 13, color: 'var(--labs-cream-dim)', marginBottom: 16 }}>{gastos.length} gasto{gastos.length !== 1 ? 's' : ''} · Total: <b style={{ color: 'var(--labs-cream)' }}>{total.toLocaleString('es-PE')}</b></p>
+
+        {sorted.length === 0 && <p className="empty-note">Todavía no hay gastos cargados.</p>}
+        {sorted.map((g) => (
+          <div className="feedback-item" key={g.id}>
+            <div className="fb-top">
+              <div className="fb-who">
+                <span className="recent-avatar" style={{ width: 24, height: 24, fontSize: 10.5 }}>{initials(g.createdBy)}</span>
+                {g.createdBy}{g.imported ? ' · importado' : ''}
+              </div>
+              <span className="recent-time">{formatDate(g.fecha)}</span>
+            </div>
+            <div className="fb-text">
+              <b>{g.monto.toLocaleString('es-PE')}</b> — {partidaLabelOf(g.partidaId)}
+              {g.proveedor ? ` — ${g.proveedor}` : ''}{g.nota ? ` — ${g.nota}` : ''}
+            </div>
+            {g.attachments?.length > 0 ? (
+              <div className="labs-attach-strip" style={{ marginTop: 10 }}>
+                {g.attachments.map((a, i) => <CommentAttachment att={a} key={i} />)}
+              </div>
+            ) : (
+              <p style={{ fontSize: 11.5, color: 'var(--labs-cream-faint)', marginTop: 6 }}>Sin factura adjunta.</p>
+            )}
+          </div>
+        ))}
+
+        <div className="modal-footer">
+          <button type="button" className="btn btn-quiet" onClick={onClose}>Cerrar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Sirve tanto para crear como para editar: si viene `partida`, precarga sus valores y hace
+// PATCH a esa partida en vez de POST de una nueva.
+function CreatePartidaModal({ tenant, experimentId, partida, onClose, onCreated }) {
+  const isEdit = !!partida;
+  const [etapa, setEtapa] = useState(partida?.etapa ?? '');
+  const [descripcion, setDescripcion] = useState(partida?.descripcion ?? '');
+  const [cantidad, setCantidad] = useState(partida?.cantidad ?? '');
+  const [unidad, setUnidad] = useState(partida?.unidad ?? '');
+  const [precioUnitario, setPrecioUnitario] = useState(partida?.precioUnitario ?? '');
+  const [proveedor, setProveedor] = useState(partida?.proveedor ?? '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
-  const handleCreate = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!descripcion.trim() || busy) return;
     setBusy(true);
     setErr(null);
     try {
-      const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/partidas`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ etapa, descripcion, cantidad, unidad, precioUnitario }),
+      const url = isEdit
+        ? `/api/labs/${tenant}/experiments/${experimentId}/partidas/${partida.id}`
+        : `/api/labs/${tenant}/experiments/${experimentId}/partidas`;
+      const res = await fetch(url, {
+        method: isEdit ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ etapa, descripcion, cantidad, unidad, precioUnitario, proveedor }),
       });
       const data = await res.json();
-      if (!res.ok) { setErr(data.error || 'No se pudo crear.'); return; }
+      if (!res.ok) { setErr(data.error || (isEdit ? 'No se pudo guardar.' : 'No se pudo crear.')); return; }
       onCreated();
     } catch {
       setErr('Error de conexión.');
@@ -2487,9 +2947,9 @@ function CreatePartidaModal({ tenant, experimentId, onClose, onCreated }) {
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-card" style={{ position: 'relative' }}>
         <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
-        <span className="eyebrow-mini on-dark">Nueva partida</span>
+        <span className="eyebrow-mini on-dark">{isEdit ? 'Editar partida' : 'Nueva partida'}</span>
         <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Presupuesto</h2>
-        <form onSubmit={handleCreate}>
+        <form onSubmit={handleSubmit}>
           <label className="field-label">Etapa</label>
           <input type="text" value={etapa} onChange={(e) => setEtapa(e.target.value)} style={{ marginBottom: 14 }} />
           <label className="field-label">Descripción</label>
@@ -2499,10 +2959,12 @@ function CreatePartidaModal({ tenant, experimentId, onClose, onCreated }) {
             <input type="text" placeholder="Unidad" value={unidad} onChange={(e) => setUnidad(e.target.value)} style={{ flex: 1 }} />
             <input type="number" placeholder="Precio unit." value={precioUnitario} onChange={(e) => setPrecioUnitario(e.target.value)} style={{ flex: 1 }} />
           </div>
+          <label className="field-label">Proveedor (opcional)</label>
+          <input type="text" value={proveedor} onChange={(e) => setProveedor(e.target.value)} style={{ marginBottom: 14 }} />
           {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
           <div className="modal-footer">
             <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Creando…' : 'Crear partida →'}</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? (isEdit ? 'Guardando…' : 'Creando…') : (isEdit ? 'Guardar cambios →' : 'Crear partida →')}</button>
           </div>
         </form>
       </div>
@@ -2604,7 +3066,7 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
         );
       })}
 
-      {createOpen && <CreateTestModal tenant={tenant} experimentId={experiment.meta.id} onClose={() => setCreateOpen(false)} onCreated={() => { setCreateOpen(false); onUpdate(); }} />}
+      {createOpen && <CreateTestModal tenant={tenant} experimentId={experiment.meta.id} successCriteria={experiment.meta.successCriteria} onClose={() => setCreateOpen(false)} onCreated={() => { setCreateOpen(false); onUpdate(); }} />}
       {editSupervisorsOpen && (
         <EditSupervisorsModal
           tenant={tenant}
@@ -2725,10 +3187,17 @@ function ValidateButton({ tenant, experimentId, executionId, by, onDone }) {
   return <button className="chip-btn" disabled={busy} onClick={handle}>{busy ? '…' : 'Validar'}</button>;
 }
 
-function CreateTestModal({ tenant, experimentId, onClose, onCreated }) {
+// Arranca con los campos de los Criterios de éxito del proyecto (si hay) en vez de en blanco —
+// son numéricos por naturaleza (llevan operador + valor), así que el tipo por defecto es
+// 'number'. Igual se pueden borrar/editar/agregar más, esto es solo el punto de partida.
+const DEFAULT_TEST_ICON = '🧪';
+
+function CreateTestModal({ tenant, experimentId, successCriteria, onClose, onCreated }) {
   const [name, setName] = useState('');
-  const [icon, setIcon] = useState('🧪');
-  const [fields, setFields] = useState([{ key: '', label: '', type: 'text' }]);
+  const criteriaFields = (successCriteria ?? [])
+    .filter((c) => typeof c === 'object' && c.label)
+    .map((c) => ({ key: '', label: c.label, type: 'number', operator: c.operator, value: c.value ?? '', unit: c.unit || '' }));
+  const [fields, setFields] = useState(criteriaFields.length ? criteriaFields : [{ key: '', label: '', type: 'text' }]);
   const [registradorIds, setRegistradorIds] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
@@ -2745,10 +3214,15 @@ function CreateTestModal({ tenant, experimentId, onClose, onCreated }) {
     try {
       const cleanFields = fields
         .filter((f) => f.label.trim())
-        .map((f) => ({ ...f, key: f.key.trim() || f.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_') }));
+        .map((f) => ({
+          key: f.key.trim() || f.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+          label: f.label.trim(),
+          type: f.type,
+          ...(f.type === 'number' && f.operator && f.value !== '' && f.value != null ? { operator: f.operator, value: f.value, unit: (f.unit || '').trim() } : {}),
+        }));
       const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/tests`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, icon, fields: cleanFields, registradorIds }),
+        body: JSON.stringify({ name, icon: DEFAULT_TEST_ICON, fields: cleanFields, registradorIds }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo crear.'); return; }
@@ -2769,16 +3243,31 @@ function CreateTestModal({ tenant, experimentId, onClose, onCreated }) {
         <form onSubmit={handleCreate}>
           <label className="field-label">Nombre de la prueba</label>
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 14 }} required />
-          <label className="field-label">Ícono (un emoji)</label>
-          <input type="text" value={icon} onChange={(e) => setIcon(e.target.value)} style={{ marginBottom: 14, maxWidth: 80 }} />
           <label className="field-label">Campos que va a registrar cada aporte</label>
           {fields.map((f, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-              <input type="text" placeholder="Nombre del campo (ej. Humedad %)" value={f.label} onChange={(e) => updateField(i, { label: e.target.value })} style={{ flex: 1 }} />
-              <select value={f.type} onChange={(e) => updateField(i, { type: e.target.value })} style={{ background: 'var(--labs-dark-3)', border: '1px solid var(--labs-line-dark)', color: 'var(--labs-cream)', borderRadius: 8, padding: '0 10px' }}>
-                {FIELD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-              {fields.length > 1 && <button type="button" className="chip-btn" onClick={() => removeField(i)}>✕</button>}
+            <div key={i} style={{ marginBottom: 8, border: '1px solid var(--labs-line-dark)', borderRadius: 8, padding: 8 }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: f.type === 'number' ? 6 : 0 }}>
+                <input type="text" placeholder="Nombre del campo (ej. Humedad %)" value={f.label} onChange={(e) => updateField(i, { label: e.target.value })} style={{ flex: 1 }} />
+                <select value={f.type} onChange={(e) => updateField(i, { type: e.target.value })} style={{ background: 'var(--labs-dark-3)', border: '1px solid var(--labs-line-dark)', color: 'var(--labs-cream)', borderRadius: 8, padding: '0 10px' }}>
+                  {FIELD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+                {fields.length > 1 && <button type="button" className="chip-btn" onClick={() => removeField(i)}>✕</button>}
+              </div>
+              {f.type === 'number' && (
+                <div>
+                  <p style={{ fontSize: 11, color: 'var(--labs-cream-faint)', margin: '2px 0 6px' }}>
+                    Criterio de aprobación (opcional) — el aporte pasa si el valor cumple esta condición
+                  </p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <select value={f.operator || ''} onChange={(e) => updateField(i, { operator: e.target.value })} style={{ flex: '0 0 130px', background: 'var(--labs-dark-3)', border: '1px solid var(--labs-line-dark)', color: 'var(--labs-cream)', borderRadius: 8, padding: '0 10px' }}>
+                      <option value="">Sin criterio</option>
+                      {CRITERIA_OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label} que…</option>)}
+                    </select>
+                    <input type="number" placeholder="Valor" value={f.value ?? ''} onChange={(e) => updateField(i, { value: e.target.value })} style={{ flex: 1, minWidth: 70 }} />
+                    <input type="text" placeholder="Unidad (ej. %)" value={f.unit ?? ''} onChange={(e) => updateField(i, { unit: e.target.value })} style={{ flex: 1, minWidth: 70 }} />
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           <button type="button" className="chip-btn" onClick={addField} style={{ marginBottom: 14 }}>+ Agregar campo</button>
@@ -2997,12 +3486,14 @@ function money(n) {
   return `S/ ${Number(n || 0).toLocaleString('es-PE')}`;
 }
 
-// Fotos disponibles para curar el reporte civil: toda evidencia con imagen ya adjuntada en
-// comentarios de tareas/partidas (ver CommentsModal) — no hace falta subir nada de nuevo acá.
+// Fotos disponibles para curar el reporte (civil o experimental): toda evidencia con imagen
+// ya adjuntada en comentarios del proyecto (tareas, partidas, pruebas, aportes...) — no hace
+// falta subir nada de nuevo acá. Se excluyen los comentarios sobre reportes: son meta-discusión
+// del reporte, no evidencia del proyecto.
 function collectAvailablePhotos(experiment) {
   const photos = [];
   for (const f of experiment.feedback) {
-    if (f.targetType !== 'tarea' && f.targetType !== 'partida') continue;
+    if (f.targetType === 'reporte') continue;
     for (const a of f.attachments || []) {
       if (a.kind !== 'image') continue;
       photos.push({ ...a, pickId: `${f.id}-${a.driveFileId || a.name}`, from: f.targetLabel, createdAt: f.createdAt });
@@ -3031,10 +3522,11 @@ function ReportPhotoGrid({ photos, caption }) {
   );
 }
 
-function GenerateCivilReportCard({ tenant, experiment, onUpdate }) {
+function GenerateReportCard({ tenant, experiment, onUpdate }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const isCivil = isTaskTrackingKind(experiment.meta.projectKind);
   const availablePhotos = collectAvailablePhotos(experiment);
   const [selected, setSelected] = useState(() => new Set(availablePhotos.slice(0, 6).map((p) => p.pickId)));
 
@@ -3071,7 +3563,10 @@ function GenerateCivilReportCard({ tenant, experiment, onUpdate }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Reporte de {experiment.meta.name}</div>
-          <div style={{ fontSize: 12.5, color: 'var(--labs-cream-dim)' }}>{experiment.civilMetrics?.pctFinanciero ?? 0}% financiero · {experiment.civilMetrics?.pctTareas ?? 0}% tareas · {availablePhotos.length} fotos disponibles</div>
+          <div style={{ fontSize: 12.5, color: 'var(--labs-cream-dim)' }}>
+            {isCivil && `${experiment.civilMetrics?.pctFinanciero ?? 0}% financiero · ${experiment.civilMetrics?.pctTareas ?? 0}% tareas · `}
+            {availablePhotos.length} fotos disponibles
+          </div>
         </div>
         {!pickerOpen && <button className="btn btn-primary" onClick={() => setPickerOpen(true)}>Elegir fotos y generar →</button>}
       </div>
@@ -3311,35 +3806,18 @@ function ExperimentalReportDoc({ tenant, experiment, identity, latest, canApprov
           <ul>{latest.doc.nextSteps.map((n, i) => <li key={i}>{n}</li>)}</ul>
         </>
       )}
+
+      <ReportPhotoGrid photos={latest.photos} caption={latest.photos?.length ? 'Evidencia fotográfica' : null} />
     </ReportDocShell>
   );
 }
 
 function ViewReportes({ tenant, experiment, identity, onUpdate }) {
-  const [generating, setGenerating] = useState(false);
-  const [err, setErr] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
-  const isCivil = isTaskTrackingKind(experiment.meta.projectKind);
   const reports = experiment.reports.map((r) => ({ ...r, experimentId: experiment.meta.id }));
   const active = reports.find((r) => r.id === selectedId) || reports[0] || null;
   const canGenerate = identity.role === 'Supervisor' && experiment.meta.supervisorIds?.includes(identity.id);
   const canApprove = identity.role === 'Director';
-
-  const handleGenerateExperimental = async () => {
-    setGenerating(true);
-    setErr(null);
-    try {
-      const res = await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/reports`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) { setErr(data.error || 'No se pudo generar.'); return; }
-      setSelectedId(null);
-      onUpdate();
-    } catch {
-      setErr('Error de conexión.');
-    } finally {
-      setGenerating(false);
-    }
-  };
 
   return (
     <div className="view">
@@ -3351,18 +3829,7 @@ function ViewReportes({ tenant, experiment, identity, onUpdate }) {
 
       {!canGenerate && !active && <p className="empty-note">Todavía no hay ningún reporte generado.</p>}
 
-      {canGenerate && isCivil && <GenerateCivilReportCard tenant={tenant} experiment={experiment} onUpdate={() => { setSelectedId(null); onUpdate(); }} />}
-
-      {canGenerate && !isCivil && (
-        <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-          <div>
-            <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Reporte de {experiment.meta.name}</div>
-            <div style={{ fontSize: 12.5, color: 'var(--labs-cream-dim)' }}>{experiment.executions.length} ejecuciones · {experiment.feedback.length} feedback</div>
-          </div>
-          <button className="btn btn-primary" disabled={generating} onClick={handleGenerateExperimental}>{generating ? 'Sintetizando…' : 'Generar borrador →'}</button>
-        </div>
-      )}
-      {err && <p className="labs-login-error">{err}</p>}
+      {canGenerate && <GenerateReportCard tenant={tenant} experiment={experiment} onUpdate={() => { setSelectedId(null); onUpdate(); }} />}
 
       {active && (active.kind === 'civil'
         ? <CivilReportDoc key={active.id} tenant={tenant} experiment={experiment} identity={identity} latest={active} canApprove={canApprove} canGenerate={canGenerate} onUpdate={onUpdate} />

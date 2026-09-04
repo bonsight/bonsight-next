@@ -2,15 +2,50 @@
 
 > Bitácora operativa para continuidad entre sesiones de IA.  
 > **Actualizar al terminar cada sesión de trabajo.**  
-> Última actualización: 2026-07-10
+> Última actualización: 2026-09-03
 
 ---
 
-## Objetivo actual
+## Snapshot local actual (2026-09-03)
+
+**Epic activo:** Labs — Presupuesto por gastos con factura, Criterios de éxito estructurados, aporte editable.
+
+Este es el snapshot más reciente y debe tratarse como referencia principal — todo lo que sigue debajo (Kai Admin Panel, 2026-07-10) es historia ya resuelta/en producción, no el trabajo actual.
+
+**Estado del working tree ahora mismo:** 6 features de Labs completas localmente (build limpio), **sin commitear ni desplegar**. Correr `git status --short` en la raíz del repo para la lista exacta — a la fecha de este snapshot son:
+
+```
+M app/api/labs/[tenant]/experiments/[id]/details/route.js
+M app/api/labs/[tenant]/experiments/[id]/partidas/[partidaId]/route.js
+M app/labs/[tenant]/LabsClientTenant.jsx
+M app/labs/labs.css
+M lib/labs/contribution.js
+M lib/labs/experiments.js
+M lib/labs/reports.js
+M lib/labs/summary.js
+?? app/api/labs/[tenant]/experiments/[id]/partidas/[partidaId]/gastos/
+```
+
+**Qué hace cada feature (todas en proyectos civiles/experimentales de Labs):**
+
+1. **Gastos con factura** — "Ejecutado" de una partida deja de ser un número editable a mano; ahora es la suma de gastos individuales (`lib/labs/experiments.js`: `addGasto`/`getGastosList`/`deleteGasto`), cada uno con monto + factura opcional subida a Drive (carpeta "Gastos", mismo mecanismo que los adjuntos de comentarios). Rutas nuevas: `.../partidas/[partidaId]/gastos` (POST) y `.../gastos/[gastoId]` (DELETE).
+2. **Desglose planificado vs. agregado** — cada partida tiene `origen: 'inicial'` (viene del Excel al crear el proyecto) o `'agregada'` (creada después con "+ Nueva partida"). El banner de totales en Presupuesto muestra ambos desgloses. Botón "Ver todos los gastos" con modal consolidado de todo el proyecto.
+3. **Criterios de éxito estructurados** — en Crear/Editar proyecto (experimental), reemplaza el textarea libre por filas Nombre + operador (>, <, =, ≥, ≤) + valor + unidad. `formatSuccessCriterion` (en `lib/labs/experiments.js`, server; duplicada en el cliente por ser server-only) formatea a texto para los prompts de IA, soporta el formato viejo (string suelto) también.
+4. **Nueva Prueba precargada** — los campos de una Prueba nueva arrancan con los Criterios de éxito del proyecto (nombre + operador + valor + unidad ya cargados), editable/ampliable. Cualquier campo numérico puede tener su propio "criterio de paso" — la IA (`lib/labs/contribution.js`) lo usa como señal principal para decidir tag éxito/parcial/fallo, no solo el tono del texto.
+5. **Aportar con campos editables** — en el paso de confirmación (después de que la IA interpreta texto/evidencia), cada campo es ahora un `<input>` editable en vez de texto de solo lectura — se puede completar a mano lo que la IA no sacó, o corregir lo que sacó mal, antes de confirmar.
+6. **Fix de contraste** — `.mode-card` (cards de selección de prueba en Aportar) es un `<button>` sin `color` propio, heredaba negro del navegador. Ya tiene `color:var(--labs-cream)`.
+
+**Próximo paso:** el usuario todavía no confirmó subir esto a prod — falta probarlo localmente y decidir. Seguir el flujo estándar: `git status` → stage explícito (nunca `-A`) → commit con mensaje que explique el porqué → push a `main` → `vercel ls bonsight-next --prod` para confirmar Ready.
+
+**Trabajo separado, no relacionado con lo anterior:** hay una rama `planning/kai-absorbe-aria` (pusheada, sin mergear) con **ADR-010** en `docs/architecture-decisions.md` — propuesta de fusión Kai+Aria (Kai absorbe skills/conexiones de Aria + export a Drive de Labs, sin apagar nada existente). Es solo visión, no se empezó a implementar. Retomar cuando el usuario lo pida explícitamente.
+
+---
+
+## Objetivo actual (histórico — 2026-07-10, ya resuelto)
 
 **Epic:** Kai Admin Panel — sistema multi-tenant para gestión de clientes de Kai
 
-Construir dentro de `bonsight-next` el admin panel de Kai (`kai.bonsight.co/admin`) y la interfaz cliente (`kai.bonsight.co/{slug}`), como extensión del agente Kai existente.
+Construir dentro de `bonsight-next` el admin panel de Kai (`kai.bonsight.co/admin`) y la interfaz cliente (`kai.bonsight.co/{slug}`), como extensión del agente Kai existente. **Este epic ya está completo y en producción** — Labs (un tercer producto, gestión de proyectos multi-tenant) se construyó después y es el foco actual, ver snapshot arriba.
 
 ---
 
@@ -147,15 +182,37 @@ docs/ai-workflow.md                         NUEVO
 
 ---
 
-## Prompt recomendado para continuar
+## Prompt recomendado para continuar (2026-09-03)
 
 ```
 Contexto: bonsight-next en /Users/itriagor/Documents/GitHub/bonsight-next
 
 Lee antes de empezar:
-- docs/architecture-decisions.md
-- docs/ai-handoff.md  
+- docs/ai-handoff.md (sección "Snapshot local actual" arriba de todo)
 - docs/project-state.json
+- docs/architecture-decisions.md (ADR-010 si se retoma la fusión Kai+Aria)
+
+Hay 6 features de Labs completas localmente (build limpio) pero sin commitear ni
+desplegar — correr `git status --short` para confirmar la lista exacta de archivos.
+Son: gastos con factura en Presupuesto, desglose planificado/agregado + gastos
+consolidados, Criterios de éxito estructurados (operador + valor), Nueva Prueba
+precargada con esos criterios, campos editables en el paso de confirmar un aporte,
+y un fix de contraste de texto.
+
+Próximo paso: probar localmente (labs.localhost:3000/{tenant}) y preguntarle al
+usuario si confirma subir a prod. Si confirma, seguir el flujo estándar: git status
+→ stage explícito de archivos (nunca git add -A) → commit con mensaje que explique
+el porqué → push a main → `vercel ls bonsight-next --prod` para confirmar Ready.
+
+Aparte, sin relación con lo anterior: hay una rama `planning/kai-absorbe-aria`
+(pusheada, no mergeada) con la propuesta de fusión Kai+Aria — solo tocarla si el
+usuario lo pide explícitamente, no está en el flujo de trabajo actual.
+```
+
+### Prompt histórico (2026-07-10 — Kai Admin, ya resuelto)
+
+```
+Contexto: bonsight-next en /Users/itriagor/Documents/GitHub/bonsight-next
 
 El sistema Kai multi-tenant está completo localmente. El próximo paso es validar el flujo 
 end-to-end y luego deployar.
@@ -167,7 +224,4 @@ Para probar localmente (kai.localhost:3000):
 4. Ir a /kai/admin/{slug} → ver tabs Perfil + Conversaciones
 5. Ir a /kai/{slug} → enviar un mensaje → verificar que responde
 6. Volver al admin → verificar que la conversación aparece en el tab
-
-Para deploy: preguntar al usuario qué commits incluir antes de hacer git commit/push.
-Los archivos nuevos están listados en "Archivos modificados" en este handoff.
 ```

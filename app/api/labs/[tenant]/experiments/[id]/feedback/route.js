@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
-import { addFeedback, dismissFeedbackSuggestion, getExperiment, TASK_TRACKING_KINDS } from '@/lib/labs/experiments';
+import { addFeedback, dismissFeedbackSuggestion, getExperiment, TASK_TRACKING_KINDS, taskResponsables } from '@/lib/labs/experiments';
 import { trackUsage } from '@/lib/kai/usage';
 
 const MODEL = 'claude-sonnet-4-6';
@@ -41,7 +41,7 @@ export async function GET(req, { params }) {
     return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
   }
   if (user.role === 'Registrador' && TASK_TRACKING_KINDS.includes(experiment.meta.projectKind)) {
-    const visibleTaskIds = new Set(experiment.tasks.filter((t) => t.responsable === user.id).map((t) => t.id));
+    const visibleTaskIds = new Set(experiment.tasks.filter((t) => taskResponsables(t).includes(user.id)).map((t) => t.id));
     if (visibleTaskIds.size === 0) return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
     experiment.feedback = experiment.feedback.filter((f) => f.targetType === 'tarea' && visibleTaskIds.has(f.targetId));
   } else if (user.role === 'Registrador') {

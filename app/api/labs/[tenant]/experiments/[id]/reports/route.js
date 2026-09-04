@@ -25,9 +25,11 @@ export async function POST(req, { params }) {
   try {
     const periodFrom = experiment.meta.createdAt;
     const periodTo = new Date().toISOString();
+    // photos: evidencia ya adjuntada en comentarios del proyecto, curada por el Supervisor en
+    // el picker antes de generar — igual para civil y experimental (ver GenerateReportCard).
+    const { photos } = await req.json().catch(() => ({ photos: [] }));
 
     if (TASK_TRACKING_KINDS.includes(experiment.meta.projectKind)) {
-      const { photos } = await req.json().catch(() => ({ photos: [] }));
       // breakdown.financialByEtapa sale vacío si el proyecto no tiene partidas (seguimiento
       // nunca las tiene) — el resto del pipeline y el render ya lo manejan sin romperse.
       const breakdown = computeCivilReportBreakdown(experiment.tasks, experiment.partidas);
@@ -45,7 +47,13 @@ export async function POST(req, { params }) {
     }
 
     const doc = await generateReportDraft(tenant, experiment);
-    const report = await addReportDraft(tenant, id, { kind: 'experimental', doc, generatedBy: user.name, periodFrom, periodTo });
+    const report = await addReportDraft(tenant, id, {
+      kind: 'experimental',
+      doc,
+      photos: Array.isArray(photos) ? photos : [],
+      generatedBy: user.name,
+      periodFrom, periodTo,
+    });
     return Response.json({ ok: true, report });
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo generar el reporte.' }, { status: 400 });

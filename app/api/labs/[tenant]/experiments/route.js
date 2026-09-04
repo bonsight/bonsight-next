@@ -35,14 +35,18 @@ export async function POST(req, { params }) {
   const supervisors = await Promise.all(ids.map((id) => getUserById(tenant, id)));
   const validSupervisorIds = supervisors.filter((u) => u?.role === 'Supervisor').map((u) => u.id);
 
-  // Tareas iniciales (import de Excel, proyecto civil) — el responsable tiene que ser un
-  // Supervisor o Registrador real del roster, nunca texto libre ni Director.
+  // Tareas iniciales (import de Excel, proyecto civil) — cada responsable tiene que ser una
+  // persona activa real del roster del tenant, nunca texto libre. Una tarea puede tener más
+  // de un responsable (ej. "Percy C. / Anthony M." en el Excel).
   let validTasks = [];
   if (projectKind === 'civil' && Array.isArray(tasks)) {
-    const responsableIds = [...new Set(tasks.map((t) => t.responsable).filter(Boolean))];
-    const responsables = await Promise.all(responsableIds.map((id) => getUserById(tenant, id)));
-    const validResponsableIds = new Set(responsables.filter((u) => u?.role === 'Supervisor' || u?.role === 'Registrador').map((u) => u.id));
-    validTasks = tasks.map((t) => ({ ...t, responsable: validResponsableIds.has(t.responsable) ? t.responsable : null }));
+    const allIds = [...new Set(tasks.flatMap((t) => (Array.isArray(t.responsables) ? t.responsables : [])).filter(Boolean))];
+    const responsables = await Promise.all(allIds.map((rid) => getUserById(tenant, rid)));
+    const validResponsableIds = new Set(responsables.filter((u) => u && u.active !== false).map((u) => u.id));
+    validTasks = tasks.map((t) => ({
+      ...t,
+      responsables: (Array.isArray(t.responsables) ? t.responsables : []).filter((rid) => validResponsableIds.has(rid)),
+    }));
   }
 
   const meta = await createExperiment(tenant, {

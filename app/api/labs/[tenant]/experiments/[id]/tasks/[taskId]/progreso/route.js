@@ -1,5 +1,5 @@
 import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
-import { getExperimentMeta, getTasksList, setTaskProgreso, projectInactiveMessage } from '@/lib/labs/experiments';
+import { getExperimentMeta, getTasksList, setTaskProgreso, projectInactiveMessage, taskResponsables } from '@/lib/labs/experiments';
 
 // Actualizar % de avance: el responsable de ESA tarea (Supervisor o Registrador), o el
 // Director/Supervisor del proyecto (supervisión, mismo criterio que validar un aporte).
@@ -18,7 +18,7 @@ export async function PATCH(req, { params }) {
   if (user.role !== 'Director' && !isSupervisorOnProject) {
     const tasks = await getTasksList(tenant, id);
     const task = tasks.find((t) => t.id === taskId);
-    if (!task || task.responsable !== user.id) {
+    if (!task || !taskResponsables(task).includes(user.id)) {
       return Response.json({ error: 'Solo el responsable de esta tarea, o el Director/Supervisor del proyecto, puede actualizar el avance.' }, { status: 403 });
     }
   }

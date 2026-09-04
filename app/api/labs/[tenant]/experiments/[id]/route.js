@@ -1,5 +1,5 @@
 import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
-import { getExperiment, setExperimentSupervisors, TASK_TRACKING_KINDS } from '@/lib/labs/experiments';
+import { getExperiment, setExperimentSupervisors, TASK_TRACKING_KINDS, taskResponsables } from '@/lib/labs/experiments';
 import { getUserById } from '@/lib/labs/users';
 
 export async function GET(req, { params }) {
@@ -21,7 +21,7 @@ export async function GET(req, { params }) {
       return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
     }
   } else if (user.role === 'Registrador' && TASK_TRACKING_KINDS.includes(experiment.meta.projectKind)) {
-    const visibleTasks = experiment.tasks.filter((t) => t.responsable === user.id);
+    const visibleTasks = experiment.tasks.filter((t) => taskResponsables(t).includes(user.id));
     if (visibleTasks.length === 0) {
       return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
     }

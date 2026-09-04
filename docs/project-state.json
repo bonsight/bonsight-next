@@ -1,40 +1,36 @@
 {
-  "current_epic": "Kai / Aria / Quiniela — snapshot local 2026-07-10",
-  "current_goal": "Mantener el contexto del proyecto actualizado en docs y continuar con los cambios locales en Kai, Aria y Quiniela",
+  "current_epic": "Labs — gastos con factura, criterios estructurados y jerarquía padre/subtareas en Aria",
+  "current_goal": "Probar localmente y subir a prod los 6 cambios de Labs pendientes (sin commitear), luego seguir con la propuesta de fusión Kai+Aria (ADR-010, rama planning/kai-absorbe-aria)",
   "completed": [
-    "Bonsight Advisor: rebrand completo + tema claro + widget FAB (en producción, commit c8a4e5e)",
-    "lib/businessMemory.js: capa compartida Kai↔Aria con Redis",
-    "app/kai/: UI completa del Kai interno (dark theme, componentes ricos, auth)",
-    "app/api/kai/route.js: API interna Kai con Business Memory y kai-component blocks",
-    "lib/kai/tenants.js: data layer multi-tenant (CRUD de tenants y perfiles)",
-    "app/api/kai/tenants/route.js: GET lista de tenants + POST crear tenant",
-    "app/kai/admin/: panel admin completo (layout, sidebar, dashboard, detalle por tenant)",
-    "app/kai/[tenant]/: interfaz cliente (page.jsx + KaiClientChat.jsx)",
-    "app/api/kai/[tenant]/route.js: endpoint de chat por tenant (auth + OpenAI + memory + sync business profile)",
-    "docs/: sistema de continuidad AI (architecture-decisions.md, ai-handoff.md, project-state.json, ai-workflow.md)"
+    "Labs: estado de proyecto Activo/Pausado/Completado bloquea gestión real (backend 409 + UI) — en prod",
+    "Labs: tercer tipo de proyecto 'seguimiento' (Basecamp-style) con Canvas Kanban — en prod",
+    "Labs: tracking de costos de IA (mismo sistema que Kai/Aria, lib/kai/usage.js) — en prod",
+    "Labs: usuarios pueden editar su propio nombre (autoservicio) + admin puede editar nombre de cualquiera — en prod",
+    "Labs: alinear cards del picker de proyectos, estilo de <select>, footer 'Powered by Bonsight' — en prod",
+    "Aria: jerarquía padre/subtareas en el Sprint board (lee Parent item/Sub-item de Notion, ya existían) + campo 'Tarea padre' al crear — en prod",
+    "Aria: fix de overflow de texto largo (URLs) en las cards del Sprint board — en prod",
+    "docs/architecture-decisions.md: ADR-010 — propuesta de fusión Kai absorbe Aria (+ export de Labs), en rama planning/kai-absorbe-aria, sin mergear, sin implementación iniciada"
   ],
   "in_progress": [
-    "Kai: refinamiento del detalle de tenant y del panel admin",
-    "Aria: ajustes en rutas/tenant y autenticación",
-    "Quiniela: overview, seguimiento y proyección de resultados"
+    "Labs — Presupuesto: 'ejecutado' pasa de campo editable a suma de gastos individuales, cada uno con factura opcional adjunta a Drive (nuevo: getGastosList/addGasto/deleteGasto en lib/labs/experiments.js, rutas .../partidas/[partidaId]/gastos)",
+    "Labs — Presupuesto: desglose 'planificado' (partidas del Excel inicial) vs 'agregado después' (+ Nueva partida), y modal de gastos consolidados de todo el proyecto",
+    "Labs — Proyectos experimentales: Criterios de éxito pasan de texto libre a estructurado (label + operador >,<,=,>=,<= + valor + unidad), editable después de creado en 'Detalles del proyecto'",
+    "Labs — Nueva Prueba: los campos se precargan desde los Criterios de éxito del proyecto (con su operador/valor), y cualquier campo numérico puede tener su propio criterio de paso — la IA usa ese criterio como señal principal para tag éxito/parcial/fallo",
+    "Labs — Aportar: los campos interpretados por la IA en el paso de confirmación ahora son inputs editables (completar a mano si la IA no los sacó, o corregir), no solo texto de solo lectura",
+    "Labs — fix: contraste de texto negro en las cards de selección de prueba (.mode-card no heredaba color)"
   ],
   "next_steps": [
-    "Prueba end-to-end local: crear tenant → admin detail → chat en /kai/{slug}",
-    "Confirmar con usuario qué commits incluir antes de deploy a producción",
-    "Mantener docs/ai-handoff.md, docs/project-state.json y docs/current-context.md alineados con el worktree local",
-    "Configurar KAI_ACCESS_CODE en Vercel + dominio kai.bonsight.co si no están activos",
-    "Definir/ajustar system prompt de Kai por tenant si el usuario lo requiere",
-    "Aria multi-tenant: parametrizar BUSINESS_ID (paso posterior)"
+    "Probar localmente los 6 cambios de Labs (Presupuesto/gastos, criterios estructurados, Nueva Prueba, Aportar editable) antes de subir",
+    "Confirmar con el usuario qué commits incluir, luego deploy a producción (patrón: git status → stage explícito → commit → push a main → verificar Vercel)",
+    "Retomar la propuesta de fusión Kai+Aria (ADR-010) cuando el usuario decida avanzar — hay una rama planning/kai-absorbe-aria sin mergear con decisiones aún por tomar (nombre del proyecto nuevo, código compartido o copiado, por dónde arrancar, qué pasa con los datos de Notion)"
   ],
-  "tenants_in_redis": [
-    {"slug": "sesuveca", "name": "Sesuveca / Labinorte", "country": "Perú", "industry": "Insumos industriales"},
-    {"slug": "afsolutions", "name": "AF Solutions", "country": "Chile", "industry": "Tecnología / Catálogo de productos"},
-    {"slug": "olaclick", "name": "OlaClick", "country": "LatAm", "industry": "Restaurantes / Food tech"},
-    {"slug": "activos100", "name": "Activos 100x100", "country": "España", "industry": "Food delivery / Operaciones"}
+  "labs_tenants_in_redis": [
+    {"slug": "sesuveca", "roster": "Percy Carazas + Julio Jimenez (Director), Jean Villanueva + Irving Julca (Supervisor), Javier Acevedo (Registrador)", "projects": "vaciados 2026-09 para entrega al cliente, se están recreando de a poco (ej. 'Briqueta de Carbon')"},
+    {"slug": "goinvest", "allowedProjectKinds": ["seguimiento"], "roster": "Daniela Izaguirre (Director), Rafael Itriago (Supervisor), Jesús (Registrador)", "projects": "vaciados 2026-09"}
   ],
   "blockers": [
-    "Ningún cambio de Kai está en producción todavía — todo es trabajo local",
-    "Deploy requiere confirmación del usuario sobre qué commits incluir"
+    "Los 6 cambios de Labs listados en 'in_progress' están completos localmente (build limpio) pero sin commitear ni desplegar — pendiente de confirmación del usuario",
+    "Ver 'git status --short' en la raíz del repo para la lista exacta de archivos modificados"
   ],
   "reserved_slugs": ["admin", "login", "components"],
   "env_required": [
@@ -43,17 +39,17 @@
     "KV_REST_API_URL",
     "KV_REST_API_TOKEN",
     "ARIA_ACCESS_CODE",
-    "KAI_ACCESS_CODE"
+    "KAI_ACCESS_CODE",
+    "LABS_ACCESS_CODE"
   ],
   "routes": {
     "bonsight.co/consulta": "Bonsight Advisor (producción)",
-    "bonsight.co (widget)": "ChatWidget.jsx flotante — llama /api/advisor",
-    "kai.bonsight.co/": "Kai interno Bonsight (requiere KAI_ACCESS_CODE)",
-    "kai.bonsight.co/admin": "Admin panel multi-tenant",
-    "kai.bonsight.co/admin/{slug}": "Detalle del tenant en admin",
-    "kai.bonsight.co/{slug}": "Interfaz de chat del cliente externo",
-    "aria.bonsight.co/": "Aria — Business Intelligence (requiere ARIA_ACCESS_CODE)"
+    "kai.bonsight.co/": "Kai interno Bonsight + multi-tenant (KAI_ACCESS_CODE)",
+    "kai.bonsight.co/admin/costs": "Dashboard global de costos de IA — Kai + Aria + Labs",
+    "aria.bonsight.co/": "Aria — Business Intelligence + Sprint board interno (ARIA_ACCESS_CODE)",
+    "labs.bonsight.co/": "Labs — gestión de proyectos multi-tenant (experimental / civil / seguimiento) (LABS_ACCESS_CODE + código por tenant)",
+    "labs.bonsight.co/admin": "Admin de Labs — tenants, equipo, capacidades habilitadas, Drive"
   },
-  "last_updated_by": "local workspace snapshot",
-  "last_updated_at": "2026-07-10T00:00:00Z"
+  "last_updated_by": "sesión de trabajo Labs (gastos, criterios, aportar editable)",
+  "last_updated_at": "2026-09-03T00:00:00Z"
 }

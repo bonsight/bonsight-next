@@ -23,11 +23,14 @@ export async function PATCH(req, { params }) {
   if (inactiveMsg) return Response.json({ error: inactiveMsg }, { status: 409 });
 
   const patch = await req.json();
-  if (patch.responsable !== undefined && patch.responsable) {
-    const u = await getUserById(tenant, patch.responsable);
-    if (!u || (u.role !== 'Supervisor' && u.role !== 'Registrador')) {
-      return Response.json({ error: 'El responsable tiene que ser un Supervisor o Registrador del equipo.' }, { status: 400 });
+  if (patch.responsables !== undefined) {
+    const ids = [...new Set(Array.isArray(patch.responsables) ? patch.responsables.filter(Boolean) : [])];
+    const users = await Promise.all(ids.map((rid) => getUserById(tenant, rid)));
+    const validResponsables = users.filter((u) => u && u.active !== false).map((u) => u.id);
+    if (validResponsables.length !== ids.length) {
+      return Response.json({ error: 'El responsable tiene que ser una persona activa del equipo.' }, { status: 400 });
     }
+    patch.responsables = validResponsables;
   }
 
   try {

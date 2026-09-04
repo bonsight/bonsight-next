@@ -224,7 +224,10 @@
 .labs-root .btn:focus-visible{ outline:2px solid var(--labs-living); outline-offset:2px; }
 .labs-root .btn[disabled]{ opacity:.4; pointer-events:none; }
 
-.labs-root textarea, .labs-root input[type=text]{
+/* :not() en vez de listar cada [type=...] — un <input> sin type explícito (default "text")
+   no matchea [type=text] en CSS, así que la lista blanca se rompía cada vez que se agregaba
+   un input sin el atributo. Excluimos solo los tipos con su propio chrome nativo. */
+.labs-root textarea, .labs-root input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]){
   width:100%; font-family:var(--labs-sans); font-size:14px; background:var(--labs-dark-3);
   border:1px solid var(--labs-line-dark); color:var(--labs-cream); border-radius:8px; padding:12px 14px;
   resize:vertical; line-height:1.55;
@@ -232,6 +235,87 @@
 .labs-root textarea:focus, .labs-root input:focus{ outline:2px solid var(--labs-living); outline-offset:1px; border-color:transparent;}
 .labs-root textarea::placeholder, .labs-root input::placeholder{ color:var(--labs-cream-faint); }
 .labs-root label.field-label{ display:block; font-size:12px; font-weight:600; color:var(--labs-cream-dim); margin-bottom:6px; }
+
+/* Resumen colapsable de avisos del import de Excel (responsables sin match, etc.) — arranca
+   cerrado para no empujar las tabs/tablas hacia abajo; se abre al click. */
+.labs-root .excel-warn-summary{ background:var(--labs-ember-soft); border:1px solid var(--labs-ember); border-radius:8px; overflow:hidden; }
+.labs-root .excel-warn-head{
+  width:100%; display:flex; align-items:center; gap:10px; padding:10px 12px; background:none; border:none;
+  color:inherit; font-family:var(--labs-sans); font-size:12.5px; cursor:pointer; text-align:left;
+}
+.labs-root .excel-warn-icon{ color:var(--labs-ember); flex-shrink:0; }
+.labs-root .excel-warn-label{ flex:1; color:var(--labs-cream-dim); }
+.labs-root .excel-warn-label b{ color:var(--labs-ember); }
+.labs-root .excel-warn-chev{ color:var(--labs-ember); font-size:10px; flex-shrink:0; transition:transform .15s var(--labs-ease); }
+.labs-root .excel-warn-summary.open .excel-warn-chev{ transform:rotate(90deg); }
+.labs-root .excel-warn-list{ padding:0 12px 10px 34px; border-top:1px solid rgba(199,133,47,0.18); }
+.labs-root .excel-warn-list div{ font-size:12px; color:var(--labs-cream-dim); padding:4px 0; line-height:1.5; }
+
+/* Tabs Tareas/Presupuesto — subrayado en vez del pill de .cron-view-toggle, más legible con
+   tanto texto denso abajo. */
+.labs-root .excel-tabs{ display:flex; gap:0; border-bottom:1px solid var(--labs-line-dark); }
+.labs-root .excel-tab{
+  padding:9px 4px; margin-right:22px; background:none; border:none; color:var(--labs-cream-faint);
+  font-family:var(--labs-sans); font-size:13.5px; font-weight:500; cursor:pointer;
+  border-bottom:2px solid transparent; position:relative; top:1px;
+}
+.labs-root .excel-tab .count{ color:var(--labs-cream-faint); font-weight:400; opacity:.75; }
+.labs-root .excel-tab.active{ color:var(--labs-cream); border-bottom-color:var(--labs-living); }
+.labs-root .excel-tab.active .count{ color:var(--labs-living); opacity:1; }
+
+/* Tareas/partidas del import de Excel agrupadas por fase/etapa en un acordeón — reemplaza las
+   dos tablas apiladas con su propio scroll (double-scroll) por un único scroll del modal.
+   Sin overflow:hidden acá: recortaba el panel del MultiUserPicker de las filas de adentro,
+   que necesita salirse de esta caja para mostrarse completo. */
+.labs-root .excel-group{ border:1px solid var(--labs-line-dark); border-radius:8px; margin-bottom:8px; background:var(--labs-dark-3); }
+.labs-root .excel-group-head{
+  width:100%; display:flex; align-items:center; gap:10px; padding:9px 12px; background:none; border:none;
+  color:inherit; font-family:var(--labs-sans); cursor:pointer; text-align:left; border-radius:8px;
+}
+.labs-root .excel-group-chev{ color:var(--labs-cream-faint); font-size:10px; flex-shrink:0; transition:transform .15s var(--labs-ease); }
+.labs-root .excel-group-chev.open{ transform:rotate(90deg); }
+.labs-root .excel-group-name{ flex:1; font-size:12px; font-weight:600; letter-spacing:.02em; color:var(--labs-cream); text-transform:uppercase; }
+.labs-root .excel-group-meta{ font-size:11.5px; color:var(--labs-cream-faint); white-space:nowrap; }
+.labs-root .excel-group-rows{ border-top:1px solid var(--labs-line-dark); }
+
+/* Nombre arriba (con el botón de eliminar a su altura) y responsable/fechas como chips en una
+   segunda línea — nunca más ancho que su propio texto, así nunca fuerzan scroll horizontal
+   como pasaba con los <input type=date] en línea (ver DateRangePicker). */
+.labs-root .excel-row{ display:flex; flex-direction:column; gap:8px; padding:10px 12px; border-top:1px solid var(--labs-line-dark); }
+.labs-root .excel-row:first-child{ border-top:none; }
+.labs-root .excel-row-top{ display:flex; align-items:center; gap:8px; }
+.labs-root .excel-row-top .excel-ghost-input{ flex:1; min-width:0; }
+.labs-root .excel-row-chips{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+/* Los chips de esta fila (MultiUserPicker, DateRangePicker) reusan .labs-multiuser-trigger,
+   que por defecto es width:100% para los formularios donde va solo en su propia línea (Nueva
+   tarea, editar tarea) — acá van dos uno al lado del otro, así que se ajustan a su contenido. */
+.labs-root .excel-row-chips .labs-multiuser-trigger{ width:auto; max-width:220px; }
+.labs-root .excel-date-panel{ min-width:0; width:200px; max-width:200px; max-height:none; padding:12px; }
+
+.labs-root .excel-brow{ display:grid; grid-template-columns:1fr 90px 70px 110px 110px 24px; gap:10px; align-items:center; padding:8px 12px; border-top:1px solid var(--labs-line-dark); }
+.labs-root .excel-brow:first-child{ border-top:none; }
+.labs-root .excel-brow-subtotal{ font-size:12.5px; text-align:right; color:var(--labs-living); font-weight:600; font-variant-numeric:tabular-nums; }
+/* Los number input no soportan separador de miles en vivo — sin esto el spinner nativo se
+   come ~16px del campo y "23148.24" se corta justo donde más importa (los últimos dígitos). */
+.labs-root .excel-brow input[type=number]::-webkit-outer-spin-button,
+.labs-root .excel-brow input[type=number]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+.labs-root .excel-brow input[type=number]{ -moz-appearance:textfield; }
+
+/* Nombre/descripción son el único campo de texto libre que casi no hace falta tocar (el resto
+   — responsable, fechas, cantidad, precio — sí necesita revisión activa) — se ven como texto
+   con affordance de edición al hover/focus, no como un input más, para que lo que sí hay que
+   revisar resalte. !important por la misma razón que el resto de estos overrides: la regla
+   global de <input> (L230) tiene más especificidad que una clase por los :not([type=...]). */
+.labs-root .excel-ghost-input{
+  background:transparent !important; border:1px solid transparent !important; padding:6px 8px !important;
+  font-size:13.5px !important; border-radius:6px !important; transition:border-color .15s var(--labs-ease), background .15s var(--labs-ease);
+}
+.labs-root .excel-ghost-input:hover{ border-color:var(--labs-line-dark) !important; }
+.labs-root .excel-ghost-input:focus{ background:var(--labs-dark-2) !important; border-color:var(--labs-living) !important; }
+
+.labs-root .excel-totals{ flex:1; display:flex; gap:22px; flex-wrap:wrap; }
+.labs-root .excel-totals-item{ font-size:12px; color:var(--labs-cream-faint); }
+.labs-root .excel-totals-item b{ display:block; color:var(--labs-cream); font-size:15px; margin-top:2px; font-variant-numeric:tabular-nums; }
 
 .labs-root select{
   font-family:var(--labs-sans); font-size:13.5px; font-weight:500; background:var(--labs-dark-3);
@@ -244,6 +328,29 @@
 .labs-root select:hover{ border-color:var(--labs-living); }
 .labs-root select:focus{ outline:2px solid var(--labs-living); outline-offset:1px; border-color:transparent; }
 .labs-root select option{ background:var(--labs-dark-3); color:var(--labs-cream); }
+
+/* Selector de varios responsables (MultiUserPicker) — botón + panel de checkboxes, mismo
+   look que un <select> pero soporta más de una persona elegida por tarea. */
+.labs-root .labs-multiuser-trigger{
+  width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px;
+  font-family:var(--labs-sans); font-size:13px; font-weight:500; background:var(--labs-dark-3);
+  border:1px solid var(--labs-line-dark); color:var(--labs-cream); border-radius:8px; padding:9px 12px;
+  cursor:pointer; text-align:left; transition:border-color .18s var(--labs-ease);
+}
+.labs-root .labs-multiuser-trigger:hover{ border-color:var(--labs-living); }
+.labs-root .labs-multiuser-trigger span:first-child{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.labs-root .labs-multiuser-trigger .chev{ flex-shrink:0; color:var(--labs-cream-faint); font-size:11px; }
+.labs-root .labs-multiuser-panel{
+  position:absolute; z-index:20; top:calc(100% + 4px); left:0; min-width:220px; max-width:280px;
+  max-height:220px; overflow-y:auto; background:var(--labs-dark-3); border:1px solid var(--labs-line-dark);
+  border-radius:8px; padding:6px; box-shadow:0 8px 24px rgba(0,0,0,0.35);
+}
+.labs-root .labs-multiuser-option{
+  display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:6px; font-size:12.5px;
+  color:var(--labs-cream-dim); cursor:pointer;
+}
+.labs-root .labs-multiuser-option:hover{ background:rgba(255,255,255,0.05); color:var(--labs-cream); }
+.labs-root .labs-multiuser-option input{ width:auto; margin:0; }
 
 /* ============ topbar create-experiment button ============ */
 .labs-root .btn-create{
@@ -288,7 +395,7 @@
 @media (max-width:700px){ .mode-grid{ grid-template-columns:1fr; } }
 .labs-root .mode-card{
   background:var(--labs-dark-2); border:1px solid var(--labs-line-dark); border-radius:12px; padding:20px 16px;
-  text-align:left; transition:all .2s var(--labs-ease);
+  text-align:left; transition:all .2s var(--labs-ease); color:var(--labs-cream);
 }
 .labs-root .mode-card:hover{ border-color:var(--labs-living); transform:translateY(-2px); }
 .labs-root .mode-card .mode-ic{ font-size:20px; margin-bottom:10px; display:block; }
@@ -321,6 +428,12 @@
 .labs-root .sp-row .k{ font-family:var(--labs-mono); font-size:11px; color:var(--labs-cream-faint); padding-top:2px; text-transform:uppercase; letter-spacing:.04em;}
 .labs-root .sp-row .v{ font-size:13.5px; color:var(--labs-cream); line-height:1.5; }
 .labs-root .sp-row .v.missing{ color:var(--labs-ember); font-style:italic; }
+.labs-root .sp-row .v input{
+  width:100%; background:transparent; border:none; border-bottom:1px dashed var(--labs-line-dark);
+  color:inherit; font:inherit; padding:0 0 3px; border-radius:0;
+}
+.labs-root .sp-row .v input:focus{ outline:none; border-bottom-color:var(--labs-living); }
+.labs-root .sp-row .v.missing input::placeholder{ color:var(--labs-ember); opacity:.75; }
 .labs-root .sp-row.dark-bg{ background: rgba(246,242,228,0.02); }
 
 .labs-root .missing-prompt{
