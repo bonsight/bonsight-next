@@ -149,6 +149,53 @@ function EditableUserName({ tenant, user, onRenamed }) {
   );
 }
 
+// Mismo patrón que EditableUserName — el email es lo que le permite a la persona usar
+// "¿Olvidaste tu contraseña?" sin depender de que el admin la resetee a mano.
+function EditableUserEmail({ tenant, user, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(user.email || '');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    const trimmed = value.trim();
+    if (trimmed === (user.email || '')) { setEditing(false); return; }
+    setSaving(true);
+    try {
+      await fetch(`/api/labs/${tenant}/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      onSaved();
+    } finally {
+      setSaving(false);
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <input
+        type="email"
+        className="labs-tenant-name-input"
+        value={value}
+        autoFocus
+        disabled={saving}
+        placeholder="email@ejemplo.com"
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+        onBlur={save}
+      />
+    );
+  }
+  return (
+    <button type="button" className="labs-name-edit-trigger" onClick={() => { setValue(user.email || ''); setEditing(true); }} title="Editar email">
+      {user.email || '+ Agregar email'}
+      <IconPencil className="labs-name-edit-pencil" />
+    </button>
+  );
+}
+
 function TeamPanel({ tenant }) {
   const [users, setUsers] = useState(undefined); // undefined = cargando
   const [name, setName] = useState('');
@@ -201,11 +248,21 @@ function TeamPanel({ tenant }) {
     load();
   };
 
+  const resetCredentials = async (userId) => {
+    if (!confirm('Esto borra su usuario y contraseña y genera un código nuevo — va a tener que volver a elegirlos. ¿Seguro?')) return;
+    await fetch(`/api/labs/${tenant}/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resetCredentials: true }),
+    });
+    load();
+  };
+
   return (
     <div className="card">
       <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Equipo</div>
       <p style={{ fontSize: 12.5, color: 'var(--labs-cream-faint)', marginTop: 4, marginBottom: 12 }}>
-        Cada persona entra con su código individual — el rol define qué puede hacer adentro (solo Director crea proyectos, Supervisor asigna Registradores en las pruebas).
+        Cada persona entra con el código la primera vez y elige su propio usuario y contraseña — el rol define qué puede hacer adentro (solo Director crea proyectos, Supervisor asigna Registradores en las pruebas).
       </p>
 
       <form onSubmit={handleCreate} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -224,13 +281,19 @@ function TeamPanel({ tenant }) {
           <div>
             <EditableUserName tenant={tenant} user={u} onRenamed={load} />
             <div className="labs-tenant-meta">
-              Código: <span style={{ fontFamily: 'var(--labs-mono)' }}>{u.accessCode}</span>
+              {u.username ? (
+                <>Usuario: <span style={{ fontFamily: 'var(--labs-mono)' }}>{u.username}</span></>
+              ) : (
+                <>Código (sin usar todavía): <span style={{ fontFamily: 'var(--labs-mono)' }}>{u.accessCode}</span></>
+              )}
+              {' · '}<EditableUserEmail tenant={tenant} user={u} onSaved={load} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <select value={u.role} onChange={(e) => changeRole(u.id, e.target.value)}>
               {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
+            {u.username && <button className="chip-btn" onClick={() => resetCredentials(u.id)}>Resetear acceso</button>}
             <button className="chip-btn" onClick={() => removeUser(u.id)}>Eliminar</button>
           </div>
         </div>

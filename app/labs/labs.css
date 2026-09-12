@@ -235,6 +235,9 @@
 .labs-root textarea:focus, .labs-root input:focus{ outline:2px solid var(--labs-living); outline-offset:1px; border-color:transparent;}
 .labs-root textarea::placeholder, .labs-root input::placeholder{ color:var(--labs-cream-faint); }
 .labs-root label.field-label{ display:block; font-size:12px; font-weight:600; color:var(--labs-cream-dim); margin-bottom:6px; }
+.labs-root .labs-field-checklist{ list-style:none; margin:5px 0 14px; padding:0; display:flex; flex-direction:column; gap:2px; }
+.labs-root .labs-field-checklist li{ font-size:11.5px; color:var(--labs-cream-faint); transition:color .18s var(--labs-ease); }
+.labs-root .labs-field-checklist li.labs-field-hint--ok{ color:var(--labs-living); }
 
 /* Resumen colapsable de avisos del import de Excel (responsables sin match, etc.) — arranca
    cerrado para no empujar las tabs/tablas hacia abajo; se abre al click. */
@@ -351,6 +354,57 @@
 }
 .labs-root .labs-multiuser-option:hover{ background:rgba(255,255,255,0.05); color:var(--labs-cream); }
 .labs-root .labs-multiuser-option input{ width:auto; margin:0; }
+
+/* ============ user menu (avatar + cambiar contraseña / salir) ============ */
+.labs-root .labs-user-menu{ position:relative; flex:none; }
+.labs-root .labs-user-menu-trigger{
+  border:none; background:transparent; padding:4px; border-radius:999px; display:flex; align-items:center; gap:6px;
+  transition:box-shadow .15s var(--labs-ease), transform .1s var(--labs-ease);
+}
+.labs-root .labs-user-menu-trigger:hover{ box-shadow:0 0 0 4px rgba(246,242,228,0.05); }
+.labs-root .labs-user-menu-trigger:active{ transform:scale(.97); }
+.labs-root .labs-user-menu-avatar-wrap{ position:relative; width:34px; height:34px; flex:none; line-height:0; }
+.labs-root .labs-user-menu-avatar{
+  width:34px; height:34px; border-radius:50%; border:1px solid var(--labs-line-dark);
+  background:var(--labs-living-glow); color:var(--labs-living); font-family:var(--labs-serif); font-size:12.5px; font-weight:700;
+  display:flex; align-items:center; justify-content:center; transition:border-color .18s var(--labs-ease), box-shadow .18s var(--labs-ease);
+}
+.labs-root .labs-user-menu-trigger:hover .labs-user-menu-avatar,
+.labs-root .labs-user-menu-trigger[aria-expanded="true"] .labs-user-menu-avatar{
+  border-color:var(--labs-living); box-shadow:0 0 0 3px var(--labs-living-glow);
+}
+.labs-root .labs-user-menu-trigger:focus-visible{ outline:2px solid var(--labs-living); outline-offset:2px; }
+.labs-root .labs-user-menu-dot{
+  position:absolute; bottom:-1px; right:-1px; width:9px; height:9px; border-radius:50%;
+  background:var(--labs-living); border:2px solid var(--labs-dark);
+}
+.labs-root .labs-user-menu-chevron{ color:var(--labs-cream-faint); flex:none; transition:transform .2s var(--labs-ease), color .15s var(--labs-ease); }
+.labs-root .labs-user-menu-trigger[aria-expanded="true"] .labs-user-menu-chevron{ transform:rotate(180deg); color:var(--labs-cream-dim); }
+.labs-root .labs-user-menu-panel{
+  position:absolute; z-index:50; top:calc(100% + 10px); right:0; min-width:220px; background:var(--labs-dark-3);
+  border:1px solid var(--labs-line-dark); border-radius:12px; padding:8px; box-shadow:0 16px 36px rgba(0,0,0,0.4);
+  transform-origin:top right; animation:userMenuIn .16s var(--labs-ease);
+}
+.labs-root .labs-user-menu-who{
+  display:flex; align-items:center; gap:10px; padding:8px 8px 10px;
+}
+.labs-root .labs-user-menu-avatar--sm{ width:32px; height:32px; font-size:11.5px; flex:none; }
+.labs-root .labs-user-menu-name{ font-size:13px; font-weight:700; color:var(--labs-cream); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.labs-root .labs-user-menu-role{ font-size:11px; font-weight:600; color:var(--labs-living); letter-spacing:.3px; text-transform:uppercase; margin-top:1px; }
+.labs-root .labs-user-menu-divider{
+  height:1px; margin:2px 4px 6px;
+  background:linear-gradient(to right, transparent, var(--labs-line-dark), transparent);
+}
+.labs-root .labs-user-menu-item{
+  display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:transparent; border:none; color:var(--labs-cream-dim);
+  font-size:13px; font-weight:500; padding:8px 8px; border-radius:8px; transition:background .15s var(--labs-ease), color .15s var(--labs-ease);
+}
+.labs-root .labs-user-menu-item svg{ flex:none; color:var(--labs-cream-faint); transition:color .15s var(--labs-ease); }
+.labs-root .labs-user-menu-item:hover{ background:rgba(255,255,255,0.05); color:var(--labs-cream); }
+.labs-root .labs-user-menu-item:hover svg{ color:var(--labs-living); }
+.labs-root .labs-user-menu-item--danger:hover{ color:var(--labs-alert); }
+.labs-root .labs-user-menu-item--danger:hover svg{ color:var(--labs-alert); }
+@keyframes userMenuIn{ from{ opacity:0; transform:translateY(-6px) scale(.97); } to{ opacity:1; transform:none; } }
 
 /* ============ topbar create-experiment button ============ */
 .labs-root .btn-create{
@@ -655,6 +709,9 @@
   background:var(--labs-living); color:#0C1F16; transition: all .2s var(--labs-ease);
 }
 .labs-root .labs-login-button:hover, .labs-root .labs-entry-button:hover{ background:#4EB483; }
+.labs-root .labs-entry-hint{ font-size:11.5px; color:var(--labs-cream-faint); text-align:center; margin:-8px 0 14px; }
+.labs-root .labs-login-link{ display:block; text-align:center; font-size:12.5px; color:var(--labs-cream-faint); margin-top:16px; text-decoration:none; }
+.labs-root .labs-login-link:hover{ color:var(--labs-living); text-decoration:underline; }
 .labs-root .labs-entry-role-grid{ display:flex; gap:8px; margin-bottom:14px; }
 .labs-root .labs-entry-role-btn{
   flex:1; border:1px solid var(--labs-line-dark); background:var(--labs-dark-3); color:var(--labs-cream-dim);

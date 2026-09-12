@@ -133,7 +133,9 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
   };
 
   const openSchedule = () => {
-    setScheduleDraft({ startDate: task.startDate ?? '', endDate: task.dueDate ?? '', estimatedHours: task.estimatedHours ?? '' });
+    // committedStartDate ("Inicio comprometido (sprint actual)"), no startDate ("Inicio") —
+    // este último es el histórico de solo lectura, nunca se edita desde acá.
+    setScheduleDraft({ startDate: task.committedStartDate ?? '', endDate: task.dueDate ?? '', estimatedHours: task.estimatedHours ?? '' });
     setScheduleOpen(true);
   };
   const saveSchedule = () => {

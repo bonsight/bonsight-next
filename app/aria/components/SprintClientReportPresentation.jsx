@@ -16,7 +16,7 @@ export default function SprintClientReportPresentation({ tenant }) {
   const [selectedSprintIds, setSelectedSprintIds] = useState(() => new Set());
   const [generating, setGenerating] = useState(false);
 
-  const [meta, setMeta] = useState(null); // { clienteName, periodLabel, sprintTitles, metrics, health }
+  const [meta, setMeta] = useState(null); // { clienteName, periodLabel, sprintTitles, metrics, health, dragStats }
   const [draft, setDraft] = useState(null); // { titulo, resumenEjecutivo, hitos, secciones, valorEntregado, riesgos, proximosPasos }
   const [exporting, setExporting] = useState(false);
 
@@ -48,7 +48,7 @@ export default function SprintClientReportPresentation({ tenant }) {
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo generar el reporte.'); return; }
-      setMeta({ clienteName: data.clienteName, periodLabel: data.periodLabel, sprintTitles: data.sprintTitles, metrics: data.metrics, health: data.health });
+      setMeta({ clienteName: data.clienteName, periodLabel: data.periodLabel, sprintTitles: data.sprintTitles, metrics: data.metrics, health: data.health, dragStats: data.dragStats });
       setDraft(data.draft);
     } catch {
       setErr('Error de conexión.');
@@ -173,6 +173,29 @@ export default function SprintClientReportPresentation({ tenant }) {
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
               <span className={`aria-health-pill ${HEALTH_CLASS[meta.health.cronograma]}`}>Cronograma: {HEALTH_LABEL[meta.health.cronograma]}</span>
               <span className={`aria-health-pill ${HEALTH_CLASS[meta.health.calidad]}`}>Calidad: {HEALTH_LABEL[meta.health.calidad]}</span>
+            </div>
+          )}
+
+          {meta.dragStats?.general.total > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <label className="aria-report-label">🔁 Tasa de arrastre</label>
+              <div className="aria-board-hint">
+                Promedio general: {meta.dragStats.general.promedio} veces por tarea (máx. {meta.dragStats.general.maximo})
+              </div>
+              {Object.keys(meta.dragStats.byResponsable).length > 0 && (
+                <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {Object.entries(meta.dragStats.byResponsable)
+                    .sort((a, b) => b[1].promedio - a[1].promedio)
+                    .map(([name, stat]) => <span key={name} className="aria-board-tag">{name}: {stat.promedio}</span>)}
+                </div>
+              )}
+              {Object.keys(meta.dragStats.bySprint).length > 1 && (
+                <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {Object.entries(meta.dragStats.bySprint).map(([title, stat]) => (
+                    <span key={title} className="aria-board-tag">{title}: {stat.promedio}</span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

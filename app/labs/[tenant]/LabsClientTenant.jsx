@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import KaiOnboarding from './KaiOnboarding';
 
 // Civil reemplaza Pruebas/Aportar por Cronograma+Presupuesto — Registrador no ve Presupuesto
 // ni Documentación (info financiera/administrativa, cosa de Director/Supervisor).
@@ -125,6 +126,19 @@ function initials(name) {
   return (name || '?').trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
 }
 
+// Mismo criterio que lib/labs/users.js#isStrongPassword — se replica acá para validar en
+// cliente sin importar ese archivo (usa `crypto`/Redis, no es apto para el bundle del browser).
+const PASSWORD_MIN_LENGTH = 8;
+function passwordChecklist(password) {
+  return [
+    { ok: password.length >= PASSWORD_MIN_LENGTH, label: `Al menos ${PASSWORD_MIN_LENGTH} caracteres` },
+    { ok: /[a-zA-Z]/.test(password) && /[0-9]/.test(password), label: 'Con letras y números' },
+  ];
+}
+function isStrongPassword(password) {
+  return passwordChecklist(password).every((c) => c.ok);
+}
+
 function formatDate(iso) {
   if (!iso) return '';
   return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -219,6 +233,7 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
   const [experimentId, setExperimentId] = useState(null);
   const [experiment, setExperiment] = useState(null);
   const [view, setView] = useState('resumen');
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const loadExperiments = useCallback(() => {
     fetch(`/api/labs/${tenant}/experiments`)
@@ -251,16 +266,19 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
 
   if (!experimentId || !experiment) {
     return (
-      <ExperimentPicker
-        tenant={tenant}
-        tenantMeta={tenantMeta}
-        identity={identity}
-        onIdentityUpdate={setIdentity}
-        experiments={experiments}
-        onSelect={setExperimentId}
-        onCreated={(id) => { loadExperiments(); setExperimentId(id); }}
-        onLogout={handleLogout}
-      />
+      <>
+        <ExperimentPicker
+          tenant={tenant}
+          tenantMeta={tenantMeta}
+          identity={identity}
+          onIdentityUpdate={setIdentity}
+          experiments={experiments}
+          onSelect={setExperimentId}
+          onCreated={(id) => { loadExperiments(); setExperimentId(id); }}
+          onLogout={handleLogout}
+        />
+        <KaiOnboarding tenant={tenant} tenantMeta={tenantMeta} identity={identity} experiments={experiments} experiment={null} onIdentityUpdate={setIdentity} />
+      </>
     );
   }
 
@@ -282,13 +300,15 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
         </div>
         <div className="topbar-actions">
           <button className="btn-ghost-top" onClick={() => { setExperimentId(null); setExperiment(null); }}>Otros proyectos</button>
-          <button className="btn-ghost-top" onClick={handleLogout}>Salir</button>
+          <UserMenu identity={identity} onChangePassword={() => setChangePasswordOpen(true)} onLogout={handleLogout} tenant={tenant} onIdentityUpdate={setIdentity} />
         </div>
       </header>
 
+      {changePasswordOpen && <ChangePasswordModal tenant={tenant} onClose={() => setChangePasswordOpen(false)} />}
+
       <nav className="mobile-tabs">
         {nav.map((item) => (
-          <button key={item.id} className={`nav-item ${view === item.id ? 'active' : ''}`} onClick={() => setView(item.id)}>
+          <button key={item.id} data-kai-anchor={`nav-${item.id}`} className={`nav-item ${view === item.id ? 'active' : ''}`} onClick={() => setView(item.id)}>
             <span className="ic">{item.ic}</span>{item.label}
           </button>
         ))}
@@ -298,7 +318,7 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
         <nav className="sidenav" aria-label="Secciones del proyecto">
           <div className="nav-label">{experiment.meta.name}</div>
           {nav.map((item) => (
-            <button key={item.id} className={`nav-item ${view === item.id ? 'active' : ''}`} onClick={() => setView(item.id)}>
+            <button key={item.id} data-kai-anchor={`nav-${item.id}`} className={`nav-item ${view === item.id ? 'active' : ''}`} onClick={() => setView(item.id)}>
               <span className="ic">{item.ic}</span>{item.label}
             </button>
           ))}
@@ -336,6 +356,8 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
         <img src="/assets/bonsight-isotipo.png" alt="Bonsight" />
         <span>Powered by Bonsight</span>
       </div>
+
+      <KaiOnboarding tenant={tenant} tenantMeta={tenantMeta} identity={identity} experiments={experiments} experiment={experiment} onIdentityUpdate={setIdentity} />
     </div>
   );
 }
@@ -374,7 +396,7 @@ function ProjectCard({ exp, nameOf, onSelect }) {
           {team.map((id) => <span key={id} className="labs-avatar-sm" title={nameOf(id)}>{initials(nameOf(id))}</span>)}
           {moreCount > 0 && <span className="labs-avatar-sm labs-avatar-more">+{moreCount}</span>}
         </div>
-        <span className="chip-btn">Entrar →</span>
+        <span data-kai-anchor="enter-experiment" className="chip-btn">Entrar →</span>
       </div>
     </div>
   );
@@ -382,6 +404,7 @@ function ProjectCard({ exp, nameOf, onSelect }) {
 
 function ExperimentPicker({ tenant, tenantMeta, identity, onIdentityUpdate, experiments, onSelect, onCreated, onLogout }) {
   const [open, setOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('todos');
@@ -409,16 +432,17 @@ function ExperimentPicker({ tenant, tenantMeta, identity, onIdentityUpdate, expe
   return (
     <div className="labs-page-shell">
     <div className="labs-admin-wrap labs-admin-wrap--wide">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <h1 className="labs-admin-title">{tenantMeta.name}</h1>
-        <button className="chip-btn" onClick={onLogout}>Salir</button>
+        <UserMenu identity={identity} onChangePassword={() => setChangePasswordOpen(true)} onLogout={onLogout} tenant={tenant} onIdentityUpdate={onIdentityUpdate} />
       </div>
+      {changePasswordOpen && <ChangePasswordModal tenant={tenant} onClose={() => setChangePasswordOpen(false)} />}
       <p style={{ fontSize: 13.5, color: 'var(--labs-cream-dim)', marginBottom: 24 }}>
         Hola <EditableName tenant={tenant} identity={identity} onUpdated={onIdentityUpdate} /> · {identity.role} — elegí un proyecto{canCreate ? ' o creá uno nuevo' : ''}.
       </p>
 
       {canCreate && (
-        <button className="btn btn-primary" style={{ marginBottom: 20 }} onClick={() => setOpen(true)}>+ Crear proyecto</button>
+        <button data-kai-anchor="create-experiment" className="btn btn-primary" style={{ marginBottom: 20 }} onClick={() => setOpen(true)}>+ Crear proyecto</button>
       )}
 
       {experiments.length === 0 && (
@@ -459,6 +483,96 @@ function ExperimentPicker({ tenant, tenantMeta, identity, onIdentityUpdate, expe
         <img src="/assets/bonsight-isotipo.png" alt="Bonsight" />
         <span>Powered by Bonsight</span>
       </div>
+    </div>
+  );
+}
+
+// Avatar del usuario logueado con menú de cuenta (cambiar contraseña / salir) — reemplaza
+// los botones sueltos que antes vivían en el topbar y en el ExperimentPicker.
+const KAI_AVISOS_CYCLE = { activados: 'reducidos', reducidos: 'apagados', apagados: 'activados' };
+const KAI_AVISOS_LABEL = { activados: 'Activados', reducidos: 'Reducidos', apagados: 'Apagados' };
+
+function UserMenu({ identity, onChangePassword, onLogout, tenant, onIdentityUpdate }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  // Ciclo de 3 estados en vez de un submenú — evita sumar otro panel/modal solo para esto.
+  // No cierra el menú (a diferencia de los otros ítems) para que se vea confirmado el cambio
+  // de label antes de que la persona lo cierre por su cuenta.
+  const avisosActual = identity.kaiOnboarding?.avisos || 'activados';
+  const handleCycleAvisos = async () => {
+    const next = KAI_AVISOS_CYCLE[avisosActual];
+    onIdentityUpdate((prev) => ({ ...prev, kaiOnboarding: { ...(prev.kaiOnboarding || {}), avisos: next } }));
+    try {
+      await fetch(`/api/labs/${tenant}/users/me/onboarding`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avisos: next }),
+      });
+    } catch {
+      // Si falla, en el peor caso queda desincronizado hasta el próximo reload — no bloquea la sesión actual.
+    }
+  };
+
+  return (
+    <div ref={wrapRef} className="labs-user-menu">
+      <button
+        type="button"
+        className="labs-user-menu-trigger"
+        onClick={() => setOpen((o) => !o)}
+        title={`${identity.name} · ${identity.role}`}
+        aria-expanded={open}
+      >
+        <span className="labs-user-menu-avatar-wrap">
+          <span className="labs-user-menu-avatar">{initials(identity.name)}</span>
+          <span className="labs-user-menu-dot" aria-hidden="true" />
+        </span>
+        <svg className="labs-user-menu-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <div className="labs-user-menu-panel" role="menu">
+          <div className="labs-user-menu-who">
+            <span className="labs-user-menu-avatar labs-user-menu-avatar--sm">{initials(identity.name)}</span>
+            <div>
+              <div className="labs-user-menu-name">{identity.name}</div>
+              <div className="labs-user-menu-role">{identity.role}</div>
+            </div>
+          </div>
+          <div className="labs-user-menu-divider" />
+          <button type="button" className="labs-user-menu-item" role="menuitem" onClick={handleCycleAvisos}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span>Avisos de Kai: {KAI_AVISOS_LABEL[avisosActual]}</span>
+          </button>
+          <div className="labs-user-menu-divider" />
+          <button type="button" className="labs-user-menu-item" role="menuitem" onClick={() => { setOpen(false); onChangePassword(); }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="7.5" cy="15.5" r="5.5" />
+              <path d="M21 2l-9.6 9.6" />
+              <path d="M15.5 7.5l3 3L22 7l-3-3" />
+            </svg>
+            <span>Cambiar contraseña</span>
+          </button>
+          <button type="button" className="labs-user-menu-item labs-user-menu-item--danger" role="menuitem" onClick={() => { setOpen(false); onLogout(); }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span>Salir</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -510,6 +624,77 @@ function EditableName({ tenant, identity, onUpdated }) {
     >
       {identity.name}<span className="labs-name-edit-pencil">✎</span>
     </button>
+  );
+}
+
+// Autoservicio: cambiar la propia contraseña estando ya adentro — a diferencia del "olvidé mi
+// contraseña" del login (por email, para cuando no podés entrar), acá pide la contraseña
+// actual porque sí podés entrar (ver PATCH .../users/me).
+function ChangePasswordModal({ tenant, onClose }) {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [done, setDone] = useState(false);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!currentPassword) { setErr('Ingresá tu contraseña actual.'); return; }
+    if (!isStrongPassword(newPassword)) { setErr('La contraseña nueva no cumple los requisitos de abajo.'); return; }
+    if (newPassword !== confirm) { setErr('Las contraseñas nuevas no coinciden.'); return; }
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/labs/${tenant}/users/me`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo cambiar la contraseña.'); return; }
+      setDone(true);
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-card" style={{ position: 'relative' }}>
+        <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
+        <span className="eyebrow-mini on-dark">Tu cuenta</span>
+        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Cambiar contraseña</h2>
+        {done ? (
+          <>
+            <p style={{ fontSize: 13.5, color: 'var(--labs-cream-dim)' }}>Listo — tu contraseña se actualizó.</p>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-primary" onClick={onClose}>Cerrar</button>
+            </div>
+          </>
+        ) : (
+          <form onSubmit={handleSave} noValidate>
+            <label className="field-label">Contraseña actual</label>
+            <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} style={{ marginBottom: 14 }} />
+            <label className="field-label">Contraseña nueva</label>
+            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            <ul className="labs-field-checklist">
+              {passwordChecklist(newPassword).map((c) => (
+                <li key={c.label} className={c.ok ? 'labs-field-hint--ok' : ''}>{c.ok ? '✓' : '•'} {c.label}</li>
+              ))}
+            </ul>
+            <label className="field-label">Repetí la contraseña nueva</label>
+            <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} style={{ marginBottom: 14 }} />
+            {err && <p className="labs-login-error" style={{ marginTop: 4 }}>{err}</p>}
+            <div className="modal-footer">
+              <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Guardando…' : 'Guardar →'}</button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -674,39 +859,45 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
         <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Nuevo proyecto</h2>
 
         {kindOptions.length > 1 && (
-          <>
+          <div data-kai-anchor="field-kind">
             <label className="field-label">Tipo de proyecto</label>
             <div className="labs-entry-role-grid" style={{ marginBottom: 14 }}>
               {kindOptions.map((k) => (
                 <button key={k.id} type="button" className={`labs-entry-role-btn${projectKind === k.id ? ' active' : ''}`} onClick={() => setProjectKind(k.id)}>{k.label}</button>
               ))}
             </div>
-          </>
+          </div>
         )}
 
         <form onSubmit={handleCreate}>
           <label className="field-label">Nombre</label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 14 }} required />
+          <input data-kai-anchor="field-name" type="text" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 14 }} required />
 
           {projectKind === 'experimental' && (
             <>
-              <label className="field-label">¿Qué queremos conseguir o descubrir?</label>
-              <textarea rows={3} value={purpose} onChange={(e) => setPurpose(e.target.value)} style={{ marginBottom: 14 }} />
-              <label className="field-label">Hipótesis a validar o refutar</label>
-              <textarea rows={2} value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} style={{ marginBottom: 14 }} />
-              <label className="field-label">Criterios de éxito</label>
-              {criteria.map((c, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <input type="text" placeholder="Nombre (ej. Resistencia)" value={c.label} onChange={(e) => updateCriterion(i, { label: e.target.value })} style={{ flex: 2 }} />
-                  <select value={c.operator} onChange={(e) => updateCriterion(i, { operator: e.target.value })} style={{ background: 'var(--labs-dark-3)', border: '1px solid var(--labs-line-dark)', color: 'var(--labs-cream)', borderRadius: 8, padding: '0 10px' }}>
-                    {CRITERIA_OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                  <input type="number" placeholder="Valor" value={c.value} onChange={(e) => updateCriterion(i, { value: e.target.value })} style={{ flex: 1, minWidth: 70 }} />
-                  <input type="text" placeholder="Unidad" value={c.unit} onChange={(e) => updateCriterion(i, { unit: e.target.value })} style={{ flex: 1, minWidth: 70 }} />
-                  {criteria.length > 1 && <button type="button" className="chip-btn" onClick={() => removeCriterion(i)}>✕</button>}
-                </div>
-              ))}
-              <button type="button" className="chip-btn" onClick={addCriterion} style={{ marginBottom: 14 }}>+ Agregar criterio</button>
+              <div data-kai-anchor="field-objective">
+                <label className="field-label">¿Qué queremos conseguir o descubrir?</label>
+                <textarea rows={3} value={purpose} onChange={(e) => setPurpose(e.target.value)} style={{ marginBottom: 14 }} />
+              </div>
+              <div data-kai-anchor="field-hypothesis">
+                <label className="field-label">Hipótesis a validar o refutar</label>
+                <textarea rows={2} value={hypothesis} onChange={(e) => setHypothesis(e.target.value)} style={{ marginBottom: 14 }} />
+              </div>
+              <div data-kai-anchor="field-success-criteria">
+                <label className="field-label">Criterios de éxito</label>
+                {criteria.map((c, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <input type="text" placeholder="Nombre (ej. Resistencia)" value={c.label} onChange={(e) => updateCriterion(i, { label: e.target.value })} style={{ flex: 2 }} />
+                    <select value={c.operator} onChange={(e) => updateCriterion(i, { operator: e.target.value })} style={{ background: 'var(--labs-dark-3)', border: '1px solid var(--labs-line-dark)', color: 'var(--labs-cream)', borderRadius: 8, padding: '0 10px' }}>
+                      {CRITERIA_OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    <input type="number" placeholder="Valor" value={c.value} onChange={(e) => updateCriterion(i, { value: e.target.value })} style={{ flex: 1, minWidth: 70 }} />
+                    <input type="text" placeholder="Unidad" value={c.unit} onChange={(e) => updateCriterion(i, { unit: e.target.value })} style={{ flex: 1, minWidth: 70 }} />
+                    {criteria.length > 1 && <button type="button" className="chip-btn" onClick={() => removeCriterion(i)}>✕</button>}
+                  </div>
+                ))}
+                <button type="button" className="chip-btn" onClick={addCriterion} style={{ marginBottom: 14 }}>+ Agregar criterio</button>
+              </div>
             </>
           )}
 
@@ -750,7 +941,7 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
                 style={{ display: 'none' }}
                 onChange={(e) => { handleExcelFile(e.target.files[0]); e.target.value = ''; }}
               />
-              <button type="button" className="btn btn-secondary" disabled={excelBusy} onClick={() => excelInputRef.current?.click()} style={{ marginBottom: 14 }}>
+              <button data-kai-anchor="field-excel-import" type="button" className="btn btn-secondary" disabled={excelBusy} onClick={() => excelInputRef.current?.click()} style={{ marginBottom: 14 }}>
                 {excelBusy ? 'Interpretando…' : civilTasks ? 'Volver a subir Excel' : '+ Subir Excel'}
               </button>
 
@@ -853,8 +1044,10 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
             </>
           )}
 
-          <label className="field-label">Supervisores del proyecto</label>
-          <UserMultiSelect tenant={tenant} role="Supervisor" selected={supervisorIds} onChange={setSupervisorIds} />
+          <div data-kai-anchor="field-supervisor">
+            <label className="field-label">Supervisores del proyecto</label>
+            <UserMultiSelect tenant={tenant} role="Supervisor" selected={supervisorIds} onChange={setSupervisorIds} />
+          </div>
           {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
           <div className="modal-footer">
             {projectKind === 'civil' && civilTasks && (
@@ -865,7 +1058,7 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
               </div>
             )}
             <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Creando…' : 'Crear proyecto →'}</button>
+            <button type="submit" data-kai-anchor="submit-create-experiment" className="btn btn-primary" disabled={busy}>{busy ? 'Creando…' : 'Crear proyecto →'}</button>
           </div>
         </form>
       </div>
@@ -2270,7 +2463,7 @@ function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
       )}
 
       {canManageActive && (
-        <button className="btn btn-primary" style={{ marginBottom: 16 }} onClick={() => setCreateOpen(true)}>+ Nueva tarea</button>
+        <button data-kai-anchor="create-task" className="btn btn-primary" style={{ marginBottom: 16 }} onClick={() => setCreateOpen(true)}>+ Nueva tarea</button>
       )}
 
       {experiment.tasks.length === 0 && <p className="empty-note">Todavía no hay tareas cargadas.</p>}
@@ -3012,7 +3205,7 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
       )}
 
       {canCreateTest && (
-        <button className="btn btn-primary" style={{ marginBottom: 16 }} onClick={() => setCreateOpen(true)}>+ Nueva prueba</button>
+        <button data-kai-anchor="create-test" className="btn btn-primary" style={{ marginBottom: 16 }} onClick={() => setCreateOpen(true)}>+ Nueva prueba</button>
       )}
 
       {experiment.tests.length === 0 && <p className="empty-note">Todavía no hay pruebas creadas.</p>}
@@ -3271,8 +3464,10 @@ function CreateTestModal({ tenant, experimentId, successCriteria, onClose, onCre
             </div>
           ))}
           <button type="button" className="chip-btn" onClick={addField} style={{ marginBottom: 14 }}>+ Agregar campo</button>
-          <label className="field-label">Registradores asignados a esta prueba</label>
-          <UserMultiSelect tenant={tenant} role="Registrador" selected={registradorIds} onChange={setRegistradorIds} />
+          <div data-kai-anchor="field-test-registradores">
+            <label className="field-label">Registradores asignados a esta prueba</label>
+            <UserMultiSelect tenant={tenant} role="Registrador" selected={registradorIds} onChange={setRegistradorIds} />
+          </div>
           {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
           <div className="modal-footer">
             <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>

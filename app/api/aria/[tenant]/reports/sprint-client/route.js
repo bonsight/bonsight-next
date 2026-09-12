@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant } from '@/lib/aria/auth';
 import { getIntelligenceSources } from '@/lib/kai/intelligenceSources';
-import { listSprints, getTasksForSprints, listClientesConProyectos, computeReportHealth } from '@/lib/aria/board';
+import { listSprints, getTasksForSprints, listClientesConProyectos, computeReportHealth, computeDragStats } from '@/lib/aria/board';
 import { generateSprintClientReportDraft } from '@/lib/aria/generators/sprintClientReport';
 
 async function getNotionToken(tenant) {
@@ -76,8 +76,9 @@ export async function POST(req, { params }) {
       iniciativas: draft.secciones.length,
     };
     const health = computeReportHealth(tasks);
+    const dragStats = computeDragStats(tasks, sprints);
 
-    return Response.json({ ok: true, draft, clienteName, periodLabel, sprintTitles, metrics, health });
+    return Response.json({ ok: true, draft, clienteName, periodLabel, sprintTitles, metrics, health, dragStats });
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo generar el reporte.' }, { status: 400 });
   }

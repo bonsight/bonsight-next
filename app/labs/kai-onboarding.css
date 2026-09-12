@@ -1,0 +1,197 @@
+/* Onboarding de Kai dentro de Labs — Fase 1, projectKind experimental.
+   Tokens tomados de app/kai/kai.css (identidad real de Kai), hardcodeados acá en vez de
+   importar ese archivo completo (2700+ líneas, pensado para la página de chat de Kai) — el
+   widget se ve intencionalmente distinto al resto de Labs (papel/crema): es un invitado
+   reconocible, no algo que se camufla con el tema del host. */
+
+/* El elemento que Kai está señalando (KaiOnboarding.jsx ya le agrega/saca esta clase) — un
+   anillo en el verde de Kai, no el de Labs, para que no se confunda con el fondo de "pestaña
+   activa" (--labs-living-glow) cuando apuntan a algo que no es la vista actual. */
+.kai-onb-highlight {
+  position: relative;
+  border-radius: 8px;
+  animation: kaiHighlightPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes kaiHighlightPulse {
+  0%, 100% { box-shadow: 0 0 0 2px #20C997, 0 0 0 5px rgba(32, 201, 151, 0.25); }
+  50% { box-shadow: 0 0 0 2px #20C997, 0 0 0 8px rgba(32, 201, 151, 0.05); }
+}
+
+.kai-onb-tip {
+  --kai-bg: #0D1117;
+  --kai-surface: #1F2937;
+  --kai-green: #20C997;
+  --kai-green-dark: #148F6A;
+  --kai-green-light: #6EE7B7;
+
+  position: absolute;
+  z-index: 150;
+  width: 280px;
+  background: var(--kai-bg);
+  border: 1px solid var(--kai-surface);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  animation: kaiOnbIn 0.18s ease;
+}
+
+@keyframes kaiOnbIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Dos variantes según de qué lado del ancla queda el tooltip (ver KaiOnboarding.jsx) —
+   triángulos sólidos en vez de cuadrado rotado con borde, más simple de calcular bien
+   sin poder probarlo visualmente en el momento. */
+.kai-onb-tip-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+
+.kai-onb-tip--bottom .kai-onb-tip-arrow {
+  top: -6px;
+  left: 24px;
+  border-width: 0 6px 6px 6px;
+  border-color: transparent transparent var(--kai-bg) transparent;
+}
+
+.kai-onb-tip--right .kai-onb-tip-arrow {
+  left: -6px;
+  top: 16px;
+  border-width: 6px 6px 6px 0;
+  border-color: transparent var(--kai-bg) transparent transparent;
+}
+
+.kai-onb-tip-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.kai-onb-tip-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--kai-green);
+}
+
+.kai-onb-tip-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #f4f4f5;
+  animation: kaiTextIn 0.25s ease;
+}
+
+@keyframes kaiTextIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
+}
+
+.kai-onb-tip-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.kai-onb-btn-go,
+.kai-onb-btn-skip {
+  border: none;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.kai-onb-btn-go {
+  background: var(--kai-green);
+  color: #06210f;
+}
+
+.kai-onb-btn-go:hover {
+  background: var(--kai-green-light);
+}
+
+.kai-onb-btn-skip {
+  background: transparent;
+  color: #9a9ba3;
+  font-weight: 500;
+}
+
+.kai-onb-btn-skip:hover {
+  color: #f4f4f5;
+}
+
+/* Fase 3 (modo discreto) — botón flotante fijo, siempre abajo a la derecha (mismo criterio de
+   interacción que .chat-fab del sitio de marketing, components/ChatWidget.jsx — no se copian
+   sus estilos, son los tokens de Kai). El aviso, cuando existe, es una burbuja anclada al
+   propio botón, no a ningún elemento de la página. */
+.kai-fab-wrap {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 150;
+}
+
+.kai-fab {
+  --kai-bg: #0D1117;
+  --kai-surface: #1F2937;
+  --kai-green: #20C997;
+  --kai-green-dark: #148F6A;
+
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--kai-bg);
+  border: 1px solid var(--kai-surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s ease;
+}
+
+.kai-fab:hover {
+  border-color: var(--kai-green-dark);
+}
+
+.kai-fab-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--kai-green);
+  border: 2px solid var(--kai-bg);
+}
+
+.kai-fab-nudge {
+  --kai-bg: #0D1117;
+  --kai-surface: #1F2937;
+  --kai-green: #20C997;
+  --kai-green-light: #6EE7B7;
+
+  position: absolute;
+  bottom: calc(100% + 12px);
+  right: 0;
+  width: 280px;
+  background: var(--kai-bg);
+  border: 1px solid var(--kai-surface);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  animation: kaiOnbIn 0.18s ease;
+}
