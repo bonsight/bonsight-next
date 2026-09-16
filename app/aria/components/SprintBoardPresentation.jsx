@@ -976,9 +976,19 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
     ? tasks.filter((t) => (responsableFilter === SIN_RESPONSABLE ? !t.responsableId : t.responsableId === responsableFilter))
     : tasks;
 
-  const tasksForColumn = (col) => (viewMode === 'estado'
-    ? visibleTasks.filter((t) => t.status === col.id)
-    : visibleTasks.filter((t) => (t.taskType ?? SIN_TIPO) === col.id));
+  const tasksForColumn = (col) => {
+    const matched = viewMode === 'estado'
+      ? visibleTasks.filter((t) => t.status === col.id)
+      : visibleTasks.filter((t) => (t.taskType ?? SIN_TIPO) === col.id);
+    // En "Hecho" la más recién movida va arriba — el resto de las columnas mantiene el
+    // orden que ya traían (no hay una noción clara de "reciente" que aplique ahí). doneAt
+    // se guarda aparte en Redis (ver lib/aria/doneAt.js) y solo se toca al mover a Hecho —
+    // editar la tarea después (ej. cargar horas reales) no la vuelve a subir de posición.
+    if (viewMode === 'estado' && col.id === 'Done') {
+      return [...matched].sort((a, b) => (b.doneAt ?? '').localeCompare(a.doneAt ?? ''));
+    }
+    return matched;
+  };
 
   return (
     <div className="aria-presentation">

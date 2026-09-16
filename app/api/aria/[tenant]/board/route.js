@@ -2,12 +2,23 @@ import { isAuthorizedForTenant } from '@/lib/aria/auth';
 import { getIntelligenceSources } from '@/lib/kai/intelligenceSources';
 import { getBoardData, searchTareas, moveTask, createTask, addExistingTask, removeTask, updateTaskResponsable, updateTaskSchedule, updateTaskDetails, updateTaskActualHours, createSprint, closeSprintPlanning, closeSprint, updateSprintDates, computeSprintMetrics } from '@/lib/aria/board';
 import { saveSprintMetrics, getSprintMetrics } from '@/lib/aria/sprintMetrics';
+import { markDoneAt, getDoneAtMap } from '@/lib/aria/doneAt';
 
 async function getNotionToken(tenant) {
   const sources = await getIntelligenceSources(tenant);
   const notionSource = sources.find((s) => s.id === 'notion');
   if (!notionSource || notionSource.status !== 'active' || !notionSource.config?.integrationToken) return null;
   return notionSource.config.integrationToken;
+}
+
+// Mezcla el momento en que cada tarea pasó a "Hecho" (guardado aparte en Redis, ver
+// lib/aria/doneAt.js) — el tablero lo usa para ordenar esa columna sin depender de
+// last_edited_time de Notion, que se bumpea con cualquier edición posterior.
+async function attachDoneAt(tenant, data) {
+  if (!data.tasks?.length) return data;
+  const doneAtMap = await getDoneAtMap(tenant);
+  data.tasks.forEach((t) => { if (t.status === 'Done') t.doneAt = doneAtMap[t.id] ?? null; });
+  return data;
 }
 
 export async function GET(req, { params }) {
@@ -36,7 +47,7 @@ export async function GET(req, { params }) {
     if (data.sprint?.status === 'Cerrado') {
       data.metrics = await getSprintMetrics(tenant, data.sprint.id);
     }
-    return Response.json(data);
+    return Response.json(await attachDoneAt(tenant, data));
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo cargar el tablero.' }, { status: 400 });
   }
@@ -75,6 +86,7 @@ export async function PATCH(req, { params }) {
     } else if (action === 'move_task') {
       if (!p.pageId || !p.status) throw new Error('pageId y status son requeridos.');
       await moveTask(token, p.pageId, p.status);
+      if (p.status === 'Done') await markDoneAt(tenant, p.pageId);
     } else if (action === 'create_task') {
       if (!sprintId) throw new Error('sprintId es requerido.');
       await createTask(token, sprintId, p);
@@ -111,7 +123,7 @@ export async function PATCH(req, { params }) {
     if (data.sprint?.status === 'Cerrado') {
       data.metrics = await getSprintMetrics(tenant, data.sprint.id);
     }
-    return Response.json(data);
+    return Response.json(await attachDoneAt(tenant, data));
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo actualizar el tablero.' }, { status: 400 });
   }
