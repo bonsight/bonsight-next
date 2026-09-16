@@ -404,7 +404,10 @@ function BoardColumn({ column, tasks, columns, viewMode, busy, pendingKey, onAct
 
 function AddTaskForm({ proyectos, talento, iniciativas, columns, tasks, busy, pendingKey, initialTitle, sprint, onCreate, onClose }) {
   const [title, setTitle] = useState(initialTitle ?? '');
-  const [status, setStatus] = useState(columns[0]?.id ?? '');
+  // Default explícito a "Por hacer" — Backlog es ahora la primera columna, pero una tarea
+  // nueva creada a mano durante el sprint casi siempre se piensa para arrancarla, no para
+  // dejarla sin priorizar.
+  const [status, setStatus] = useState(columns.find((c) => c.id === 'Not started')?.id ?? columns[0]?.id ?? '');
   const [proyectoId, setProyectoId] = useState('');
   const [responsableId, setResponsableId] = useState('');
   const [priority, setPriority] = useState('');
