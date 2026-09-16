@@ -108,6 +108,8 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
   const [titleInput, setTitleInput] = useState(task.title);
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionInput, setDescriptionInput] = useState(task.description ?? '');
+  const [editingActualHours, setEditingActualHours] = useState(false);
+  const [actualHoursInput, setActualHoursInput] = useState(task.actualHours ?? '');
   const otherColumns = viewMode === 'estado' ? columns.filter((c) => c.id !== task.status) : [];
   const otherSprints = sprints.filter((s) => s.id !== currentSprintId && s.status !== 'Cerrado');
   const hasMoveOptions = otherColumns.length > 0 || otherSprints.length > 0;
@@ -130,6 +132,13 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
     const next = descriptionInput.trim();
     if (next === (task.description ?? '')) return;
     onAction('update_task_details', { pageId: task.id, description: next }, `details-desc:${task.id}`);
+  };
+
+  const saveActualHours = () => {
+    setEditingActualHours(false);
+    const trimmed = actualHoursInput === '' ? '' : actualHoursInput;
+    if (trimmed === (task.actualHours ?? '')) return;
+    onAction('update_task_actual_hours', { pageId: task.id, actualHours: trimmed === '' ? null : trimmed }, `actual-hours:${task.id}`);
   };
 
   const openSchedule = () => {
@@ -271,6 +280,29 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
         </button>
       )}
 
+      {task.status === 'Done' && (
+        editingActualHours ? (
+          <input
+            className="aria-board-description-input"
+            type="number" min="0" step="0.5"
+            value={actualHoursInput}
+            onChange={(e) => setActualHoursInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && saveActualHours()}
+            onBlur={saveActualHours}
+            autoFocus
+          />
+        ) : task.actualHours != null ? (
+          <p className="aria-board-description aria-board-description--editable" onClick={() => { setActualHoursInput(task.actualHours ?? ''); setEditingActualHours(true); }} title="Click para editar">
+            {task.actualHours}h reales
+            <IconPencil className="aria-canvas-col-name-pencil" />
+          </p>
+        ) : (
+          <button type="button" className="aria-board-add-description" onClick={() => { setActualHoursInput(''); setEditingActualHours(true); }}>
+            + Agregar horas reales
+          </button>
+        )
+      )}
+
       {task.parentName && <p className="aria-board-parent-tag">↳ {task.parentName}</p>}
       {task.previousSprintTitle && <p className="aria-board-parent-tag">↳ vino de {task.previousSprintTitle}</p>}
       {task.children.length > 0 && (
@@ -386,6 +418,17 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, tasks, busy, pe
   const [description, setDescription] = useState('');
 
   const iniciativasDelProyecto = proyectoId ? iniciativas.filter((i) => i.proyectoId === proyectoId) : [];
+  // Solo tareas de nivel superior pueden ser "padre" — si una subtarea apareciera acá se
+  // podría armar una cadena de 3 niveles (padre → hijo → nieto), confuso de leer en el tablero.
+  // Si ya se eligió proyecto, se acota además a ese proyecto — una subtarea casi siempre
+  // pertenece al mismo proyecto que su padre. Si además hay iniciativa elegida, se acota un
+  // nivel más — necesario en proyectos con muchas tareas (ej. Dev), donde filtrar solo por
+  // proyecto todavía deja una lista larga.
+  const parentOptions = tasks.filter((t) =>
+    !t.parentId
+    && (!proyectoId || t.proyectoId === proyectoId)
+    && (!iniciativaId || t.iniciativaId === iniciativaId)
+  );
 
   const submit = () => {
     if (!title.trim()) return;
@@ -466,7 +509,7 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, tasks, busy, pe
           <select
             className={`aria-board-select${proyectoId ? '' : ' aria-canvas-meta-select--empty'}`}
             value={proyectoId}
-            onChange={(e) => { setProyectoId(e.target.value); setIniciativaId(''); }}
+            onChange={(e) => { setProyectoId(e.target.value); setIniciativaId(''); setParentId(''); }}
           >
             <option value="">Sin definir</option>
             {proyectos.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -477,7 +520,7 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, tasks, busy, pe
           <select
             className={`aria-board-select${iniciativaId ? '' : ' aria-canvas-meta-select--empty'}`}
             value={iniciativaId}
-            onChange={(e) => setIniciativaId(e.target.value)}
+            onChange={(e) => { setIniciativaId(e.target.value); setParentId(''); }}
             disabled={!proyectoId}
           >
             <option value="">{proyectoId ? 'Sin definir' : 'Elegí un proyecto primero'}</option>
@@ -492,7 +535,7 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, tasks, busy, pe
         <label className="aria-board-field-label">Tarea padre</label>
         <select className={`aria-board-select${parentId ? '' : ' aria-canvas-meta-select--empty'}`} value={parentId} onChange={(e) => setParentId(e.target.value)}>
           <option value="">Ninguna</option>
-          {tasks.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+          {parentOptions.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
         </select>
         <p className="aria-board-hint">Elegí una si esta tarea es una subtarea de otra ya en el sprint.</p>
       </div>

@@ -21,6 +21,7 @@ import { runGoogleAdsQuery } from '@/lib/aria/googleAds';
 import { runActivityResultsQuery } from '@/lib/aria/activities';
 import { getDbSources, queryDatabase, buildDbSourcesContext } from '@/lib/aria/databases';
 import { searchNotion, getNotionPage, queryNotionDatabase } from '@/lib/aria/notion';
+import { getBoardData, computeSprintMetrics } from '@/lib/aria/board';
 import { OFFICE_MIMES, extractTextFromBuffer } from '@/lib/fileExtract';
 
 const MODEL = 'claude-sonnet-4-6';
@@ -490,7 +491,9 @@ present_advisory → Cuando la respuesta sea una recomendación ejecutiva con de
 
 present_workshop_canvas → Cuando el usuario pida agrupar, consolidar o mapear las iniciativas/respuestas de una Activity (workshop) finalizada — siempre después de get_activity_results. Es distinto de present_analysis: acá el pedido es organizar respuestas individuales en clusters, no un análisis narrativo de métricas.
 
-present_sprint_board → Cuando el usuario pida planear el sprint, ver o abrir el tablero de tareas, crear un sprint, o gestionar/mover tareas del equipo (ej. "creemos el sprint", "muéstrame el tablero", "quiero ver las tareas"). No necesitas ningún dato previo ni tool adicional — solo llamala directo, el tablero se conecta a Notion por su cuenta.
+present_sprint_board → Cuando el usuario pida planear el sprint, abrir el tablero, crear un sprint, o gestionar/mover tareas visualmente (ej. "creemos el sprint", "muéstrame el tablero", "abrime el kanban"). No necesitas ningún dato previo ni tool adicional — solo llamala directo, el tablero se conecta a Notion por su cuenta. No la uses si lo que quiere es una respuesta o análisis sobre las tareas dentro del chat — para eso está get_sprint_tasks.
+
+get_sprint_tasks → Cuando el usuario pregunte o pida análisis sobre las tareas de un sprint dentro de la conversación (ej. "cómo van las tareas", "qué está atrasado", "cuántas tareas tiene X", "hazme un análisis del sprint"). Trae los datos reales y responde en el chat — nunca respondas solo con un link al tablero cuando lo que se pidió es conversar sobre el contenido.
 
 present_sprint_draft → Cuando el usuario pida convertir un workshop ya trabajado (con al menos una ficha de objetivos consolidada) en tareas de sprint — ej. "armemos el sprint de esto", "pasá el workshop al tablero", "generá las tareas de esta agrupación". Distinto de present_sprint_board: acá el punto de partida es el workshop, no el tablero directamente. No necesitas ningún dato previo — arranca con un triage (valor vs. esfuerzo por agrupación) donde el usuario elige qué avanza; recién después se genera el borrador de tareas para revisión. Nada se escribe en Notion hasta que el usuario confirma cada agrupación ahí.
 
@@ -812,8 +815,20 @@ No repitas el texto original de cada respuesta en tu output (ya está en itemsBy
     },
     {
       name: 'present_sprint_board',
-      description: `Abre el tablero Kanban de tareas (Sprint) conectado a Notion. Usalo cuando el usuario pida planear el sprint, ver el tablero de tareas, crear un sprint, o gestionar/mover tareas — nunca para análisis de datos ni para workshops. No requiere datos previos: el tablero carga y guarda directo contra Notion en tiempo real, vos no manejás las tareas.
+      description: `Abre el tablero Kanban de tareas (Sprint) conectado a Notion. Usalo cuando el usuario pida planear el sprint, abrir/ver el tablero como interfaz, crear un sprint, o gestionar/mover tareas — nunca para análisis de datos, preguntas conversacionales sobre las tareas (usa get_sprint_tasks) ni para workshops. No requiere datos previos: el tablero carga y guarda directo contra Notion en tiempo real, vos no manejás las tareas.
 Si el usuario nombra un sprint puntual por número (ej. "el tablero del sprint 3", "muéstrame el sprint 2"), pasá ese número en sprintNumber. Si no especifica ninguno, omití el campo — el tablero abre el sprint "En curso" por defecto (o el planificado más reciente si no hay ninguno en curso).`,
+      input_schema: {
+        type: 'object',
+        properties: {
+          sprintNumber: { type: 'integer', description: 'Número del sprint pedido explícitamente por el usuario, ej. 3 para "Sprint #3". Omitir si no lo especifica.' },
+        },
+      },
+    },
+    {
+      name: 'get_sprint_tasks',
+      description: `Trae las tareas reales de un sprint (título, estado, responsable, prioridad, tipo, severidad, fechas, horas estimadas, proyecto/iniciativa) más un resumen de métricas — para responder preguntas conversacionales sobre el contenido del sprint, no para abrir el tablero. Usalo cuando el usuario pida un análisis, resumen, diagnóstico o pregunta puntual sobre las tareas ("cómo van las tareas", "qué está atrasado", "cuántas tareas tiene fulano", "hazme un análisis del sprint") — distinto de present_sprint_board, que abre la interfaz Kanban para ver/gestionar tareas visualmente, no trae los datos a la conversación.
+Si el usuario nombra un sprint puntual por número, pasalo en sprintNumber; si no, se usa el sprint "En curso" por defecto (o el planificado más reciente si no hay ninguno en curso).
+Después de llamarla, responde con el análisis pedido — en texto si es una pregunta puntual, o con present_analysis si conviene un desglose visual de varias dimensiones.`,
       input_schema: {
         type: 'object',
         properties: {
@@ -1251,6 +1266,47 @@ async function executeTool(name, input, { tenant, investigationId, intelligenceS
     if (input.action === 'get_page') return getNotionPage(token, input.page_id);
     if (input.action === 'query_database') return queryNotionDatabase(token, input.database_id);
     return { error: `Acción desconocida: ${input.action}` };
+  }
+  if (name === 'get_sprint_tasks') {
+    const notionSource = intelligenceSources?.find((s) => s.id === 'notion');
+    if (!notionSource || notionSource.status !== 'active') {
+      return { error: 'Notion no está configurado para este tenant.' };
+    }
+    const token = notionSource.config?.integrationToken;
+    if (!token) return { error: 'Integration Token no configurado.' };
+    const { sprint, tasks } = await getBoardData(token, { sprintNumber: input.sprintNumber });
+    if (!sprint) return { error: 'No hay ningún sprint en curso ni planificado para mostrar.' };
+    return {
+      sprint: {
+        title: sprint.title,
+        status: sprint.status,
+        objetivo: sprint.objetivo,
+        startDate: sprint.startDate,
+        endDate: sprint.endDate,
+        committedHours: sprint.committedHours,
+        loggedHours: sprint.loggedHours,
+      },
+      tasks: tasks.map((t) => ({
+        title: t.title,
+        status: t.status,
+        priority: t.priority,
+        taskType: t.taskType,
+        severity: t.severity,
+        responsable: t.responsableName,
+        proyecto: t.proyectoName,
+        cliente: t.clienteName,
+        iniciativa: t.iniciativaName,
+        startDate: t.startDate,
+        dueDate: t.dueDate,
+        estimatedHours: t.estimatedHours,
+        actualHours: t.actualHours,
+        outOfPlan: t.outOfPlan,
+        draggedCount: t.draggedCount,
+        description: t.description,
+        parent: t.parentName,
+      })),
+      metrics: computeSprintMetrics(sprint, tasks),
+    };
   }
   if (name === 'get_activity_results') {
     return runActivityResultsQuery({ tenant, activityId: input.activityId });
