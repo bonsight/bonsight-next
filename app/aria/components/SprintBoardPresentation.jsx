@@ -110,6 +110,8 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
   const [descriptionInput, setDescriptionInput] = useState(task.description ?? '');
   const [editingActualHours, setEditingActualHours] = useState(false);
   const [actualHoursInput, setActualHoursInput] = useState(task.actualHours ?? '');
+  const [doneHoursPrompt, setDoneHoursPrompt] = useState(false);
+  const [doneHoursInput, setDoneHoursInput] = useState('');
   const otherColumns = viewMode === 'estado' ? columns.filter((c) => c.id !== task.status) : [];
   const otherSprints = sprints.filter((s) => s.id !== currentSprintId && s.status !== 'Cerrado');
   const hasMoveOptions = otherColumns.length > 0 || otherSprints.length > 0;
@@ -139,6 +141,23 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
     const trimmed = actualHoursInput === '' ? '' : actualHoursInput;
     if (trimmed === (task.actualHours ?? '')) return;
     onAction('update_task_actual_hours', { pageId: task.id, actualHours: trimmed === '' ? null : trimmed }, `actual-hours:${task.id}`);
+  };
+
+  // Mover a "Hecho" sin horas reales cargadas pide el dato antes de mandar el move — si la
+  // tarea ya las tiene (ej. se reabrió y se vuelve a cerrar) no vuelve a preguntar.
+  const requestMoveTo = (targetStatus) => {
+    setMoveOpen(false);
+    if (targetStatus === 'Done' && task.actualHours == null) {
+      setDoneHoursInput('');
+      setDoneHoursPrompt(true);
+      return;
+    }
+    onAction('move_task', { pageId: task.id, status: targetStatus }, `${movePrefix}status:${targetStatus}`);
+  };
+  const confirmDoneWithHours = () => {
+    if (doneHoursInput === '') return;
+    onAction('move_task', { pageId: task.id, status: 'Done', actualHours: doneHoursInput }, `${movePrefix}status:Done`);
+    setDoneHoursPrompt(false);
   };
 
   const openSchedule = () => {
@@ -343,7 +362,7 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
               <>
                 <p className="aria-board-card-menu-label">Mover a estado</p>
                 {otherColumns.map((c) => (
-                  <button key={c.id} type="button" disabled={busy} onClick={() => { onAction('move_task', { pageId: task.id, status: c.id }, `${movePrefix}status:${c.id}`); setMoveOpen(false); }}>
+                  <button key={c.id} type="button" disabled={busy} onClick={() => requestMoveTo(c.id)}>
                     {c.name}
                   </button>
                 ))}
@@ -359,6 +378,25 @@ function TaskCard({ task, columns, viewMode, busy, pendingKey, onAction, sprints
                 ))}
               </>
             )}
+          </div>
+        </>
+      )}
+
+      {doneHoursPrompt && (
+        <>
+          <div className="aria-canvas-col-menu-backdrop" onClick={() => setDoneHoursPrompt(false)} />
+          <div className="aria-canvas-col-menu aria-board-schedule-menu">
+            <label className="aria-board-schedule-label">
+              Horas reales — obligatorio para marcar Hecho
+              <input
+                type="number" min="0" step="0.5" value={doneHoursInput} autoFocus
+                onChange={(e) => setDoneHoursInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && confirmDoneWithHours()}
+              />
+            </label>
+            <button type="button" className="aria-board-schedule-save" disabled={busy || doneHoursInput === ''} onClick={confirmDoneWithHours}>
+              {pendingKey === `${movePrefix}status:Done` ? <Spinner /> : 'Marcar como Hecho'}
+            </button>
           </div>
         </>
       )}
@@ -940,6 +978,10 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
   const { sprint, sprints, columns, typeColumns, tasks, proyectos, talento, iniciativas } = data;
 
   if (!sprint || mode === 'new_sprint') {
+    // "Sin sprint activo" no es lo mismo que "sin sprints" — si los que hay están todos
+    // Cerrado (nadie planificó el siguiente), sprint da null igual, pero el título y el
+    // número tienen que seguir la numeración real, no reiniciar en "el primero".
+    const nextSprintNumber = Math.max(0, ...sprints.map((s) => s.number ?? 0)) + 1;
     return (
       <div className="aria-presentation">
         <div className="aria-card">
@@ -948,13 +990,13 @@ export default function SprintBoardPresentation({ tenant, initialSprintNumber })
               <div className="aria-canvas-header-eyebrow-row">
                 <span className="aria-canvas-header-eyebrow">Sprint</span>
               </div>
-              <h3 className="aria-canvas-title">{sprint ? 'Nuevo sprint' : 'Crear el primer sprint'}</h3>
+              <h3 className="aria-canvas-title">{sprints.length > 0 ? 'Nuevo sprint' : 'Crear el primer sprint'}</h3>
             </div>
           </div>
         </div>
         {err && <p className="aria-canvas-error">{err}</p>}
         <CreateSprintForm
-          nextLabel={sprint ? `Se creará el Sprint #${sprint.number + 1}.` : 'Se creará el Sprint #1.'}
+          nextLabel={`Se creará el Sprint #${nextSprintNumber}.`}
           busy={busy}
           pendingKey={pendingKey}
           onCreate={(p) => handleAction('create_sprint', p, 'create_sprint')}

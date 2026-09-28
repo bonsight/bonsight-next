@@ -85,7 +85,7 @@ export async function PATCH(req, { params }) {
       await closeSprint(token, sprintId);
     } else if (action === 'move_task') {
       if (!p.pageId || !p.status) throw new Error('pageId y status son requeridos.');
-      await moveTask(token, p.pageId, p.status);
+      await moveTask(token, p.pageId, p.status, p.actualHours);
       if (p.status === 'Done') await markDoneAt(tenant, p.pageId);
     } else if (action === 'create_task') {
       if (!sprintId) throw new Error('sprintId es requerido.');
