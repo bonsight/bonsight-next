@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import TeamLogoutButton from '@/components/TeamLogoutButton';
 
 export default function LabsAdminList() {
   const [tenants, setTenants] = useState(null);
@@ -44,7 +45,10 @@ export default function LabsAdminList() {
   return (
     <div className="labs-page-shell">
     <div className="labs-admin-wrap">
-      <h1 className="labs-admin-title">Labs <span className="living-word" style={{ color: 'var(--labs-living)', fontStyle: 'italic', fontWeight: 500 }}>· admin</span></h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <h1 className="labs-admin-title">Labs <span className="living-word" style={{ color: 'var(--labs-living)', fontStyle: 'italic', fontWeight: 500 }}>· admin</span></h1>
+        <TeamLogoutButton className="chip-btn" />
+      </div>
       <p style={{ fontSize: 13.5, color: 'var(--labs-cream-dim)', marginBottom: 28 }}>
         Crear un espacio nuevo para un cliente. El código de acceso se comparte con todo su equipo — no hace falta login por persona.
       </p>

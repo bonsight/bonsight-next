@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import TeamLogoutButton from '@/components/TeamLogoutButton';
 
 function initials(name = '') {
   return name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('');
@@ -132,7 +133,7 @@ export default function AriaAdminShell({ tenants, children }) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: 10, borderTop: '0.5px solid #e0e0dc', flexShrink: 0 }}>
+        <div style={{ padding: 10, borderTop: '0.5px solid #e0e0dc', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <a
             href={kaiAdminUrl}
             target="_blank"
@@ -150,6 +151,14 @@ export default function AriaAdminShell({ tenants, children }) {
             </svg>
             Ir a Kai Admin
           </a>
+          <TeamLogoutButton
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              padding: '7px 10px', borderRadius: 7,
+              fontSize: 11.5, color: '#888',
+              border: '0.5px solid #e0e0dc', background: '#fff', cursor: 'pointer',
+            }}
+          />
         </div>
       </aside>
 

@@ -1,10 +1,11 @@
 import { isLabsAdminAuthorized } from '@/lib/labs/auth';
+import { teamLoginUrl } from '@/lib/team/auth';
 import { redirect } from 'next/navigation';
 import LabsAdminList from './LabsAdminList';
 
 export default async function LabsAdminPage() {
   if (!(await isLabsAdminAuthorized())) {
-    redirect('/labs/login');
+    redirect(await teamLoginUrl());
   }
 
   return <LabsAdminList />;

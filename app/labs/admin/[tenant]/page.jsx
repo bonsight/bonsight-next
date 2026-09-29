@@ -1,11 +1,12 @@
 import { notFound, redirect } from 'next/navigation';
 import { isLabsAdminAuthorized } from '@/lib/labs/auth';
+import { teamLoginUrl } from '@/lib/team/auth';
 import { getTenantMeta } from '@/lib/labs/tenants';
 import LabsAdminTenantDetail from './LabsAdminTenantDetail';
 
 export default async function LabsAdminTenantPage({ params }) {
   if (!(await isLabsAdminAuthorized())) {
-    redirect('/labs/login');
+    redirect(await teamLoginUrl());
   }
 
   const { tenant } = await params;

@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import TeamLogoutButton from '@/components/TeamLogoutButton';
 
 const Isotipo = () => (
   <svg width="18" height="15" viewBox="0 0 72 58" fill="none">
@@ -285,6 +286,7 @@ export default function AdminShell({ tenants: initialTenants, children }) {
             <button className="admin-new-btn" onClick={() => setShowModal(true)}>
               + Nuevo cliente
             </button>
+            <TeamLogoutButton className="admin-new-btn" style={{ marginTop: 8, background: 'transparent' }} />
           </div>
         </aside>
 

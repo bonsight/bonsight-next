@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import TeamLogoutButton from '@/components/TeamLogoutButton';
 
 const SA_EMAIL = 'id-aria-platform@bonsight-web.iam.gserviceaccount.com';
 const PROJECT_KINDS = [
@@ -15,14 +16,17 @@ export default function LabsAdminTenantDetail({ tenant, tenantMeta }) {
   return (
     <div className="labs-page-shell">
     <div className="labs-admin-wrap">
-      <a href="/admin" className="chip-btn" style={{ marginBottom: 18, display: 'inline-block', textDecoration: 'none' }}>← Todos los tenants</a>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+        <a href="/admin" className="chip-btn" style={{ display: 'inline-block', textDecoration: 'none' }}>← Todos los tenants</a>
+        <TeamLogoutButton className="chip-btn" />
+      </div>
       <h1 className="labs-admin-title">{tenantMeta.name}</h1>
 
       <div className="card">
         <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Acceso</div>
         <div style={{ marginTop: 10, fontSize: 13.5, color: 'var(--labs-cream-dim)', lineHeight: 1.8 }}>
           <div>URL: <a href={tenantUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--labs-living)' }}>{tenantUrl}</a></div>
-          <div>Código de acceso: <span style={{ fontFamily: 'var(--labs-mono)', color: 'var(--labs-cream)' }}>{tenantMeta.accessCode}</span></div>
+          <div style={{ fontSize: 12, color: 'var(--labs-cream-faint)' }}>Login directo con usuario y contraseña — asignalos en "Equipo", abajo.</div>
         </div>
       </div>
 
@@ -196,6 +200,65 @@ function EditableUserEmail({ tenant, user, onSaved }) {
   );
 }
 
+// Reemplaza el viejo "código personal, sin usar todavía" — el admin le pone usuario y
+// contraseña directo a la persona (nueva, o después de "Resetear acceso") y se los pasa por
+// fuera de la plataforma. Confirmación explícita (no autosave al perder foco, como
+// EditableUserName/Email) porque acá el error es más caro: mandarle a alguien una contraseña
+// que no se guardó.
+function AssignCredentials({ tenant, user, onSaved }) {
+  const [open, setOpen] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+  const [done, setDone] = useState(null); // { username, password } — se muestra una vez, para copiar
+
+  const save = async () => {
+    if (!username.trim() || !password || saving) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/labs/${tenant}/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ setCredentials: { username: username.trim(), password } }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo guardar.'); return; }
+      setDone({ username: username.trim(), password });
+      onSaved();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <div style={{ fontSize: 12.5, color: 'var(--labs-cream-dim)' }}>
+        Usuario <strong style={{ fontFamily: 'var(--labs-mono)', color: 'var(--labs-cream)' }}>{done.username}</strong> listo — pasale la contraseña que elegiste, no queda guardada acá.
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button type="button" className="chip-btn" onClick={() => setOpen(true)}>Asignar usuario y contraseña</button>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <input type="text" placeholder="Usuario" value={username} onChange={(e) => setUsername(e.target.value)} style={{ width: 130 }} autoFocus disabled={saving} />
+      <input type="text" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: 140 }} disabled={saving} />
+      <button type="button" className="chip-btn" onClick={save} disabled={saving || !username.trim() || !password}>{saving ? 'Guardando…' : 'Guardar'}</button>
+      <button type="button" className="chip-btn" onClick={() => setOpen(false)} disabled={saving}>Cancelar</button>
+      {err && <span style={{ color: '#E19680', fontSize: 12 }}>{err}</span>}
+    </div>
+  );
+}
+
 function TeamPanel({ tenant }) {
   const [users, setUsers] = useState(undefined); // undefined = cargando
   const [name, setName] = useState('');
@@ -249,7 +312,7 @@ function TeamPanel({ tenant }) {
   };
 
   const resetCredentials = async (userId) => {
-    if (!confirm('Esto borra su usuario y contraseña y genera un código nuevo — va a tener que volver a elegirlos. ¿Seguro?')) return;
+    if (!confirm('Esto borra su usuario y contraseña — vas a tener que asignarle unos nuevos. ¿Seguro?')) return;
     await fetch(`/api/labs/${tenant}/users/${userId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -262,7 +325,7 @@ function TeamPanel({ tenant }) {
     <div className="card">
       <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Equipo</div>
       <p style={{ fontSize: 12.5, color: 'var(--labs-cream-faint)', marginTop: 4, marginBottom: 12 }}>
-        Cada persona entra con el código la primera vez y elige su propio usuario y contraseña — el rol define qué puede hacer adentro (solo Director crea proyectos, Supervisor asigna Registradores en las pruebas).
+        Le asignás usuario y contraseña a cada persona y se los pasás vos — el rol define qué puede hacer adentro (solo Director crea proyectos, Supervisor asigna Registradores en las pruebas).
       </p>
 
       <form onSubmit={handleCreate} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -284,7 +347,7 @@ function TeamPanel({ tenant }) {
               {u.username ? (
                 <>Usuario: <span style={{ fontFamily: 'var(--labs-mono)' }}>{u.username}</span></>
               ) : (
-                <>Código (sin usar todavía): <span style={{ fontFamily: 'var(--labs-mono)' }}>{u.accessCode}</span></>
+                <AssignCredentials tenant={tenant} user={u} onSaved={load} />
               )}
               {' · '}<EditableUserEmail tenant={tenant} user={u} onSaved={load} />
             </div>

@@ -3,10 +3,28 @@ import { NextResponse } from 'next/server';
 const locales = ['es', 'en'];
 const defaultLocale = 'en';
 
-async function sha256Hex(input) {
-  const data = new TextEncoder().encode(input);
-  const buf = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+// Login único de admin (lib/team/auth.js) — la cookie "bonsight_team" es un
+// "{userId}.{hmacHex}" firmado con TEAM_SESSION_SECRET, la misma verificación que hace el
+// server en getCurrentTeamUser, reimplementada acá con Web Crypto porque el proxy no puede
+// importar código que dependa de next/headers.
+async function isTeamAuthed(request) {
+  const token = request.cookies.get('bonsight_team')?.value;
+  if (!token || !process.env.TEAM_SESSION_SECRET) return false;
+  const [userId, sigHex] = token.split('.');
+  if (!userId || !sigHex || !/^[0-9a-f]+$/.test(sigHex)) return false;
+  try {
+    const key = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(process.env.TEAM_SESSION_SECRET || ''),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify']
+    );
+    const sigBytes = new Uint8Array(sigHex.match(/.{2}/g).map((b) => parseInt(b, 16)));
+    return await crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(userId));
+  } catch {
+    return false;
+  }
 }
 
 export async function proxy(request) {
@@ -17,18 +35,17 @@ export async function proxy(request) {
   if (host.startsWith('kai.')) {
     const url = request.nextUrl.clone();
 
-    // Login page — always accessible
-    if (pathname === '/login') {
-      url.pathname = '/kai/login';
+    // /login (viejo) y /team se sirven como el mismo login único, sin cambiar de dominio —
+    // reescritura, no redirect: así funciona igual en cualquier subdominio y en local.
+    if (pathname === '/login' || pathname === '/team') {
+      url.pathname = '/team';
       return NextResponse.rewrite(url);
     }
 
-    // Admin routes — require global KAI_ACCESS_CODE
+    // Admin routes — requieren el login único de Bonsight
     if (pathname === '/' || pathname.startsWith('/admin')) {
-      const expected = await sha256Hex(process.env.KAI_ACCESS_CODE || '');
-      const isAuthed = request.cookies.get('kai_auth')?.value === expected;
-      if (!isAuthed) {
-        url.pathname = '/kai/login';
+      if (!(await isTeamAuthed(request))) {
+        url.pathname = '/team';
         return NextResponse.rewrite(url);
       }
       url.pathname = pathname === '/' ? '/kai' : `/kai${pathname}`;
@@ -44,25 +61,20 @@ export async function proxy(request) {
   if (host.startsWith('aria.')) {
     const url = request.nextUrl.clone();
 
-    // Login page — always accessible
-    if (pathname === '/login') {
-      url.pathname = '/aria/login';
+    if (pathname === '/login' || pathname === '/team') {
+      url.pathname = '/team';
       return NextResponse.rewrite(url);
     }
 
-    // Root and admin — require global ARIA_ACCESS_CODE
     if (pathname === '/' || pathname.startsWith('/admin')) {
-      const expected = await sha256Hex(process.env.ARIA_ACCESS_CODE || '');
-      const isAuthed = request.cookies.get('aria_auth')?.value === expected;
-      if (!isAuthed) {
-        url.pathname = '/aria/login';
+      if (!(await isTeamAuthed(request))) {
+        url.pathname = '/team';
         return NextResponse.rewrite(url);
       }
       url.pathname = pathname === '/' ? '/aria' : `/aria${pathname}`;
       return NextResponse.rewrite(url);
     }
 
-    // Tenant routes — per-tenant auth handled at page level
     url.pathname = `/aria${pathname}`;
     return NextResponse.rewrite(url);
   }
@@ -71,18 +83,14 @@ export async function proxy(request) {
   if (host.startsWith('labs.')) {
     const url = request.nextUrl.clone();
 
-    // Login page — always accessible
-    if (pathname === '/login') {
-      url.pathname = '/labs/login';
+    if (pathname === '/login' || pathname === '/team') {
+      url.pathname = '/team';
       return NextResponse.rewrite(url);
     }
 
-    // Root and admin — require global LABS_ACCESS_CODE
     if (pathname === '/' || pathname.startsWith('/admin')) {
-      const expected = await sha256Hex(process.env.LABS_ACCESS_CODE || '');
-      const isAuthed = request.cookies.get('labs_auth')?.value === expected;
-      if (!isAuthed) {
-        url.pathname = '/labs/login';
+      if (!(await isTeamAuthed(request))) {
+        url.pathname = '/team';
         return NextResponse.rewrite(url);
       }
       url.pathname = pathname === '/' ? '/labs' : `/labs${pathname}`;
@@ -114,5 +122,5 @@ export async function proxy(request) {
 }
 
 export const config = {
-  matcher: ['/((?!api|aria|kai|labs|quiniela|proposals|assets|_next/static|_next/image|favicon\\.svg|logo\\.svg|hero_home\\.png|.*\\.ico|sitemap\\.xml|robots\\.txt).*)'],
+  matcher: ['/((?!api|aria|kai|labs|quiniela|proposals|team|assets|_next/static|_next/image|favicon\\.svg|logo\\.svg|hero_home\\.png|.*\\.ico|sitemap\\.xml|robots\\.txt).*)'],
 };
