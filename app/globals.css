@@ -863,3 +863,72 @@ a.svc-card { text-decoration: none; color: inherit; }
   .consulta-msg--user{max-width:92%}
   .consulta-limit{padding:0.875rem 1rem}
 }
+
+/* ============================================================
+   SEO CONTENT CLUSTER — landing/blog (breadcrumb, comparison
+   table, FAQ accordion, article prose). Reusa tokens y patrones
+   existentes (.svc-*, .jc-*, .cta-band, .outcomes-panel); solo
+   se agrega lo que no tenía equivalente.
+   ============================================================ */
+
+.crumb-bar{background:var(--bg2);padding:0.9rem 4rem;border-bottom:1px solid var(--border)}
+.crumb-bar-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:0.5rem;font-size:0.76rem;color:var(--text3)}
+.crumb-bar-inner a{color:var(--text2);text-decoration:none;cursor:pointer}
+.crumb-bar-inner a:hover{color:var(--accent)}
+.crumb-bar-inner span{color:var(--text)}
+
+.cmp-section{max-width:1200px;margin:0 auto;padding:5rem 4rem}
+.cmp-table-wrap{overflow-x:auto;border:1px solid var(--border)}
+.cmp-table{width:100%;border-collapse:collapse;min-width:520px}
+.cmp-table th,.cmp-table td{padding:1rem 1.25rem;text-align:left;font-size:0.85rem;line-height:1.6;border-bottom:1px solid var(--border)}
+.cmp-table thead th{font-family:var(--mono);font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--text3);font-weight:500;background:var(--bg2)}
+.cmp-table tbody th{font-weight:500;color:var(--text);white-space:nowrap;background:var(--bg2)}
+.cmp-table td{color:var(--text2);font-weight:300}
+.cmp-table tbody tr:last-child td,.cmp-table tbody tr:last-child th{border-bottom:none}
+.cmp-table td.cmp-good{color:var(--accent);font-weight:500}
+
+.faq-section{max-width:900px;margin:0 auto;padding:5rem 4rem}
+.faq-list{display:flex;flex-direction:column;gap:1px;background:var(--border)}
+.faq-item{background:var(--white);padding:0}
+.faq-item summary{list-style:none;cursor:pointer;padding:1.5rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;font-size:0.95rem;font-weight:500;color:var(--text)}
+.faq-item summary::-webkit-details-marker{display:none}
+.faq-item summary::after{content:'+';font-family:var(--mono);font-size:1.2rem;color:var(--accent);flex-shrink:0;transition:transform 0.2s}
+.faq-item[open] summary::after{transform:rotate(45deg)}
+.faq-item p{padding:0 1.5rem 1.5rem;font-size:0.85rem;color:var(--text2);line-height:1.8;font-weight:300;max-width:640px}
+
+.pipeline-diagram{font-family:var(--mono);font-size:0.78rem;color:var(--text2);background:var(--bg2);border:1px solid var(--border);padding:1.5rem;display:flex;flex-wrap:wrap;align-items:center;gap:0.6rem;letter-spacing:0.01em}
+.pipeline-diagram span{background:var(--white);border:1px solid var(--border);padding:0.5rem 0.9rem;color:var(--text)}
+.pipeline-diagram em{font-style:normal;color:var(--text3)}
+
+/* ARTICLE (blog) */
+.article-hero{background:var(--dark);padding:4.5rem 4rem 3.5rem}
+.article-hero-inner{max-width:760px;margin:0 auto}
+.article-hero h1{font-family:var(--serif);font-size:clamp(2.2rem,4vw,3.2rem);font-weight:400;letter-spacing:-0.025em;line-height:1.15;color:var(--white);margin-bottom:1.25rem}
+.article-hero-desc{font-size:0.95rem;color:rgba(255,255,255,0.72);line-height:1.85;font-weight:300}
+.article-meta{font-family:var(--mono);font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent-mid);margin-bottom:1.25rem}
+.article-body{max-width:760px;margin:0 auto;padding:4rem 4rem}
+.article-body h2{font-family:var(--serif);font-size:clamp(1.5rem,2.6vw,1.9rem);font-weight:400;color:var(--text);letter-spacing:-0.02em;margin:3rem 0 1.25rem}
+.article-body h2:first-child{margin-top:0}
+.article-body h3{font-family:var(--serif);font-size:1.2rem;font-weight:400;color:var(--text);margin:2rem 0 0.85rem}
+.article-body p{font-size:0.92rem;color:var(--text2);line-height:1.9;font-weight:300;margin-bottom:1.25rem}
+.article-body ul{margin:0 0 1.25rem 1.1rem;padding:0}
+.article-body li{font-size:0.92rem;color:var(--text2);line-height:1.85;font-weight:300;margin-bottom:0.5rem}
+.article-body strong{color:var(--text);font-weight:500}
+.article-callout{background:var(--accent-light);border-left:3px solid var(--accent);padding:1.25rem 1.5rem;margin:1.75rem 0;font-size:0.85rem;color:var(--accent-dim);line-height:1.8}
+.code-snippet{background:var(--dark2);border:1px solid rgba(255,255,255,0.08);padding:1.5rem;margin:1.75rem 0;overflow-x:auto}
+.code-snippet pre{font-family:var(--mono);font-size:0.8rem;line-height:1.7;color:rgba(255,255,255,0.85);white-space:pre}
+.code-snippet .cs-comment{color:var(--text3)}
+.code-snippet .cs-key{color:var(--accent-mid)}
+
+.related-section{background:var(--bg2);padding:4rem 4rem}
+.related-inner{max-width:1200px;margin:0 auto}
+.related-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1px;background:var(--border);margin-top:2rem}
+
+@media(max-width:900px){
+  .crumb-bar{padding:0.75rem 1.5rem}
+  .cmp-section{padding:3rem 1.5rem}
+  .faq-section{padding:3rem 1.5rem}
+  .article-hero{padding:3rem 1.5rem}
+  .article-body{padding:3rem 1.5rem}
+  .related-section{padding:3rem 1.5rem}
+}

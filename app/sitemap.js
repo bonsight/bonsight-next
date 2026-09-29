@@ -12,8 +12,15 @@ const pages = [
   { path: '/cases/sesuveca',         freq: 'monthly', priority: 0.7 },
 ];
 
+// Cluster SEO nuevo — arranca solo en español (todavía no tienen versión en inglés,
+// a diferencia del resto que vive en ambos locales desde siempre).
+const esOnlyPages = [
+  { path: '/servicios/automatizacion-reportes-ai', freq: 'monthly', priority: 0.9 },
+  { path: '/blog/que-ia-puede-generar-reportes',    freq: 'monthly', priority: 0.6 },
+];
+
 export default function sitemap() {
-  return pages.flatMap(({ path, freq, priority }) =>
+  const localized = pages.flatMap(({ path, freq, priority }) =>
     ['es', 'en'].map(locale => ({
       url: `${BASE}/${locale}${path}`,
       lastModified: new Date(),
@@ -27,4 +34,13 @@ export default function sitemap() {
       },
     }))
   );
+
+  const esOnly = esOnlyPages.map(({ path, freq, priority }) => ({
+    url: `${BASE}/es${path}`,
+    lastModified: new Date(),
+    changeFrequency: freq,
+    priority,
+  }));
+
+  return [...localized, ...esOnly];
 }
