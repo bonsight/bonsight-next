@@ -4,6 +4,7 @@ import {
   getTenantUserByUsername, checkTenantUserPassword, requestTenantPasswordReset,
 } from '@/lib/kai/tenantUsers';
 import { loginTenantSession, logoutTenantSession, getCurrentTenantUser } from '@/lib/kai/tenantAuth';
+import { isBonsightTeamAuthorized } from '@/lib/team/auth';
 import { sendEmail } from '@/lib/labs/gmail';
 import { forgotPasswordEmailHtml } from '@/lib/labs/emailTemplates';
 import KaiClientView from './KaiClientView';
@@ -60,8 +61,9 @@ export default async function KaiTenantPage({ params, searchParams }) {
   }
 
   const currentUser = await getCurrentTenantUser(tenant);
+  const isTeamAdmin = await isBonsightTeamAuthorized();
 
-  if (!currentUser) {
+  if (!currentUser && !isTeamAdmin) {
     const step = ['forgot', 'sent'].includes(sp?.step) ? sp.step : 'login';
     const errMsg = typeof sp?.err === 'string' ? sp.err : null;
     const forgotUser = step === 'forgot' && sp?.username ? await getTenantUserByUsername(tenant, sp.username) : null;
@@ -155,7 +157,7 @@ export default async function KaiTenantPage({ params, searchParams }) {
     );
   }
 
-  if (!currentUser.access?.kai) {
+  if (currentUser && !currentUser.access?.kai && !isTeamAdmin) {
     async function doLogout() {
       'use server';
       await logoutTenantSession(tenant);
@@ -182,6 +184,7 @@ export default async function KaiTenantPage({ params, searchParams }) {
       tenant={tenant}
       tenantMeta={meta}
       profile={profile}
+      currentUserName={currentUser?.name}
     />
   );
 }

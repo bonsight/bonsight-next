@@ -16,6 +16,7 @@ import IntelligencePanel from '../components/IntelligencePanel';
 import ChatInsightSeparator from '../components/ChatInsightSeparator';
 import ArchiveContextCard from '../components/ArchiveContextCard';
 import AriaDocumentCard from './AriaDocumentCard';
+import TenantAccountMenu from '@/components/TenantAccountMenu';
 
 const ACTIVE_ID_KEY = (tenant, usr) => `ariaTenant_${tenant}${usr ? `_${usr}` : ''}_activeInvestigationId`;
 
@@ -333,7 +334,7 @@ function extractIntelligence(presentation, advisory) {
   return { items, main };
 }
 
-export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
+export default function AriaClientTenant({ tenant, tenantMeta, profile, usr, currentUserName }) {
   const tenantName = tenantMeta?.name ?? tenant;
   const industry = profile?.general?.industry || tenantMeta?.industry || '';
   const country = profile?.general?.country || tenantMeta?.country || '';
@@ -864,6 +865,9 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile, usr }) {
               Reportes
             </button>
           </div>
+          {currentUserName && (
+            <TenantAccountMenu tenant={tenant} userName={currentUserName} accent="#7C3AED" dark />
+          )}
         </header>
 
         {visited.chat && (

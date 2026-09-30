@@ -5,6 +5,7 @@ import KaiClientChat from './KaiClientChat';
 import MeetingAnalysisCard from '../components/MeetingAnalysisCard';
 import DemoChatPlayer from './DemoChatPlayer';
 import { getDemoProgression } from '@/lib/kai/demoScripts';
+import TenantAccountMenu from '@/components/TenantAccountMenu';
 import '../kai.css';
 
 function mergeProfile(base, patch) {
@@ -1928,7 +1929,7 @@ function DiscoveryProgress({ areaStatuses, currentArea, score }) {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export default function KaiClientView({ tenant, tenantMeta, profile }) {
+export default function KaiClientView({ tenant, tenantMeta, profile, currentUserName }) {
   const [activeSection, setActiveSection] = useState('resumen');
   const [learnings, setLearnings]         = useState([]);
   const [transversals, setTransversals]   = useState([]);
@@ -2191,9 +2192,14 @@ export default function KaiClientView({ tenant, tenantMeta, profile }) {
         <DiscoveryProgress areaStatuses={areaStatuses} currentArea={currentArea} score={score} />
 
         {/* Footer */}
-        <div className="kcv-sidebar-footer">
-          <div className="kcv-sidebar-footer-dot" />
-          <span className="kcv-sidebar-footer-text">1 participante activo</span>
+        <div className="kcv-sidebar-footer" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div className="kcv-sidebar-footer-dot" />
+            <span className="kcv-sidebar-footer-text">1 participante activo</span>
+          </div>
+          {currentUserName && (
+            <TenantAccountMenu tenant={tenant} userName={currentUserName} accent="#20C997" />
+          )}
         </div>
       </aside>
 

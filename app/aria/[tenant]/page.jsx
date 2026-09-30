@@ -176,5 +176,5 @@ export default async function AriaTenantPage({ params, searchParams }) {
   // localStorage de "última investigación abierta" entre personas en el mismo navegador.
   const usr = currentUser?.id;
 
-  return <AriaClientTenant tenant={tenant} tenantMeta={meta} profile={profile} usr={usr} />;
+  return <AriaClientTenant tenant={tenant} tenantMeta={meta} profile={profile} usr={usr} currentUserName={currentUser?.name} />;
 }
