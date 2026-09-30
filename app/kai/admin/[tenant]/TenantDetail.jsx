@@ -1039,7 +1039,7 @@ function IntelligenceTab({ profile, conversations, ariaInvestigations, slug, all
 
 // ── Conversations Tab ──────────────────────────────────────────────────────
 
-function ConversationsTab({ conversations, slug }) {
+function ConversationsTab({ conversations, slug, tenantUserNameById = {} }) {
   const [copied, setCopied] = useState(false);
 
   const copyLink = () => {
@@ -1083,6 +1083,7 @@ function ConversationsTab({ conversations, slug }) {
             <div className="admin-conv-title">{c.title || 'Conversación'}</div>
             <div className="admin-conv-meta">
               {exactDate(c.createdAt)}
+              {c.owner && tenantUserNameById[c.owner] && <> · {tenantUserNameById[c.owner]}</>}
             </div>
           </div>
 
@@ -1922,9 +1923,170 @@ function SummaryTab({ slug }) {
   );
 }
 
+// ── Equipo Tab ─────────────────────────────────────────────────────────────
+// Roster de personas del cliente, compartido entre Kai y Aria (mismo tenant, ver
+// lib/kai/tenantUsers.js) — reemplaza el código único por tenant. El admin crea la persona,
+// le asigna usuario+contraseña directo (sin código intermedio, mismo flujo que Labs) y decide
+// a cuál de los dos productos entra con los checkboxes de acceso.
+
+function EquipoAssignCredentials({ tenant, user, onSaved }) {
+  const [open, setOpen] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+  const [done, setDone] = useState(null);
+
+  const save = async () => {
+    if (!username.trim() || !password || saving) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/tenant-users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ setCredentials: { username: username.trim(), password } }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo guardar.'); return; }
+      setDone({ username: username.trim() });
+      onSaved();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (done) {
+    return <span style={{ fontSize: 11.5, color: '#888' }}>Usuario <strong style={{ color: '#111' }}>{done.username}</strong> listo — pasale la contraseña, no queda guardada acá.</span>;
+  }
+  if (!open) {
+    return <button className="admin-btn" style={{ fontSize: 11 }} onClick={() => setOpen(true)}>Asignar usuario y contraseña</button>;
+  }
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+      <input style={{ width: 110, padding: '6px 10px', border: '0.5px solid #ddd', borderRadius: 7, fontSize: 12, fontFamily: 'inherit', outline: 'none' }} placeholder="Usuario" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus disabled={saving} />
+      <input style={{ width: 120, padding: '6px 10px', border: '0.5px solid #ddd', borderRadius: 7, fontSize: 12, fontFamily: 'inherit', outline: 'none' }} placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} disabled={saving} />
+      <button className="admin-btn admin-btn--primary" style={{ fontSize: 11 }} onClick={save} disabled={saving || !username.trim() || !password}>{saving ? 'Guardando…' : 'Guardar'}</button>
+      <button className="admin-btn admin-btn--ghost" style={{ fontSize: 11 }} onClick={() => setOpen(false)} disabled={saving}>Cancelar</button>
+      {err && <span style={{ color: '#c0392b', fontSize: 11 }}>{err}</span>}
+    </div>
+  );
+}
+
+function EquipoTab({ slug }) {
+  const [users, setUsers] = useState(undefined);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [accessKai, setAccessKai] = useState(true);
+  const [accessAria, setAccessAria] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const load = () => {
+    fetch(`/api/kai/${slug}/tenant-users`)
+      .then((r) => r.json())
+      .then((d) => setUsers(d.users ?? []))
+      .catch(() => setUsers([]));
+  };
+  useEffect(() => { load(); }, [slug]);
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/kai/${slug}/tenant-users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, access: { kai: accessKai, aria: accessAria } }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo crear.'); return; }
+      setName(''); setEmail('');
+      load();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleAccess = async (userId, product, value) => {
+    const user = users.find((u) => u.id === userId);
+    const access = { kai: user.access?.kai, aria: user.access?.aria, [product]: value };
+    await fetch(`/api/kai/${slug}/tenant-users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access }),
+    });
+    load();
+  };
+
+  const resetCredentials = async (userId) => {
+    if (!confirm('Esto borra su usuario y contraseña — vas a tener que asignarle unos nuevos. ¿Seguro?')) return;
+    await fetch(`/api/kai/${slug}/tenant-users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resetCredentials: true }),
+    });
+    load();
+  };
+
+  const removeUser = async (userId) => {
+    if (!confirm('¿Eliminar a esta persona del equipo?')) return;
+    await fetch(`/api/kai/${slug}/tenant-users/${userId}`, { method: 'DELETE' });
+    load();
+  };
+
+  return (
+    <div className="admin-detail-card">
+      <SectionTitle>Equipo del cliente</SectionTitle>
+      <p style={{ fontSize: 12, color: '#999', marginTop: 4, marginBottom: 14 }}>
+        Roster compartido entre Kai y Aria — cada persona entra con su propio usuario y contraseña, y el acceso a cada producto se habilita acá.
+      </p>
+
+      <form onSubmit={handleCreate} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16, alignItems: 'center' }}>
+        <input style={{ flex: 1, minWidth: 140, padding: '7px 12px', border: '0.5px solid #ddd', borderRadius: 8, fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }} placeholder="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
+        <input style={{ flex: 1, minWidth: 160, padding: '7px 12px', border: '0.5px solid #ddd', borderRadius: 8, fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }} placeholder="Email (opcional)" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={accessKai} onChange={(e) => setAccessKai(e.target.checked)} /> Kai</label>
+        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={accessAria} onChange={(e) => setAccessAria(e.target.checked)} /> Aria</label>
+        <button type="submit" className="admin-btn admin-btn--primary" disabled={busy || !name.trim()}>{busy ? 'Creando…' : '+ Agregar'}</button>
+      </form>
+      {err && <p style={{ color: '#c0392b', fontSize: 12, marginBottom: 12 }}>{err}</p>}
+
+      {users === undefined && <p style={{ fontSize: 12, color: '#bbb' }}>Cargando…</p>}
+      {users?.length === 0 && <p style={{ fontSize: 12, color: '#bbb' }}>Todavía no hay nadie en el equipo.</p>}
+      {users?.map((u) => (
+        <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '0.5px solid #eee', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{u.name}</div>
+            <div style={{ fontSize: 11.5, color: '#999', marginTop: 2 }}>
+              {u.username ? <>Usuario: <span style={{ fontFamily: 'monospace' }}>{u.username}</span></> : <EquipoAssignCredentials tenant={slug} user={u} onSaved={load} />}
+              {u.email && <span> · {u.email}</span>}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+            <label style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="checkbox" checked={!!u.access?.kai} onChange={(e) => toggleAccess(u.id, 'kai', e.target.checked)} /> Kai
+            </label>
+            <label style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="checkbox" checked={!!u.access?.aria} onChange={(e) => toggleAccess(u.id, 'aria', e.target.checked)} /> Aria
+            </label>
+            {u.username && <button className="admin-btn" style={{ fontSize: 11 }} onClick={() => resetCredentials(u.id)}>Resetear acceso</button>}
+            <button className="admin-btn" style={{ fontSize: 11 }} onClick={() => removeUser(u.id)}>Eliminar</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────
 
-const TABS = ['Business Profile', 'Conversaciones', 'Conocimiento', 'Stakeholders', 'Intelligence', 'Aprendizajes', 'Resumen', 'Costos IA'];
+const TABS = ['Business Profile', 'Conversaciones', 'Conocimiento', 'Stakeholders', 'Intelligence', 'Aprendizajes', 'Resumen', 'Costos IA', 'Equipo'];
 
 // ── Costs Tab ──────────────────────────────────────────────────────────────
 
@@ -2210,7 +2372,7 @@ function CostsTab({ usage, events, dailyUsage = [] }) {
   );
 }
 
-export default function TenantDetail({ meta, profile, conversations, allLearnings = [], participantMap = {}, knowledgeQuality = {}, recentSession = null, changeCounts = {}, recentLearnings = [], ariaInvestigations = [], tenantUsage = null, usageEvents = [], dailyUsage = [] }) {
+export default function TenantDetail({ meta, profile, conversations, allLearnings = [], participantMap = {}, knowledgeQuality = {}, recentSession = null, changeCounts = {}, recentLearnings = [], ariaInvestigations = [], tenantUsage = null, usageEvents = [], dailyUsage = [], tenantUserNameById = {} }) {
   const [activeTab, setActiveTab] = useState(0);
   const [copied, setCopied] = useState(false);
   const [isDemo, setIsDemo] = useState(!!meta.isDemo);
@@ -2352,7 +2514,7 @@ export default function TenantDetail({ meta, profile, conversations, allLearning
 
         {/* Conversaciones Tab */}
         {activeTab === 1 && (
-          <ConversationsTab conversations={conversations} slug={meta.slug} />
+          <ConversationsTab conversations={conversations} slug={meta.slug} tenantUserNameById={tenantUserNameById} />
         )}
 
         {/* Conocimiento Tab */}
@@ -2387,6 +2549,9 @@ export default function TenantDetail({ meta, profile, conversations, allLearning
 
         {/* Costos IA Tab */}
         {activeTab === 7 && <CostsTab usage={tenantUsage} events={usageEvents} dailyUsage={dailyUsage} />}
+
+        {/* Equipo Tab */}
+        {activeTab === 8 && <EquipoTab slug={meta.slug} />}
 
       </div>
     </>

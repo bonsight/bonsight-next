@@ -17,7 +17,7 @@ export default async function AriaAdminTenantPage({ params }) {
     getTenantMeta(tenant),
     getBusinessProfile(tenant),
     listConversations(tenant),
-    listInvestigations(tenant),
+    listInvestigations(tenant, 'ALL'),
   ]);
 
   if (!meta) notFound();

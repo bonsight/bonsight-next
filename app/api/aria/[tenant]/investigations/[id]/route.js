@@ -1,6 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { isAuthorizedForTenant } from '@/lib/aria/auth';
+import { isBonsightTeamAuthorized } from '@/lib/team/auth';
+import { getCurrentTenantUser } from '@/lib/kai/tenantAuth';
 import { getInvestigation, updateInvestigationMeta, deleteInvestigation } from '@/lib/aria/memory';
+
+// Mismo criterio de ownership que .../investigations/route.js — acá además chequea que la
+// investigación puntual (por id) sea del que la pide, no solo que tenga acceso al tenant en
+// general. Investigaciones viejas sin owner (de antes de las cuentas por persona) quedan
+// abiertas a cualquiera con acceso al tenant, como siempre.
+async function canAccessInvestigation(tenant, meta) {
+  if (!meta?.owner) return true;
+  if (await isBonsightTeamAuthorized()) return true;
+  const user = await getCurrentTenantUser(tenant);
+  return user?.id === meta.owner;
+}
 
 async function buildArchiveIndex(meta, messages) {
   if (!messages?.length || messages.length < 2) return {};
@@ -74,6 +87,9 @@ export async function GET(req, { params }) {
   if (!investigation) {
     return Response.json({ error: 'No encontrada.' }, { status: 404 });
   }
+  if (!(await canAccessInvestigation(tenant, investigation.meta))) {
+    return Response.json({ error: 'No autorizado.' }, { status: 401 });
+  }
 
   return Response.json(investigation);
 }
@@ -86,12 +102,14 @@ export async function PATCH(req, { params }) {
 
   const updates = await req.json();
 
-  if (updates.estado === 'archivada') {
-    const inv = await getInvestigation(tenant, id);
-    if (inv) {
-      const index = await buildArchiveIndex(inv.meta, inv.messages);
-      Object.assign(updates, index);
-    }
+  const inv = await getInvestigation(tenant, id);
+  if (inv && !(await canAccessInvestigation(tenant, inv.meta))) {
+    return Response.json({ error: 'No autorizado.' }, { status: 401 });
+  }
+
+  if (updates.estado === 'archivada' && inv) {
+    const index = await buildArchiveIndex(inv.meta, inv.messages);
+    Object.assign(updates, index);
   }
 
   const result = await updateInvestigationMeta(tenant, id, updates);
@@ -102,6 +120,11 @@ export async function PATCH(req, { params }) {
 export async function DELETE(req, { params }) {
   const { tenant, id } = await params;
   if (!(await isAuthorizedForTenant(tenant))) {
+    return Response.json({ error: 'No autorizado.' }, { status: 401 });
+  }
+
+  const inv = await getInvestigation(tenant, id);
+  if (inv && !(await canAccessInvestigation(tenant, inv.meta))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
 

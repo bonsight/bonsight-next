@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { after } from 'next/server';
 import { isKaiOrTenantAuthorized } from '@/lib/kai/auth';
+import { getCurrentTenantUser } from '@/lib/kai/tenantAuth';
 import { getTenantMeta, getBusinessProfile, updateBusinessProfile } from '@/lib/kai/tenants';
 import {
   createConversation,
@@ -883,7 +884,7 @@ export async function POST(req, { params }) {
       return Response.json({ reply: 'Cliente no encontrado.' }, { status: 404 });
     }
 
-    if (!(await isKaiOrTenantAuthorized(tenant, meta.accessCode))) {
+    if (!(await isKaiOrTenantAuthorized(tenant))) {
       return Response.json({ reply: 'No autorizado.' }, { status: 401 });
     }
 
@@ -893,7 +894,8 @@ export async function POST(req, { params }) {
 
     let conversationId = incomingId;
     if (!conversationId) {
-      const created = await createConversation(tenant);
+      const tenantUser = await getCurrentTenantUser(tenant);
+      const created = await createConversation(tenant, tenantUser?.id);
       conversationId = created.id;
     }
 
@@ -1092,7 +1094,7 @@ export async function POST(req, { params }) {
 export async function PATCH(req, { params }) {
   const { tenant } = await params;
   const meta = await getTenantMeta(tenant);
-  if (!(await isKaiOrTenantAuthorized(tenant, meta?.accessCode))) {
+  if (!(await isKaiOrTenantAuthorized(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
   const { field, action, proposedValue } = await req.json();
@@ -1135,7 +1137,7 @@ export async function PATCH(req, { params }) {
 export async function GET(req, { params }) {
   const { tenant } = await params;
   const meta = await getTenantMeta(tenant);
-  if (!(await isKaiOrTenantAuthorized(tenant, meta?.accessCode))) {
+  if (!(await isKaiOrTenantAuthorized(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
   const { searchParams } = new URL(req.url);

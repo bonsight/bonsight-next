@@ -3,6 +3,7 @@ import { getTenantMeta, getBusinessProfile } from '@/lib/kai/tenants';
 import { listConversations, getConversationMessages, getConversationCheckpointSummary } from '@/lib/kai/memory';
 import { listLearnings } from '@/lib/kai/learnings';
 import { listInvestigations } from '@/lib/aria/memory';
+import { listTenantUsers } from '@/lib/kai/tenantUsers';
 import { calcOverallScore } from '@/lib/kai/scoring';
 import { getTenantMonthlyUsage, getRecentEvents, getTenantDailyUsage, currentMonth } from '@/lib/kai/usage';
 import TenantDetail from './TenantDetail';
@@ -58,18 +59,23 @@ export default async function TenantAdminPage({ params }) {
   })();
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  const [meta, profile, conversations, ariaInvestigations, allLearnings, tenantUsage, usageEvents, dailyUsage] = await Promise.all([
+  const [meta, profile, conversations, ariaInvestigations, allLearnings, tenantUsage, usageEvents, dailyUsage, tenantUsers] = await Promise.all([
     getTenantMeta(tenant),
     getBusinessProfile(tenant),
     listConversations(tenant),
-    listInvestigations(tenant),
+    listInvestigations(tenant, 'ALL'),
     listLearnings(tenant),
     getTenantMonthlyUsage(tenant, currentMonth()),
     getRecentEvents(tenant, 1000),
     getTenantDailyUsage(tenant, ninetyDaysAgo, todayStr),
+    listTenantUsers(tenant),
   ]);
 
   if (!meta) notFound();
+
+  // Para mostrar "quién tuvo esta conversación" en ConversationsTab — owner es un id de
+  // lib/kai/tenantUsers.js, no un nombre; se resuelve acá una sola vez para todo el tenant.
+  const tenantUserNameById = Object.fromEntries(tenantUsers.map((u) => [u.id, u.name]));
 
   // Group learnings by conversationId
   const learningsByConv = {};
@@ -172,6 +178,7 @@ export default async function TenantAdminPage({ params }) {
       conversations={conversations}
       allLearnings={allLearnings}
       participantMap={participantMap}
+      tenantUserNameById={tenantUserNameById}
       knowledgeQuality={knowledgeQuality}
       recentSession={recentSession}
       changeCounts={changeCounts}
