@@ -80,11 +80,11 @@ export default async function LabsTenantPage({ params, searchParams }) {
 
       const user = await getUserByUsername(tenant, username);
       if (!user || !checkUserPassword(user, password)) {
-        redirect(`/labs/${tenant}?username=${encodeURIComponent(username)}&err=${encodeURIComponent('Usuario o contraseña incorrectos.')}`);
+        redirect(`/${tenant}?username=${encodeURIComponent(username)}&err=${encodeURIComponent('Usuario o contraseña incorrectos.')}`);
       }
 
       (await cookies()).set(`labs_user_${tenant}`, signLabsUser(tenant, user.id), cookieOpts);
-      redirect(`/labs/${tenant}`);
+      redirect(`/${tenant}`);
     }
 
     // Cuando ya sabemos el usuario (vino del paso de contraseña) no hace falta volver a
@@ -99,13 +99,13 @@ export default async function LabsTenantPage({ params, searchParams }) {
       // anterior (ver render de step=forgot), así que no hay nada que "proteger" ocultándolo
       // de nuevo — al contrario, el mensaje genérico solo generaba dudas de si funcionó.
       const masked = maskEmail(user?.email);
-      redirect(`/labs/${tenant}?step=sent${masked ? `&masked=${encodeURIComponent(masked)}` : ''}`);
+      redirect(`/${tenant}?step=sent${masked ? `&masked=${encodeURIComponent(masked)}` : ''}`);
     }
 
     async function doForgotPassword(formData) {
       'use server';
       await sendResetEmail(tenant, meta, String(formData.get('email') ?? '').trim());
-      redirect(`/labs/${tenant}?step=sent`);
+      redirect(`/${tenant}?step=sent`);
     }
 
     return (
@@ -123,7 +123,7 @@ export default async function LabsTenantPage({ params, searchParams }) {
                   <input type="password" name="password" placeholder="Contraseña" className="labs-entry-input" required />
                   <button type="submit" className="labs-entry-button">Entrar</button>
                 </form>
-                <a href={`/labs/${tenant}?step=forgot&username=${encodeURIComponent(sp?.username ?? '')}`} className="labs-login-link">¿Olvidaste tu contraseña?</a>
+                <a href={`/${tenant}?step=forgot&username=${encodeURIComponent(sp?.username ?? '')}`} className="labs-login-link">¿Olvidaste tu contraseña?</a>
               </>
             )}
 
@@ -152,7 +152,7 @@ export default async function LabsTenantPage({ params, searchParams }) {
                     </form>
                   </>
                 )}
-                <a href={`/labs/${tenant}`} className="labs-login-link">Volver</a>
+                <a href={`/${tenant}`} className="labs-login-link">Volver</a>
               </>
             )}
 
@@ -163,7 +163,7 @@ export default async function LabsTenantPage({ params, searchParams }) {
                 ) : (
                   <p className="labs-entry-subtitle">Si ese email está registrado con una cuenta, te va a llegar un código para elegir una nueva contraseña — vale por 15 minutos.</p>
                 )}
-                <a href={`/labs/${tenant}`} className="labs-login-link">Volver a entrar</a>
+                <a href={`/${tenant}`} className="labs-login-link">Volver a entrar</a>
               </>
             )}
           </div>

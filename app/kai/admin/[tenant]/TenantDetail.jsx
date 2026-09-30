@@ -1929,13 +1929,98 @@ function SummaryTab({ slug }) {
 // le asigna usuario+contraseña directo (sin código intermedio, mismo flujo que Labs) y decide
 // a cuál de los dos productos entra con los checkboxes de acceso.
 
+const EqIconEdit = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" /></svg>
+);
+const EqIconDots = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
+);
+const EqIconKey = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="15.5" r="5.5" /><path d="M21 2l-9.6 9.6" /><path d="M15.5 7.5l3 3L22 7l-3-3" /></svg>
+);
+const EqIconPause = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
+);
+const EqIconPlay = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21" /></svg>
+);
+const EqIconTrash = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /></svg>
+);
+
+function eqInitials(name = '') {
+  return name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('');
+}
+
+// Campos de nombre/apellido/cargo/email, reusados por el panel de "agregar" y por la fila en
+// modo edición — mismo shape de inputs en los dos lugares.
+function EquipoFieldsGrid({ values, onChange, disabled }) {
+  return (
+    <div className="eq-edit-grid">
+      <div><div className="eq-label">Nombre</div><input className="eq-input" value={values.firstName} onChange={(e) => onChange({ ...values, firstName: e.target.value })} disabled={disabled} autoFocus /></div>
+      <div><div className="eq-label">Apellido</div><input className="eq-input" value={values.lastName} onChange={(e) => onChange({ ...values, lastName: e.target.value })} disabled={disabled} /></div>
+      <div><div className="eq-label">Cargo</div><input className="eq-input" value={values.cargo} onChange={(e) => onChange({ ...values, cargo: e.target.value })} disabled={disabled} placeholder="Opcional" /></div>
+      <div><div className="eq-label">Email</div><input className="eq-input" value={values.email} onChange={(e) => onChange({ ...values, email: e.target.value })} disabled={disabled} placeholder="Opcional" /></div>
+    </div>
+  );
+}
+
+// Panel colapsable de "+ Agregar persona" — separado del listado para no ensuciar la tabla
+// con un formulario siempre visible (a diferencia de la versión anterior).
+function EquipoAddPanel({ tenant, onCreated, onClose }) {
+  const [draft, setDraft] = useState({ firstName: '', lastName: '', cargo: '', email: '' });
+  const [access, setAccess] = useState({ kai: true, aria: false });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const save = async () => {
+    if (!draft.firstName.trim() || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/tenant-users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...draft, access }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo crear.'); return; }
+      onCreated();
+      onClose();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="eq-add-panel">
+      <EquipoFieldsGrid values={draft} onChange={setDraft} disabled={busy} />
+      <div className="eq-add-footer">
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: '#666' }}>
+          Acceso:
+          <button type="button" className={`eq-pill${access.kai ? ' eq-pill--on' : ''}`} onClick={() => setAccess((a) => ({ ...a, kai: !a.kai }))}>Kai</button>
+          <button type="button" className={`eq-pill${access.aria ? ' eq-pill--on' : ''}`} onClick={() => setAccess((a) => ({ ...a, aria: !a.aria }))}>Aria</button>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {err && <span style={{ color: '#c0392b', fontSize: 12 }}>{err}</span>}
+          <button className="admin-btn" onClick={onClose} disabled={busy}>Cancelar</button>
+          <button className="admin-btn admin-btn--primary" onClick={save} disabled={busy || !draft.firstName.trim()}>{busy ? 'Creando…' : 'Crear y generar acceso'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Asignar usuario+contraseña — vive en la columna "Usuario / email" cuando la persona todavía
+// no tiene cuenta (equivalente al botón "Asignar acceso" del mock).
 function EquipoAssignCredentials({ tenant, user, onSaved }) {
   const [open, setOpen] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
-  const [done, setDone] = useState(null);
 
   const save = async () => {
     if (!username.trim() || !password || saving) return;
@@ -1949,7 +2034,6 @@ function EquipoAssignCredentials({ tenant, user, onSaved }) {
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo guardar.'); return; }
-      setDone({ username: username.trim() });
       onSaved();
     } catch {
       setErr('Error de conexión.');
@@ -1958,31 +2042,154 @@ function EquipoAssignCredentials({ tenant, user, onSaved }) {
     }
   };
 
-  if (done) {
-    return <span style={{ fontSize: 11.5, color: '#888' }}>Usuario <strong style={{ color: '#111' }}>{done.username}</strong> listo — pasale la contraseña, no queda guardada acá.</span>;
-  }
   if (!open) {
-    return <button className="admin-btn" style={{ fontSize: 11 }} onClick={() => setOpen(true)}>Asignar usuario y contraseña</button>;
+    return <button type="button" className="eq-assign-btn" onClick={() => setOpen(true)}><EqIconKey /> Asignar acceso</button>;
   }
   return (
     <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-      <input style={{ width: 110, padding: '6px 10px', border: '0.5px solid #ddd', borderRadius: 7, fontSize: 12, fontFamily: 'inherit', outline: 'none' }} placeholder="Usuario" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus disabled={saving} />
-      <input style={{ width: 120, padding: '6px 10px', border: '0.5px solid #ddd', borderRadius: 7, fontSize: 12, fontFamily: 'inherit', outline: 'none' }} placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} disabled={saving} />
-      <button className="admin-btn admin-btn--primary" style={{ fontSize: 11 }} onClick={save} disabled={saving || !username.trim() || !password}>{saving ? 'Guardando…' : 'Guardar'}</button>
+      <input className="eq-input" style={{ width: 100 }} placeholder="Usuario" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus disabled={saving} />
+      <input className="eq-input" style={{ width: 110 }} placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} disabled={saving} />
+      <button className="admin-btn admin-btn--primary" style={{ fontSize: 11 }} onClick={save} disabled={saving || !username.trim() || !password}>{saving ? '…' : 'Guardar'}</button>
       <button className="admin-btn admin-btn--ghost" style={{ fontSize: 11 }} onClick={() => setOpen(false)} disabled={saving}>Cancelar</button>
       {err && <span style={{ color: '#c0392b', fontSize: 11 }}>{err}</span>}
     </div>
   );
 }
 
+function EquipoRow({ tenant, user: u, onSaved }) {
+  const inactive = u.active === false;
+  const [mode, setMode] = useState(null); // null | 'edit' | 'menu'
+  const [draft, setDraft] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const openEdit = () => {
+    setDraft({ firstName: u.firstName ?? '', lastName: u.lastName ?? '', cargo: u.cargo ?? '', email: u.email ?? '' });
+    setMode('edit');
+  };
+
+  const saveEdit = async () => {
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/tenant-users/${u.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draft),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo guardar.'); return; }
+      setMode(null);
+      onSaved();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const patch = async (body) => {
+    await fetch(`/api/kai/${tenant}/tenant-users/${u.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    onSaved();
+  };
+
+  const toggleAccess = (product) => {
+    if (inactive) return;
+    patch({ access: { kai: u.access?.kai, aria: u.access?.aria, [product]: !u.access?.[product] } });
+  };
+
+  const resetCredentials = () => {
+    setMode(null);
+    if (!confirm('Esto borra su usuario y contraseña — vas a tener que asignarle unos nuevos. ¿Seguro?')) return;
+    patch({ resetCredentials: true });
+  };
+
+  const toggleActive = () => {
+    setMode(null);
+    patch({ active: inactive });
+  };
+
+  const removeUser = () => {
+    setMode(null);
+    if (!confirm('¿Eliminar a esta persona del equipo? Es permanente — si solo querés bloquearle el acceso, mejor usá "Desactivar".')) return;
+    fetch(`/api/kai/${tenant}/tenant-users/${u.id}`, { method: 'DELETE' }).then(onSaved);
+  };
+
+  const status = inactive
+    ? { label: 'Inactivo', cls: 'eq-status--inactive' }
+    : !u.username
+    ? { label: 'Sin acceso', cls: 'eq-status--pending' }
+    : { label: 'Activo', cls: 'eq-status--active' };
+
+  return (
+    <div className={inactive ? 'eq-inactive-row' : ''}>
+      <div className="eq-row">
+        <div className="eq-person">
+          <div className="eq-avatar">{eqInitials(u.name)}</div>
+          <div style={{ minWidth: 0 }}>
+            <p className="eq-name">{u.name}</p>
+            {u.cargo && <p className="eq-cargo">{u.cargo}</p>}
+          </div>
+        </div>
+        <div style={{ minWidth: 0 }}>
+          {u.username ? (
+            <>
+              <p className="eq-username">{u.username}</p>
+              {u.email && <p className="eq-email">{u.email}</p>}
+            </>
+          ) : !inactive ? (
+            <EquipoAssignCredentials tenant={tenant} user={u} onSaved={onSaved} />
+          ) : (
+            <p className="eq-email">Sin usuario asignado</p>
+          )}
+        </div>
+        <div className="eq-pills">
+          <button type="button" className={`eq-pill${u.access?.kai ? ' eq-pill--on' : ''}${inactive ? ' eq-pill--disabled' : ''}`} onClick={() => toggleAccess('kai')} disabled={inactive}>Kai</button>
+          <button type="button" className={`eq-pill${u.access?.aria ? ' eq-pill--on' : ''}${inactive ? ' eq-pill--disabled' : ''}`} onClick={() => toggleAccess('aria')} disabled={inactive}>Aria</button>
+        </div>
+        <span className={`eq-status ${status.cls}`}>{status.label}</span>
+        <div className="eq-row-actions">
+          {!inactive && (
+            <button type="button" className="eq-icon-btn" title="Editar" onClick={() => (mode === 'edit' ? setMode(null) : openEdit())}><EqIconEdit /></button>
+          )}
+          <button type="button" className="eq-icon-btn" title="Más acciones" onClick={() => setMode(mode === 'menu' ? null : 'menu')}><EqIconDots /></button>
+          {mode === 'menu' && (
+            <>
+              <div style={{ position: 'fixed', inset: 0, zIndex: 19 }} onClick={() => setMode(null)} />
+              <div className="eq-menu">
+                {inactive ? (
+                  <button type="button" className="eq-menu-item" onClick={toggleActive}><EqIconPlay /> Activar</button>
+                ) : (
+                  <>
+                    {u.username && <button type="button" className="eq-menu-item" onClick={resetCredentials}><EqIconKey /> Resetear acceso</button>}
+                    <button type="button" className="eq-menu-item" onClick={toggleActive}><EqIconPause /> Desactivar</button>
+                    <button type="button" className="eq-menu-item eq-menu-item--danger" onClick={removeUser}><EqIconTrash /> Eliminar</button>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      {mode === 'edit' && (
+        <div className="eq-edit-row">
+          <EquipoFieldsGrid values={draft} onChange={setDraft} disabled={saving} />
+          <div className="eq-edit-footer">
+            {err && <span style={{ color: '#c0392b', fontSize: 12, marginRight: 8 }}>{err}</span>}
+            <button className="admin-btn" onClick={() => setMode(null)} disabled={saving}>Cancelar</button>
+            <button className="admin-btn admin-btn--primary" onClick={saveEdit} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EquipoTab({ slug }) {
   const [users, setUsers] = useState(undefined);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [accessKai, setAccessKai] = useState(true);
-  const [accessAria, setAccessAria] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   const load = () => {
     fetch(`/api/kai/${slug}/tenant-users`)
@@ -1992,94 +2199,27 @@ function EquipoTab({ slug }) {
   };
   useEffect(() => { load(); }, [slug]);
 
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    if (!name.trim() || busy) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      const res = await fetch(`/api/kai/${slug}/tenant-users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, access: { kai: accessKai, aria: accessAria } }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setErr(data.error || 'No se pudo crear.'); return; }
-      setName(''); setEmail('');
-      load();
-    } catch {
-      setErr('Error de conexión.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const toggleAccess = async (userId, product, value) => {
-    const user = users.find((u) => u.id === userId);
-    const access = { kai: user.access?.kai, aria: user.access?.aria, [product]: value };
-    await fetch(`/api/kai/${slug}/tenant-users/${userId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ access }),
-    });
-    load();
-  };
-
-  const resetCredentials = async (userId) => {
-    if (!confirm('Esto borra su usuario y contraseña — vas a tener que asignarle unos nuevos. ¿Seguro?')) return;
-    await fetch(`/api/kai/${slug}/tenant-users/${userId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resetCredentials: true }),
-    });
-    load();
-  };
-
-  const removeUser = async (userId) => {
-    if (!confirm('¿Eliminar a esta persona del equipo?')) return;
-    await fetch(`/api/kai/${slug}/tenant-users/${userId}`, { method: 'DELETE' });
-    load();
-  };
-
   return (
-    <div className="admin-detail-card">
-      <SectionTitle>Equipo del cliente</SectionTitle>
-      <p style={{ fontSize: 12, color: '#999', marginTop: 4, marginBottom: 14 }}>
-        Roster compartido entre Kai y Aria — cada persona entra con su propio usuario y contraseña, y el acceso a cada producto se habilita acá.
-      </p>
-
-      <form onSubmit={handleCreate} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16, alignItems: 'center' }}>
-        <input style={{ flex: 1, minWidth: 140, padding: '7px 12px', border: '0.5px solid #ddd', borderRadius: 8, fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }} placeholder="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
-        <input style={{ flex: 1, minWidth: 160, padding: '7px 12px', border: '0.5px solid #ddd', borderRadius: 8, fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }} placeholder="Email (opcional)" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={accessKai} onChange={(e) => setAccessKai(e.target.checked)} /> Kai</label>
-        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" checked={accessAria} onChange={(e) => setAccessAria(e.target.checked)} /> Aria</label>
-        <button type="submit" className="admin-btn admin-btn--primary" disabled={busy || !name.trim()}>{busy ? 'Creando…' : '+ Agregar'}</button>
-      </form>
-      {err && <p style={{ color: '#c0392b', fontSize: 12, marginBottom: 12 }}>{err}</p>}
-
-      {users === undefined && <p style={{ fontSize: 12, color: '#bbb' }}>Cargando…</p>}
-      {users?.length === 0 && <p style={{ fontSize: 12, color: '#bbb' }}>Todavía no hay nadie en el equipo.</p>}
-      {users?.map((u) => (
-        <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '0.5px solid #eee', gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{u.name}</div>
-            <div style={{ fontSize: 11.5, color: '#999', marginTop: 2 }}>
-              {u.username ? <>Usuario: <span style={{ fontFamily: 'monospace' }}>{u.username}</span></> : <EquipoAssignCredentials tenant={slug} user={u} onSaved={load} />}
-              {u.email && <span> · {u.email}</span>}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
-            <label style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <input type="checkbox" checked={!!u.access?.kai} onChange={(e) => toggleAccess(u.id, 'kai', e.target.checked)} /> Kai
-            </label>
-            <label style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <input type="checkbox" checked={!!u.access?.aria} onChange={(e) => toggleAccess(u.id, 'aria', e.target.checked)} /> Aria
-            </label>
-            {u.username && <button className="admin-btn" style={{ fontSize: 11 }} onClick={() => resetCredentials(u.id)}>Resetear acceso</button>}
-            <button className="admin-btn" style={{ fontSize: 11 }} onClick={() => removeUser(u.id)}>Eliminar</button>
-          </div>
+    <div className="admin-detail-card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="eq-header">
+        <div>
+          <p className="eq-header-title">Equipo del cliente{users?.length ? <span className="eq-header-count"> · {users.length} persona{users.length !== 1 ? 's' : ''}</span> : null}</p>
+          <p className="eq-header-sub">Cada persona entra con su usuario. El acceso a Kai y Aria se habilita por persona.</p>
         </div>
-      ))}
+        <button type="button" className="eq-add-btn" onClick={() => setAddOpen((v) => !v)}>+ Agregar persona</button>
+      </div>
+
+      {addOpen && <EquipoAddPanel tenant={slug} onCreated={load} onClose={() => setAddOpen(false)} />}
+
+      {users?.length > 0 && (
+        <div className="eq-row-head">
+          <span>Persona</span><span>Usuario / email</span><span>Productos</span><span>Estado</span><span></span>
+        </div>
+      )}
+
+      {users === undefined && <p style={{ fontSize: 12, color: '#bbb', padding: '16px' }}>Cargando…</p>}
+      {users?.length === 0 && <p style={{ fontSize: 12, color: '#bbb', padding: '16px' }}>Todavía no hay nadie en el equipo.</p>}
+      {users?.map((u) => <EquipoRow key={u.id} tenant={slug} user={u} onSaved={load} />)}
     </div>
   );
 }
@@ -2421,7 +2561,7 @@ export default function TenantDetail({ meta, profile, conversations, allLearning
 
         <div className="admin-topbar-actions">
           <a
-            href={`/kai/${meta.slug}`}
+            href={clientUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="admin-btn"

@@ -48,7 +48,7 @@ export default async function CostsDashboardPage() {
           <div className="costs-title">Costos IA</div>
           <div className="costs-month">{fmtMonth(month)}</div>
         </div>
-        <Link href="/kai/admin" className="costs-back">← Dashboard</Link>
+        <Link href="/admin" className="costs-back">← Dashboard</Link>
       </div>
 
       {/* ── Vista global ── */}

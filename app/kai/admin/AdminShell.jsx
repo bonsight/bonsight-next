@@ -216,7 +216,7 @@ export default function AdminShell({ tenants: initialTenants, children }) {
   const handleCreate = (meta) => {
     setTenants((prev) => [...prev, meta]);
     setShowModal(false);
-    startTransition(() => router.push(`/kai/admin/${meta.slug}`));
+    startTransition(() => router.push(`/admin/${meta.slug}`));
     router.refresh();
   };
 
@@ -236,7 +236,7 @@ export default function AdminShell({ tenants: initialTenants, children }) {
 
           <nav className="admin-nav">
             <Link
-              href="/kai/admin"
+              href="/admin"
               className={`admin-nav-item${!activeTenant ? ' admin-nav-item--active' : ''}`}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -246,7 +246,7 @@ export default function AdminShell({ tenants: initialTenants, children }) {
               Dashboard
             </Link>
             <Link
-              href="/kai/admin/costs"
+              href="/admin/costs"
               className={`admin-nav-item${pathname?.includes('/costs') ? ' admin-nav-item--active' : ''}`}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -267,7 +267,7 @@ export default function AdminShell({ tenants: initialTenants, children }) {
             {tenants.map((t) => (
               <Link
                 key={t.slug}
-                href={`/kai/admin/${t.slug}`}
+                href={`/admin/${t.slug}`}
                 className={`admin-tenant-item${activeTenant === t.slug ? ' admin-tenant-item--active' : ''}`}
               >
                 <div className="admin-tenant-avatar">{initials(t.name)}</div>

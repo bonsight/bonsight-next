@@ -26,7 +26,7 @@ export default async function AriaAdminPage() {
           {tenants.map((t) => (
             <Link
               key={t.slug}
-              href={`/aria/admin/${t.slug}`}
+              href={`/admin/${t.slug}`}
               style={{
                 background: '#fff', border: '0.5px solid #e0e0dc',
                 borderRadius: 12, padding: 18,

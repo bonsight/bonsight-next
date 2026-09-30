@@ -109,8 +109,8 @@ function ContextTab({ profile, conversations, ariaInvestigations, slug }) {
     const isLocal = window.location.hostname.includes('localhost');
     setKaiAdminUrl(
       isLocal
-        ? `http://kai.localhost:3000/kai/admin/${slug}`
-        : `https://kai.bonsight.co/kai/admin/${slug}`
+        ? `http://kai.localhost:3000/admin/${slug}`
+        : `https://kai.bonsight.co/admin/${slug}`
     );
   }, [slug]);
 
@@ -1049,7 +1049,7 @@ export default function AriaAdminDetail({ meta, profile, conversations, ariaInve
 
         <div style={{ display: 'flex', gap: 8 }}>
           <a
-            href={`/aria/${meta.slug}`}
+            href={`/${meta.slug}`}
             target="_blank"
             rel="noopener noreferrer"
             title="Abrir interfaz del cliente"

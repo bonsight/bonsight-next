@@ -20,11 +20,11 @@ const AriaLogo = () => (
 export default function AriaAdminShell({ tenants, children }) {
   const params = useParams();
   const activeTenant = params?.tenant;
-  const [kaiAdminUrl, setKaiAdminUrl] = useState('https://kai.bonsight.co/kai/admin');
+  const [kaiAdminUrl, setKaiAdminUrl] = useState('https://kai.bonsight.co/admin');
 
   useEffect(() => {
     const isLocal = window.location.hostname.includes('localhost');
-    setKaiAdminUrl(isLocal ? 'http://kai.localhost:3000/kai/admin' : 'https://kai.bonsight.co/kai/admin');
+    setKaiAdminUrl(isLocal ? 'http://kai.localhost:3000/admin' : 'https://kai.bonsight.co/admin');
   }, []);
 
   return (
@@ -66,7 +66,7 @@ export default function AriaAdminShell({ tenants, children }) {
         {/* Nav */}
         <nav style={{ padding: '10px 8px 6px', flexShrink: 0 }}>
           <Link
-            href="/aria/admin"
+            href="/admin"
             style={{
               display: 'flex', alignItems: 'center', gap: 7,
               padding: '7px 9px', borderRadius: 7,
@@ -96,7 +96,7 @@ export default function AriaAdminShell({ tenants, children }) {
           {tenants.map((t) => (
             <Link
               key={t.slug}
-              href={`/aria/admin/${t.slug}`}
+              href={`/admin/${t.slug}`}
               style={{
                 display: 'flex', alignItems: 'center', gap: 9,
                 padding: '7px 9px', borderRadius: 8,

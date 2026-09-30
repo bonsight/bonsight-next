@@ -8,7 +8,7 @@ export async function PATCH(req, { params }) {
   if (!(await isKaiAuthorized())) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
-  const { name, email, active, access, resetCredentials, setCredentials } = await req.json();
+  const { firstName, lastName, cargo, email, active, access, resetCredentials, setCredentials } = await req.json();
   try {
     if (resetCredentials) {
       const user = await resetTenantUserCredentials(tenant, userId);
@@ -18,7 +18,7 @@ export async function PATCH(req, { params }) {
       const user = await setTenantUserCredentials(tenant, userId, setCredentials);
       return Response.json({ ok: true, user: sanitizeTenantUser(user, { includeCredentials: true }) });
     }
-    const user = await updateTenantUser(tenant, userId, { name, email, active, access });
+    const user = await updateTenantUser(tenant, userId, { firstName, lastName, cargo, email, active, access });
     return Response.json({ ok: true, user: sanitizeTenantUser(user, { includeCredentials: true }) });
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo actualizar.' }, { status: 400 });

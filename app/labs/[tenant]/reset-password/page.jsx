@@ -23,7 +23,7 @@ export default async function ResetPasswordPage({ params, searchParams }) {
     const password = String(formData.get('password') ?? '');
     const confirm = String(formData.get('confirm') ?? '');
     if (password !== confirm) {
-      redirect(`/labs/${tenant}/reset-password?token=${token}&err=${encodeURIComponent('Las contraseñas no coinciden.')}`);
+      redirect(`/${tenant}/reset-password?token=${token}&err=${encodeURIComponent('Las contraseñas no coinciden.')}`);
     }
 
     let saved = null;
@@ -34,7 +34,7 @@ export default async function ResetPasswordPage({ params, searchParams }) {
       errorMsg = e.message || 'No se pudo guardar.';
     }
     if (errorMsg) {
-      redirect(`/labs/${tenant}/reset-password?token=${token}&err=${encodeURIComponent(errorMsg)}`);
+      redirect(`/${tenant}/reset-password?token=${token}&err=${encodeURIComponent(errorMsg)}`);
     }
 
     (await cookies()).set(`labs_user_${tenant}`, signLabsUser(tenant, saved.id), {
@@ -44,7 +44,7 @@ export default async function ResetPasswordPage({ params, searchParams }) {
       maxAge: 60 * 60 * 24 * 365,
       path: '/',
     });
-    redirect(`/labs/${tenant}`);
+    redirect(`/${tenant}`);
   }
 
   const errMsg = typeof sp?.err === 'string' ? sp.err : null;
@@ -57,7 +57,7 @@ export default async function ResetPasswordPage({ params, searchParams }) {
           {!user ? (
             <>
               <p className="labs-entry-subtitle">Este link ya expiró o no es válido — pedí uno nuevo desde "¿Olvidaste tu contraseña?".</p>
-              <a href={`/labs/${tenant}?step=forgot`} className="labs-login-link">Pedir un link nuevo</a>
+              <a href={`/${tenant}?step=forgot`} className="labs-login-link">Pedir un link nuevo</a>
             </>
           ) : (
             <>

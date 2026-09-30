@@ -245,7 +245,7 @@ export default async function AdminDashboard() {
         {tenants.map((t, i) => {
           const s = stats[i];
           return (
-            <Link key={t.slug} href={`/kai/admin/${t.slug}`} className="admin-tenant-card">
+            <Link key={t.slug} href={`/admin/${t.slug}`} className="admin-tenant-card">
               {/* Header */}
               <div className="admin-tenant-card-top">
                 <div className="admin-tenant-card-avatar">{initials(t.name)}</div>

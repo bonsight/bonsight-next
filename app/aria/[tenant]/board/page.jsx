@@ -19,7 +19,7 @@ export default async function AriaBoardPage({ params }) {
   if (!meta) notFound();
 
   if (!(await isAuthorizedForTenant(tenant))) {
-    redirect(`/aria/${tenant}`);
+    redirect(`/${tenant}`);
   }
 
   return (
@@ -27,7 +27,7 @@ export default async function AriaBoardPage({ params }) {
       <div className="aria-page">
         <header className="aria-header">
           <div className="aria-header-brand">
-            <Link href={`/aria/${tenant}`} className="aria-header-menu-btn" aria-label="Volver a Aria">
+            <Link href={`/${tenant}`} className="aria-header-menu-btn" aria-label="Volver a Aria">
               ←
             </Link>
             <div>

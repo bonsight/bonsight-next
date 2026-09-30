@@ -69,10 +69,10 @@ export default async function AriaTenantPage({ params, searchParams }) {
       const password = String(formData.get('password') ?? '');
       const user = await getTenantUserByUsername(tenant, username);
       if (!user || !checkTenantUserPassword(user, password)) {
-        redirect(`/aria/${tenant}?username=${encodeURIComponent(username)}&err=${encodeURIComponent('Usuario o contraseña incorrectos.')}`);
+        redirect(`/${tenant}?username=${encodeURIComponent(username)}&err=${encodeURIComponent('Usuario o contraseña incorrectos.')}`);
       }
       await loginTenantSession(tenant, user.id);
-      redirect(`/aria/${tenant}`);
+      redirect(`/${tenant}`);
     }
 
     async function doForgotPasswordByUsername(formData) {
@@ -81,13 +81,13 @@ export default async function AriaTenantPage({ params, searchParams }) {
       const user = username ? await getTenantUserByUsername(tenant, username) : null;
       await sendResetEmail(tenant, meta, user?.email);
       const masked = maskEmail(user?.email);
-      redirect(`/aria/${tenant}?step=sent${masked ? `&masked=${encodeURIComponent(masked)}` : ''}`);
+      redirect(`/${tenant}?step=sent${masked ? `&masked=${encodeURIComponent(masked)}` : ''}`);
     }
 
     async function doForgotPassword(formData) {
       'use server';
       await sendResetEmail(tenant, meta, String(formData.get('email') ?? '').trim());
-      redirect(`/aria/${tenant}?step=sent`);
+      redirect(`/${tenant}?step=sent`);
     }
 
     return (
@@ -107,7 +107,7 @@ export default async function AriaTenantPage({ params, searchParams }) {
                 <input type="password" name="password" placeholder="Contraseña" className="aria-login-input" required />
                 <button type="submit" className="aria-login-button">Entrar</button>
               </form>
-              <a href={`/aria/${tenant}?step=forgot&username=${encodeURIComponent(sp?.username ?? '')}`} className="aria-login-link">¿Olvidaste tu contraseña?</a>
+              <a href={`/${tenant}?step=forgot&username=${encodeURIComponent(sp?.username ?? '')}`} className="aria-login-link">¿Olvidaste tu contraseña?</a>
             </>
           )}
 
@@ -132,7 +132,7 @@ export default async function AriaTenantPage({ params, searchParams }) {
                   </form>
                 </>
               )}
-              <a href={`/aria/${tenant}`} className="aria-login-link">Volver</a>
+              <a href={`/${tenant}`} className="aria-login-link">Volver</a>
             </>
           )}
 
@@ -143,7 +143,7 @@ export default async function AriaTenantPage({ params, searchParams }) {
               ) : (
                 <p className="aria-login-subtitle">Si ese email está registrado con una cuenta, te va a llegar un código para elegir una nueva contraseña.</p>
               )}
-              <a href={`/aria/${tenant}`} className="aria-login-link">Volver a entrar</a>
+              <a href={`/${tenant}`} className="aria-login-link">Volver a entrar</a>
             </>
           )}
         </div>
@@ -155,7 +155,7 @@ export default async function AriaTenantPage({ params, searchParams }) {
     async function doLogout() {
       'use server';
       await logoutTenantSession(tenant);
-      redirect(`/aria/${tenant}`);
+      redirect(`/${tenant}`);
     }
     return (
       <div className="aria-login-wrap">
