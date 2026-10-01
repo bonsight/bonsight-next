@@ -21,8 +21,8 @@ export async function POST(req, { params }) {
   }
   const user = await getCurrentLabsUser(tenant);
   if (!user) return Response.json({ error: 'No autorizado.' }, { status: 401 });
-  if (user.role !== 'Director') {
-    return Response.json({ error: 'Solo un Director puede crear proyectos.' }, { status: 403 });
+  if (user.role !== 'Director' && user.role !== 'Supervisor') {
+    return Response.json({ error: 'Solo un Director o Supervisor puede crear proyectos.' }, { status: 403 });
   }
 
   const {
@@ -31,8 +31,12 @@ export async function POST(req, { params }) {
   } = await req.json();
   if (!name?.trim()) return Response.json({ error: 'El nombre es requerido.' }, { status: 400 });
 
-  const ids = Array.isArray(supervisorIds) ? supervisorIds : [];
-  const supervisors = await Promise.all(ids.map((id) => getUserById(tenant, id)));
+  const ids = new Set(Array.isArray(supervisorIds) ? supervisorIds : []);
+  // Si quien crea es Supervisor, se asegura a sí mismo en la lista — listExperimentsForUser
+  // solo le muestra proyectos donde está en supervisorIds, así que sin esto se crearía un
+  // proyecto que su propio creador no vuelve a ver.
+  if (user.role === 'Supervisor') ids.add(user.id);
+  const supervisors = await Promise.all([...ids].map((id) => getUserById(tenant, id)));
   const validSupervisorIds = supervisors.filter((u) => u?.role === 'Supervisor').map((u) => u.id);
 
   // Tareas iniciales (import de Excel, proyecto civil) — cada responsable tiene que ser una

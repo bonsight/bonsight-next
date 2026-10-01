@@ -2,17 +2,17 @@ import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
 import { listUsers } from '@/lib/labs/users';
 import { parseCivilExcel } from '@/lib/labs/civilImport';
 
-// Solo Director — parsea el Excel (cronograma+presupuesto) y devuelve la interpretación para
-// revisar/corregir en la vista previa. No persiste nada; la creación real pasa por
-// POST /experiments con lo que el Director confirmó.
+// Director o Supervisor — parsea el Excel (cronograma+presupuesto) y devuelve la interpretación
+// para revisar/corregir en la vista previa. No persiste nada; la creación real pasa por
+// POST /experiments (mismo gate: Director o Supervisor).
 export async function POST(req, { params }) {
   const { tenant } = await params;
   if (!(await isAuthorizedForTenant(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
   const user = await getCurrentLabsUser(tenant);
-  if (!user || user.role !== 'Director') {
-    return Response.json({ error: 'Solo un Director puede importar un proyecto civil.' }, { status: 403 });
+  if (!user || (user.role !== 'Director' && user.role !== 'Supervisor')) {
+    return Response.json({ error: 'Solo un Director o Supervisor puede importar un proyecto civil.' }, { status: 403 });
   }
 
   const { data } = await req.json();

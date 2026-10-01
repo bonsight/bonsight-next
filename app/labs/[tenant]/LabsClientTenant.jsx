@@ -409,7 +409,7 @@ function ExperimentPicker({ tenant, tenantMeta, identity, onIdentityUpdate, expe
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('todos');
   const [sortBy, setSortBy] = useState('recientes');
-  const canCreate = identity.role === 'Director';
+  const canCreate = identity.role === 'Director' || identity.role === 'Supervisor';
 
   useEffect(() => {
     fetch(`/api/labs/${tenant}/users`)
@@ -450,7 +450,7 @@ function ExperimentPicker({ tenant, tenantMeta, identity, onIdentityUpdate, expe
           {identity.role === 'Director'
             ? 'Todavía no hay ningún proyecto en este espacio.'
             : identity.role === 'Supervisor'
-              ? 'Todavía no te asignaron como Supervisor a ningún proyecto.'
+              ? 'Todavía no te asignaron como Supervisor a ningún proyecto — podés crear uno nuevo.'
               : 'Todavía no te asignaron a ninguna prueba en ningún proyecto.'}
         </p>
       )}
