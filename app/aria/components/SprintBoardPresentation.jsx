@@ -457,6 +457,9 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, tasks, busy, pe
   const [endDate, setEndDate] = useState('');
   const [estimatedHours, setEstimatedHours] = useState('');
   const [description, setDescription] = useState('');
+  // Recién se muestra el aviso de campos faltantes después de un intento bloqueado — no apenas
+  // se abre el form vacío, que sería ruido en vez de ayuda.
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
 
   const iniciativasDelProyecto = proyectoId ? iniciativas.filter((i) => i.proyectoId === proyectoId) : [];
   // Solo tareas de nivel superior pueden ser "padre" — si una subtarea apareciera acá se
@@ -471,8 +474,18 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, tasks, busy, pe
     && (!iniciativaId || t.iniciativaId === iniciativaId)
   );
 
+  // Fecha inicio, fecha fin y estimación son obligatorias al crear — sin esto, el sprint
+  // terminaba con tareas sin agenda ni esfuerzo estimado, imposibles de planificar en el tablero.
+  const missingFieldLabels = [
+    !title.trim() && 'nombre de la tarea',
+    !startDate && 'fecha de inicio',
+    !endDate && 'fecha de fin',
+    estimatedHours.toString().trim() === '' && 'estimación de horas',
+  ].filter(Boolean);
+  const missingRequired = missingFieldLabels.length > 0;
+
   const submit = () => {
-    if (!title.trim()) return;
+    if (missingRequired) { setAttemptedSubmit(true); return; }
     onCreate({
       title,
       status,
@@ -488,7 +501,7 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, tasks, busy, pe
       estimatedHours: estimatedHours || undefined,
       description: description || undefined,
     });
-    setTitle(''); setParentId(''); setStartDate(''); setEndDate(''); setEstimatedHours(''); setDescription('');
+    setTitle(''); setParentId(''); setStartDate(''); setEndDate(''); setEstimatedHours(''); setDescription(''); setAttemptedSubmit(false);
   };
 
   return (
@@ -589,24 +602,27 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, tasks, busy, pe
       </div>
       <div className="aria-board-form-row">
         <div className="aria-board-field">
-          <label className="aria-board-field-label">Inicio</label>
-          <input className="aria-board-input" type="date" value={startDate} min={sprint?.startDate || undefined} max={sprint?.endDate || undefined} onChange={(e) => setStartDate(e.target.value)} />
+          <label className="aria-board-field-label">Inicio — obligatorio</label>
+          <input className="aria-board-input" type="date" required value={startDate} min={sprint?.startDate || undefined} max={sprint?.endDate || undefined} onChange={(e) => setStartDate(e.target.value)} />
         </div>
         <div className="aria-board-field">
-          <label className="aria-board-field-label">Fin</label>
-          <input className="aria-board-input" type="date" value={endDate} min={sprint?.startDate || undefined} max={sprint?.endDate || undefined} onChange={(e) => setEndDate(e.target.value)} />
+          <label className="aria-board-field-label">Fin — obligatorio</label>
+          <input className="aria-board-input" type="date" required value={endDate} min={sprint?.startDate || undefined} max={sprint?.endDate || undefined} onChange={(e) => setEndDate(e.target.value)} />
         </div>
       </div>
       <div className="aria-board-field">
-        <label className="aria-board-field-label">Estimación (hs)</label>
-        <input className="aria-board-input" type="number" min="0" step="0.5" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} />
+        <label className="aria-board-field-label">Estimación (hs) — obligatorio</label>
+        <input className="aria-board-input" type="number" required min="0" step="0.5" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} />
       </div>
       <div className="aria-board-field">
         <label className="aria-board-field-label">Descripción</label>
         <textarea className="aria-board-input" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Opcional" />
       </div>
+      {attemptedSubmit && missingRequired && (
+        <p className="aria-canvas-error">Falta completar: {missingFieldLabels.join(', ')}.</p>
+      )}
       <div className="aria-canvas-newcol-actions">
-        <button type="button" className="aria-canvas-mini aria-canvas-mini--primary" onClick={submit} disabled={busy || !title.trim()}>
+        <button type="button" className="aria-canvas-mini aria-canvas-mini--primary" onClick={submit} disabled={busy || missingRequired}>
           {pendingKey === 'create_task' ? <Spinner /> : 'Crear'}
         </button>
         <button type="button" className="aria-canvas-mini" onClick={onClose}>Cancelar</button>
