@@ -2215,6 +2215,9 @@ function EquipoRow({ tenant, user: u, onSaved }) {
             </button>
           )}
         </div>
+        <span className="eq-last-login">
+          {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+        </span>
         <span className={`eq-status ${status.cls}`}>{status.label}</span>
         <div className="eq-row-actions">
           {!inactive && (
@@ -2458,7 +2461,7 @@ function EquipoTab({ slug }) {
 
         {users?.length > 0 && (
           <div className="eq-row-head">
-            <span>Persona</span><span>Usuario / email</span><span>Productos</span><span>Estado</span><span></span>
+            <span>Persona</span><span>Usuario / email</span><span>Productos</span><span>Último acceso</span><span>Estado</span><span></span>
           </div>
         )}
 

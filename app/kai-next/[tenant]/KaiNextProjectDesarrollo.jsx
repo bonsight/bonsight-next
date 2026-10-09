@@ -1353,6 +1353,35 @@ function ScheduleModal({ onCancel, onConfirm }) {
   );
 }
 
+// Gate separado del de ScheduleModal — entrar a Hecho exige horas reales, no fecha/estimación
+// (antes se reusaba por error el modal de fechas para esto, ver requestStatusChange).
+function HoursModal({ onCancel, onConfirm }) {
+  const [actualHours, setActualHours] = useState('');
+  const [err, setErr] = useState(null);
+
+  const submit = () => {
+    if (actualHours === '') { setErr('Completá las horas reales.'); return; }
+    onConfirm({ actualHours });
+  };
+
+  return (
+    <div className="knx-ficha-share-backdrop" onClick={onCancel}>
+      <div className="knx-ficha-review-modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(360px, 92vw)' }}>
+        <div className="knx-ficha-review-head">
+          <div><h3 className="knx-ficha-review-title">Cargá las horas reales antes de marcarla Hecho</h3></div>
+          <button type="button" className="knx-side-panel-close" aria-label="Cerrar" onClick={onCancel}>×</button>
+        </div>
+        {err && <p className="knx-canvas-error">{err}</p>}
+        <input className="knx-canvas-meta-select" type="number" min="0" step="0.5" placeholder="Horas reales" value={actualHours} onChange={(e) => setActualHours(e.target.value)} />
+        <div className="knx-canvas-ficha-draft-actions" style={{ marginTop: 16 }}>
+          <button type="button" className="knx-canvas-mini" onClick={onCancel}>Cancelar</button>
+          <button type="button" className="knx-analisis-sources-save" onClick={submit}>Guardar y mover</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Asignar una tarea sin sprint a un sprint real — mismo addExistingTask que ya usa el tablero
 // real de Sprints para "jalar" una tarea existente, expuesto acá para no tener que ir al otro
 // tablero solo para esto.
@@ -1443,6 +1472,7 @@ function LaneToggle({ name, iniciativaName, count, doneCount = 0, collapsed, onT
 
 function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeSprint, onOptimisticMove }) {
   const [scheduleFor, setScheduleFor] = useState(null); // { taskId, status }
+  const [hoursFor, setHoursFor] = useState(null); // { taskId, status }
   const [newTareaOpen, setNewTareaOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [removeTarget, setRemoveTarget] = useState(null);
@@ -1500,12 +1530,20 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
     }
   };
 
+  // Dos gates independientes, no uno solo: salir de Backlog exige fecha inicio/fin/estimación
+  // (lo de siempre); entrar a Hecho exige horas reales — son reglas sobre campos distintos, así
+  // que cada una abre su propio modal en vez de reusar el de la otra (antes pasaba esto último:
+  // mover a Hecho con la estimación vacía abría el modal de fechas pidiendo lo que no corresponde).
   const requestStatusChange = (taskId, status) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.status === status) return;
-    const incompleta = !task.startDate || !task.dueDate || task.estimatedHours == null;
-    if (status !== 'Backlog' && incompleta) {
+    const incompleta = status !== 'Backlog' && (!task.startDate || !task.dueDate || task.estimatedHours == null);
+    if (incompleta) {
       setScheduleFor({ taskId, status });
+      return;
+    }
+    if (status === 'Done' && task.actualHours == null) {
+      setHoursFor({ taskId, status });
       return;
     }
     move(taskId, status);
@@ -1536,6 +1574,23 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
     setErr(null);
     try {
       await patch({ action: 'update_schedule', pageId: taskId, startDate, endDate, estimatedHours });
+      const task = tasks.find((t) => t.id === taskId);
+      if (status === 'Done' && task?.actualHours == null) {
+        setHoursFor({ taskId, status });
+        return;
+      }
+      await move(taskId, status);
+    } catch (e) {
+      setErr(e.message);
+    }
+  };
+
+  const confirmHours = async ({ actualHours }) => {
+    const { taskId, status } = hoursFor;
+    setHoursFor(null);
+    setErr(null);
+    try {
+      await patch({ action: 'update_actual_hours', pageId: taskId, actualHours });
       await move(taskId, status);
     } catch (e) {
       setErr(e.message);
@@ -1544,6 +1599,10 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
 
   const detailAction = async (action, extra) => {
     if (!selectedTask) return;
+    if (action === 'move_task') {
+      requestStatusChange(selectedTask.id, extra.status);
+      return;
+    }
     setErr(null);
     try {
       await patch({ action, pageId: selectedTask.id, ...extra });
@@ -1642,6 +1701,7 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
         </>
       )}
       {scheduleFor && <ScheduleModal onCancel={() => setScheduleFor(null)} onConfirm={confirmSchedule} />}
+      {hoursFor && <HoursModal onCancel={() => setHoursFor(null)} onConfirm={confirmHours} />}
       {newTareaOpen && (
         <NewTareaModal
           tenant={tenant}
@@ -1721,6 +1781,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
   const [dragInfo, setDragInfo] = useState(null); // { taskId, laneId }
   const [dragOverCell, setDragOverCell] = useState(null);
   const [scheduleFor, setScheduleFor] = useState(null); // { taskId, status }
+  const [hoursFor, setHoursFor] = useState(null); // { taskId, status }
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [removeTarget, setRemoveTarget] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -1793,12 +1854,18 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
     }
   };
 
+  // Dos gates independientes (ver misma nota en ProjectBoard): salir de Backlog exige fecha
+  // inicio/fin/estimación; entrar a Hecho exige horas reales — cada una con su propio modal.
   const requestStatusChange = (taskId, status) => {
     const task = sprintTasks.find((t) => t.id === taskId);
     if (!task || task.status === status) return;
-    const incompleta = !task.startDate || !task.dueDate || task.estimatedHours == null;
-    if (status !== 'Backlog' && incompleta) {
+    const incompleta = status !== 'Backlog' && (!task.startDate || !task.dueDate || task.estimatedHours == null);
+    if (incompleta) {
       setScheduleFor({ taskId, status });
+      return;
+    }
+    if (status === 'Done' && task.actualHours == null) {
+      setHoursFor({ taskId, status });
       return;
     }
     move(taskId, status);
@@ -1818,6 +1885,23 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
     setErr(null);
     try {
       await patch({ action: 'update_schedule', pageId: taskId, startDate, endDate, estimatedHours });
+      const task = sprintTasks.find((t) => t.id === taskId);
+      if (status === 'Done' && task?.actualHours == null) {
+        setHoursFor({ taskId, status });
+        return;
+      }
+      await move(taskId, status);
+    } catch (e) {
+      setErr(e.message);
+    }
+  };
+
+  const confirmHours = async ({ actualHours }) => {
+    const { taskId, status } = hoursFor;
+    setHoursFor(null);
+    setErr(null);
+    try {
+      await patch({ action: 'update_actual_hours', pageId: taskId, actualHours });
       await move(taskId, status);
     } catch (e) {
       setErr(e.message);
@@ -1826,6 +1910,10 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
 
   const detailAction = async (action, extra) => {
     if (!selectedTask) return;
+    if (action === 'move_task') {
+      requestStatusChange(selectedTask.id, extra.status);
+      return;
+    }
     setErr(null);
     try {
       await patch({ action, pageId: selectedTask.id, ...extra });
@@ -2022,6 +2110,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
         </>
       )}
       {scheduleFor && <ScheduleModal onCancel={() => setScheduleFor(null)} onConfirm={confirmSchedule} />}
+      {hoursFor && <HoursModal onCancel={() => setHoursFor(null)} onConfirm={confirmHours} />}
       {newTareaOpen && (
         <NewTareaModal
           tenant={tenant}

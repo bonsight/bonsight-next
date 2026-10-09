@@ -1,7 +1,7 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
-import { getNotionToken, listTareas } from '@/lib/kaiNext/projectsNotion';
+import { getNotionToken, listTareas, getDevEpica } from '@/lib/kaiNext/projectsNotion';
 import { createTask } from '@/lib/aria/board';
 
 export async function GET(req, { params }) {
@@ -53,14 +53,20 @@ export async function POST(req, { params }) {
     return Response.json({ error: 'Body inválido.' }, { status: 400 });
   }
   const {
-    sprintId, title, iniciativaId, fase, startDate, endDate, estimatedHours, responsableId,
+    sprintId, title, fase, startDate, endDate, estimatedHours, responsableId,
     taskType, priority, severity, description,
   } = body;
 
   try {
     const meta = await getProjectMeta(tenant, id);
+    // La Iniciativa se resuelve acá, de la Épica real — no del body del cliente. Si se confía en
+    // que el formulario la mande, una tarea creada sin ese campo queda sin Iniciativa en Notion
+    // y listTareasByIniciativas (lo que arma los carriles del Tablero) nunca la encuentra: existe
+    // pero es invisible. Así, esta ruta es la única fuente de verdad y no puede volver a pasar.
+    const epica = await getDevEpica(token, epicaId);
+    if (!epica) return Response.json({ error: 'Épica no encontrada.' }, { status: 404 });
     const taskId = await createTask(token, sprintId, {
-      title, iniciativaId, epicaId, fase, startDate, endDate, estimatedHours, responsableId,
+      title, iniciativaId: epica.iniciativaId, epicaId, fase, startDate, endDate, estimatedHours, responsableId,
       taskType, priority, severity, description,
       proyectoId: meta?.notionProyectoId,
     });
