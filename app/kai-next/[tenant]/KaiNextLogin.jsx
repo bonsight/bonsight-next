@@ -83,7 +83,7 @@ export default async function KaiNextLogin({ tenant, tenantName, searchParams, b
     <div className="knx-login-shell">
       <div className="knx-login-hero">
         <div className="knx-login-hero-top">
-          <img src="/assets/bonsight-isotipo.png" alt="" width="36" height="29" />
+          <img src="/assets/bonsight-isotipo.svg" alt="" width="36" height="20" />
           <span className="knx-login-wordmark">Bonsight</span>
         </div>
         <div className="knx-login-hero-mid">

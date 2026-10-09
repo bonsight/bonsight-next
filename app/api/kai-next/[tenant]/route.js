@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { isAuthorizedForTenant, getCurrentKaiNextAccess } from '@/lib/kaiNext/auth';
+import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { getTenantMeta } from '@/lib/kai/tenants';
 import { getIntelligenceSources } from '@/lib/kai/intelligenceSources';
 import { getDbSources, buildDbSourcesContext } from '@/lib/aria/databases';
@@ -102,7 +102,8 @@ export async function POST(req, { params }) {
   if (!meta) return Response.json({ error: 'Tenant no encontrado.' }, { status: 404 });
   // Rollout por persona (ver lib/kaiNext/capabilities.js) — no por tenant: cada usuario del
   // cliente trae su propio access.kaiNextSections/kaiNextCapabilities.
-  const kaiNextAccess = await getCurrentKaiNextAccess(tenant);
+  const identity = await getCurrentKaiNextIdentity(tenant);
+  const kaiNextAccess = identity.access;
   if (!isSectionAllowed(kaiNextAccess, 'chat')) {
     return Response.json({ error: 'El chat no está habilitado para tu usuario.' }, { status: 403 });
   }
@@ -138,7 +139,7 @@ export async function POST(req, { params }) {
           // página Empresa (?ref=...) — ver KaiNextEmpresa.jsx. Queda guardado en la conversación
           // para que, aunque el intercambio se extienda varios turnos, Kai siga sabiendo sobre
           // qué ítem puede llamar mark_resolved.
-          const created = await createConversation(tenant, 'bonsight-team', ref ?? null);
+          const created = await createConversation(tenant, identity.chatOwnerId ?? 'bonsight-team', ref ?? null);
           convoId = created.id;
           activeRef = created.meta.activeRef ?? null;
         }
@@ -192,7 +193,7 @@ export async function POST(req, { params }) {
           system,
           messages: conversation,
           tools: allowedTools,
-          context: { tenant, intelligenceSources, dbSources },
+          context: { tenant, intelligenceSources, dbSources, identity },
           executeTool,
           isStopTool: (name) => name === 'present_analysis',
           onToolStart: (name) => {
@@ -334,7 +335,8 @@ export async function GET(req, { params }) {
     const convo = await getConversation(tenant, conversationId);
     return convo ? Response.json(convo) : Response.json({ error: 'No encontrado.' }, { status: 404 });
   }
-  return Response.json({ conversations: await listConversations(tenant) });
+  const identity = await getCurrentKaiNextIdentity(tenant);
+  return Response.json({ conversations: await listConversations(tenant, identity.chatOwnerId) });
 }
 
 export async function DELETE(req, { params }) {

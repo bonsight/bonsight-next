@@ -47,11 +47,18 @@
 }
 
 .knx-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 19px;
   font-weight: 600;
   color: var(--knx-text);
   letter-spacing: -0.01em;
   padding: 0 4px;
+}
+
+.knx-brand img {
+  display: block;
 }
 
 .knx-tenant-chip {
@@ -5325,6 +5332,122 @@
 .knx-canvas-item-name {
   font-size: 11.5px;
   font-weight: 600;
+  color: var(--knx-text-muted);
+}
+
+/* ── Tabla de tareas (Proyecto de Seguimiento — vista Lista) ─────────────── */
+
+.knx-task-table {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+  border: 1px solid var(--knx-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.knx-task-table-head,
+.knx-task-table-row,
+.knx-task-quickadd {
+  display: grid;
+  grid-template-columns: 28px minmax(160px, 2fr) 130px 120px 120px 90px 70px 28px;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+}
+
+.knx-task-table-head {
+  background: var(--knx-sidebar-bg);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--knx-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.knx-task-table-row {
+  border-top: 1px solid var(--knx-border);
+  cursor: pointer;
+}
+
+.knx-task-table-row:hover {
+  background: var(--knx-sidebar-bg);
+}
+
+.knx-task-table-cell-main {
+  min-width: 0;
+}
+
+.knx-task-table-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--knx-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.knx-task-table-title--done {
+  text-decoration: line-through;
+  color: var(--knx-text-muted);
+}
+
+.knx-task-table-sub {
+  font-size: 11px;
+  color: var(--knx-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.knx-task-table-dates {
+  font-size: 12px;
+  color: var(--knx-text);
+}
+
+.knx-task-table-overdue {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #B3261E;
+}
+
+.knx-task-table-duetoday {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #92400E;
+}
+
+.knx-task-table-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--knx-border);
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.knx-task-table-checkbox--done {
+  background: var(--knx-primary);
+  border-color: var(--knx-primary);
+}
+
+.knx-task-quickadd {
+  border-top: 1px solid var(--knx-border);
+  grid-template-columns: 28px 1fr;
+}
+
+.knx-task-quickadd input {
+  border: none;
+  outline: none;
+  font-size: 13px;
+  background: none;
+  color: var(--knx-text);
+}
+
+.knx-task-quickadd input::placeholder {
   color: var(--knx-text-muted);
 }
 

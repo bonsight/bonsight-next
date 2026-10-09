@@ -45,7 +45,10 @@ export default function KaiNextSidebar({
   return (
     <aside className="knx-sidebar">
       <div className="knx-sidebar-top">
-        <div className="knx-brand">Kai</div>
+        <div className="knx-brand">
+          <img src="/assets/bonsight-isotipo.svg" alt="" width="22" height="12" />
+          Kai
+        </div>
         <a className="knx-tenant-chip" href="/team" title="Cambiar de producto o cliente">
           <span className="knx-tenant-avatar">{initials(tenantName)[0]}</span>
           <span className="knx-tenant-name">{tenantName}</span>
