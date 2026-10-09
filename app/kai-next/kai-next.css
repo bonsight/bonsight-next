@@ -87,6 +87,14 @@
   border-color: var(--knx-primary);
 }
 
+.knx-tenant-chip--static {
+  cursor: default;
+}
+
+.knx-tenant-chip--static:hover {
+  border-color: var(--knx-border);
+}
+
 .knx-tenant-chip svg {
   margin-left: auto;
   color: var(--knx-text-muted);

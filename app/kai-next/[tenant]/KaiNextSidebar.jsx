@@ -49,11 +49,10 @@ export default function KaiNextSidebar({
           <img src="/assets/bonsight-isotipo.svg" alt="" width="22" height="12" />
           Kai
         </div>
-        <a className="knx-tenant-chip" href="/team" title="Cambiar de producto o cliente">
+        <div className="knx-tenant-chip knx-tenant-chip--static">
           <span className="knx-tenant-avatar">{initials(tenantName)[0]}</span>
           <span className="knx-tenant-name">{tenantName}</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 10l5 5 5-5" /></svg>
-        </a>
+        </div>
         {showSection('chat') && (onNewChat ? (
           <button className="knx-new-chat" onClick={onNewChat} type="button">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
