@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { calcAreaScore, calcOverallScore } from '@/lib/kai/scoring';
+import { KAI_NEXT_SECTIONS } from '@/lib/kaiNext/capabilities';
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -85,6 +86,10 @@ function SectionTitle({ children }) {
 
 // ── Active Priorities ─────────────────────────────────────────────────────
 
+function normalizePriorities(list) {
+  return (list ?? []).map((p) => (typeof p === 'string' ? { text: p, done: false } : { text: p?.text ?? '', done: !!p?.done }));
+}
+
 function ActivePrioritiesEditor({ slug }) {
   const [priorities, setPriorities] = useState([]);
   const [input, setInput]           = useState('');
@@ -93,7 +98,7 @@ function ActivePrioritiesEditor({ slug }) {
   useEffect(() => {
     fetch(`/api/kai/${slug}/active-priorities`)
       .then(r => r.json())
-      .then(d => setPriorities(d.priorities ?? []))
+      .then(d => setPriorities(normalizePriorities(d.priorities)))
       .catch(() => {});
   }, [slug]);
 
@@ -106,15 +111,15 @@ function ActivePrioritiesEditor({ slug }) {
         body: JSON.stringify({ priorities: next }),
       });
       const data = await res.json();
-      setPriorities(data.priorities ?? next);
+      setPriorities(normalizePriorities(data.priorities ?? next));
     } catch {}
     setSaving(false);
   };
 
   const add = () => {
     const trimmed = input.trim();
-    if (!trimmed || priorities.includes(trimmed)) return;
-    const next = [...priorities, trimmed];
+    if (!trimmed || priorities.some((p) => p.text === trimmed)) return;
+    const next = [...priorities, { text: trimmed, done: false }];
     setInput('');
     save(next);
   };
@@ -124,25 +129,42 @@ function ActivePrioritiesEditor({ slug }) {
     save(next);
   };
 
+  const toggleDone = (i) => {
+    const next = priorities.map((p, idx) => (idx === i ? { ...p, done: !p.done } : p));
+    save(next);
+  };
+
   const handleKey = (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
 
   return (
     <div style={{ background: '#fff', border: '0.5px solid #e0e0dc', borderRadius: 12, padding: '18px 22px', marginBottom: 16 }}>
       <div style={{ fontSize: 10, fontWeight: 600, color: '#bbb', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
         Prioridades activas — lo que importa esta semana
+        {priorities.length > 0 && ` · ${priorities.filter((p) => p.done).length}/${priorities.length} completadas`}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: priorities.length ? 12 : 0 }}>
         {priorities.map((p, i) => (
           <span key={i} style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
-            background: '#F0FDF4', border: '0.5px solid #86EFAC',
+            background: p.done ? '#F5F5F3' : '#F0FDF4', border: `0.5px solid ${p.done ? '#ddd' : '#86EFAC'}`,
             borderRadius: 20, padding: '4px 12px',
-            fontSize: 12.5, fontWeight: 500, color: '#15803D',
+            fontSize: 12.5, fontWeight: 500, color: p.done ? '#999' : '#15803D',
           }}>
-            {p}
+            <button
+              onClick={() => toggleDone(i)}
+              title={p.done ? 'Marcar como pendiente' : 'Marcar como completada'}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, lineHeight: 1, display: 'flex' }}
+            >
+              {p.done ? (
+                <svg width="13" height="13" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="currentColor" /><path d="M7.5 12.5l3 3 6-6.5" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10" /></svg>
+              )}
+            </button>
+            <span style={{ textDecoration: p.done ? 'line-through' : 'none' }}>{p.text}</span>
             <button
               onClick={() => remove(i)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#86EFAC', padding: 0, lineHeight: 1, fontSize: 14 }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', opacity: 0.6, padding: 0, lineHeight: 1, fontSize: 14 }}
             >×</button>
           </span>
         ))}
@@ -565,6 +587,38 @@ function DiagnosisBlock({ slug }) {
                   {e}
                 </div>
               ))}
+            </div>
+          )}
+
+          {diag.ejes?.length > 0 && (
+            <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: '#bbb', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Ejes estratégicos (visibles en Kai Next como activadores)
+              </div>
+              {diag.ejes.map((eje, i) => (
+                <div key={i} style={{ background: '#fff', border: '0.5px solid #e8e8e4', borderRadius: 10, padding: '10px 14px' }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, textTransform: 'uppercase', borderRadius: 6, padding: '1px 7px',
+                    background: eje.categoria === 'bloqueo_critico' ? '#FEF0EE' : '#E1F5EE',
+                    color: eje.categoria === 'bloqueo_critico' ? '#7B1A0A' : '#085041',
+                  }}>
+                    {eje.categoria === 'bloqueo_critico' ? 'Bloqueo crítico' : 'Oportunidad clave'}
+                  </span>
+                  <div style={{ fontSize: 13, fontWeight: 600, margin: '6px 0 2px' }}>{eje.titulo}</div>
+                  <div style={{ fontSize: 12, color: '#777', lineHeight: 1.5 }}>{eje.descripcion}</div>
+                  {eje.acciones?.length > 0 && (
+                    <div style={{ fontSize: 11, color: '#aaa', marginTop: 6 }}>
+                      Acciones: {eje.acciones.map((a) => a.label).join(' · ')}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {diag.duplicados?.length > 0 && (
+            <div style={{ fontSize: 11.5, color: '#92400E', background: '#FEF3C7', borderRadius: 8, padding: '8px 12px', marginTop: 10 }}>
+              {diag.duplicados.reduce((sum, g) => sum + (g.items?.length ?? 0), 0)} ítems casi-duplicados detectados en el perfil — visibles como sugerencia de fusión en Kai Next.
             </div>
           )}
 
@@ -1969,7 +2023,7 @@ function EquipoFieldsGrid({ values, onChange, disabled }) {
 // con un formulario siempre visible (a diferencia de la versión anterior).
 function EquipoAddPanel({ tenant, onCreated, onClose }) {
   const [draft, setDraft] = useState({ firstName: '', lastName: '', cargo: '', email: '' });
-  const [access, setAccess] = useState({ kai: true, aria: false });
+  const [access, setAccess] = useState({ kai: true, aria: false, kaiNext: false });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -2002,6 +2056,7 @@ function EquipoAddPanel({ tenant, onCreated, onClose }) {
           Acceso:
           <button type="button" className={`eq-pill${access.kai ? ' eq-pill--on' : ''}`} onClick={() => setAccess((a) => ({ ...a, kai: !a.kai }))}>Kai</button>
           <button type="button" className={`eq-pill${access.aria ? ' eq-pill--on' : ''}`} onClick={() => setAccess((a) => ({ ...a, aria: !a.aria }))}>Aria</button>
+          <button type="button" className={`eq-pill${access.kaiNext ? ' eq-pill--on' : ''}`} onClick={() => setAccess((a) => ({ ...a, kaiNext: !a.kaiNext }))}>Kai Next</button>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {err && <span style={{ color: '#c0392b', fontSize: 12 }}>{err}</span>}
@@ -2097,7 +2152,7 @@ function EquipoRow({ tenant, user: u, onSaved }) {
 
   const toggleAccess = (product) => {
     if (inactive) return;
-    patch({ access: { kai: u.access?.kai, aria: u.access?.aria, [product]: !u.access?.[product] } });
+    patch({ access: { kai: u.access?.kai, aria: u.access?.aria, kaiNext: u.access?.kaiNext, [product]: !u.access?.[product] } });
   };
 
   const resetCredentials = () => {
@@ -2148,6 +2203,17 @@ function EquipoRow({ tenant, user: u, onSaved }) {
         <div className="eq-pills">
           <button type="button" className={`eq-pill${u.access?.kai ? ' eq-pill--on' : ''}${inactive ? ' eq-pill--disabled' : ''}`} onClick={() => toggleAccess('kai')} disabled={inactive}>Kai</button>
           <button type="button" className={`eq-pill${u.access?.aria ? ' eq-pill--on' : ''}${inactive ? ' eq-pill--disabled' : ''}`} onClick={() => toggleAccess('aria')} disabled={inactive}>Aria</button>
+          <button type="button" className={`eq-pill${u.access?.kaiNext ? ' eq-pill--on' : ''}${inactive ? ' eq-pill--disabled' : ''}`} onClick={() => toggleAccess('kaiNext')} disabled={inactive}>Kai Next</button>
+          {u.access?.kaiNext && !inactive && (
+            <button
+              type="button"
+              className="eq-icon-btn"
+              title="Qué puede ver y hacer en Kai Next"
+              onClick={() => setMode(mode === 'kaiNextConfig' ? null : 'kaiNextConfig')}
+            >
+              <EqIconEdit />
+            </button>
+          )}
         </div>
         <span className={`eq-status ${status.cls}`}>{status.label}</span>
         <div className="eq-row-actions">
@@ -2183,6 +2249,183 @@ function EquipoRow({ tenant, user: u, onSaved }) {
           </div>
         </div>
       )}
+      {mode === 'kaiNextConfig' && (
+        <div className="eq-edit-row">
+          <KaiNextUserCapabilitiesPanel tenant={tenant} user={u} onSaved={() => { onSaved(); setMode(null); }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Rollout por PERSONA de Kai Next (ver lib/kaiNext/capabilities.js) — a diferencia de
+// allowedProjectKinds de Labs (que es por tenant), esto vive en access.kaiNextSections/
+// access.kaiNextCapabilities de CADA tenant-user, porque acá lo que varía es qué puede ver y
+// hacer cada persona del cliente, no el cliente entero. Mismas dos capas: secciones (el nav
+// real) y, anidadas, las capacidades puntuales de cada una.
+function KaiNextUserCapabilitiesPanel({ tenant, user: u, onSaved }) {
+  const allSectionIds = KAI_NEXT_SECTIONS.map((s) => s.id);
+  const allCapIds = KAI_NEXT_SECTIONS.flatMap((s) => s.capabilities.map((c) => c.id));
+  const [sections, setSections] = useState(new Set(u.access?.kaiNextSections?.length ? u.access.kaiNextSections : allSectionIds));
+  const [caps, setCaps] = useState(new Set(u.access?.kaiNextCapabilities?.length ? u.access.kaiNextCapabilities : allCapIds));
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const toggleSection = (id) => setSections((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const toggleCap = (id) => setCaps((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const save = async () => {
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/tenant-users/${u.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          access: {
+            kai: u.access?.kai, aria: u.access?.aria, kaiNext: u.access?.kaiNext,
+            kaiNextSections: [...sections], kaiNextCapabilities: [...caps],
+          },
+        }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setErr(d.error || 'No se pudo guardar.'); return; }
+      onSaved();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: '10px 2px' }}>
+      <p style={{ fontSize: 12.5, color: '#888', marginBottom: 10 }}>
+        Qué puede ver y hacer <strong>{u.name}</strong> en Kai Next.
+      </p>
+      {KAI_NEXT_SECTIONS.map((s) => {
+        const sectionOn = sections.has(s.id);
+        return (
+          <div key={s.id} style={{ padding: '8px 0', borderTop: '1px solid #eee' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <input type="checkbox" checked={sectionOn} onChange={() => toggleSection(s.id)} />
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{s.label}</span>
+              <span style={{ fontSize: 11.5, color: '#999' }}>{s.description}</span>
+            </label>
+            {s.capabilities.length > 0 && (
+              <div style={{ marginLeft: 26, marginTop: 4 }}>
+                {s.capabilities.map((c) => (
+                  <label
+                    key={c.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0',
+                      cursor: sectionOn ? 'pointer' : 'default',
+                      opacity: sectionOn ? 1 : 0.4,
+                    }}
+                  >
+                    <input type="checkbox" checked={caps.has(c.id)} disabled={!sectionOn} onChange={() => toggleCap(c.id)} />
+                    <span style={{ fontSize: 12 }}>{c.label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div className="eq-edit-footer" style={{ marginTop: 8 }}>
+        {err && <span style={{ color: '#c0392b', fontSize: 12, marginRight: 8 }}>{err}</span>}
+        <button className="admin-btn admin-btn--primary" onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</button>
+      </div>
+    </div>
+  );
+}
+
+const PROJECTS_SA_EMAIL = 'id-aria-platform@bonsight-web.iam.gserviceaccount.com';
+
+// Repositorio de Drive para Proyectos (Kai Next) — mismo patrón que DriveConnectPanel de Labs,
+// con su propia config (kainext:{tenant}:projects:drive:config, ver lib/kaiNext/projectsDrive.js)
+// y el mismo service account de escritura que ya usan Aria/Labs.
+function KaiNextProjectsDrivePanel({ tenant }) {
+  const [config, setConfig] = useState(undefined);
+  const [folderInput, setFolderInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const load = () => {
+    fetch(`/api/kai-next/${tenant}/projects-drive`)
+      .then((r) => r.json())
+      .then((d) => setConfig(d.config ?? null))
+      .catch(() => setConfig(null));
+  };
+  useEffect(() => { load(); }, [tenant]);
+
+  const connect = async (e) => {
+    e.preventDefault();
+    if (!folderInput.trim() || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/kai-next/${tenant}/projects-drive`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folderId: folderInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo conectar.'); return; }
+      setConfig(data.config);
+      setFolderInput('');
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disconnect = async () => {
+    setBusy(true);
+    try {
+      await fetch(`/api/kai-next/${tenant}/projects-drive`, { method: 'DELETE' });
+      setConfig(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="admin-detail-card" style={{ marginBottom: 16 }}>
+      <p className="eq-header-title">Proyectos — Repositorio de Drive</p>
+      <p className="eq-header-sub" style={{ marginBottom: 12 }}>La documentación que se suba desde Proyectos (Kai Next) va a quedar guardada acá, organizada por proyecto.</p>
+
+      {config === undefined && <p style={{ fontSize: 12, color: '#bbb' }}>Cargando…</p>}
+
+      {config === null && (
+        <>
+          <p style={{ fontSize: 12.5, color: '#bbb', marginBottom: 10 }}>
+            Antes de conectar, compartí la carpeta en Drive con <b style={{ fontFamily: 'monospace', fontSize: 11.5 }}>{PROJECTS_SA_EMAIL}</b> como <b>Editor</b> — Proyectos necesita crear carpetas y subir archivos ahí, no solo leer.
+          </p>
+          <form onSubmit={connect} style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <input type="text" placeholder="Link o ID de la carpeta de Drive" value={folderInput} onChange={(e) => setFolderInput(e.target.value)} style={{ flex: 1, minWidth: 220 }} />
+            <button type="submit" className="eq-add-btn" disabled={busy}>{busy ? 'Conectando…' : 'Conectar'}</button>
+          </form>
+          {err && <p style={{ color: '#c0392b', fontSize: 12.5, marginTop: 8 }}>{err}</p>}
+        </>
+      )}
+
+      {config && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 13.5 }}>
+            📁 <b>{config.folderName}</b>
+            <div style={{ fontSize: 11.5, color: '#999', marginTop: 2 }}>Conectado {new Date(config.connectedAt).toLocaleDateString('es-ES')}</div>
+          </div>
+          <button type="button" className="eq-add-btn" disabled={busy} onClick={disconnect}>{busy ? '…' : 'Desconectar'}</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -2200,27 +2443,30 @@ function EquipoTab({ slug }) {
   useEffect(() => { load(); }, [slug]);
 
   return (
-    <div className="admin-detail-card" style={{ padding: 0, overflow: 'hidden' }}>
-      <div className="eq-header">
-        <div>
-          <p className="eq-header-title">Equipo del cliente{users?.length ? <span className="eq-header-count"> · {users.length} persona{users.length !== 1 ? 's' : ''}</span> : null}</p>
-          <p className="eq-header-sub">Cada persona entra con su usuario. El acceso a Kai y Aria se habilita por persona.</p>
+    <>
+      <KaiNextProjectsDrivePanel tenant={slug} />
+      <div className="admin-detail-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="eq-header">
+          <div>
+            <p className="eq-header-title">Equipo del cliente{users?.length ? <span className="eq-header-count"> · {users.length} persona{users.length !== 1 ? 's' : ''}</span> : null}</p>
+            <p className="eq-header-sub">Cada persona entra con su usuario. El acceso a Kai y Aria se habilita por persona.</p>
+          </div>
+          <button type="button" className="eq-add-btn" onClick={() => setAddOpen((v) => !v)}>+ Agregar persona</button>
         </div>
-        <button type="button" className="eq-add-btn" onClick={() => setAddOpen((v) => !v)}>+ Agregar persona</button>
+
+        {addOpen && <EquipoAddPanel tenant={slug} onCreated={load} onClose={() => setAddOpen(false)} />}
+
+        {users?.length > 0 && (
+          <div className="eq-row-head">
+            <span>Persona</span><span>Usuario / email</span><span>Productos</span><span>Estado</span><span></span>
+          </div>
+        )}
+
+        {users === undefined && <p style={{ fontSize: 12, color: '#bbb', padding: '16px' }}>Cargando…</p>}
+        {users?.length === 0 && <p style={{ fontSize: 12, color: '#bbb', padding: '16px' }}>Todavía no hay nadie en el equipo.</p>}
+        {users?.map((u) => <EquipoRow key={u.id} tenant={slug} user={u} onSaved={load} />)}
       </div>
-
-      {addOpen && <EquipoAddPanel tenant={slug} onCreated={load} onClose={() => setAddOpen(false)} />}
-
-      {users?.length > 0 && (
-        <div className="eq-row-head">
-          <span>Persona</span><span>Usuario / email</span><span>Productos</span><span>Estado</span><span></span>
-        </div>
-      )}
-
-      {users === undefined && <p style={{ fontSize: 12, color: '#bbb', padding: '16px' }}>Cargando…</p>}
-      {users?.length === 0 && <p style={{ fontSize: 12, color: '#bbb', padding: '16px' }}>Todavía no hay nadie en el equipo.</p>}
-      {users?.map((u) => <EquipoRow key={u.id} tenant={slug} user={u} onSaved={load} />)}
-    </div>
+    </>
   );
 }
 

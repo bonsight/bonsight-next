@@ -19,7 +19,10 @@ export async function PUT(req, { params }) {
   if (!Array.isArray(priorities)) {
     return Response.json({ error: 'priorities debe ser un array.' }, { status: 400 });
   }
-  const cleaned = priorities.map((p) => String(p).trim()).filter(Boolean).slice(0, 10);
+  const cleaned = priorities
+    .map((p) => (typeof p === 'string' ? { text: p.trim(), done: false } : { text: String(p?.text ?? '').trim(), done: !!p?.done }))
+    .filter((p) => p.text)
+    .slice(0, 10);
   await setActivePriorities(tenant, cleaned);
   return Response.json({ priorities: cleaned });
 }

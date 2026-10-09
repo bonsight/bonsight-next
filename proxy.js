@@ -52,6 +52,14 @@ export async function proxy(request) {
       return NextResponse.rewrite(url);
     }
 
+    // /next/* — Kai Next (MVP): vive bajo kai. sin subdominio nuevo; se pisa /next por
+    // /kai-next para mantener el código separado de Kai legacy. Auth por tenant se resuelve a
+    // nivel de page (lib/kaiNext/auth.js), no acá.
+    if (pathname.startsWith('/next')) {
+      url.pathname = `/kai-next${pathname.slice('/next'.length)}`;
+      return NextResponse.rewrite(url);
+    }
+
     // Tenant routes (/[slug], /[slug]/*) — per-tenant auth handled at page level
     url.pathname = `/kai${pathname}`;
     return NextResponse.rewrite(url);
