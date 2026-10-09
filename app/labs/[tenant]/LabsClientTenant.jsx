@@ -99,6 +99,11 @@ const FIELD_TYPES = [
   { value: 'number', label: 'Número' },
 ];
 
+// Sentinel para "no aplica a esta ejecución" — distinto de vacío/undefined (que cuenta como
+// faltante real, ver missingFields en handleConfirm): un campo marcado así nunca debería
+// pedirse de nuevo, a diferencia de uno que simplemente no se completó todavía.
+const NA_VALUE = '__NA__';
+
 const CRITERIA_OPERATORS = [
   { value: '>', label: '>' },
   { value: '<', label: '<' },
@@ -1787,17 +1792,30 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
             </div>
             {test.fields.map((f, i) => {
               const val = editedValues[f.key] ?? '';
+              const isNA = val === NA_VALUE;
               const isMissing = val === '';
               return (
                 <div className={`sp-row ${i % 2 ? 'dark-bg' : ''}`} key={f.key}>
                   <div className="k">{f.label}</div>
-                  <div className={`v ${isMissing ? 'missing' : ''}`}>
-                    <input
-                      type={f.type === 'number' ? 'number' : 'text'}
-                      value={val}
-                      placeholder="Sin especificar — completá a mano"
-                      onChange={(e) => setEditedValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                    />
+                  <div className={`v ${isMissing ? 'missing' : ''}`} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {isNA ? (
+                      <span style={{ flex: 1, fontStyle: 'italic', color: 'var(--labs-cream-faint)' }}>No aplica a esta ejecución</span>
+                    ) : (
+                      <input
+                        type={f.type === 'number' ? 'number' : 'text'}
+                        value={val}
+                        placeholder="Sin especificar — completá a mano"
+                        onChange={(e) => setEditedValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                        style={{ flex: 1 }}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      className="chip-btn"
+                      onClick={() => setEditedValues((prev) => ({ ...prev, [f.key]: isNA ? '' : NA_VALUE }))}
+                    >
+                      {isNA ? 'Deshacer' : 'No aplica'}
+                    </button>
                   </div>
                 </div>
               );
@@ -3237,7 +3255,7 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
                 <div className="exec-row" key={e.id}>
                   <div className="exec-date">{formatDate(e.createdAt)}</div>
                   <div className="exec-detail">
-                    <b>{e.contributor}</b> ({e.role}) — {t.fields.map((f) => `${f.label}: ${e.values[f.key] ?? '—'}`).join(' · ')}
+                    <b>{e.contributor}</b> ({e.role}) — {t.fields.map((f) => `${f.label}: ${e.values[f.key] === NA_VALUE ? 'No aplica' : e.values[f.key] ?? '—'}`).join(' · ')}
                     {e.note && <div style={{ marginTop: 3, color: 'var(--labs-cream-faint)' }}>{e.note}</div>}
                     {e.validatedBy && <div style={{ marginTop: 3, color: 'var(--labs-living)', fontSize: 11.5 }}>✓ validado por {e.validatedBy}</div>}
                     {e.evidence?.some((a) => a.driveUrl) && (
