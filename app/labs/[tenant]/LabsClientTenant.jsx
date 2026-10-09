@@ -3226,7 +3226,10 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
                 <div style={{ fontSize: 12, color: 'var(--labs-cream-faint)' }}>
                   Registradores: {t.registradorIds?.length ? t.registradorIds.map(nameOf).join(', ') : 'ninguno asignado'}
                 </div>
-                <button type="button" className="chip-btn" onClick={() => setEditRegistradoresOf(t.id)}>Editar</button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" className="chip-btn" onClick={() => setEditRegistradoresOf(t.id)}>Editar</button>
+                  <DeleteTestButton tenant={tenant} experimentId={experiment.meta.id} testId={t.id} testName={t.name} onDeleted={onUpdate} />
+                </div>
               </div>
             )}
             <div className="exec-list">
@@ -3275,6 +3278,7 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
           experimentId={experiment.meta.id}
           testId={editRegistradoresOf}
           current={experiment.tests.find((t) => t.id === editRegistradoresOf)?.registradorIds ?? []}
+          currentName={experiment.tests.find((t) => t.id === editRegistradoresOf)?.name ?? ''}
           onClose={() => setEditRegistradoresOf(null)}
           onSaved={() => { setEditRegistradoresOf(null); onUpdate(); }}
         />
@@ -3324,19 +3328,21 @@ function EditSupervisorsModal({ tenant, experimentId, current, onClose, onSaved 
   );
 }
 
-function EditRegistradoresModal({ tenant, experimentId, testId, current, onClose, onSaved }) {
+function EditRegistradoresModal({ tenant, experimentId, testId, current, currentName, onClose, onSaved }) {
+  const [name, setName] = useState(currentName ?? '');
   const [registradorIds, setRegistradorIds] = useState(current);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
   const handleSave = async () => {
+    if (!name.trim()) { setErr('El nombre de la prueba es requerido.'); return; }
     setBusy(true);
     setErr(null);
     try {
       const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/tests/${testId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ registradorIds }),
+        body: JSON.stringify({ name, registradorIds }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo guardar.'); return; }
@@ -3352,8 +3358,11 @@ function EditRegistradoresModal({ tenant, experimentId, testId, current, onClose
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-card" style={{ position: 'relative' }}>
         <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
-        <span className="eyebrow-mini on-dark">Editar equipo</span>
-        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Registradores de la prueba</h2>
+        <span className="eyebrow-mini on-dark">Editar prueba</span>
+        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>{currentName}</h2>
+        <label className="field-label">Nombre de la prueba</label>
+        <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 16 }} />
+        <label className="field-label">Registradores</label>
         <UserMultiSelect tenant={tenant} role="Registrador" selected={registradorIds} onChange={setRegistradorIds} />
         {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
         <div className="modal-footer">
@@ -3362,6 +3371,54 @@ function EditRegistradoresModal({ tenant, experimentId, testId, current, onClose
         </div>
       </div>
     </div>
+  );
+}
+
+function DeleteTestButton({ tenant, experimentId, testId, testName, onDeleted }) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const handleDelete = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/tests/${testId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || 'No se pudo eliminar.'); return; }
+      onDeleted();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <button type="button" className="chip-btn" onClick={(e) => { e.stopPropagation(); setConfirming(true); }} style={{ color: 'var(--labs-alert)' }}>
+        Eliminar
+      </button>
+      {confirming && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setConfirming(false); }}>
+          <div className="modal-card" style={{ position: 'relative' }}>
+            <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={() => setConfirming(false)}>✕</button>
+            <span className="eyebrow-mini on-dark">Eliminar prueba</span>
+            <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>{testName}</h2>
+            <p style={{ fontSize: 13.5, color: 'var(--labs-cream-dim)' }}>
+              Se borran también sus ejecuciones — no se puede deshacer.
+            </p>
+            {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
+            <div className="modal-footer">
+              <button type="button" className="btn btn-quiet" onClick={() => setConfirming(false)}>Cancelar</button>
+              <button type="button" className="btn btn-primary" style={{ background: 'var(--labs-alert)', borderColor: 'var(--labs-alert)' }} disabled={busy} onClick={handleDelete}>
+                {busy ? 'Eliminando…' : 'Eliminar prueba'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
