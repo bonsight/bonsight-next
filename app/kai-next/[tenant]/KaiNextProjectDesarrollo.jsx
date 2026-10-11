@@ -59,6 +59,7 @@ function TrashIcon() {
 // tablero real (KaiNextSprints.jsx), para que una tarea se vea igual en los dos lugares.
 function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragStart, onDragEnd, dragging, entering, showStatusSelect = true }) {
   const hasDates = task.startDate || task.dueDate;
+  const vencida = task.status !== 'Done' && !!task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10);
   return (
     <div
       className={`knx-board-card${dragging ? ' knx-board-card--dragging' : ''}${entering ? ' knx-board-card--entering' : ''}`}
@@ -83,7 +84,10 @@ function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragS
         {task.severity && <span className="knx-board-tag knx-board-tag--severity">{task.severity}</span>}
       </div>
       {hasDates && (
-        <div className="knx-board-card-dates">{task.startDate ? fmtDate(task.startDate) : '—'} → {task.dueDate ? fmtDate(task.dueDate) : '—'}</div>
+        <div className="knx-board-card-dates">
+          {task.startDate ? fmtDate(task.startDate) : '—'} → {task.dueDate ? fmtDate(task.dueDate) : '—'}
+          {vencida && <span className="knx-board-card-overdue">Vencida</span>}
+        </div>
       )}
       <div className="knx-board-card-foot">
         <span className="knx-board-card-resp">
