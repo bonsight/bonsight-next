@@ -4,7 +4,7 @@ import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/project
 import { getNotionToken, listTareasDelProyecto } from '@/lib/kaiNext/projectsNotion';
 import {
   STATUS_COLUMNS, loadTalentoMap, moveTask, updateTaskDatesAndHours, updateTaskResponsable, addExistingTask,
-  updateTaskDetails, updateTaskActualHours, removeTask, createTask,
+  updateTaskDetails, updateTaskActualHours, deleteTask, createTask,
 } from '@/lib/aria/board';
 
 // Tablero agregado de TODO el proyecto (todas las iniciativas) — a diferencia de EpicaTareas
@@ -85,7 +85,7 @@ export async function PATCH(req, { params }) {
     } else if (action === 'update_actual_hours') {
       await updateTaskActualHours(token, pageId, body.actualHours);
     } else if (action === 'remove_task') {
-      await removeTask(token, pageId);
+      await deleteTask(token, pageId);
     } else if (action === 'create_subtask') {
       // pageId acá es la tarea PADRE (mismo criterio que el resto de las acciones: pageId es a
       // qué apunta la acción). Arranca en Backlog — createTask no exige fecha/estimación como sí

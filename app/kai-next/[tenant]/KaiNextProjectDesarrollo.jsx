@@ -647,6 +647,7 @@ function NewEpicaModal({ tenant, projectId, iniciativas, onClose, onCreated }) {
 function NewTareaForm({ activeSprint, onCreate }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [addToSprint, setAddToSprint] = useState(!!activeSprint);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -657,15 +658,15 @@ function NewTareaForm({ activeSprint, onCreate }) {
   if (!open) return <button type="button" className="knx-canvas-add-item-btn" onClick={() => setOpen(true)}>+ Nueva tarea</button>;
 
   const submit = async () => {
-    if (!title.trim() || !startDate || !endDate || !estimatedHours) {
-      setErr('Completá título, fechas y estimación.');
+    if (!title.trim() || !description.trim() || !startDate || !endDate || !estimatedHours) {
+      setErr('Completá título, descripción, fechas y estimación.');
       return;
     }
     setSaving(true);
     setErr(null);
     try {
-      await onCreate({ title, sprintId: addToSprint && activeSprint ? activeSprint.id : null, startDate, endDate, estimatedHours });
-      setTitle(''); setStartDate(''); setEndDate(''); setEstimatedHours('');
+      await onCreate({ title, description, sprintId: addToSprint && activeSprint ? activeSprint.id : null, startDate, endDate, estimatedHours });
+      setTitle(''); setDescription(''); setStartDate(''); setEndDate(''); setEstimatedHours('');
       setOpen(false);
     } catch (e) {
       setErr(e.message || 'No se pudo crear.');
@@ -678,6 +679,7 @@ function NewTareaForm({ activeSprint, onCreate }) {
     <div className="knx-canvas-newcol-form">
       {err && <p className="knx-canvas-error">{err}</p>}
       <input className="knx-canvas-meta-select" placeholder="Título de la tarea…" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+      <textarea className="knx-canvas-meta-select" rows={2} placeholder="Descripción" value={description} onChange={(e) => setDescription(e.target.value)} />
       {activeSprint && (
         <label className="knx-canvas-meta-checkbox">
           <input type="checkbox" checked={addToSprint} onChange={(e) => setAddToSprint(e.target.checked)} />
@@ -1309,8 +1311,8 @@ function NewTareaModal({ tenant, projectId, iniciativas, talento, activeSprint, 
 
   const submit = async () => {
     if (!epicaId) { setErr('Elegí una épica.'); return; }
-    if (!title.trim() || !startDate || !endDate || !estimatedHours) {
-      setErr('Completá título, fechas y estimación.');
+    if (!title.trim() || !description.trim() || !startDate || !endDate || !estimatedHours) {
+      setErr('Completá título, descripción, fechas y estimación.');
       return;
     }
     setSaving(true);
@@ -1321,7 +1323,7 @@ function NewTareaModal({ tenant, projectId, iniciativas, talento, activeSprint, 
         body: JSON.stringify({
           title, sprintId: addToSprint && activeSprint ? activeSprint.id : null, startDate, endDate, estimatedHours,
           taskType: taskType || undefined, priority: priority || undefined, severity: severity || undefined,
-          responsableId: responsableId || undefined, description: description || undefined,
+          responsableId: responsableId || undefined, description,
         }),
       });
       const data = await res.json();
@@ -1393,7 +1395,7 @@ function NewTareaModal({ tenant, projectId, iniciativas, talento, activeSprint, 
           </div>
         </div>
         <input className="knx-canvas-meta-select" type="number" placeholder="Estimación (horas)" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} style={{ marginTop: 8 }} />
-        <textarea className="knx-canvas-meta-select" rows={2} placeholder="Descripción (opcional)" value={description} onChange={(e) => setDescription(e.target.value)} style={{ marginTop: 8 }} />
+        <textarea className="knx-canvas-meta-select" rows={2} placeholder="Descripción" value={description} onChange={(e) => setDescription(e.target.value)} style={{ marginTop: 8 }} />
         <div className="knx-canvas-ficha-draft-actions" style={{ marginTop: 16 }}>
           <button type="button" className="knx-canvas-mini" onClick={onClose} disabled={saving}>Cancelar</button>
           <button type="button" className="knx-analisis-sources-save" onClick={submit} disabled={saving}>{saving ? 'Creando…' : 'Crear tarea'}</button>
