@@ -25,9 +25,12 @@ const TASK_TYPES = ['Desarrollo', 'Soporte', 'Bug', 'Mejora', 'Reunión'];
 const SEVERITIES = ['Crítica', 'Alta', 'Media', 'Baja'];
 const SEVERITY_APPLIES_TO = new Set(['Bug']);
 
+// "2026-09-07" sin forzar UTC se interpreta como medianoche UTC y renderiza en la hora LOCAL
+// del navegador — en cualquier timezone detrás de UTC (toda Latinoamérica) eso corre la fecha
+// un día para atrás (6 sept en vez de 7 sept). Mismo fix que ya usa formatShortDate más abajo.
 function fmtDate(iso) {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short' });
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('es', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
 function initials(name = '') {

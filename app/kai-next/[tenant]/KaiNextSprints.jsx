@@ -9,9 +9,11 @@ const TASK_TYPES = ['Desarrollo', 'Soporte', 'Bug', 'Mejora', 'Reunión'];
 const SEVERITIES = ['Crítica', 'Alta', 'Media', 'Baja'];
 const SEVERITY_APPLIES_TO = new Set(['Bug']);
 
+// Mismo fix que KaiNextProjectDesarrollo.jsx: una fecha "YYYY-MM-DD" sin forzar UTC se corre un
+// día para atrás en cualquier timezone detrás de UTC (toda Latinoamérica).
 function fmtDate(iso) {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short' });
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('es', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
 function initials(name = '') {
