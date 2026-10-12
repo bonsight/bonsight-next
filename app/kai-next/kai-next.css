@@ -4848,6 +4848,16 @@
   color: var(--knx-text-muted);
 }
 
+.knx-board-detail-meta a {
+  color: var(--knx-primary);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.knx-board-detail-meta a:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 1100px) {
   .knx-board-columns {
     grid-template-columns: repeat(5, 220px);
@@ -4913,6 +4923,119 @@
   font-size: 10.5px;
   font-weight: 600;
   color: #B3261E;
+}
+
+/* ── Subtareas — en la tarjeta (expandible) y en el panel de detalle ─────── */
+
+.knx-board-card-children {
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 11px;
+  color: var(--knx-text-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.knx-board-card-children:hover {
+  color: var(--knx-text);
+}
+
+.knx-board-card-children-list {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.knx-board-subtask-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.knx-board-card-child-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.knx-board-card-child-check {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  border: 1.5px solid var(--knx-border);
+  background: #fff;
+  cursor: pointer;
+  padding: 0;
+}
+
+.knx-board-card-child-check--done {
+  background: var(--knx-primary);
+  border-color: var(--knx-primary);
+}
+
+.knx-board-card-child-title {
+  font-size: 11.5px;
+  color: var(--knx-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.knx-board-card-child-title:hover {
+  text-decoration: underline;
+}
+
+.knx-board-card-child-title--done {
+  color: var(--knx-text-muted);
+  text-decoration: line-through;
+}
+
+.knx-board-subtask-add {
+  display: flex;
+  gap: 6px;
+}
+
+.knx-board-subtask-add input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--knx-border);
+  border-radius: 7px;
+  padding: 6px 9px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--knx-text);
+}
+
+.knx-board-subtask-add input:focus {
+  outline: none;
+  border-color: var(--knx-primary);
+}
+
+.knx-board-subtask-add-btn {
+  flex-shrink: 0;
+  border: 1px solid var(--knx-primary);
+  border-radius: 7px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--knx-primary);
+  color: #fff;
+  cursor: pointer;
+}
+
+.knx-board-subtask-add-btn:hover {
+  background: var(--knx-primary-dark, var(--knx-primary));
+}
+
+.knx-board-subtask-add-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* ── Sprints — drag and drop entre columnas ───────────────────────────────── */

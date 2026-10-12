@@ -57,9 +57,12 @@ function TrashIcon() {
 
 // Tarjeta compartida por Tablero y el tab Sprints — misma estructura/clases que TaskCard del
 // tablero real (KaiNextSprints.jsx), para que una tarea se vea igual en los dos lugares.
-function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragStart, onDragEnd, dragging, entering, showStatusSelect = true }) {
+function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragStart, onDragEnd, dragging, entering, showStatusSelect = true, allTasks }) {
+  const [childrenOpen, setChildrenOpen] = useState(false);
   const hasDates = task.startDate || task.dueDate;
   const vencida = task.status !== 'Done' && !!task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10);
+  const children = task.childIds?.length ? task.childIds.map((id) => allTasks?.find((t) => t.id === id)).filter(Boolean) : [];
+  const childrenDone = children.filter((c) => c.status === 'Done').length;
   return (
     <div
       className={`knx-board-card${dragging ? ' knx-board-card--dragging' : ''}${entering ? ' knx-board-card--entering' : ''}`}
@@ -103,19 +106,49 @@ function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragS
           {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       )}
+      {children.length > 0 && (
+        <>
+          <button
+            type="button"
+            className="knx-board-card-children"
+            onClick={(e) => { e.stopPropagation(); setChildrenOpen((v) => !v); }}
+          >
+            {childrenOpen ? '▾' : '▸'} {childrenDone}/{children.length} subtareas
+          </button>
+          {childrenOpen && (
+            <div className="knx-board-card-children-list" onClick={(e) => e.stopPropagation()}>
+              {children.map((c) => (
+                <div key={c.id} className="knx-board-card-child-row">
+                  <button
+                    type="button"
+                    className={`knx-board-card-child-check${c.status === 'Done' ? ' knx-board-card-child-check--done' : ''}`}
+                    aria-label={c.status === 'Done' ? 'Marcar como pendiente' : 'Marcar como hecha'}
+                    onClick={() => onStatusChange(c, c.status === 'Done' ? 'Not started' : 'Done')}
+                  />
+                  <span className={`knx-board-card-child-title${c.status === 'Done' ? ' knx-board-card-child-title--done' : ''}`} onClick={() => onOpen(c.id)}>
+                    {c.title}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
 // Panel de detalle/edición de una tarea — mismos campos/acciones que TaskDetailPanel del
 // tablero real, pegando a /dev/board en vez de /board.
-function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose, onAction, onRemove }) {
+function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose, onAction, onRemove, allTasks, onCreateSubtask, onToggleSubtask, onOpenSubtask }) {
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? '');
   const [startDate, setStartDate] = useState(task.startDate ?? '');
   const [endDate, setEndDate] = useState(task.dueDate ?? '');
   const [estimatedHours, setEstimatedHours] = useState(task.estimatedHours ?? '');
   const [actualHours, setActualHours] = useState(task.actualHours ?? '');
+  const [newSubtask, setNewSubtask] = useState('');
+  const [savingSubtask, setSavingSubtask] = useState(false);
 
   const saveTitle = () => { if (title.trim() && title !== task.title) onAction('update_task_details', { title: title.trim() }); };
   const saveDescription = () => { if (description !== (task.description ?? '')) onAction('update_task_details', { description }); };
@@ -124,6 +157,20 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
   const saveTaskType = (taskType) => onAction('update_task_details', { taskType, ...(SEVERITY_APPLIES_TO.has(taskType) ? {} : { severity: '' }) });
   const savePriority = (priority) => onAction('update_task_details', { priority });
   const saveSeverity = (severity) => onAction('update_task_details', { severity });
+
+  const parentTask = task.parentId ? allTasks?.find((t) => t.id === task.parentId) : null;
+  const children = task.childIds?.length ? task.childIds.map((id) => allTasks?.find((t) => t.id === id)).filter(Boolean) : [];
+
+  const addSubtask = async () => {
+    if (!newSubtask.trim() || savingSubtask) return;
+    setSavingSubtask(true);
+    try {
+      await onCreateSubtask(newSubtask.trim());
+      setNewSubtask('');
+    } finally {
+      setSavingSubtask(false);
+    }
+  };
 
   return (
     <div className="knx-side-panel">
@@ -137,6 +184,11 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
         <button type="button" className="knx-side-panel-close" onClick={onClose} aria-label="Cerrar">×</button>
       </div>
       <div className="knx-side-panel-thread knx-board-detail-body">
+        {parentTask && (
+          <p className="knx-board-detail-meta">
+            Subtarea de: <a onClick={() => onOpenSubtask(parentTask.id)}>{parentTask.title}</a>
+          </p>
+        )}
         <div className="knx-board-field">
           <label>Título</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} onBlur={saveTitle} />
@@ -202,6 +254,36 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
         <div className="knx-board-field">
           <label>Horas reales</label>
           <input type="number" min="0" step="0.5" value={actualHours ?? ''} onChange={(e) => setActualHours(e.target.value)} onBlur={saveActualHours} />
+        </div>
+        <div className="knx-board-field">
+          <label>Subtareas{children.length > 0 ? ` (${children.filter((c) => c.status === 'Done').length}/${children.length})` : ''}</label>
+          <div className="knx-board-subtask-list">
+            {children.map((c) => (
+              <div key={c.id} className="knx-board-card-child-row">
+                <button
+                  type="button"
+                  className={`knx-board-card-child-check${c.status === 'Done' ? ' knx-board-card-child-check--done' : ''}`}
+                  aria-label={c.status === 'Done' ? 'Marcar como pendiente' : 'Marcar como hecha'}
+                  onClick={() => onToggleSubtask(c.id, c.status !== 'Done')}
+                />
+                <span className={`knx-board-card-child-title${c.status === 'Done' ? ' knx-board-card-child-title--done' : ''}`} onClick={() => onOpenSubtask(c.id)}>
+                  {c.title}
+                </span>
+              </div>
+            ))}
+            <div className="knx-board-subtask-add">
+              <input
+                value={newSubtask}
+                onChange={(e) => setNewSubtask(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addSubtask()}
+                placeholder="Nombre de la subtarea"
+                disabled={savingSubtask}
+              />
+              <button type="button" className="knx-board-subtask-add-btn" disabled={!newSubtask.trim() || savingSubtask} onClick={addSubtask}>
+                {savingSubtask ? 'Agregando…' : '+ Agregar'}
+              </button>
+            </div>
+          </div>
         </div>
         <button type="button" className="knx-doc-card-error" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 8 }} onClick={onRemove}>
           Eliminar tarea
@@ -1616,6 +1698,20 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
     }
   };
 
+  const createSubtask = async (title) => {
+    if (!selectedTask) return;
+    setErr(null);
+    try {
+      await patch({
+        action: 'create_subtask', pageId: selectedTask.id, title,
+        proyectoId: selectedTask.proyectoId, iniciativaId: selectedTask.iniciativaId, epicaId: selectedTask.epicaId,
+      });
+      onReload();
+    } catch (e) {
+      setErr(e.message);
+    }
+  };
+
   const confirmRemove = async () => {
     const taskId = removeTarget;
     setRemoveTarget(null);
@@ -1689,6 +1785,7 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
                                 onStatusChange={(task, status) => requestStatusChange(task.id, status)}
                                 showStatusSelect={false}
                                 entering={justMovedTaskId === t.id}
+                                allTasks={tasks}
                               />
                               {!t.sprintIds?.length && <AssignSprintControl pageId={t.id} activeSprint={activeSprint} onAssigned={assignSprint} />}
                             </div>
@@ -1727,6 +1824,10 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
           onClose={() => setSelectedTaskId(null)}
           onAction={detailAction}
           onRemove={() => setRemoveTarget(selectedTask.id)}
+          allTasks={tasks}
+          onCreateSubtask={createSubtask}
+          onToggleSubtask={(childId, done) => requestStatusChange(childId, done ? 'Done' : 'Not started')}
+          onOpenSubtask={setSelectedTaskId}
         />
       )}
       <KaiNextConfirmDialog
@@ -1816,7 +1917,10 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
     next.has(id) ? next.delete(id) : next.add(id);
     return next;
   });
-  const selectedTask = selectedTaskId ? sprintTasks.find((t) => t.id === selectedTaskId) : null;
+  // Ojo: busca en `tasks` (TODO el proyecto), no en `sprintTasks` (acotado al sprint que se está
+  // viendo) — una subtarea puede no estar en el sprint activo (se crea en Backlog, ver
+  // createSubtask) y aun así hay que poder abrirla/tildarla desde el panel de su padre.
+  const selectedTask = selectedTaskId ? tasks.find((t) => t.id === selectedTaskId) : null;
 
   // Mismo patrón que ProjectBoard/KaiNextSprints.jsx — se limpia recién después de que `tasks`
   // ya trajo a la tarea en su nueva columna, así la animación de entrada juega en su posición
@@ -1846,7 +1950,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
   // Pinta la tarjeta en su columna nueva AL INSTANTE — mismo criterio que ProjectBoard.move.
   const move = async (pageId, status) => {
     setErr(null);
-    const prevStatus = sprintTasks.find((t) => t.id === pageId)?.status;
+    const prevStatus = tasks.find((t) => t.id === pageId)?.status;
     setJustMovedTaskId(pageId);
     onOptimisticMove(pageId, status);
     try {
@@ -1861,7 +1965,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
   // Dos gates independientes (ver misma nota en ProjectBoard): salir de Backlog exige fecha
   // inicio/fin/estimación; entrar a Hecho exige horas reales — cada una con su propio modal.
   const requestStatusChange = (taskId, status) => {
-    const task = sprintTasks.find((t) => t.id === taskId);
+    const task = tasks.find((t) => t.id === taskId);
     if (!task || task.status === status) return;
     const incompleta = status !== 'Backlog' && (!task.startDate || !task.dueDate || task.estimatedHours == null);
     if (incompleta) {
@@ -1889,7 +1993,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
     setErr(null);
     try {
       await patch({ action: 'update_schedule', pageId: taskId, startDate, endDate, estimatedHours });
-      const task = sprintTasks.find((t) => t.id === taskId);
+      const task = tasks.find((t) => t.id === taskId);
       if (status === 'Done' && task?.actualHours == null) {
         setHoursFor({ taskId, status });
         return;
@@ -1921,6 +2025,20 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
     setErr(null);
     try {
       await patch({ action, pageId: selectedTask.id, ...extra });
+      onReload();
+    } catch (e) {
+      setErr(e.message);
+    }
+  };
+
+  const createSubtask = async (title) => {
+    if (!selectedTask) return;
+    setErr(null);
+    try {
+      await patch({
+        action: 'create_subtask', pageId: selectedTask.id, title,
+        proyectoId: selectedTask.proyectoId, iniciativaId: selectedTask.iniciativaId, epicaId: selectedTask.epicaId,
+      });
       onReload();
     } catch (e) {
       setErr(e.message);
@@ -2100,6 +2218,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
                               onDragEnd={() => setDragInfo(null)}
                               dragging={dragInfo?.taskId === t.id}
                               entering={justMovedTaskId === t.id}
+                              allTasks={tasks}
                             />
                           ))}
                         </div>
@@ -2136,6 +2255,10 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
           onClose={() => setSelectedTaskId(null)}
           onAction={detailAction}
           onRemove={() => setRemoveTarget(selectedTask.id)}
+          allTasks={tasks}
+          onCreateSubtask={createSubtask}
+          onToggleSubtask={(childId, done) => requestStatusChange(childId, done ? 'Done' : 'Not started')}
+          onOpenSubtask={setSelectedTaskId}
         />
       )}
       <KaiNextConfirmDialog

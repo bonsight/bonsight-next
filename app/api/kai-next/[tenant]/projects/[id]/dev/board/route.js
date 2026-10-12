@@ -4,7 +4,7 @@ import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/project
 import { getNotionToken, listTareasDelProyecto } from '@/lib/kaiNext/projectsNotion';
 import {
   STATUS_COLUMNS, loadTalentoMap, moveTask, updateTaskDatesAndHours, updateTaskResponsable, addExistingTask,
-  updateTaskDetails, updateTaskActualHours, removeTask,
+  updateTaskDetails, updateTaskActualHours, removeTask, createTask,
 } from '@/lib/aria/board';
 
 // Tablero agregado de TODO el proyecto (todas las iniciativas) — a diferencia de EpicaTareas
@@ -86,6 +86,16 @@ export async function PATCH(req, { params }) {
       await updateTaskActualHours(token, pageId, body.actualHours);
     } else if (action === 'remove_task') {
       await removeTask(token, pageId);
+    } else if (action === 'create_subtask') {
+      // pageId acá es la tarea PADRE (mismo criterio que el resto de las acciones: pageId es a
+      // qué apunta la acción). Arranca en Backlog — createTask no exige fecha/estimación como sí
+      // lo hace moveTask al sacar algo de Backlog, así que un "+ agregar" solo con título no
+      // queda en un estado inconsistente (Por hacer sin fechas).
+      if (!body.title?.trim()) return Response.json({ error: 'El título es requerido.' }, { status: 400 });
+      await createTask(token, null, {
+        title: body.title, status: 'Backlog', parentId: pageId,
+        proyectoId: body.proyectoId, iniciativaId: body.iniciativaId, epicaId: body.epicaId, fase: body.fase,
+      });
     } else {
       return Response.json({ error: 'Acción inválida.' }, { status: 400 });
     }

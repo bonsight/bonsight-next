@@ -31,6 +31,16 @@ export async function proxy(request) {
   const host = request.headers.get('host') || '';
   const { pathname } = request.nextUrl;
 
+  // Quiniela vive físicamente en app/labs/quiniela (vista como "proyecto" dentro del espacio
+  // Labs) pero su URL pública sigue siendo /quiniela en cualquier host — antes bypaseaba el
+  // proxy entero vía el matcher (funcionaba igual sin importar el subdominio); esto reproduce
+  // ese mismo comportamiento ahora que necesita una reescritura real.
+  if (pathname === '/quiniela' || pathname.startsWith('/quiniela/')) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/labs${pathname}`;
+    return NextResponse.rewrite(url);
+  }
+
   // ── kai.bonsight.co ───────────────────────────────────────
   if (host.startsWith('kai.')) {
     const url = request.nextUrl.clone();
@@ -130,5 +140,5 @@ export async function proxy(request) {
 }
 
 export const config = {
-  matcher: ['/((?!api|aria|kai|labs|quiniela|proposals|team|assets|_next/static|_next/image|favicon\\.svg|logo\\.svg|hero_home\\.png|.*\\.ico|sitemap\\.xml|robots\\.txt).*)'],
+  matcher: ['/((?!api|aria|kai|labs|proposals|team|assets|_next/static|_next/image|favicon\\.svg|logo\\.svg|hero_home\\.png|.*\\.ico|sitemap\\.xml|robots\\.txt).*)'],
 };
