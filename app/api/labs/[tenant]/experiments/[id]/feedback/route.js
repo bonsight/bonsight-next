@@ -70,24 +70,13 @@ export async function POST(req, { params }) {
     return Response.json({ error: 'Los Registradores no dejan feedback, solo lo reciben.' }, { status: 403 });
   }
 
-  const { targetType, targetId, text, visibility, attachments } = await req.json();
+  const body = await req.json();
+  const { text, visibility, attachments, replyTo } = body;
   const cleanAttachments = Array.isArray(attachments) ? attachments : [];
   // Un comentario puede ser solo evidencia (una foto sin texto) — no forzamos texto si ya
   // hay al menos un adjunto.
   if (!text?.trim() && cleanAttachments.length === 0) {
     return Response.json({ error: 'Escribí un texto o adjuntá un archivo.' }, { status: 400 });
-  }
-  if (!['proyecto', 'prueba', 'aporte', 'tarea', 'partida', 'reporte'].includes(targetType)) {
-    return Response.json({ error: 'targetType inválido.' }, { status: 400 });
-  }
-  // Experimental: Director puede dejar feedback en cualquier nivel; Supervisor solo sobre
-  // aportes (registros) del equipo que supervisa. Civil: comentarios en Tareas/Partidas —
-  // tanto Director como Supervisor pueden, sin restricción entre ellos (nunca Registrador,
-  // ya bloqueado arriba). 'reporte' vale para ambos flujos — es donde Director y Supervisor
-  // se van y vienen comentarios sobre un reporte ya generado.
-  const supervisorAllowedTargets = ['aporte', 'tarea', 'partida', 'reporte'];
-  if (user.role === 'Supervisor' && !supervisorAllowedTargets.includes(targetType)) {
-    return Response.json({ error: 'Un Supervisor no puede dejar feedback a este nivel.' }, { status: 403 });
   }
 
   const experiment = await getExperiment(tenant, id);
@@ -96,6 +85,25 @@ export async function POST(req, { params }) {
   if (user.role === 'Supervisor' && !experiment.meta.supervisorIds?.includes(user.id)) {
     return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
   }
+
+  // Una respuesta hereda el target del feedback original (mismo targetType/targetId/
+  // targetLabel) — así queda agrupada junto a su padre, y no hace falta que el cliente lo
+  // vuelva a enviar (ni pueda falsearlo apuntando a otro lado).
+  let targetType, targetId;
+  if (replyTo) {
+    const parent = experiment.feedback.find((f) => f.id === replyTo);
+    if (!parent) return Response.json({ error: 'El feedback al que respondés ya no existe.' }, { status: 400 });
+    ({ targetType, targetId } = parent);
+  } else {
+    ({ targetType, targetId } = body);
+  }
+
+  if (!['proyecto', 'prueba', 'aporte', 'tarea', 'partida', 'reporte'].includes(targetType)) {
+    return Response.json({ error: 'targetType inválido.' }, { status: 400 });
+  }
+  // Director y Supervisor pueden dejar feedback en cualquier nivel por igual (proyecto, prueba,
+  // aporte, tarea, partida, reporte) — la única restricción real es la de arriba (Registrador
+  // nunca escribe, solo recibe) y la de acceso al proyecto (Supervisor tiene que estar asignado).
 
   let resolvedTargetId = null;
   let targetLabel = 'Proyecto general';
@@ -127,14 +135,15 @@ export async function POST(req, { params }) {
     targetLabel = `Reporte del ${new Date(report.createdAt).toLocaleDateString('es-ES')}`;
   }
 
-  // La sugerencia de "convertir en una nueva ejecución" solo tiene sentido para proyectos
-  // experimentales (pruebas/aportes) — no aplica al vocabulario de tareas/partidas de civil.
-  const suggestion = ['proyecto', 'prueba', 'aporte'].includes(targetType)
+  // La sugerencia de "convertir en una nueva ejecución" solo tiene sentido para feedback nuevo
+  // de primer nivel sobre proyectos experimentales — una respuesta es solo conversación, no
+  // algo para analizar de nuevo.
+  const suggestion = (!replyTo && ['proyecto', 'prueba', 'aporte'].includes(targetType))
     ? await suggestConversion(tenant, experiment.meta.name, targetLabel, text)
     : null;
   const entry = await addFeedback(tenant, id, {
     who: user.name, whoRole: user.role, targetType, targetId: resolvedTargetId, targetLabel, text, visibility, suggestion,
-    attachments: cleanAttachments,
+    attachments: cleanAttachments, replyTo: replyTo || null,
   });
   return Response.json({ ok: true, feedback: entry });
 }

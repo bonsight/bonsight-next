@@ -2175,6 +2175,7 @@ function CommentAttachment({ att }) {
 function CommentsModal({ tenant, experimentId, canComment, targetType, targetId, targetLabel, comments, onClose, onUpdate }) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState([]);
+  const [replyingTo, setReplyingTo] = useState(null); // comentario al que se está respondiendo, o null
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const fileInputRef = useRef(null);
@@ -2182,6 +2183,8 @@ function CommentsModal({ tenant, experimentId, canComment, targetType, targetId,
 
   const hasContent = text.trim() || attachments.length > 0;
   const uploading = attachments.some((a) => a.uploading);
+  const topLevel = comments.filter((c) => !c.replyTo);
+  const repliesOf = (id) => comments.filter((c) => c.replyTo === id);
 
   const handleSend = async () => {
     if (!hasContent || busy || uploading) return;
@@ -2191,7 +2194,7 @@ function CommentsModal({ tenant, experimentId, canComment, targetType, targetId,
       const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/feedback`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          targetType, targetId, text, visibility: 'Todo el equipo',
+          targetType, targetId, text, visibility: 'Todo el equipo', replyTo: replyingTo,
           attachments: attachments.map(({ name, mimeType, data, previewUrl, driveFileId, driveUrl, kind }) => ({ name, mimeType, data, previewUrl, driveFileId, driveUrl, kind })),
         }),
       });
@@ -2199,6 +2202,7 @@ function CommentsModal({ tenant, experimentId, canComment, targetType, targetId,
       if (!res.ok) { setErr(data.error || 'No se pudo enviar.'); return; }
       setText('');
       setAttachments([]);
+      setReplyingTo(null);
       onUpdate();
     } catch {
       setErr('Error de conexión.');
@@ -2207,32 +2211,48 @@ function CommentsModal({ tenant, experimentId, canComment, targetType, targetId,
     }
   };
 
+  const renderComment = (c, nested) => (
+    <div className="feedback-item" key={c.id} style={nested ? { marginLeft: 24, marginTop: 8 } : undefined}>
+      <div className="fb-top">
+        <div className="fb-who"><span className="recent-avatar" style={{ width: 24, height: 24, fontSize: 10.5 }}>{initials(c.who)}</span>{c.who}{c.whoRole ? ` (${c.whoRole})` : ''}</div>
+        <span className="recent-time">{formatDateTime(c.createdAt)}</span>
+      </div>
+      {c.text && <div className="fb-text">{c.text}</div>}
+      {c.attachments?.length > 0 && (
+        <div className="labs-attach-strip" style={{ marginTop: 10 }}>
+          {c.attachments.map((a, i) => <CommentAttachment att={a} key={i} />)}
+        </div>
+      )}
+      {canComment && !nested && (
+        <button type="button" className="chip-btn" style={{ marginTop: 8, fontSize: 11 }} onClick={() => setReplyingTo(c.id)}>Responder</button>
+      )}
+    </div>
+  );
+
   return (
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-card" style={{ position: 'relative' }}>
         <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
-        <span className="eyebrow-mini on-dark">Comentarios</span>
+        <span className="eyebrow-mini on-dark">Feedback</span>
         <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 20, fontWeight: 600, margin: '6px 0 16px' }}>{targetLabel}</h2>
 
-        {comments.length === 0 && <p className="empty-note">Todavía no hay comentarios.</p>}
-        {comments.map((c) => (
-          <div className="feedback-item" key={c.id}>
-            <div className="fb-top">
-              <div className="fb-who"><span className="recent-avatar" style={{ width: 24, height: 24, fontSize: 10.5 }}>{initials(c.who)}</span>{c.who}{c.whoRole ? ` (${c.whoRole})` : ''}</div>
-              <span className="recent-time">{formatDateTime(c.createdAt)}</span>
-            </div>
-            {c.text && <div className="fb-text">{c.text}</div>}
-            {c.attachments?.length > 0 && (
-              <div className="labs-attach-strip" style={{ marginTop: 10 }}>
-                {c.attachments.map((a, i) => <CommentAttachment att={a} key={i} />)}
-              </div>
-            )}
+        {comments.length === 0 && <p className="empty-note">Todavía no hay feedback.</p>}
+        {topLevel.map((c) => (
+          <div key={c.id}>
+            {renderComment(c, false)}
+            {repliesOf(c.id).map((r) => renderComment(r, true))}
           </div>
         ))}
 
         {canComment && (
           <>
-            <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Escribí un comentario… (o adjuntá evidencia sin texto)" style={{ marginTop: 14 }} />
+            {replyingTo && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, fontSize: 12, color: 'var(--labs-cream-dim)' }}>
+                Respondiendo a {comments.find((c) => c.id === replyingTo)?.who}
+                <button type="button" className="chip-btn" style={{ fontSize: 11 }} onClick={() => setReplyingTo(null)}>✕ Cancelar</button>
+              </div>
+            )}
+            <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Escribí tu feedback… (o adjuntá evidencia sin texto)" style={{ marginTop: replyingTo ? 8 : 14 }} />
 
             <input
               ref={fileInputRef} type="file" accept={EVIDENCE_ACCEPT} multiple style={{ display: 'none' }}
@@ -2262,7 +2282,7 @@ function CommentsModal({ tenant, experimentId, canComment, targetType, targetId,
             {err && <p className="labs-login-error" style={{ marginTop: 8 }}>{err}</p>}
             <div className="modal-footer">
               <button type="button" className="btn btn-quiet" onClick={onClose}>Cerrar</button>
-              <button type="button" className="btn btn-primary" disabled={busy || uploading || !hasContent} onClick={handleSend}>{busy ? 'Enviando…' : 'Comentar →'}</button>
+              <button type="button" className="btn btn-primary" disabled={busy || uploading || !hasContent} onClick={handleSend}>{busy ? 'Enviando…' : 'Enviar feedback →'}</button>
             </div>
           </>
         )}
@@ -2283,7 +2303,7 @@ function TaskCommentButton({ count, onClick, small }) {
   const size = small ? 13 : 15;
   return (
     <div className="cron-comment-wrap">
-      <button type="button" className="cron-comment-btn" title="Comentarios" onClick={onClick}>
+      <button type="button" className="cron-comment-btn" title="Feedback" onClick={onClick}>
         <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
           <path d="M3 5.5C3 4.12 4.12 3 5.5 3h9C15.88 3 17 4.12 17 5.5v6c0 1.38-1.12 2.5-2.5 2.5H9l-3.6 3.1c-.4.34-1 .06-1-.46V14h-.9C2.12 14 1 12.88 1 11.5v-6C1 4.12 2.12 3 3.5 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -2841,7 +2861,7 @@ function PartidaRow({ partida, gastosCount, commentsCount, canManage, onOpenComm
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {canManage && <button className="chip-btn" onClick={onEdit}>✎ Editar</button>}
-        <button className="chip-btn" onClick={onOpenComments}>💬 Comentarios{commentsCount ? ` (${commentsCount})` : ''}</button>
+        <button className="chip-btn" onClick={onOpenComments}>💬 Feedback{commentsCount ? ` (${commentsCount})` : ''}</button>
         <button className="chip-btn" onClick={onOpenGastos}>🧾 Gastos{gastosCount ? ` (${gastosCount})` : ''} — {partida.ejecutado.toLocaleString('es-PE')}</button>
         <span className={`tag ${sobrecosto ? 'tag-alert' : 'tag-neutral'}`}>{pct}%</span>
       </div>
@@ -3241,8 +3261,14 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [editSupervisorsOpen, setEditSupervisorsOpen] = useState(false);
   const [editRegistradoresOf, setEditRegistradoresOf] = useState(null); // testId o null
+  const [commentsFor, setCommentsFor] = useState(null); // { type: 'prueba'|'aporte', id, label } | null
   const [users, setUsers] = useState([]);
   const canCreateTest = identity.role === 'Director' || experiment.meta.supervisorIds?.includes(identity.id);
+  // Director y Supervisor comentan libre en cualquier nivel (prueba o aporte); Registrador
+  // nunca deja feedback, solo lo recibe (ve el hilo, no puede escribir) — mismo criterio que
+  // la route de feedback.
+  const canComment = identity.role === 'Director' || identity.role === 'Supervisor';
+  const commentsOf = (targetType, targetId) => experiment.feedback.filter((f) => f.targetType === targetType && f.targetId === targetId);
 
   useEffect(() => {
     fetch(`/api/labs/${tenant}/users`)
@@ -3290,17 +3316,24 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
               </div>
               <span className="chev">⌄</span>
             </button>
-            {canCreateTest && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '0 18px 12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '0 18px 12px', flexWrap: 'wrap' }}>
+              {canCreateTest ? (
                 <div style={{ fontSize: 12, color: 'var(--labs-cream-faint)' }}>
                   Registradores: {t.registradorIds?.length ? t.registradorIds.map(nameOf).join(', ') : 'ninguno asignado'}
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button type="button" className="chip-btn" onClick={() => setEditRegistradoresOf(t.id)}>Editar</button>
-                  <DeleteTestButton tenant={tenant} experimentId={experiment.meta.id} testId={t.id} testName={t.name} onDeleted={onUpdate} />
-                </div>
+              ) : <span />}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="chip-btn" onClick={() => setCommentsFor({ type: 'prueba', id: t.id, label: t.name })}>
+                  💬 Feedback{commentsOf('prueba', t.id).length ? ` (${commentsOf('prueba', t.id).length})` : ''}
+                </button>
+                {canCreateTest && (
+                  <>
+                    <button type="button" className="chip-btn" onClick={() => setEditRegistradoresOf(t.id)}>Editar</button>
+                    <DeleteTestButton tenant={tenant} experimentId={experiment.meta.id} testId={t.id} testName={t.name} onDeleted={onUpdate} />
+                  </>
+                )}
               </div>
-            )}
+            </div>
             <div className="exec-list">
               {execs.map((e) => (
                 <div className="exec-row" key={e.id}>
@@ -3319,6 +3352,14 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
                     <span className={`tag ${tagClass(e.tag)}`}>{e.tag}</span>
+                    <button
+                      type="button"
+                      className="chip-btn"
+                      style={{ fontSize: 11 }}
+                      onClick={() => setCommentsFor({ type: 'aporte', id: e.id, label: `Aporte de ${e.contributor} — ${t.name}` })}
+                    >
+                      💬{commentsOf('aporte', e.id).length ? ` ${commentsOf('aporte', e.id).length}` : ''}
+                    </button>
                     {identity.role !== 'Registrador' && !e.validatedBy && (
                       <ValidateButton tenant={tenant} experimentId={experiment.meta.id} executionId={e.id} by={identity.name} onDone={onUpdate} />
                     )}
@@ -3351,6 +3392,20 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
           currentFields={experiment.tests.find((t) => t.id === editRegistradoresOf)?.fields ?? []}
           onClose={() => setEditRegistradoresOf(null)}
           onSaved={() => { setEditRegistradoresOf(null); onUpdate(); }}
+        />
+      )}
+      {commentsFor && (
+        <CommentsModal
+          tenant={tenant}
+          experimentId={experiment.meta.id}
+          identity={identity}
+          canComment={canComment}
+          targetType={commentsFor.type}
+          targetId={commentsFor.id}
+          targetLabel={commentsFor.label}
+          comments={commentsOf(commentsFor.type, commentsFor.id)}
+          onClose={() => setCommentsFor(null)}
+          onUpdate={onUpdate}
         />
       )}
     </div>
@@ -3666,7 +3721,7 @@ function ViewFeedback({ tenant, experiment, identity, onUpdate }) {
 // Supervisor solo puede dejar feedback sobre aportes (registros) — nunca al proyecto ni a una
 // prueba entera. Registrador nunca da feedback, solo lo recibe (ver FeedbackReceived).
 function FeedbackCompose({ tenant, experiment, identity, onUpdate }) {
-  const canTargetAll = identity.role === 'Director';
+  const canTargetAll = identity.role === 'Director' || identity.role === 'Supervisor';
   const [targetType, setTargetType] = useState(canTargetAll ? 'proyecto' : 'aporte');
   const [testId, setTestId] = useState(null);
   const [executionId, setExecutionId] = useState(null);
@@ -3759,13 +3814,16 @@ function FeedbackCompose({ tenant, experiment, identity, onUpdate }) {
         {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
       </div>
       <div className="divider-label"><span>Feedback anterior</span></div>
-      {experiment.feedback.map((f) => <FeedbackItem key={f.id} f={f} tenant={tenant} experimentId={experiment.meta.id} onUpdate={onUpdate} />)}
+      {experiment.feedback.filter((f) => !f.replyTo).map((f) => (
+        <FeedbackItem key={f.id} f={f} replies={experiment.feedback.filter((r) => r.replyTo === f.id)} tenant={tenant} experimentId={experiment.meta.id} identity={identity} onUpdate={onUpdate} />
+      ))}
     </div>
   );
 }
 
 function FeedbackReceived({ tenant, experiment, identity, onUpdate }) {
   const visible = experiment.feedback.filter((f) => f.visibility === 'Todo el equipo' || (identity.role === 'Supervisor' && f.visibility === 'Privado a Supervisor'));
+  const visibleIds = new Set(visible.map((f) => f.id));
   return (
     <div className="view">
       <div className="view-header">
@@ -3774,13 +3832,26 @@ function FeedbackReceived({ tenant, experiment, identity, onUpdate }) {
         <p className="view-sub">Lo que Director y Supervisor comparten sobre tu trabajo, en un solo lugar.</p>
       </div>
       {visible.length === 0 && <p className="empty-note">Todavía no hay feedback.</p>}
-      {visible.map((f) => <FeedbackItem key={f.id} f={f} tenant={tenant} experimentId={experiment.meta.id} onUpdate={onUpdate} />)}
+      {visible.filter((f) => !f.replyTo).map((f) => (
+        <FeedbackItem key={f.id} f={f} replies={visible.filter((r) => r.replyTo === f.id && visibleIds.has(r.id))} tenant={tenant} experimentId={experiment.meta.id} identity={identity} onUpdate={onUpdate} />
+      ))}
     </div>
   );
 }
 
-function FeedbackItem({ f, tenant, experimentId, onUpdate }) {
+// Director y Supervisor pueden responder feedback en cualquier nivel; Registrador nunca
+// escribe, solo recibe — mismo criterio que la route de feedback.
+function canReplyTo(identity) {
+  return identity.role === 'Director' || identity.role === 'Supervisor';
+}
+
+function FeedbackItem({ f, replies = [], tenant, experimentId, identity, onUpdate }) {
   const [busy, setBusy] = useState(false);
+  const [replying, setReplying] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
+  const canReply = canReplyTo(identity);
+
   const dismiss = async () => {
     setBusy(true);
     try {
@@ -3791,6 +3862,21 @@ function FeedbackItem({ f, tenant, experimentId, onUpdate }) {
       onUpdate();
     } finally { setBusy(false); }
   };
+
+  const sendReply = async () => {
+    if (!replyText.trim() || sendingReply) return;
+    setSendingReply(true);
+    try {
+      const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/feedback`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ replyTo: f.id, text: replyText, visibility: f.visibility }),
+      });
+      if (res.ok) { setReplyText(''); setReplying(false); onUpdate(); }
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
   // f.targetLabel es el modelo nuevo; f.target es el campo viejo (feedback de antes de esta
   // versión) — se muestra igual en vez de quedar en blanco.
   const targetDisplay = f.targetLabel || f.target || 'Proyecto general';
@@ -3809,6 +3895,27 @@ function FeedbackItem({ f, tenant, experimentId, onUpdate }) {
           </div>
         </div>
       )}
+      {canReply && (
+        <button type="button" className="chip-btn" style={{ marginTop: 8, fontSize: 11 }} onClick={() => setReplying((o) => !o)}>Responder</button>
+      )}
+      {replying && (
+        <div style={{ marginTop: 8 }}>
+          <textarea rows={2} value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Tu respuesta…" />
+          <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+            <button type="button" className="chip-btn" onClick={() => { setReplying(false); setReplyText(''); }}>Cancelar</button>
+            <button type="button" className="btn btn-primary" style={{ padding: '6px 14px', fontSize: 12 }} disabled={sendingReply || !replyText.trim()} onClick={sendReply}>{sendingReply ? 'Enviando…' : 'Responder →'}</button>
+          </div>
+        </div>
+      )}
+      {replies.map((r) => (
+        <div className="feedback-item" key={r.id} style={{ marginLeft: 24, marginTop: 8 }}>
+          <div className="fb-top">
+            <div className="fb-who"><span className="recent-avatar" style={{ width: 24, height: 24, fontSize: 10.5 }}>{initials(r.who)}</span>{r.who}{r.whoRole ? ` (${r.whoRole})` : ''}</div>
+            <span className="recent-time">{formatDateTime(r.createdAt)}</span>
+          </div>
+          <div className="fb-text">{r.text}</div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -3917,7 +4024,7 @@ function GenerateReportCard({ tenant, experiment, onUpdate }) {
 
       {pickerOpen && (
         <>
-          <p className="empty-note" style={{ marginTop: 14 }}>{availablePhotos.length === 0 ? 'Todavía no hay fotos de evidencia en los comentarios de tareas/partidas — el reporte igual se puede generar sin fotos.' : 'Elegí qué fotos de evidencia entran al reporte (preseleccioné las más recientes).'}</p>
+          <p className="empty-note" style={{ marginTop: 14 }}>{availablePhotos.length === 0 ? 'Todavía no hay fotos de evidencia en el feedback de tareas/partidas — el reporte igual se puede generar sin fotos.' : 'Elegí qué fotos de evidencia entran al reporte (preseleccioné las más recientes).'}</p>
           {availablePhotos.length > 0 && (
             <div className="report-photo-grid" style={{ marginTop: 10 }}>
               {availablePhotos.map((p) => (
@@ -3996,7 +4103,7 @@ function ReportDocShell({ tenant, experiment, identity, latest, canApprove, canG
       {children}
 
       <div className="report-actions" style={{ justifyContent: 'space-between' }}>
-        <button type="button" className="chip-btn on-paper" onClick={() => setCommentsOpen(true)}>💬 Comentarios{commentsOf.length ? ` (${commentsOf.length})` : ''}</button>
+        <button type="button" className="chip-btn on-paper" onClick={() => setCommentsOpen(true)}>💬 Feedback{commentsOf.length ? ` (${commentsOf.length})` : ''}</button>
         <div style={{ display: 'flex', gap: 8 }}>
           {latest.status === 'borrador' && canGenerate && (
             <button className="btn btn-primary" disabled={busy} onClick={() => patch({ action: 'submit' })}>{busy ? 'Enviando…' : 'Enviar a Director →'}</button>
