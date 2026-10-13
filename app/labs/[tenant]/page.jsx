@@ -186,6 +186,8 @@ export default async function LabsTenantPage({ params, searchParams }) {
     name: currentUser.name,
     role: currentUser.role,
     kaiOnboarding: currentUser.kaiOnboarding,
+    superadmin: !!currentUser.superadmin,
+    realRole: currentUser.realRole ?? currentUser.role,
   };
 
   return <LabsClientTenant tenant={tenant} tenantMeta={meta} identity={clientIdentity} />;

@@ -243,6 +243,11 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
   const [experiment, setExperiment] = useState(null);
   const [view, setView] = useState('resumen');
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  // Solo para cuentas superadmin (ver lib/labs/auth.js#getCurrentLabsUser) — el servidor ya
+  // las trata como Director en todo (acceso total), esto es puramente un toggle de UI para
+  // previsualizar cómo se ve cada rol, sin perder visibilidad de nada mientras tanto.
+  const [viewAsRole, setViewAsRole] = useState(null); // null = usar el rol real (Director)
+  const effectiveIdentity = identity.superadmin && viewAsRole ? { ...identity, role: viewAsRole } : identity;
 
   const loadExperiments = useCallback(() => {
     fetch(`/api/labs/${tenant}/experiments`)
@@ -291,7 +296,7 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
     );
   }
 
-  const nav = getNav(identity.role, experiment.meta.projectKind);
+  const nav = getNav(effectiveIdentity.role, experiment.meta.projectKind);
   const refresh = () => loadExperiment(experimentId);
 
   return (
@@ -306,6 +311,21 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
         </div>
         <div className="role-switch" role="tablist" aria-label="Tu identidad">
           <span className="role-btn active"><span className="dot"></span><EditableName tenant={tenant} identity={identity} onUpdated={setIdentity} /> · {identity.role}</span>
+          {identity.superadmin && (
+            <>
+              <span style={{ opacity: 0.5, fontSize: 11 }}>Ver como:</span>
+              {['Director', 'Supervisor', 'Registrador'].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  className={`role-btn${(viewAsRole ?? identity.realRole) === r ? ' active' : ''}`}
+                  onClick={() => setViewAsRole(r === identity.realRole ? null : r)}
+                >
+                  {r}
+                </button>
+              ))}
+            </>
+          )}
         </div>
         <div className="topbar-actions">
           <button className="btn-ghost-top" onClick={() => { setExperimentId(null); setExperiment(null); }}>Otros proyectos</button>
@@ -334,29 +354,29 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
         </nav>
         <main>
           {view === 'resumen' && (
-            <ViewResumen tenant={tenant} experiment={experiment} identity={identity} onGo={setView} onUpdate={refresh} />
+            <ViewResumen tenant={tenant} experiment={experiment} identity={effectiveIdentity} onGo={setView} onUpdate={refresh} />
           )}
           {view === 'aportar' && (
-            <ViewAportar tenant={tenant} experiment={experiment} identity={identity} onDone={refresh} />
+            <ViewAportar tenant={tenant} experiment={experiment} identity={effectiveIdentity} onDone={refresh} />
           )}
           {view === 'pruebas' && (
-            <ViewPruebas tenant={tenant} experiment={experiment} identity={identity} onUpdate={refresh} />
+            <ViewPruebas tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} />
           )}
           {view === 'cronograma' && (
-            <ViewCronograma tenant={tenant} experiment={experiment} identity={identity} onUpdate={refresh} />
+            <ViewCronograma tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} />
           )}
           {view === 'presupuesto' && (
-            <ViewPresupuesto tenant={tenant} experiment={experiment} identity={identity} onUpdate={refresh} />
+            <ViewPresupuesto tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} />
           )}
           {view === 'documentacion' && (
-            <ViewDocumentacion tenant={tenant} experiment={experiment} identity={identity} onUpdate={refresh} />
+            <ViewDocumentacion tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} />
           )}
           {view === 'historia' && <ViewHistoria experiment={experiment} />}
           {view === 'feedback' && (
-            <ViewFeedback tenant={tenant} experiment={experiment} identity={identity} onUpdate={refresh} />
+            <ViewFeedback tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} />
           )}
           {view === 'reportes' && (
-            <ViewReportes tenant={tenant} experiment={experiment} identity={identity} onUpdate={refresh} />
+            <ViewReportes tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} />
           )}
         </main>
       </div>
@@ -1082,7 +1102,7 @@ function ViewResumen({ tenant, experiment, identity, onGo, onUpdate }) {
     return <ViewResumenCivil tenant={tenant} experiment={experiment} identity={identity} onUpdate={onUpdate} />;
   }
   if (identity.role === 'Director') return <ViewResumenDirector tenant={tenant} experiment={experiment} onGo={onGo} onUpdate={onUpdate} />;
-  if (identity.role === 'Supervisor') return <ViewResumenSupervisor tenant={tenant} experiment={experiment} />;
+  if (identity.role === 'Supervisor') return <ViewResumenSupervisor tenant={tenant} experiment={experiment} onUpdate={onUpdate} />;
   return <ViewResumenRegistrador experiment={experiment} identity={identity} onGo={onGo} />;
 }
 
@@ -1191,7 +1211,7 @@ function ViewResumenRegistrador({ experiment, identity, onGo }) {
   );
 }
 
-function ViewResumenSupervisor({ tenant, experiment }) {
+function ViewResumenSupervisor({ tenant, experiment, onUpdate }) {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1223,6 +1243,8 @@ function ViewResumenSupervisor({ tenant, experiment }) {
         <h1 className="view-title">Desde tu última revisión</h1>
         <p className="view-sub">Primero la síntesis, el detalle está en Pruebas e Historia.</p>
       </div>
+
+      <ProjectDetailsCard tenant={tenant} experiment={experiment} onUpdate={onUpdate} />
 
       <div className="synth-banner">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
