@@ -242,6 +242,11 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
   const [experimentId, setExperimentId] = useState(null);
   const [experiment, setExperiment] = useState(null);
   const [view, setView] = useState('resumen');
+  // Timeline viva (Historia) — clickear un evento marca su punto como visto y lleva a la
+  // pestaña/ítem que corresponda. `focus` es consumido una sola vez por la vista destino (ver
+  // su propio useEffect) y después se limpia con onFocusHandled, para no re-disparar en cada
+  // render.
+  const [focus, setFocus] = useState(null);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   // Solo para cuentas superadmin (ver lib/labs/auth.js#getCurrentLabsUser) — el servidor ya
   // las trata como Director en todo (acceso total), esto es puramente un toggle de UI para
@@ -298,6 +303,26 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
 
   const nav = getNav(effectiveIdentity.role, experiment.meta.projectKind);
   const refresh = () => loadExperiment(experimentId);
+
+  // Mapa evento → a dónde ir. 'feedback' se resuelve por el target real del feedback (una
+  // tarea, una partida, una prueba/aporte, un reporte, o el proyecto en general); el resto de
+  // los tipos tiene un destino fijo. Marcar como visto es best-effort — si falla, el punto
+  // sigue lleno hasta el próximo click, no bloquea la navegación.
+  const FEEDBACK_TARGET_VIEW = { tarea: 'cronograma', partida: 'presupuesto', prueba: 'pruebas', aporte: 'pruebas', reporte: 'reportes', proyecto: 'feedback' };
+  const goToEvent = (ev) => {
+    fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/events/${ev.id}`, { method: 'PATCH' }).then(refresh).catch(() => {});
+    if (ev.type === 'documento') { setView('documentacion'); setFocus({ scrollToId: `doc-${ev.documentId}` }); return; }
+    if (ev.type === 'aporte' || ev.type === 'validacion') { setView('pruebas'); setFocus({ openTest: ev.testId, scrollToId: ev.executionId ? `exec-${ev.executionId}` : null }); return; }
+    if (ev.type === 'tarea') { setView('cronograma'); setFocus({ scrollToId: `task-${ev.taskId}` }); return; }
+    if (ev.type === 'gasto') { setView('presupuesto'); setFocus({ scrollToId: `partida-${ev.partidaId}` }); return; }
+    if (ev.type === 'reporte') { setView('reportes'); setFocus({ scrollToId: `report-${ev.reportId}` }); return; }
+    if (ev.type === 'feedback') {
+      const targetView = FEEDBACK_TARGET_VIEW[ev.targetType] ?? 'feedback';
+      setView(targetView);
+      setFocus(ev.targetType === 'proyecto' || !ev.targetId ? null : { commentsFor: { type: ev.targetType, id: ev.targetId } });
+    }
+  };
+  const clearFocus = () => setFocus(null);
 
   return (
     <div id="app">
@@ -360,23 +385,23 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
             <ViewAportar tenant={tenant} experiment={experiment} identity={effectiveIdentity} onDone={refresh} />
           )}
           {view === 'pruebas' && (
-            <ViewPruebas tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} />
+            <ViewPruebas tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} focus={focus} onFocusHandled={clearFocus} />
           )}
           {view === 'cronograma' && (
-            <ViewCronograma tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} />
+            <ViewCronograma tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} focus={focus} onFocusHandled={clearFocus} />
           )}
           {view === 'presupuesto' && (
-            <ViewPresupuesto tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} />
+            <ViewPresupuesto tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} focus={focus} onFocusHandled={clearFocus} />
           )}
           {view === 'documentacion' && (
-            <ViewDocumentacion tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} />
+            <ViewDocumentacion tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} focus={focus} onFocusHandled={clearFocus} />
           )}
-          {view === 'historia' && <ViewHistoria experiment={experiment} />}
+          {view === 'historia' && <ViewHistoria experiment={experiment} identity={effectiveIdentity} onGoToEvent={goToEvent} />}
           {view === 'feedback' && (
             <ViewFeedback tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} />
           )}
           {view === 'reportes' && (
-            <ViewReportes tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} />
+            <ViewReportes tenant={tenant} experiment={experiment} identity={effectiveIdentity} onUpdate={refresh} focus={focus} onFocusHandled={clearFocus} />
           )}
         </main>
       </div>
@@ -1929,13 +1954,27 @@ function getDocCategories(projectKind) {
 // Cronogramas, presupuestos y otros adjuntos de referencia del proyecto — no se analizan con
 // IA, es solo almacenamiento. Solo Director, o Supervisor asignado a este proyecto, suben o
 // borran (el server ya lo hace cumplir; acá es nomás la UI).
-function ViewDocumentacion({ tenant, experiment, identity, onUpdate }) {
+function ViewDocumentacion({ tenant, experiment, identity, onUpdate, focus, onFocusHandled }) {
   const DOC_CATEGORIES = getDocCategories(experiment.meta.projectKind);
   const [category, setCategory] = useState(DOC_CATEGORIES[0]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const fileInputRef = useRef(null);
   const canManage = identity.role === 'Director' || experiment.meta.supervisorIds?.includes(identity.id);
+
+  useEffect(() => {
+    if (!focus?.scrollToId) return;
+    const t = setTimeout(() => {
+      const el = document.getElementById(focus.scrollToId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('tl-flash');
+        setTimeout(() => el.classList.remove('tl-flash'), 1800);
+      }
+    }, 80);
+    onFocusHandled?.();
+    return () => clearTimeout(t);
+  }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFile = async (file) => {
     if (!file) return;
@@ -2006,7 +2045,7 @@ function ViewDocumentacion({ tenant, experiment, identity, onUpdate }) {
           {g.docs.map((d) => {
             const href = d.driveUrl || (d.data ? `data:${d.mimeType};base64,${d.data}` : null);
             return (
-              <div className="labs-tenant-row" key={d.id}>
+              <div className="labs-tenant-row" id={`doc-${d.id}`} key={d.id}>
                 <div>
                   <div className="labs-tenant-name">
                     {href ? (
@@ -2428,7 +2467,7 @@ function CronRow({ tenant, experimentId, task, nameOf, roster, vencida, saving, 
   }
 
   return (
-    <div className="cron-row">
+    <div className="cron-row" id={`task-${task.id}`}>
       <div className="cron-row-info">
         <div className="cron-row-name">{task.nombre}</div>
         <div className="cron-row-meta">
@@ -2460,12 +2499,35 @@ function CronRow({ tenant, experimentId, task, nameOf, roster, vencida, saving, 
   );
 }
 
-function ViewCronograma({ tenant, experiment, identity, onUpdate }) {
+function ViewCronograma({ tenant, experiment, identity, onUpdate, focus, onFocusHandled }) {
   const [users, setUsers] = useState([]);
   const [view, setView] = useState('list'); // 'list' | 'gantt' | 'canvas'
   const [createOpen, setCreateOpen] = useState(false);
   const [savingTaskId, setSavingTaskId] = useState(null);
   const [commentsFor, setCommentsFor] = useState(null); // { id, label } | null
+
+  // Llegada desde la Historia — abre el hilo de comentarios de la tarea, o solo resalta la fila
+  // si el evento era de otro tipo (progreso/estado cambiado).
+  useEffect(() => {
+    if (!focus) return;
+    if (focus.commentsFor?.type === 'tarea') {
+      const t = experiment.tasks.find((x) => x.id === focus.commentsFor.id);
+      if (t) setCommentsFor({ id: t.id, label: t.nombre });
+    }
+    if (focus.scrollToId) {
+      const t = setTimeout(() => {
+        const el = document.getElementById(focus.scrollToId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('tl-flash');
+          setTimeout(() => el.classList.remove('tl-flash'), 1800);
+        }
+      }, 80);
+      onFocusHandled?.();
+      return () => clearTimeout(t);
+    }
+    onFocusHandled?.();
+  }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
   // Pausado/completado bloquea gestión de verdad (el backend también lo rechaza) — no es
   // solo una etiqueta. canManage sigue siendo "por rol" puro, se usa aparte para mensajes.
   const isActive = (experiment.meta.status || 'activo') === 'activo';
@@ -2851,7 +2913,7 @@ function PartidaRow({ partida, gastosCount, commentsCount, canManage, onOpenComm
   const sobrecosto = partida.importe > 0 && partida.ejecutado > partida.importe;
 
   return (
-    <div className="labs-tenant-row">
+    <div className="labs-tenant-row" id={`partida-${partida.id}`}>
       <div>
         <div className="labs-tenant-name">{partida.descripcion}</div>
         <div className="labs-tenant-meta">
@@ -2998,7 +3060,7 @@ function GastosModal({ tenant, experimentId, partidaId, partidaLabel, gastos, ca
   );
 }
 
-function ViewPresupuesto({ tenant, experiment, identity, onUpdate }) {
+function ViewPresupuesto({ tenant, experiment, identity, onUpdate, focus, onFocusHandled }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingPartida, setEditingPartida] = useState(null); // partida | null
   const [commentsFor, setCommentsFor] = useState(null); // { id, label } | null
@@ -3008,6 +3070,30 @@ function ViewPresupuesto({ tenant, experiment, identity, onUpdate }) {
   const canComment = identity.role === 'Director' || identity.role === 'Supervisor';
   const isActive = (experiment.meta.status || 'activo') === 'activo';
   const canManageActive = canManage && isActive;
+
+  // Llegada desde la Historia — un gasto nuevo resalta su partida (los gastos en sí viven
+  // dentro del modal "Ver gastos" de esa partida, no hay fila propia que resaltar); un
+  // feedback sobre la partida abre directo su hilo de comentarios.
+  useEffect(() => {
+    if (!focus) return;
+    if (focus.commentsFor?.type === 'partida') {
+      const p = experiment.partidas.find((x) => x.id === focus.commentsFor.id);
+      if (p) setCommentsFor({ id: p.id, label: p.descripcion });
+    }
+    if (focus.scrollToId) {
+      const t = setTimeout(() => {
+        const el = document.getElementById(focus.scrollToId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('tl-flash');
+          setTimeout(() => el.classList.remove('tl-flash'), 1800);
+        }
+      }, 80);
+      onFocusHandled?.();
+      return () => clearTimeout(t);
+    }
+    onFocusHandled?.();
+  }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const grouped = [];
   for (const p of experiment.partidas) {
@@ -3256,13 +3342,46 @@ function CreatePartidaModal({ tenant, experimentId, partida, onClose, onCreated 
 
 /* ======================= Pruebas ======================= */
 
-function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
-  const [openTest, setOpenTest] = useState(experiment.tests[0]?.id ?? null);
+function ViewPruebas({ tenant, experiment, identity, onUpdate, focus, onFocusHandled }) {
+  // Arranca todo cerrado al entrar por el menú — solo se abre una por click, o la puntual que
+  // trae un focus desde la Historia (ver useEffect de abajo).
+  const [openTest, setOpenTest] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editSupervisorsOpen, setEditSupervisorsOpen] = useState(false);
   const [editRegistradoresOf, setEditRegistradoresOf] = useState(null); // testId o null
   const [commentsFor, setCommentsFor] = useState(null); // { type: 'prueba'|'aporte', id, label } | null
   const [users, setUsers] = useState([]);
+
+  // Llegada desde la Historia (ver ViewHistoria/goToEvent) — abre la prueba correspondiente y,
+  // si el evento apuntaba a un feedback puntual, también su hilo de comentarios.
+  useEffect(() => {
+    if (!focus) return;
+    if (focus.openTest) setOpenTest(focus.openTest);
+    if (focus.commentsFor) {
+      const { type, id } = focus.commentsFor;
+      if (type === 'prueba') {
+        const t = experiment.tests.find((x) => x.id === id);
+        if (t) setCommentsFor({ type: 'prueba', id, label: t.name });
+      } else if (type === 'aporte') {
+        const e = experiment.executions.find((x) => x.id === id);
+        const t = e && experiment.tests.find((x) => x.id === e.testId);
+        if (e) setCommentsFor({ type: 'aporte', id, label: `Aporte de ${e.contributor} — ${t?.name ?? 'prueba eliminada'}` });
+      }
+    }
+    if (focus.scrollToId) {
+      const t = setTimeout(() => {
+        const el = document.getElementById(focus.scrollToId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('tl-flash');
+          setTimeout(() => el.classList.remove('tl-flash'), 1800);
+        }
+      }, 80);
+      onFocusHandled?.();
+      return () => clearTimeout(t);
+    }
+    onFocusHandled?.();
+  }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
   const canCreateTest = identity.role === 'Director' || experiment.meta.supervisorIds?.includes(identity.id);
   // Director y Supervisor comentan libre en cualquier nivel (prueba o aporte); Registrador
   // nunca deja feedback, solo lo recibe (ve el hilo, no puede escribir) — mismo criterio que
@@ -3336,7 +3455,7 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
             </div>
             <div className="exec-list">
               {execs.map((e) => (
-                <div className="exec-row" key={e.id}>
+                <div className="exec-row" id={`exec-${e.id}`} key={e.id}>
                   <div className="exec-date">{formatDate(e.createdAt)}</div>
                   <div className="exec-detail">
                     <b>{e.contributor}</b> ({e.role}) — {t.fields.map((f) => `${f.label}: ${e.values[f.key] === NA_VALUE ? 'No aplica' : e.values[f.key] ?? '—'}`).join(' · ')}
@@ -3685,24 +3804,27 @@ function CreateTestModal({ tenant, experimentId, successCriteria, onClose, onCre
 
 /* ======================= Historia ======================= */
 
-function ViewHistoria({ experiment }) {
+function ViewHistoria({ experiment, identity, onGoToEvent }) {
   return (
     <div className="view">
       <div className="view-header">
         <span className="view-eyebrow">Historia · {experiment.meta.name}</span>
         <h1 className="view-title">Memoria del proyecto</h1>
-        <p className="view-sub">No se escribe a mano — emerge de los aportes, validaciones y feedback del equipo.</p>
+        <p className="view-sub">No se escribe a mano — emerge de los aportes, validaciones y feedback del equipo. Tocá un punto para ir directo a lo que pasó.</p>
       </div>
       {experiment.events.length === 0 && <p className="empty-note">Todavía no hay historia — el primer aporte la va a empezar.</p>}
       <div className="timeline">
-        {experiment.events.map((ev) => (
-          <div className={`tl-item type-${ev.type}`} key={ev.id}>
-            <div className="tl-dot"></div>
-            <div className="tl-date">{formatDateTime(ev.date)}</div>
-            <div className="tl-title">{ev.title}</div>
-            <div className="tl-body">{ev.body}</div>
-          </div>
-        ))}
+        {experiment.events.map((ev) => {
+          const seen = ev.seenBy?.includes(identity.id);
+          return (
+            <button type="button" className={`tl-item type-${ev.type}${seen ? ' tl-item--seen' : ''}`} key={ev.id} onClick={() => onGoToEvent(ev)}>
+              <div className={`tl-dot${seen ? ' tl-dot--seen' : ''}`}></div>
+              <div className="tl-date">{formatDateTime(ev.date)}</div>
+              <div className="tl-title">{ev.title}</div>
+              <div className="tl-body">{ev.body}</div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -4263,12 +4385,21 @@ function ExperimentalReportDoc({ tenant, experiment, identity, latest, canApprov
   );
 }
 
-function ViewReportes({ tenant, experiment, identity, onUpdate }) {
+function ViewReportes({ tenant, experiment, identity, onUpdate, focus, onFocusHandled }) {
   const [selectedId, setSelectedId] = useState(null);
   const reports = experiment.reports.map((r) => ({ ...r, experimentId: experiment.meta.id }));
   const active = reports.find((r) => r.id === selectedId) || reports[0] || null;
   const canGenerate = identity.role === 'Supervisor' && experiment.meta.supervisorIds?.includes(identity.id);
   const canApprove = identity.role === 'Director';
+
+  // Llegada desde la Historia — selecciona el reporte puntual del evento (el feedback sobre un
+  // reporte específico también cae acá, vía el mismo reportId).
+  useEffect(() => {
+    if (!focus) return;
+    const reportId = focus.commentsFor?.type === 'reporte' ? focus.commentsFor.id : focus.scrollToId?.replace('report-', '');
+    if (reportId && reports.some((r) => r.id === reportId)) setSelectedId(reportId);
+    onFocusHandled?.();
+  }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="view">

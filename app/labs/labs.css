@@ -538,17 +538,31 @@
   background: linear-gradient(var(--labs-living), var(--labs-line-dark) 85%);
   opacity:.5;
 }
-.labs-root .tl-item{ position:relative; padding-bottom:26px; }
+.labs-root .tl-item{
+  position:relative; display:block; width:100%; padding-bottom:26px;
+  border:none; background:transparent; text-align:left; cursor:pointer; font-family:inherit;
+  border-radius:8px;
+}
 .labs-root .tl-item:last-child{ padding-bottom:0; }
+.labs-root .tl-item:hover{ background:var(--labs-dark-3); }
 .labs-root .tl-dot{
   position:absolute; left:-26px; top:3px; width:13px; height:13px; border-radius:50%;
-  background:var(--labs-dark-2); border:2px solid var(--labs-living); display:flex; align-items:center; justify-content:center;
+  background:var(--labs-living); border:2px solid var(--labs-living); display:flex; align-items:center; justify-content:center;
 }
-.labs-root .tl-item.type-feedback .tl-dot{ border-color:var(--labs-ember); }
-.labs-root .tl-item.type-validacion .tl-dot{ border-color:#8FA6E0; }
+.labs-root .tl-item.type-feedback .tl-dot{ border-color:var(--labs-ember); background:var(--labs-ember); }
+.labs-root .tl-item.type-validacion .tl-dot{ border-color:#8FA6E0; background:#8FA6E0; }
+/* Visto = vacío (apagado); no visto = lleno (resalta) — se apaga solo al tocarlo. */
+.labs-root .tl-dot--seen{ background:var(--labs-dark-2) !important; }
 .labs-root .tl-date{ font-family:var(--labs-mono); font-size:11px; color:var(--labs-cream-faint); margin-bottom:4px; }
-.labs-root .tl-title{ font-weight:600; font-size:13.5px; margin-bottom:3px; }
+.labs-root .tl-title{ font-weight:600; font-size:13.5px; margin-bottom:3px; color:var(--labs-cream); }
+.labs-root .tl-item--seen .tl-title{ color:var(--labs-cream-dim); font-weight:500; }
 .labs-root .tl-body{ font-size:13px; color:var(--labs-cream-dim); line-height:1.55; }
+/* Resaltado momentáneo al llegar desde la Historia (ver goToEvent) */
+.labs-root .tl-flash{ animation: labs-flash 1.8s ease-out; }
+@keyframes labs-flash {
+  0% { background: var(--labs-ember); background: color-mix(in srgb, var(--labs-living) 35%, transparent); }
+  100% { background: transparent; }
+}
 
 /* ============ Supervisor ============ */
 .labs-root .synth-banner{
