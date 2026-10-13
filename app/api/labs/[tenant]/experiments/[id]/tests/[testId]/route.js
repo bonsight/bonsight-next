@@ -1,5 +1,5 @@
 import { isAuthorizedForTenant, getCurrentLabsUser } from '@/lib/labs/auth';
-import { getExperimentMeta, setTestRegistradores, renameTest, deleteTest } from '@/lib/labs/experiments';
+import { getExperimentMeta, setTestRegistradores, renameTest, updateTestFields, deleteTest } from '@/lib/labs/experiments';
 import { getUserById } from '@/lib/labs/users';
 
 async function requireDirectorOrSupervisor(tenant, id) {
@@ -36,6 +36,9 @@ export async function PATCH(req, { params }) {
       const registradores = await Promise.all(ids.map((rid) => getUserById(tenant, rid)));
       const validRegistradorIds = registradores.filter((u) => u?.role === 'Registrador').map((u) => u.id);
       test = await setTestRegistradores(tenant, id, testId, validRegistradorIds);
+    }
+    if (body.fields !== undefined) {
+      test = await updateTestFields(tenant, id, testId, body.fields);
     }
     return Response.json({ ok: true, test });
   } catch (err) {

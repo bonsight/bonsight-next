@@ -120,6 +120,10 @@ function formatSuccessCriterion(c) {
   return `${c.label || ''} ${op} ${c.value ?? ''}${c.unit ? ` ${c.unit}` : ''}`.trim();
 }
 
+function formatSummaryDate(iso) {
+  return new Date(iso).toLocaleString('es-PE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
 function tagClass(tag) {
   if (tag === 'éxito') return 'tag-living';
   if (tag === 'parcial') return 'tag-ember';
@@ -1190,21 +1194,27 @@ function ViewResumenRegistrador({ experiment, identity, onGo }) {
 function ViewResumenSupervisor({ tenant, experiment }) {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState(null);
 
-  useEffect(() => {
-    setLoading(true);
+  const load = (force = false) => {
+    (force ? setRefreshing : setLoading)(true);
     setErr(null);
     fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/summary`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'Supervisor' }),
+      body: JSON.stringify({ role: 'Supervisor', force }),
     })
       .then((r) => r.json())
       .then((d) => { if (d.error) setErr(d.error); else setSummary(d.summary); })
       .catch(() => setErr('Error de conexión.'))
-      .finally(() => setLoading(false));
-  }, [tenant, experiment.meta.id, experiment.meta.updatedAt]);
+      .finally(() => { setLoading(false); setRefreshing(false); });
+  };
+
+  // Se genera solo si todavía no existe un análisis guardado — una vez que hay uno, queda
+  // "congelado" (con su fecha) hasta que alguien toque "Actualizar"; no se regenera solo por
+  // volver a entrar a la pestaña ni porque el proyecto haya cambiado mientras tanto.
+  useEffect(() => { load(false); }, [tenant, experiment.meta.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="view">
@@ -1215,7 +1225,15 @@ function ViewResumenSupervisor({ tenant, experiment }) {
       </div>
 
       <div className="synth-banner">
-        <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Qué cambió</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+          <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Qué cambió</div>
+          {summary?.generatedAt && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, color: 'var(--labs-cream-faint)' }}>Análisis del {formatSummaryDate(summary.generatedAt)}</span>
+              <button type="button" className="chip-btn" disabled={refreshing} onClick={() => load(true)}>{refreshing ? 'Actualizando…' : 'Actualizar'}</button>
+            </div>
+          )}
+        </div>
         {loading && <p className="empty-note">Analizando el estado del proyecto…</p>}
         {err && <p className="labs-login-error">{err}</p>}
         {summary && <div style={{ fontSize: 13.5, color: 'var(--labs-cream-dim)', lineHeight: 1.6 }}>{summary.whatChanged}</div>}
@@ -1247,21 +1265,24 @@ function ViewResumenSupervisor({ tenant, experiment }) {
 function ViewResumenDirector({ tenant, experiment, onGo, onUpdate }) {
   const [brief, setBrief] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState(null);
 
-  useEffect(() => {
-    setLoading(true);
+  const load = (force = false) => {
+    (force ? setRefreshing : setLoading)(true);
     setErr(null);
     fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/summary`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'Director' }),
+      body: JSON.stringify({ role: 'Director', force }),
     })
       .then((r) => r.json())
       .then((d) => { if (d.error) setErr(d.error); else setBrief(d.brief); })
       .catch(() => setErr('Error de conexión.'))
-      .finally(() => setLoading(false));
-  }, [tenant, experiment.meta.id, experiment.meta.updatedAt]);
+      .finally(() => { setLoading(false); setRefreshing(false); });
+  };
+
+  useEffect(() => { load(false); }, [tenant, experiment.meta.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="view">
@@ -1277,7 +1298,15 @@ function ViewResumenDirector({ tenant, experiment, onGo, onUpdate }) {
         {err && <p className="labs-login-error">{err}</p>}
         {brief && (
           <>
-            <div className="section-title" style={{ fontSize: 16, color: 'var(--labs-cream)' }}>{brief.headline}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+              <div className="section-title" style={{ fontSize: 16, color: 'var(--labs-cream)' }}>{brief.headline}</div>
+              {brief.generatedAt && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: 'var(--labs-cream-faint)' }}>Análisis del {formatSummaryDate(brief.generatedAt)}</span>
+                  <button type="button" className="chip-btn" disabled={refreshing} onClick={() => load(true)}>{refreshing ? 'Actualizando…' : 'Actualizar'}</button>
+                </div>
+              )}
+            </div>
             <p style={{ fontSize: 13, color: 'var(--labs-cream-dim)', lineHeight: 1.6, marginTop: 8 }}>{brief.narrative}</p>
             <div className="dim-grid">
               {brief.dimensions.map((d, i) => (
@@ -3297,6 +3326,7 @@ function ViewPruebas({ tenant, experiment, identity, onUpdate }) {
           testId={editRegistradoresOf}
           current={experiment.tests.find((t) => t.id === editRegistradoresOf)?.registradorIds ?? []}
           currentName={experiment.tests.find((t) => t.id === editRegistradoresOf)?.name ?? ''}
+          currentFields={experiment.tests.find((t) => t.id === editRegistradoresOf)?.fields ?? []}
           onClose={() => setEditRegistradoresOf(null)}
           onSaved={() => { setEditRegistradoresOf(null); onUpdate(); }}
         />
@@ -3346,9 +3376,13 @@ function EditSupervisorsModal({ tenant, experimentId, current, onClose, onSaved 
   );
 }
 
-function EditRegistradoresModal({ tenant, experimentId, testId, current, currentName, onClose, onSaved }) {
+function EditRegistradoresModal({ tenant, experimentId, testId, current, currentName, currentFields, onClose, onSaved }) {
   const [name, setName] = useState(currentName ?? '');
   const [registradorIds, setRegistradorIds] = useState(current);
+  // Solo se edita operator/value/unit de los campos que YA existen — no se agregan ni quitan
+  // campos acá (eso cambiaría las `key` que las ejecuciones ya cargadas referencian).
+  const [fields, setFields] = useState((currentFields ?? []).map((f) => ({ ...f, value: f.value ?? '', unit: f.unit ?? '' })));
+  const updateField = (i, patch) => setFields((prev) => prev.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -3360,7 +3394,7 @@ function EditRegistradoresModal({ tenant, experimentId, testId, current, current
       const res = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/tests/${testId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, registradorIds }),
+        body: JSON.stringify({ name, registradorIds, fields }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo guardar.'); return; }
@@ -3382,6 +3416,24 @@ function EditRegistradoresModal({ tenant, experimentId, testId, current, current
         <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 16 }} />
         <label className="field-label">Registradores</label>
         <UserMultiSelect tenant={tenant} role="Registrador" selected={registradorIds} onChange={setRegistradorIds} />
+        {fields.some((f) => f.type === 'number') && (
+          <>
+            <label className="field-label" style={{ marginTop: 16 }}>Criterios de aprobación por campo</label>
+            {fields.map((f, i) => f.type === 'number' && (
+              <div key={f.key || i} style={{ marginBottom: 8, border: '1px solid var(--labs-line-dark)', borderRadius: 8, padding: 8 }}>
+                <p style={{ fontSize: 11, color: 'var(--labs-cream-faint)', margin: '0 0 6px' }}>{f.label}</p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <select value={f.operator || ''} onChange={(e) => updateField(i, { operator: e.target.value })} style={{ flex: '0 0 130px', background: 'var(--labs-dark-3)', border: '1px solid var(--labs-line-dark)', color: 'var(--labs-cream)', borderRadius: 8, padding: '0 10px' }}>
+                    <option value="">Sin criterio</option>
+                    {CRITERIA_OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label} que…</option>)}
+                  </select>
+                  <input type="number" placeholder="Valor" value={f.value ?? ''} onChange={(e) => updateField(i, { value: e.target.value })} style={{ flex: 1, minWidth: 70 }} />
+                  <input type="text" placeholder="Unidad (ej. %)" value={f.unit ?? ''} onChange={(e) => updateField(i, { unit: e.target.value })} style={{ flex: 1, minWidth: 70 }} />
+                </div>
+              </div>
+            ))}
+          </>
+        )}
         {err && <p className="labs-login-error" style={{ marginTop: 10 }}>{err}</p>}
         <div className="modal-footer">
           <button type="button" className="btn btn-quiet" onClick={onClose}>Cancelar</button>
