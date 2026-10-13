@@ -5524,7 +5524,7 @@
 .knx-task-table-head,
 .knx-task-table-row {
   display: grid;
-  grid-template-columns: 28px minmax(160px, 2fr) 130px 120px 120px 90px 70px 28px;
+  grid-template-columns: 28px minmax(160px, 2fr) 110px 130px 120px 120px 90px 70px 28px;
   gap: 10px;
   align-items: center;
   padding: 9px 10px;
@@ -7378,6 +7378,204 @@
   color: var(--knx-text-muted);
 }
 
+.knx-tipologia-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  margin-right: 5px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.knx-mini-proyectos-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px dashed var(--knx-border);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.knx-mini-proyectos-empty p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--knx-text-muted);
+}
+
+.knx-mini-proyectos-empty strong {
+  display: block;
+  font-size: 13px;
+  color: var(--knx-text);
+  margin-bottom: 2px;
+}
+
+.knx-grupo-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.knx-grupo-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--knx-border);
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.knx-grupo-card:hover {
+  border-color: var(--knx-primary);
+}
+
+.knx-grupo-card--active {
+  border-color: var(--knx-primary);
+  box-shadow: 0 0 0 1px var(--knx-primary);
+}
+
+.knx-grupo-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.knx-grupo-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--knx-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.knx-grupo-card-edit {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--knx-text-muted);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.knx-grupo-card-edit:hover {
+  background: var(--knx-sidebar-bg);
+  color: var(--knx-text);
+}
+
+.knx-grupo-card-tipologia {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  color: var(--knx-text-muted);
+}
+
+.knx-grupo-card-progressbar {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--knx-sidebar-bg);
+  overflow: hidden;
+}
+
+.knx-grupo-card-progressbar > div {
+  height: 100%;
+  background: var(--knx-primary);
+  border-radius: 999px;
+}
+
+.knx-grupo-card-foot {
+  font-size: 11px;
+  color: var(--knx-text-muted);
+}
+
+.knx-task-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-top: 1px solid var(--knx-border);
+  background: var(--knx-sidebar-bg);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--knx-text);
+  text-align: left;
+}
+
+.knx-task-group-chevron {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: var(--knx-text-muted);
+}
+
+.knx-task-group-chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.knx-task-group-name {
+  flex: 1;
+}
+
+.knx-task-group-count {
+  font-weight: 400;
+  color: var(--knx-text-muted);
+}
+
+.knx-mini-suggestion-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--knx-border);
+  background: var(--knx-sidebar-bg);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  font-size: 12.5px;
+}
+
+.knx-mini-suggestion-avatar {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--knx-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.knx-mini-suggestion-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--knx-text);
+}
+
+.knx-mini-suggestion-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 
 .knx-delete-task-btn {
   display: inline-flex;
@@ -7447,4 +7645,166 @@
   margin-left: 14px;
   color: var(--knx-primary);
   font-weight: 500;
+}
+
+/* ── Filtros de Tareas (Lista/Canvas/Cronograma) ──────────────────────────── */
+
+.knx-task-status-tabs {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.knx-task-status-tabs button {
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--knx-text-muted);
+  cursor: pointer;
+  padding: 0 0 6px;
+}
+
+.knx-task-status-tabs button.knx-task-status-tab--active {
+  color: var(--knx-text);
+  font-weight: 700;
+  border-bottom-color: var(--knx-primary);
+}
+
+.knx-task-filters-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.knx-task-filters-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.knx-filter-dropdown {
+  position: relative;
+}
+
+.knx-filter-dropdown-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--knx-border);
+  background: #fff;
+  color: var(--knx-text-muted);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.knx-filter-dropdown-btn strong {
+  color: var(--knx-text);
+  font-weight: 600;
+}
+
+.knx-filter-dropdown-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 230px;
+  background: #fff;
+  border: 1px solid var(--knx-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 8px;
+}
+
+.knx-filter-checkbox-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 6px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  color: var(--knx-text);
+  cursor: pointer;
+}
+
+.knx-filter-checkbox-row:hover {
+  background: var(--knx-sidebar-bg);
+}
+
+.knx-filter-checkbox-row-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knx-filter-checkbox-row-count {
+  color: var(--knx-text-muted);
+  flex-shrink: 0;
+}
+
+.knx-filter-dropdown-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--knx-border);
+}
+
+.knx-filter-dropdown-footer button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--knx-text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.knx-filter-dropdown-footer button:hover {
+  background: var(--knx-sidebar-bg);
+  color: var(--knx-text);
+}
+
+.knx-task-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--knx-border);
+  background: #fff;
+  color: var(--knx-text-muted);
+}
+
+.knx-task-search input {
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--knx-text);
+  background: transparent;
+  width: 130px;
 }

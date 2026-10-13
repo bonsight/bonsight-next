@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import KaiNextSidebar from './KaiNextSidebar';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
@@ -15,6 +15,20 @@ const TASK_STATUSES = [
   { id: 'done', label: 'Terminado' },
 ];
 const PRIORITIES = ['Alta', 'Media', 'Baja'];
+
+// Tabs de la lista de tareas — "Activas" (todo+doing) va primero y es el default: una tarea
+// terminada deja de ser información accionable del día a día, así que no satura la vista por
+// defecto; "Todas" sigue disponible para auditar el historial completo.
+const STATUS_TABS = [
+  { id: 'activas', label: 'Activas', test: (t) => t.status !== 'done' },
+  { id: 'todo', label: 'Por hacer', test: (t) => t.status === 'todo' },
+  { id: 'doing', label: 'Haciendo', test: (t) => t.status === 'doing' },
+  { id: 'done', label: 'Terminadas', test: (t) => t.status === 'done' },
+  { id: 'all', label: 'Todas', test: () => true },
+];
+function matchesStatusTab(task, tabId) {
+  return (STATUS_TABS.find((s) => s.id === tabId) ?? STATUS_TABS[0]).test(task);
+}
 
 function formatShortDate(iso) {
   if (!iso) return '—';
@@ -43,6 +57,42 @@ function groupTasksByFase(tasks) {
     g.tasks.push(t);
   }
   return grouped;
+}
+
+// Para la Lista agrupada por mini proyecto — a diferencia de groupTasksByFase (que agrupa por
+// el string tal cual aparece, usado solo por Cronograma), acá el orden sigue el de `grupos`
+// (gestionados), seguido de cualquier `fase` suelta que no matchee ninguno (legado), y por
+// último "Sin mini proyecto" — así el orden en pantalla es estable aunque cambie el de `tasks`.
+function groupTasksByGrupo(tasks, grupos) {
+  const byName = new Map(grupos.map((g) => [g.name, { key: g.name, tasks: [] }]));
+  const extra = new Map();
+  const sinGrupo = { key: null, tasks: [] };
+  for (const t of tasks) {
+    if (!t.fase) { sinGrupo.tasks.push(t); continue; }
+    if (byName.has(t.fase)) { byName.get(t.fase).tasks.push(t); continue; }
+    if (!extra.has(t.fase)) extra.set(t.fase, { key: t.fase, tasks: [] });
+    extra.get(t.fase).tasks.push(t);
+  }
+  const groups = [...byName.values(), ...extra.values()].filter((g) => g.tasks.length > 0);
+  if (sinGrupo.tasks.length > 0) groups.push(sinGrupo);
+  return groups;
+}
+
+// Paleta fija, asignada por posición en el array de tipologías (orden de creación) — nunca se
+// persiste un color: así una tipología creada antes de que existiera este campo (o reordenada
+// algún día) sigue teniendo un color determinístico sin necesitar una migración de datos.
+const TIPOLOGIA_COLORS = ['#34D399', '#60A5FA', '#F59E0B', '#A78BFA', '#F472B6', '#38BDF8', '#FB923C', '#A3E635'];
+function tipologiaColor(tipologias, tipologiaId) {
+  const idx = tipologias.findIndex((t) => t.id === tipologiaId);
+  return idx === -1 ? null : TIPOLOGIA_COLORS[idx % TIPOLOGIA_COLORS.length];
+}
+
+// Heurística simple (sin IA real) para sugerir "esto parece un mini proyecto, no una tarea" —
+// tareas sueltas (sin mini proyecto todavía) cuyo nombre arranca con "Proyecto", típico de
+// trabajos con alcance propio importados como una sola tarea. Una sugerencia a la vez; se
+// descarta por tarea (persistido en `miniProyectoSuggestionDismissed`, no por sesión).
+function findMiniProyectoCandidate(tasks) {
+  return (tasks ?? []).find((t) => !t.fase && !t.miniProyectoSuggestionDismissed && /^proyecto\b/i.test(t.nombre.trim())) ?? null;
 }
 
 function personName(people, id) {
@@ -637,7 +687,11 @@ function TaskTableRow({ task, people, tipologias, canManage, canToggle, onStatus
       />
       <div className="knx-task-table-cell-main">
         <div className={`knx-task-table-title${done ? ' knx-task-table-title--done' : ''}`} title={task.nombre}>{task.nombre}</div>
-        {(task.fase || tipologiaName) && <div className="knx-task-table-sub">{[task.fase, tipologiaName].filter(Boolean).join(' · ')}</div>}
+        {task.fase && <div className="knx-task-table-sub">{task.fase}</div>}
+      </div>
+      <div className="knx-task-table-sub">
+        {tipologiaName && <span className="knx-tipologia-dot" style={{ background: tipologiaColor(tipologias, task.tipologiaId) }} />}
+        {tipologiaName ?? '—'}
       </div>
       <div className="knx-task-table-sub">{(task.responsables ?? []).map((id) => personName(people, id)).join(', ') || 'Sin responsable'}</div>
       <div className="knx-task-table-dates">
@@ -789,7 +843,12 @@ function TaskCanvasCard({ task, people, tipologias, draggable, onDragStart, onDr
       {(task.prioridad || tipologiaName) && (
         <div className="knx-board-card-tags">
           {task.prioridad && <span className={`knx-board-tag knx-board-tag--priority-${task.prioridad.toLowerCase()}`}>{task.prioridad}</span>}
-          {tipologiaName && <span className="knx-board-tag">{tipologiaName}</span>}
+          {tipologiaName && (
+            <span className="knx-board-tag">
+              <span className="knx-tipologia-dot" style={{ background: tipologiaColor(tipologias, task.tipologiaId) }} />
+              {tipologiaName}
+            </span>
+          )}
         </div>
       )}
       {task.fechaInicio && (
@@ -1144,27 +1203,73 @@ function GrupoModal({ title, initial, onSave, onDelete, onClose }) {
   );
 }
 
-function GruposSection({ grupos, tasks, canManage, onAdd, onUpdate, onDelete }) {
+// Tarjetas compactas en vez de la sección de chips de antes — al hacer clic en una, filtra la
+// lista de tareas a ese mini proyecto (toggle: un segundo clic la vuelve a mostrar todas). Editar
+// (nombre/fechas) pasa a un ícono aparte (⋯) en la tarjeta, para no pisar el click de filtrar.
+function GruposSection({ grupos, tasks, tipologias, selected, onSelect, canManage, onAdd, onUpdate, onDelete }) {
   const [modal, setModal] = useState(null); // null | 'new' | grupo
 
   if (!canManage && !grupos.length) return null;
 
+  if (!grupos.length) {
+    return (
+      <div className="knx-mini-proyectos-empty">
+        <p><strong>Mini proyectos</strong>Agrupa tareas que avanzan juntas, con sus fechas y su avance.</p>
+        {canManage && <button type="button" className="knx-canvas-mini" onClick={() => setModal('new')}>+ Nuevo mini proyecto</button>}
+        {modal && (
+          <GrupoModal
+            title="Nuevo mini proyecto"
+            initial={null}
+            onSave={onAdd}
+            onClose={() => setModal(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="knx-canvas-group" style={{ marginBottom: 16 }}>
-      <div className="knx-canvas-group-head"><span className="knx-canvas-group-name">Mini proyectos</span></div>
-      <div className="knx-grupos-chips">
+    <div style={{ marginBottom: 4 }}>
+      <div className="knx-canvas-group-head">
+        <span className="knx-canvas-group-name">Mini proyectos · {grupos.length}</span>
+        {canManage && <button type="button" className="knx-canvas-mini" onClick={() => setModal('new')}>+ Nuevo mini proyecto</button>}
+      </div>
+      <div className="knx-grupo-cards">
         {grupos.map((g) => {
-          const count = tasks.filter((t) => t.fase === g.name).length;
+          const groupTasks = tasks.filter((t) => t.fase === g.name);
+          const done = groupTasks.filter((t) => t.status === 'done').length;
+          const pct = groupTasks.length ? Math.round((done / groupTasks.length) * 100) : 0;
+          const distinctTipologias = [...new Set(groupTasks.map((t) => t.tipologiaId).filter(Boolean))];
+          const dominant = distinctTipologias.length === 1 ? tipologias.find((t) => t.id === distinctTipologias[0]) : null;
           return (
-            <button type="button" key={g.id} className="knx-grupo-chip" onClick={() => canManage && setModal(g)} disabled={!canManage}>
-              {g.name} · {count} tarea{count !== 1 ? 's' : ''}
-              {(g.fechaInicio || g.fechaFin) && (
-                <span className="knx-grupo-chip-dates">{g.fechaInicio ? formatShortDate(g.fechaInicio) : '—'} → {g.fechaFin ? formatShortDate(g.fechaFin) : '—'}</span>
+            <div
+              key={g.id}
+              role="button"
+              tabIndex={0}
+              className={`knx-grupo-card${selected === g.name ? ' knx-grupo-card--active' : ''}`}
+              onClick={() => onSelect(selected === g.name ? 'all' : g.name)}
+              onKeyDown={(e) => { if (e.key === 'Enter') onSelect(selected === g.name ? 'all' : g.name); }}
+            >
+              <div className="knx-grupo-card-head">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                <span className="knx-grupo-card-name" title={g.name}>{g.name}</span>
+                {canManage && (
+                  <button type="button" className="knx-grupo-card-edit" aria-label="Editar mini proyecto" onClick={(e) => { e.stopPropagation(); setModal(g); }}>⋯</button>
+                )}
+              </div>
+              {dominant && (
+                <div className="knx-grupo-card-tipologia">
+                  <span className="knx-tipologia-dot" style={{ background: tipologiaColor(tipologias, dominant.id) }} />
+                  {dominant.name}
+                </div>
               )}
-            </button>
+              <div className="knx-grupo-card-progressbar"><div style={{ width: `${pct}%` }} /></div>
+              <div className="knx-grupo-card-foot">
+                {done}/{groupTasks.length} · {g.fechaInicio ? formatShortDate(g.fechaInicio) : '—'} → {g.fechaFin ? formatShortDate(g.fechaFin) : '—'}
+              </div>
+            </div>
           );
         })}
-        {canManage && <button type="button" className="knx-new-chat" onClick={() => setModal('new')}>+ Nuevo mini proyecto</button>}
       </div>
       {modal && (
         <GrupoModal
@@ -1175,6 +1280,45 @@ function GruposSection({ grupos, tasks, canManage, onAdd, onUpdate, onDelete }) 
           onClose={() => setModal(null)}
         />
       )}
+    </div>
+  );
+}
+
+function MiniProyectoSuggestionBanner({ task, onConvert, onDismiss }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const convert = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await onConvert(task);
+    } catch (e) {
+      setErr(e.message || 'No se pudo convertir.');
+      setBusy(false);
+    }
+  };
+
+  const dismiss = async () => {
+    setBusy(true);
+    try {
+      await onDismiss(task.id);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="knx-mini-suggestion-banner">
+      <span className="knx-mini-suggestion-avatar">K</span>
+      <span className="knx-mini-suggestion-text">
+        «{task.nombre}» tiene alcance propio. ¿Lo convierto en mini proyecto?
+        {err && <span className="knx-canvas-error" style={{ display: 'block', marginTop: 4 }}>{err}</span>}
+      </span>
+      <div className="knx-mini-suggestion-actions">
+        <button type="button" className="knx-canvas-mini" onClick={dismiss} disabled={busy}>Ahora no</button>
+        <button type="button" className="knx-new-chat" onClick={convert} disabled={busy}>{busy ? 'Convirtiendo…' : 'Convertir'}</button>
+      </div>
     </div>
   );
 }
@@ -1234,34 +1378,77 @@ function TipologiaModal({ title, initial, onSave, onDelete, onClose }) {
 // Clasificación de tarea configurable por proyecto (a diferencia de Mini proyectos, no agrupa
 // progreso ni tiene fechas — es solo una etiqueta). Cada proyecto de Seguimiento define las
 // suyas porque el rubro de tareas varía de uno a otro (Infraestructura TI ≠ Legal, por ejemplo).
-function TipologiasSection({ tipologias, tasks, canManage, onAdd, onUpdate, onDelete }) {
-  const [modal, setModal] = useState(null); // null | 'new' | tipologia
+// Reemplaza la sección siempre-visible de antes — crear/editar tipologías es algo que se hace
+// una vez al configurar el proyecto, no todos los días; ahora vive detrás del ícono de engranaje
+// junto a los filtros, no ocupando el lugar principal de la pantalla.
+// Botón que abre un popover — mismo rol visual que un <select>, pero permite contenido rico
+// adentro (checkboxes con punto de color, conteos, un link de "editar" al pie). Se cierra solo
+// al clickear afuera.
+function FilterDropdown({ label, summary, children }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
 
-  if (!canManage && !tipologias.length) return null;
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
 
   return (
-    <div className="knx-canvas-group" style={{ marginBottom: 16 }}>
-      <div className="knx-canvas-group-head"><span className="knx-canvas-group-name">Tipologías</span></div>
-      <div className="knx-grupos-chips">
-        {tipologias.map((t) => {
-          const count = tasks.filter((task) => task.tipologiaId === t.id).length;
-          return (
-            <button type="button" key={t.id} className="knx-grupo-chip" onClick={() => canManage && setModal(t)} disabled={!canManage}>
-              {t.name} · {count} tarea{count !== 1 ? 's' : ''}
-            </button>
-          );
-        })}
-        {canManage && <button type="button" className="knx-new-chat" onClick={() => setModal('new')}>+ Nueva tipología</button>}
+    <div className="knx-filter-dropdown" ref={ref}>
+      <button type="button" className="knx-filter-dropdown-btn" onClick={() => setOpen((o) => !o)}>
+        {label}: <strong>{summary}</strong>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+      </button>
+      {open && <div className="knx-filter-dropdown-pop">{children}</div>}
+    </div>
+  );
+}
+
+function TipologiasManageModal({ tipologias, tasks, canManage, onAdd, onUpdate, onDelete, onClose }) {
+  const [sub, setSub] = useState(null); // null | 'new' | tipologia
+
+  return (
+    <div className="knx-ficha-share-backdrop" onClick={onClose}>
+      <div className="knx-ficha-review-modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(420px, 92vw)' }}>
+        <div className="knx-ficha-review-head">
+          <div><h3 className="knx-ficha-review-title">Tipologías</h3></div>
+          <button type="button" className="knx-side-panel-close" aria-label="Cerrar" onClick={onClose}>×</button>
+        </div>
+        {!tipologias.length ? (
+          <p className="knx-knowledge-empty">Sin tipologías todavía.</p>
+        ) : (
+          <div className="knx-grupos-chips" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+            {tipologias.map((t, i) => {
+              const count = tasks.filter((task) => task.tipologiaId === t.id).length;
+              return (
+                <button
+                  type="button"
+                  key={t.id}
+                  className="knx-grupo-chip"
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
+                  onClick={() => canManage && setSub(t)}
+                  disabled={!canManage}
+                >
+                  <span><span className="knx-tipologia-dot" style={{ background: TIPOLOGIA_COLORS[i % TIPOLOGIA_COLORS.length] }} />{t.name}</span>
+                  <span>{count} tarea{count !== 1 ? 's' : ''}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {canManage && <button type="button" className="knx-new-chat" style={{ marginTop: 10 }} onClick={() => setSub('new')}>+ Nueva tipología</button>}
+        {sub && (
+          <TipologiaModal
+            title={sub === 'new' ? 'Nueva tipología' : 'Editar tipología'}
+            initial={sub === 'new' ? null : sub}
+            onSave={(payload) => (sub === 'new' ? onAdd(payload) : onUpdate(sub.id, payload))}
+            onDelete={sub === 'new' ? undefined : () => onDelete(sub.id)}
+            onClose={() => setSub(null)}
+          />
+        )}
       </div>
-      {modal && (
-        <TipologiaModal
-          title={modal === 'new' ? 'Nueva tipología' : 'Editar tipología'}
-          initial={modal === 'new' ? null : modal}
-          onSave={(payload) => (modal === 'new' ? onAdd(payload) : onUpdate(modal.id, payload))}
-          onDelete={modal === 'new' ? undefined : () => onDelete(modal.id)}
-          onClose={() => setModal(null)}
-        />
-      )}
     </div>
   );
 }
@@ -1275,7 +1462,12 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
   const [view, setView] = useState('list');
   const [taskResponsableFilter, setTaskResponsableFilter] = useState('all');
   const [taskGrupoFilter, setTaskGrupoFilter] = useState('all');
-  const [taskStatusFilter, setTaskStatusFilter] = useState('all');
+  const [taskStatusFilter, setTaskStatusFilter] = useState('activas');
+  const [taskTipologiaFilter, setTaskTipologiaFilter] = useState([]); // array de ids, o '__none__' para "Sin tipología"; [] = todas
+  const [taskSearchQuery, setTaskSearchQuery] = useState('');
+  const [taskGroupBy, setTaskGroupBy] = useState('none');
+  const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
+  const [tipologiasModalOpen, setTipologiasModalOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [removeTaskTarget, setRemoveTaskTarget] = useState(null);
@@ -1305,8 +1497,16 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
   const visibleTasks = (tasks ?? []).filter((t) =>
     (taskResponsableFilter === 'all' || (t.responsables ?? []).includes(taskResponsableFilter))
     && (taskGrupoFilter === 'all' || t.fase === taskGrupoFilter)
-    && (taskStatusFilter === 'all' || t.status === taskStatusFilter)
+    && matchesStatusTab(t, taskStatusFilter)
+    && (taskTipologiaFilter.length === 0 || taskTipologiaFilter.includes(t.tipologiaId ?? '__none__'))
+    && (!taskSearchQuery.trim() || t.nombre.toLowerCase().includes(taskSearchQuery.trim().toLowerCase()))
   );
+  const miniProyectoCandidate = findMiniProyectoCandidate(tasks);
+  const toggleGroupCollapsed = (key) => setCollapsedGroups((prev) => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
   const inactive = meta.status !== 'activo';
   const isCivil = meta.projectKind === 'civil';
   const isExperimental = meta.projectKind === 'experimental';
@@ -1355,6 +1555,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
     const d = await res.json();
     if (!res.ok) throw new Error(d.error || 'No se pudo crear.');
     load();
+    return d.grupo;
   };
 
   const updateGrupoRow = async (grupoId, payload) => {
@@ -1427,6 +1628,17 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
     if (res.ok) load();
   };
 
+  // Sugerencia "esto parece un mini proyecto" (ver findMiniProyectoCandidate) — convertir crea
+  // el mini proyecto con el nombre/fechas de la tarea y la engancha ahí (fase = nombre del
+  // mini proyecto). No inventa tareas nuevas: eso requeriría pedirle a un modelo que las
+  // redacte, y preferimos que las cargue quien gestiona el proyecto, no generarlas sin revisión.
+  const convertTaskToMiniProyecto = async (task) => {
+    const grupo = await addGrupoRow({ name: task.nombre, fechaInicio: task.fechaInicio, fechaFin: task.fechaFin });
+    await saveTaskDetail(task.id, { fase: grupo.name });
+  };
+
+  const dismissMiniProyectoSuggestion = (taskId) => saveTaskDetail(taskId, { miniProyectoSuggestionDismissed: true });
+
   const confirmRemoveTask = async () => {
     const taskId = removeTaskTarget;
     setRemoveTaskTarget(null);
@@ -1489,6 +1701,9 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
         <GruposSection
           grupos={grupos}
           tasks={tasks}
+          tipologias={tipologias}
+          selected={taskGrupoFilter}
+          onSelect={setTaskGrupoFilter}
           canManage={level.isSupervisorLevel && !inactive}
           onAdd={addGrupoRow}
           onUpdate={updateGrupoRow}
@@ -1496,21 +1711,33 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
         />
       )}
 
-      {!isExperimental && !isDesarrollo && (
-        <TipologiasSection
-          tipologias={tipologias}
-          tasks={tasks}
-          canManage={level.isSupervisorLevel && !inactive}
-          onAdd={addTipologiaRow}
-          onUpdate={updateTipologiaRow}
-          onDelete={deleteTipologiaRow}
+      {!isExperimental && !isDesarrollo && miniProyectoCandidate && level.isSupervisorLevel && !inactive && (
+        <MiniProyectoSuggestionBanner
+          task={miniProyectoCandidate}
+          onConvert={convertTaskToMiniProyecto}
+          onDismiss={dismissMiniProyectoSuggestion}
         />
       )}
 
       {!isExperimental && !isDesarrollo && (
         <div className="knx-canvas-group" style={{ marginBottom: 16 }}>
           <div className="knx-canvas-group-head">
-            <span className="knx-canvas-group-name">Tareas</span>
+            {tasks.length > 0 ? (
+              <div className="knx-task-status-tabs">
+                {STATUS_TABS.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={taskStatusFilter === s.id ? 'knx-task-status-tab--active' : ''}
+                    onClick={() => setTaskStatusFilter(s.id)}
+                  >
+                    {s.label} {tasks.filter((t) => matchesStatusTab(t, s.id)).length}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span className="knx-canvas-group-name">Tareas</span>
+            )}
             {tasks.length > 0 && (
               <div className="knx-gantt-view-toggle">
                 <button type="button" className={view === 'list' ? 'knx-gantt-view-toggle--active' : ''} onClick={() => setView('list')}>Lista</button>
@@ -1521,45 +1748,111 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
           </div>
 
           {tasks.length > 0 && (() => {
-            const preStatusTasks = tasks.filter((t) =>
+            const preTipologiaTasks = tasks.filter((t) =>
               (taskResponsableFilter === 'all' || (t.responsables ?? []).includes(taskResponsableFilter))
               && (taskGrupoFilter === 'all' || t.fase === taskGrupoFilter)
+              && matchesStatusTab(t, taskStatusFilter)
             );
-            const statusCounts = [{ id: 'all', label: 'Todas' }, ...TASK_STATUSES].map((s) => ({
-              ...s,
-              count: s.id === 'all' ? preStatusTasks.length : preStatusTasks.filter((t) => t.status === s.id).length,
+            const tipologiaCounts = tipologias.map((t, i) => ({
+              ...t,
+              color: TIPOLOGIA_COLORS[i % TIPOLOGIA_COLORS.length],
+              count: preTipologiaTasks.filter((task) => task.tipologiaId === t.id).length,
             }));
+            const sinTipologiaCount = preTipologiaTasks.filter((task) => !task.tipologiaId).length;
+            const toggleTipologiaFilter = (key) => setTaskTipologiaFilter((prev) => (
+              prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]
+            ));
+            const tipologiaSummary = taskTipologiaFilter.length === 0
+              ? 'Todas'
+              : taskTipologiaFilter.length === 1
+                ? (taskTipologiaFilter[0] === '__none__' ? 'Sin tipología' : tipologias.find((t) => t.id === taskTipologiaFilter[0])?.name ?? 'Todas')
+                : `${taskTipologiaFilter.length} seleccionadas`;
+            const responsablesConTareas = people.filter((p) => tasks.some((t) => (t.responsables ?? []).includes(p.id)));
+            const responsableSummary = taskResponsableFilter === 'all' ? 'Todos' : (responsablesConTareas.find((p) => p.id === taskResponsableFilter)?.name ?? 'Todos');
+
             return (
-              <div className="knx-roadmap-status-filters" style={{ marginBottom: 10, flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              <div className="knx-task-filters-row">
+                <div className="knx-task-filters-left">
+                  {(tipologias.length > 0 || (level.isSupervisorLevel && !inactive)) && (
+                    <FilterDropdown label="Tipología" summary={tipologiaSummary}>
+                      {tipologias.length === 0 ? (
+                        <p className="knx-knowledge-empty" style={{ margin: '4px 6px' }}>Sin tipologías todavía.</p>
+                      ) : (
+                        <>
+                          {tipologiaCounts.map((t) => (
+                            <label key={t.id} className="knx-filter-checkbox-row">
+                              <span className="knx-filter-checkbox-row-label">
+                                <input type="checkbox" checked={taskTipologiaFilter.includes(t.id)} onChange={() => toggleTipologiaFilter(t.id)} />
+                                <span className="knx-tipologia-dot" style={{ background: t.color }} />
+                                {t.name}
+                              </span>
+                              <span className="knx-filter-checkbox-row-count">{t.count}</span>
+                            </label>
+                          ))}
+                          <label className="knx-filter-checkbox-row">
+                            <span className="knx-filter-checkbox-row-label">
+                              <input type="checkbox" checked={taskTipologiaFilter.includes('__none__')} onChange={() => toggleTipologiaFilter('__none__')} />
+                              Sin tipología
+                            </span>
+                            <span className="knx-filter-checkbox-row-count">{sinTipologiaCount}</span>
+                          </label>
+                        </>
+                      )}
+                      {level.isSupervisorLevel && !inactive && (
+                        <div className="knx-filter-dropdown-footer">
+                          <button type="button" onClick={() => setTipologiasModalOpen(true)}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" /></svg>
+                            Editar tipologías
+                          </button>
+                        </div>
+                      )}
+                    </FilterDropdown>
+                  )}
+                  <FilterDropdown label="Responsable" summary={responsableSummary}>
+                    <label className="knx-filter-checkbox-row">
+                      <span className="knx-filter-checkbox-row-label">
+                        <input type="radio" checked={taskResponsableFilter === 'all'} onChange={() => setTaskResponsableFilter('all')} />
+                        Todos
+                      </span>
+                    </label>
+                    {responsablesConTareas.map((p) => (
+                      <label key={p.id} className="knx-filter-checkbox-row">
+                        <span className="knx-filter-checkbox-row-label">
+                          <input type="radio" checked={taskResponsableFilter === p.id} onChange={() => setTaskResponsableFilter(p.id)} />
+                          {p.name || p.email}
+                        </span>
+                      </label>
+                    ))}
+                  </FilterDropdown>
+                  {view === 'list' && grupos.length > 0 && (
+                    <select className="knx-canvas-meta-select" style={{ width: 'auto' }} value={taskGroupBy} onChange={(e) => setTaskGroupBy(e.target.value)}>
+                      <option value="none">Agrupar: Ninguno</option>
+                      <option value="grupo">Agrupar: Mini proyecto</option>
+                    </select>
+                  )}
+                  <label className="knx-task-search">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.35-4.35" /></svg>
+                    <input type="text" placeholder="Buscar" value={taskSearchQuery} onChange={(e) => setTaskSearchQuery(e.target.value)} />
+                  </label>
+                </div>
                 {level.isSupervisorLevel && !inactive && (
                   <button type="button" className="knx-new-chat" onClick={() => setNewTaskOpen(true)}>+ Nueva tarea</button>
-                )}
-                {statusCounts.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    className={`knx-filter-pill${taskStatusFilter === s.id ? ' knx-filter-pill--active' : ''}`}
-                    onClick={() => setTaskStatusFilter(s.id)}
-                  >
-                    {s.label} · {s.count}
-                  </button>
-                ))}
-                <select className="knx-canvas-meta-select" style={{ width: 'auto' }} value={taskResponsableFilter} onChange={(e) => setTaskResponsableFilter(e.target.value)}>
-                  <option value="all">Todos los responsables</option>
-                  {people
-                    .filter((p) => tasks.some((t) => (t.responsables ?? []).includes(p.id)))
-                    .map((p) => <option key={p.id} value={p.id}>{p.name || p.email}</option>)}
-                </select>
-                {grupos.length > 0 && (
-                  <select className="knx-canvas-meta-select" style={{ width: 'auto' }} value={taskGrupoFilter} onChange={(e) => setTaskGrupoFilter(e.target.value)}>
-                    <option value="all">Todos los mini proyectos</option>
-                    {grupos.map((g) => <option key={g.id} value={g.name}>{g.name}</option>)}
-                  </select>
                 )}
               </div>
             );
           })()}
           {newTaskOpen && <NewTaskQuickModal people={people} grupos={grupos} tipologias={tipologias} onCreate={createTask} onClose={() => setNewTaskOpen(false)} />}
+          {tipologiasModalOpen && (
+            <TipologiasManageModal
+              tipologias={tipologias}
+              tasks={tasks}
+              canManage={level.isSupervisorLevel && !inactive}
+              onAdd={addTipologiaRow}
+              onUpdate={updateTipologiaRow}
+              onDelete={deleteTipologiaRow}
+              onClose={() => setTipologiasModalOpen(false)}
+            />
+          )}
 
           {!tasks.length ? (
             <p className="knx-knowledge-empty">Sin tareas todavía.</p>
@@ -1570,6 +1863,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
               <div className="knx-task-table-head">
                 <span />
                 <span>Tarea</span>
+                <span>Tipología</span>
                 <span>Responsable</span>
                 <span>Fechas</span>
                 <span>Estado</span>
@@ -1577,19 +1871,49 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
                 <span>Horas</span>
                 <span />
               </div>
-              {visibleTasks.map((t) => (
-                <TaskTableRow
-                  key={t.id}
-                  task={t}
-                  people={people}
-                  tipologias={tipologias}
-                  canManage={level.isSupervisorLevel && !inactive}
-                  canToggle={!inactive}
-                  onStatusChange={(status) => setStatus(t.id, status)}
-                  onDelete={() => setRemoveTaskTarget(t.id)}
-                  onOpen={() => setSelectedTaskId(t.id)}
-                />
-              ))}
+              {taskGroupBy === 'grupo' && grupos.length > 0 ? (
+                groupTasksByGrupo(visibleTasks, grupos).map((g) => {
+                  const key = g.key ?? '__sin_grupo__';
+                  const collapsed = collapsedGroups.has(key);
+                  const done = g.tasks.filter((t) => t.status === 'done').length;
+                  return (
+                    <div key={key}>
+                      <button type="button" className="knx-task-group-header" onClick={() => toggleGroupCollapsed(key)}>
+                        <span className={`knx-task-group-chevron${collapsed ? ' knx-task-group-chevron--collapsed' : ''}`}>▾</span>
+                        <span className="knx-task-group-name">{g.key ?? 'Sin mini proyecto'}</span>
+                        <span className="knx-task-group-count">{done}/{g.tasks.length}</span>
+                      </button>
+                      {!collapsed && g.tasks.map((t) => (
+                        <TaskTableRow
+                          key={t.id}
+                          task={t}
+                          people={people}
+                          tipologias={tipologias}
+                          canManage={level.isSupervisorLevel && !inactive}
+                          canToggle={!inactive}
+                          onStatusChange={(status) => setStatus(t.id, status)}
+                          onDelete={() => setRemoveTaskTarget(t.id)}
+                          onOpen={() => setSelectedTaskId(t.id)}
+                        />
+                      ))}
+                    </div>
+                  );
+                })
+              ) : (
+                visibleTasks.map((t) => (
+                  <TaskTableRow
+                    key={t.id}
+                    task={t}
+                    people={people}
+                    tipologias={tipologias}
+                    canManage={level.isSupervisorLevel && !inactive}
+                    canToggle={!inactive}
+                    onStatusChange={(status) => setStatus(t.id, status)}
+                    onDelete={() => setRemoveTaskTarget(t.id)}
+                    onOpen={() => setSelectedTaskId(t.id)}
+                  />
+                ))
+              )}
             </div>
           ) : view === 'canvas' ? (
             <KaiNextTaskCanvas
