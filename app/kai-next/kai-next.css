@@ -136,6 +136,15 @@
   background: #063a2f;
 }
 
+.knx-new-chat:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.knx-new-chat:disabled:hover {
+  background: var(--knx-deep);
+}
+
 .knx-sidebar-nav {
   /* Reset explícito: globals.css define un selector `nav{...}` a secas (para el header del
      sitio marketing) que de otro modo se filtra acá — mismo elemento, especificidad pareja,
@@ -208,6 +217,33 @@
   flex-direction: column;
   gap: 2px;
   margin-top: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.knx-chat-list:hover {
+  scrollbar-color: var(--knx-border) transparent;
+}
+
+.knx-chat-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.knx-chat-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.knx-chat-list::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 10px;
+}
+
+.knx-chat-list:hover::-webkit-scrollbar-thumb {
+  background: var(--knx-border);
+}
+
+.knx-chat-list::-webkit-scrollbar-thumb:hover {
+  background: var(--knx-text-secondary, #9aa1ac);
 }
 
 /* Los grupos de fecha (Hoy / Esta semana / ...) son divs sin clase, flex items directos de
@@ -5486,8 +5522,7 @@
 }
 
 .knx-task-table-head,
-.knx-task-table-row,
-.knx-task-quickadd {
+.knx-task-table-row {
   display: grid;
   grid-template-columns: 28px minmax(160px, 2fr) 130px 120px 120px 90px 70px 28px;
   gap: 10px;
@@ -5573,21 +5608,9 @@
   border-color: var(--knx-primary);
 }
 
-.knx-task-quickadd {
+.knx-task-quickadd-row {
+  padding: 10px;
   border-top: 1px solid var(--knx-border);
-  grid-template-columns: 28px 1fr;
-}
-
-.knx-task-quickadd input {
-  border: none;
-  outline: none;
-  font-size: 13px;
-  background: none;
-  color: var(--knx-text);
-}
-
-.knx-task-quickadd input::placeholder {
-  color: var(--knx-text-muted);
 }
 
 .knx-canvas-item-icons {
@@ -7317,3 +7340,111 @@
   animation: knx-voice-pulse 1s ease-in-out infinite;
 }
 
+
+/* ── Mini proyectos (Proyecto de Seguimiento/Civil) ───────────────────────── */
+
+.knx-grupos-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.knx-grupo-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--knx-border);
+  background: #fff;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--knx-text);
+  cursor: pointer;
+}
+
+.knx-grupo-chip:disabled {
+  cursor: default;
+}
+
+.knx-grupo-chip:not(:disabled):hover {
+  border-color: var(--knx-primary);
+}
+
+.knx-grupo-chip-dates {
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--knx-text-muted);
+}
+
+
+.knx-delete-task-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  margin-top: 10px;
+  padding: 7px 14px;
+  border-radius: 7px;
+  border: 1px solid #C0392B;
+  background: #fff;
+  color: #C0392B;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.knx-delete-task-btn:hover {
+  background: #FDECEA;
+}
+
+.knx-delete-task-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.knx-delete-task-btn:disabled:hover {
+  background: #fff;
+}
+
+.knx-sidebar-sublist {
+  display: flex;
+  flex-direction: column;
+  margin-left: 14px;
+  padding-left: 12px;
+  border-left: 1px solid var(--knx-border);
+}
+
+.knx-sidebar-subitem {
+  display: block;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  color: var(--knx-text-muted);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knx-sidebar-subitem:hover {
+  background: #EAEEEC;
+  color: var(--knx-text);
+}
+
+.knx-sidebar-subitem--active {
+  background: var(--knx-soft-bg);
+  color: var(--knx-deep);
+  font-weight: 600;
+}
+
+.knx-sidebar-subitem--active:hover {
+  background: var(--knx-soft-bg);
+}
+
+.knx-sidebar-subitem--add {
+  margin-left: 14px;
+  color: var(--knx-primary);
+  font-weight: 500;
+}

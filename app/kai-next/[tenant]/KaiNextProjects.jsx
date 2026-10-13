@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import KaiNextSidebar from './KaiNextSidebar';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
 import { PruebasSection } from './KaiNextProjectExperimental';
@@ -312,61 +313,135 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
   );
 }
 
-function NewTaskForm({ people, onCreate }) {
-  const [open, setOpen] = useState(false);
+// Alta rápida (solo título) arriba de Canvas/Cronograma — mismo criterio que TaskQuickAdd de
+// Lista y el "+ Agregar subtarea" de Proyecto de Desarrollo: el resto de los campos (fase,
+// responsables, fechas) se completan después desde el panel de detalle, no al crear.
+// Botón + modal (mismo patrón que GrupoModal) — antes era una barra con input siempre visible
+// arriba de Canvas/Cronograma, pero quedaba fuera de lugar ahí; un botón que abre el modal es
+// coherente con el resto de los "+ Nuevo X" de la app.
+// Mismos campos que el panel de detalle (Nombre/Descripción/Mini proyecto/Prioridad/Estado/
+// Inicio/Fin/Estimación/Horas reales/Responsables) — así no hace falta crear la tarea "a
+// medias" y después abrir el detalle para completarla.
+function NewTaskQuickModal({ people, grupos, onCreate, onClose }) {
   const [nombre, setNombre] = useState('');
+  const [descripcion, setDescripcion] = useState('');
   const [fase, setFase] = useState('');
-  const [responsables, setResponsables] = useState([]);
+  const [prioridad, setPrioridad] = useState('');
+  const [status, setStatus] = useState('todo');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
+  const [estimatedHours, setEstimatedHours] = useState('');
+  const [actualHours, setActualHours] = useState('');
+  const [responsables, setResponsables] = useState([]);
   const [saving, setSaving] = useState(false);
-
-  if (!open) {
-    return <button type="button" className="knx-canvas-add-item-btn" onClick={() => setOpen(true)}>+ Agregar tarea</button>;
-  }
+  const [err, setErr] = useState(null);
 
   const toggleResponsable = (id) => setResponsables((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const submit = async () => {
-    if (!nombre.trim()) return;
+    if (!nombre.trim() || saving) return;
     setSaving(true);
+    setErr(null);
     try {
-      await onCreate({ nombre, fase, responsables, fechaInicio: fechaInicio || null, fechaFin: fechaFin || null });
-      setNombre(''); setFase(''); setResponsables([]); setFechaInicio(''); setFechaFin('');
-      setOpen(false);
-    } finally {
+      await onCreate({
+        nombre: nombre.trim(), descripcion, fase, prioridad, status, responsables,
+        fechaInicio: fechaInicio || null, fechaFin: fechaFin || null,
+        estimatedHours: estimatedHours === '' ? null : Number(estimatedHours),
+        actualHours: actualHours === '' ? null : Number(actualHours),
+      });
+      onClose();
+    } catch (e) {
+      setErr(e.message || 'No se pudo crear.');
       setSaving(false);
     }
   };
 
   return (
-    <div className="knx-canvas-newcol-form">
-      <input className="knx-canvas-meta-select" placeholder="Nombre de la tarea…" value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus />
-      <input className="knx-canvas-meta-select" placeholder="Fase (opcional)" value={fase} onChange={(e) => setFase(e.target.value)} />
-      <div className="knx-canvas-meta-form-row">
-        <div className="knx-canvas-meta-field">
-          <label className="knx-canvas-meta-field-label">Inicio</label>
-          <input type="date" className="knx-canvas-meta-select" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+    <div className="knx-ficha-share-backdrop" onClick={onClose}>
+      <div className="knx-ficha-review-modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(460px, 92vw)', maxHeight: '88vh', overflowY: 'auto' }}>
+        <div className="knx-ficha-review-head">
+          <div><h3 className="knx-ficha-review-title">Nueva tarea</h3></div>
+          <button type="button" className="knx-side-panel-close" aria-label="Cerrar" onClick={onClose}>×</button>
         </div>
-        <div className="knx-canvas-meta-field">
-          <label className="knx-canvas-meta-field-label">Fin</label>
-          <input type="date" className="knx-canvas-meta-select" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+        {err && <p className="knx-canvas-error">{err}</p>}
+        <div className="knx-board-field">
+          <label>Nombre</label>
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus />
         </div>
-      </div>
-      <div className="knx-canvas-meta-checklist">
-        {people.map((p) => (
-          <label key={p.id} className="knx-canvas-meta-checkbox">
-            <input type="checkbox" checked={responsables.includes(p.id)} onChange={() => toggleResponsable(p.id)} />
-            <span className="knx-canvas-meta-checkbox-box" />
-            {p.name || p.email}
-          </label>
-        ))}
-      </div>
-      <div className="knx-canvas-newcol-actions">
-        <button type="button" className="knx-canvas-mini" disabled={saving} onClick={submit}>Agregar</button>
-        <button type="button" className="knx-canvas-mini" onClick={() => setOpen(false)}>Cancelar</button>
+        <div className="knx-board-field">
+          <label>Descripción</label>
+          <textarea rows={4} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
+        </div>
+        <div className="knx-board-field-row">
+          <div className="knx-board-field">
+            <label>Mini proyecto</label>
+            <select value={fase} onChange={(e) => setFase(e.target.value)}>
+              <option value="">Sin mini proyecto</option>
+              {grupos?.map((g) => <option key={g.id} value={g.name}>{g.name}</option>)}
+            </select>
+          </div>
+          <div className="knx-board-field">
+            <label>Prioridad</label>
+            <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)}>
+              <option value="">Sin definir</option>
+              {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="knx-board-field">
+          <label>Estado</label>
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            {TASK_STATUSES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </div>
+        <div className="knx-board-field-row">
+          <div className="knx-board-field">
+            <label>Inicio</label>
+            <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+          </div>
+          <div className="knx-board-field">
+            <label>Fin</label>
+            <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+          </div>
+        </div>
+        <div className="knx-board-field-row">
+          <div className="knx-board-field">
+            <label>Estimación (hs)</label>
+            <input type="number" min="0" step="0.5" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} />
+          </div>
+          <div className="knx-board-field">
+            <label>Horas reales</label>
+            <input type="number" min="0" step="0.5" value={actualHours} onChange={(e) => setActualHours(e.target.value)} />
+          </div>
+        </div>
+        <div className="knx-board-field">
+          <label>Responsables</label>
+          <div className="knx-canvas-meta-checklist">
+            {people.map((p) => (
+              <label key={p.id} className="knx-canvas-meta-checkbox">
+                <input type="checkbox" checked={responsables.includes(p.id)} onChange={() => toggleResponsable(p.id)} />
+                <span className="knx-canvas-meta-checkbox-box" />
+                {p.name || p.email}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="knx-canvas-ficha-draft-actions" style={{ marginTop: 16 }}>
+          <button type="button" className="knx-canvas-mini" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button type="button" className="knx-analisis-sources-save" onClick={submit} disabled={!nombre.trim() || saving}>{saving ? 'Creando…' : 'Crear tarea'}</button>
+        </div>
       </div>
     </div>
+  );
+}
+
+function TaskQuickAddBar({ people, grupos, onCreate }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="knx-new-chat" style={{ marginBottom: 14 }} onClick={() => setOpen(true)}>+ Nueva tarea</button>
+      {open && <NewTaskQuickModal people={people} grupos={grupos} onCreate={onCreate} onClose={() => setOpen(false)} />}
+    </>
   );
 }
 
@@ -403,7 +478,7 @@ function TaskRow({ task, people, canManage, canToggle, onStatusChange, onDelete,
 
 // Panel de detalle de una tarea de Proyecto de Seguimiento — mismo shell visual
 // (.knx-side-panel) que ya usa DevTaskDetailPanel en Proyecto de Desarrollo.
-function TaskDetailPanel({ task, people, canManage, onClose, onSave, onStatusChange, onDelete }) {
+function TaskDetailPanel({ task, people, grupos, canManage, onClose, onSave, onStatusChange, onDelete }) {
   const [nombre, setNombre] = useState(task.nombre);
   const [descripcion, setDescripcion] = useState(task.descripcion ?? '');
   const [fase, setFase] = useState(task.fase ?? '');
@@ -412,12 +487,30 @@ function TaskDetailPanel({ task, people, canManage, onClose, onSave, onStatusCha
   const [prioridad, setPrioridad] = useState(task.prioridad ?? '');
   const [estimatedHours, setEstimatedHours] = useState(task.estimatedHours ?? '');
   const [actualHours, setActualHours] = useState(task.actualHours ?? '');
+  const [responsables, setResponsables] = useState(task.responsables ?? []);
+  const [saving, setSaving] = useState(false);
 
   const toggleResponsable = (id) => {
-    const next = (task.responsables ?? []).includes(id)
-      ? task.responsables.filter((x) => x !== id)
-      : [...(task.responsables ?? []), id];
-    onSave({ responsables: next });
+    setResponsables((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const dirty = nombre !== task.nombre || descripcion !== (task.descripcion ?? '') || fase !== (task.fase ?? '')
+    || fechaInicio !== (task.fechaInicio ?? '') || fechaFin !== (task.fechaFin ?? '') || prioridad !== (task.prioridad ?? '')
+    || String(estimatedHours) !== String(task.estimatedHours ?? '') || String(actualHours) !== String(task.actualHours ?? '')
+    || JSON.stringify(responsables) !== JSON.stringify(task.responsables ?? []);
+
+  const saveAll = async () => {
+    setSaving(true);
+    try {
+      await onSave({
+        nombre: nombre.trim() || task.nombre, descripcion, fase, prioridad, responsables,
+        fechaInicio: fechaInicio || null, fechaFin: fechaFin || null,
+        estimatedHours: estimatedHours === '' ? null : Number(estimatedHours),
+        actualHours: actualHours === '' ? null : Number(actualHours),
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -429,20 +522,24 @@ function TaskDetailPanel({ task, people, canManage, onClose, onSave, onStatusCha
       <div className="knx-side-panel-thread knx-board-detail-body">
         <div className="knx-board-field">
           <label>Nombre</label>
-          <input value={nombre} onChange={(e) => setNombre(e.target.value)} onBlur={() => nombre.trim() && nombre !== task.nombre && onSave({ nombre: nombre.trim() })} disabled={!canManage} />
+          <input value={nombre} onChange={(e) => setNombre(e.target.value)} disabled={!canManage} />
         </div>
         <div className="knx-board-field">
           <label>Descripción</label>
-          <textarea rows={8} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} onBlur={() => descripcion !== (task.descripcion ?? '') && onSave({ descripcion })} disabled={!canManage} />
+          <textarea rows={8} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} disabled={!canManage} />
         </div>
         <div className="knx-board-field-row">
           <div className="knx-board-field">
-            <label>Fase</label>
-            <input value={fase} onChange={(e) => setFase(e.target.value)} onBlur={() => fase !== (task.fase ?? '') && onSave({ fase })} disabled={!canManage} />
+            <label>Mini proyecto</label>
+            <select value={fase} onChange={(e) => setFase(e.target.value)} disabled={!canManage}>
+              <option value="">Sin mini proyecto</option>
+              {grupos?.map((g) => <option key={g.id} value={g.name}>{g.name}</option>)}
+              {fase && !grupos?.some((g) => g.name === fase) && <option value={fase}>{fase} (sin gestionar)</option>}
+            </select>
           </div>
           <div className="knx-board-field">
             <label>Prioridad</label>
-            <select value={prioridad} onChange={(e) => { setPrioridad(e.target.value); onSave({ prioridad: e.target.value }); }} disabled={!canManage}>
+            <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} disabled={!canManage}>
               <option value="">Sin definir</option>
               {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -459,21 +556,21 @@ function TaskDetailPanel({ task, people, canManage, onClose, onSave, onStatusCha
         <div className="knx-board-field-row">
           <div className="knx-board-field">
             <label>Inicio</label>
-            <input type="date" value={fechaInicio ?? ''} onChange={(e) => setFechaInicio(e.target.value)} onBlur={() => onSave({ fechaInicio: fechaInicio || null })} disabled={!canManage} />
+            <input type="date" value={fechaInicio ?? ''} onChange={(e) => setFechaInicio(e.target.value)} disabled={!canManage} />
           </div>
           <div className="knx-board-field">
             <label>Fin</label>
-            <input type="date" value={fechaFin ?? ''} onChange={(e) => setFechaFin(e.target.value)} onBlur={() => onSave({ fechaFin: fechaFin || null })} disabled={!canManage} />
+            <input type="date" value={fechaFin ?? ''} onChange={(e) => setFechaFin(e.target.value)} disabled={!canManage} />
           </div>
         </div>
         <div className="knx-board-field-row">
           <div className="knx-board-field">
             <label>Estimación (hs)</label>
-            <input type="number" min="0" step="0.5" value={estimatedHours ?? ''} onChange={(e) => setEstimatedHours(e.target.value)} onBlur={() => onSave({ estimatedHours: estimatedHours === '' ? null : Number(estimatedHours) })} disabled={!canManage} />
+            <input type="number" min="0" step="0.5" value={estimatedHours ?? ''} onChange={(e) => setEstimatedHours(e.target.value)} disabled={!canManage} />
           </div>
           <div className="knx-board-field">
             <label>Horas reales</label>
-            <input type="number" min="0" step="0.5" value={actualHours ?? ''} onChange={(e) => setActualHours(e.target.value)} onBlur={() => onSave({ actualHours: actualHours === '' ? null : Number(actualHours) })} disabled={!canManage} />
+            <input type="number" min="0" step="0.5" value={actualHours ?? ''} onChange={(e) => setActualHours(e.target.value)} disabled={!canManage} />
           </div>
         </div>
         <div className="knx-board-field">
@@ -481,7 +578,7 @@ function TaskDetailPanel({ task, people, canManage, onClose, onSave, onStatusCha
           <div className="knx-canvas-meta-checklist">
             {people.map((p) => (
               <label key={p.id} className="knx-canvas-meta-checkbox">
-                <input type="checkbox" checked={(task.responsables ?? []).includes(p.id)} onChange={() => toggleResponsable(p.id)} disabled={!canManage} />
+                <input type="checkbox" checked={responsables.includes(p.id)} onChange={() => toggleResponsable(p.id)} disabled={!canManage} />
                 <span className="knx-canvas-meta-checkbox-box" />
                 {p.name || p.email}
               </label>
@@ -489,7 +586,12 @@ function TaskDetailPanel({ task, people, canManage, onClose, onSave, onStatusCha
           </div>
         </div>
         {canManage && (
-          <button type="button" className="knx-doc-card-error" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 8 }} onClick={onDelete}>
+          <button type="button" className="knx-new-chat" disabled={!dirty || saving} onClick={saveAll} style={{ width: '100%', justifyContent: 'center' }}>
+            {saving ? 'Guardando…' : 'Guardar cambios'}
+          </button>
+        )}
+        {canManage && (
+          <button type="button" className="knx-delete-task-btn" onClick={onDelete}>
             Eliminar tarea
           </button>
         )}
@@ -501,31 +603,15 @@ function TaskDetailPanel({ task, people, canManage, onClose, onSave, onStatusCha
 // Fila de alta rápida — mismo patrón "escribir y Enter" del mockup, sin abrir ningún popup.
 // Campos que no sean el nombre (fecha, responsable, prioridad) se completan después desde el
 // panel de detalle, igual que cualquier tarea creada así.
-function TaskQuickAdd({ onCreate }) {
-  const [nombre, setNombre] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const submit = async () => {
-    if (!nombre.trim() || saving) return;
-    setSaving(true);
-    try {
-      await onCreate({ nombre: nombre.trim() });
-      setNombre('');
-    } finally {
-      setSaving(false);
-    }
-  };
-
+// Antes era un input siempre visible dentro de la fila de la tabla — mismo criterio que ya se
+// cambió en Canvas/Cronograma: botón que abre el modal completo (NewTaskQuickModal), no un
+// campo de texto suelto.
+function TaskQuickAdd({ people, grupos, onCreate }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="knx-task-quickadd">
-      <span />
-      <input
-        value={nombre}
-        onChange={(e) => setNombre(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && submit()}
-        placeholder="+ Agregar tarea y presionar Enter"
-        disabled={saving}
-      />
+    <div className="knx-task-quickadd-row">
+      <button type="button" className="knx-new-chat" onClick={() => setOpen(true)}>+ Nueva tarea</button>
+      {open && <NewTaskQuickModal people={people} grupos={grupos} onCreate={onCreate} onClose={() => setOpen(false)} />}
     </div>
   );
 }
@@ -578,18 +664,12 @@ const GANTT_INFO_WIDTH = 200;
 // Port directo de CronogramaGantt (app/labs/[tenant]/LabsClientTenant.jsx:2555) — barras
 // posicionadas por fecha de inicio/fin, agrupadas por fase, con un pill a la derecha para
 // marcar terminada/pendiente (togglea status 'todo'⇄'done', mismo setTaskStatus que la Lista).
-function KaiNextGantt({ grouped, people, savingTaskId, canToggleTask, onToggle, selectedTaskId, onSelectTask }) {
-  const [statusFilter, setStatusFilter] = useState('all');
+function KaiNextGantt({ grouped, people, grupos, savingTaskId, canToggleTask, onToggle, selectedTaskId, onSelectTask }) {
   const allTasks = grouped.flatMap((g) => g.tasks);
   const withDates = allTasks.filter((t) => t.fechaInicio && t.fechaFin);
   if (!withDates.length) {
     return <p className="knx-knowledge-empty">Ninguna tarea tiene fecha de inicio y fin cargadas todavía — usá la vista Lista o editalas para ver el cronograma.</p>;
   }
-
-  const statusCounts = [{ id: 'all', label: 'Todas' }, ...TASK_STATUSES].map((f) => ({
-    ...f,
-    count: f.id === 'all' ? withDates.length : withDates.filter((t) => t.status === f.id).length,
-  }));
 
   const starts = withDates.map((t) => t.fechaInicio).sort();
   const ends = withDates.map((t) => t.fechaFin).sort();
@@ -611,18 +691,6 @@ function KaiNextGantt({ grouped, people, savingTaskId, canToggleTask, onToggle, 
 
   return (
     <>
-      <div className="knx-roadmap-status-filters" style={{ marginBottom: 10 }}>
-        {statusCounts.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            className={`knx-filter-pill${statusFilter === f.id ? ' knx-filter-pill--active' : ''}`}
-            onClick={() => setStatusFilter(f.id)}
-          >
-            {f.label} · {f.count}
-          </button>
-        ))}
-      </div>
       <div className="knx-gantt-scroll">
         <div className="knx-gantt-wrap" style={{ width: GANTT_INFO_WIDTH + trackWidth + 160, position: 'relative' }}>
           <div className="knx-gantt-grid" style={{ left: GANTT_INFO_WIDTH, width: trackWidth }}>
@@ -642,7 +710,7 @@ function KaiNextGantt({ grouped, people, savingTaskId, canToggleTask, onToggle, 
           )}
 
           {grouped.map((g) => {
-            const tasks = g.tasks.filter((t) => statusFilter === 'all' || t.status === statusFilter);
+            const tasks = g.tasks;
             if (!tasks.length) return null;
             return (
               <div key={g.fase}>
@@ -1000,6 +1068,108 @@ function DocumentacionSection({ projectKind, documents, canManage, onUpload, onD
   );
 }
 
+// "Mini proyectos" dentro de un Proyecto de Seguimiento/Civil — le dan nombre e identidad
+// propia a lo que antes era solo el texto libre `fase` de cada tarea (ver groupTasksByFase).
+// Las tareas se siguen agrupando por ese mismo string, esto solo lo vuelve gestionable.
+function GrupoModal({ title, initial, onSave, onDelete, onClose }) {
+  const [name, setName] = useState(initial?.name ?? '');
+  const [fechaInicio, setFechaInicio] = useState(initial?.fechaInicio ?? '');
+  const [fechaFin, setFechaFin] = useState(initial?.fechaFin ?? '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const submit = async () => {
+    if (!name.trim()) { setErr('El nombre es requerido.'); return; }
+    setBusy(true);
+    setErr(null);
+    try {
+      await onSave({ name: name.trim(), fechaInicio: fechaInicio || null, fechaFin: fechaFin || null });
+      onClose();
+    } catch (e) {
+      setErr(e.message || 'No se pudo guardar.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await onDelete();
+      onClose();
+    } catch (e) {
+      setErr(e.message || 'No se pudo eliminar.');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="knx-ficha-share-backdrop" onClick={onClose}>
+      <div className="knx-ficha-review-modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(380px, 92vw)' }}>
+        <div className="knx-ficha-review-head">
+          <div><h3 className="knx-ficha-review-title">{title}</h3></div>
+          <button type="button" className="knx-side-panel-close" aria-label="Cerrar" onClick={onClose}>×</button>
+        </div>
+        {err && <p className="knx-canvas-error">{err}</p>}
+        <input className="knx-canvas-meta-select" placeholder="Nombre del mini proyecto" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        <div className="knx-canvas-meta-form-row" style={{ marginTop: 8 }}>
+          <div className="knx-canvas-meta-field">
+            <label className="knx-canvas-meta-field-label">Inicio</label>
+            <input type="date" className="knx-canvas-meta-select" value={fechaInicio ?? ''} onChange={(e) => setFechaInicio(e.target.value)} />
+          </div>
+          <div className="knx-canvas-meta-field">
+            <label className="knx-canvas-meta-field-label">Fin</label>
+            <input type="date" className="knx-canvas-meta-select" value={fechaFin ?? ''} onChange={(e) => setFechaFin(e.target.value)} />
+          </div>
+        </div>
+        <div className="knx-canvas-ficha-draft-actions" style={{ marginTop: 16, justifyContent: initial ? 'space-between' : 'flex-end' }}>
+          {initial && <button type="button" className="knx-delete-task-btn" style={{ marginTop: 0 }} disabled={busy} onClick={remove}>Eliminar mini proyecto</button>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" className="knx-canvas-mini" onClick={onClose} disabled={busy}>Cancelar</button>
+            <button type="button" className="knx-analisis-sources-save" onClick={submit} disabled={busy}>{busy ? 'Guardando…' : 'Guardar'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GruposSection({ grupos, tasks, canManage, onAdd, onUpdate, onDelete }) {
+  const [modal, setModal] = useState(null); // null | 'new' | grupo
+
+  if (!canManage && !grupos.length) return null;
+
+  return (
+    <div className="knx-canvas-group" style={{ marginBottom: 16 }}>
+      <div className="knx-canvas-group-head"><span className="knx-canvas-group-name">Mini proyectos</span></div>
+      <div className="knx-grupos-chips">
+        {grupos.map((g) => {
+          const count = tasks.filter((t) => t.fase === g.name).length;
+          return (
+            <button type="button" key={g.id} className="knx-grupo-chip" onClick={() => canManage && setModal(g)} disabled={!canManage}>
+              {g.name} · {count} tarea{count !== 1 ? 's' : ''}
+              {(g.fechaInicio || g.fechaFin) && (
+                <span className="knx-grupo-chip-dates">{g.fechaInicio ? formatShortDate(g.fechaInicio) : '—'} → {g.fechaFin ? formatShortDate(g.fechaFin) : '—'}</span>
+              )}
+            </button>
+          );
+        })}
+        {canManage && <button type="button" className="knx-new-chat" onClick={() => setModal('new')}>+ Nuevo mini proyecto</button>}
+      </div>
+      {modal && (
+        <GrupoModal
+          title={modal === 'new' ? 'Nuevo mini proyecto' : 'Editar mini proyecto'}
+          initial={modal === 'new' ? null : modal}
+          onSave={(payload) => (modal === 'new' ? onAdd(payload) : onUpdate(modal.id, payload))}
+          onDelete={modal === 'new' ? undefined : () => onDelete(modal.id)}
+          onClose={() => setModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
 function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1007,6 +1177,10 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
   const [savingDetails, setSavingDetails] = useState(false);
   const [savingTaskId, setSavingTaskId] = useState(null);
   const [view, setView] = useState('list');
+  const [taskResponsableFilter, setTaskResponsableFilter] = useState('all');
+  const [taskGrupoFilter, setTaskGrupoFilter] = useState('all');
+  const [taskStatusFilter, setTaskStatusFilter] = useState('all');
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [removeTaskTarget, setRemoveTaskTarget] = useState(null);
 
@@ -1020,11 +1194,23 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
 
   useEffect(() => { load(); }, [tenant, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (loading) return <p className="knx-knowledge-empty">Cargando…</p>;
+  // Solo pantalla de "Cargando…" en la carga inicial (sin datos todavía) — load() se vuelve a
+  // llamar después de cualquier acción (tildar una tarea, guardar, etc.) y antes blanqueaba toda
+  // la página cada vez porque reusaba el mismo `loading` para ambos casos.
+  if (loading && !data) return <p className="knx-knowledge-empty">Cargando…</p>;
   if (error) return <div className="knx-analisis-empty"><p>{error}</p></div>;
   if (!data) return null;
 
-  const { meta, tasks, events, level, partidas = [], gastos = [], civilMetrics, civilAlerts = [], documents = [], tests = [], executions = [] } = data;
+  const { meta, tasks, events, level, partidas = [], gastos = [], civilMetrics, civilAlerts = [], documents = [], tests = [], executions = [], grupos = [] } = data;
+  // Responsable/mini proyecto — compartidos entre Lista/Canvas/Cronograma (no uno por vista),
+  // así cambiar de vista no pierde el filtro que ya elegiste. `tasks` no existe en absoluto
+  // para proyectos 'desarrollo' (esa rama del GET devuelve notionProyecto/iniciativas en vez de
+  // tasks) — de ahí el fallback, para que esto no reviente en ese caso.
+  const visibleTasks = (tasks ?? []).filter((t) =>
+    (taskResponsableFilter === 'all' || (t.responsables ?? []).includes(taskResponsableFilter))
+    && (taskGrupoFilter === 'all' || t.fase === taskGrupoFilter)
+    && (taskStatusFilter === 'all' || t.status === taskStatusFilter)
+  );
   const inactive = meta.status !== 'activo';
   const isCivil = meta.projectKind === 'civil';
   const isExperimental = meta.projectKind === 'experimental';
@@ -1063,6 +1249,29 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
 
   const deleteDocument = async (documentId) => {
     const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/documents/${documentId}`, { method: 'DELETE' });
+    if (res.ok) load();
+  };
+
+  const addGrupoRow = async (payload) => {
+    const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/grupos`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'No se pudo crear.');
+    load();
+  };
+
+  const updateGrupoRow = async (grupoId, payload) => {
+    const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/grupos/${grupoId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || 'No se pudo guardar.');
+    load();
+  };
+
+  const deleteGrupoRow = async (grupoId) => {
+    const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/grupos/${grupoId}`, { method: 'DELETE' });
     if (res.ok) load();
   };
 
@@ -1158,6 +1367,17 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
       )}
 
       {!isExperimental && !isDesarrollo && (
+        <GruposSection
+          grupos={grupos}
+          tasks={tasks}
+          canManage={level.isSupervisorLevel && !inactive}
+          onAdd={addGrupoRow}
+          onUpdate={updateGrupoRow}
+          onDelete={deleteGrupoRow}
+        />
+      )}
+
+      {!isExperimental && !isDesarrollo && (
         <div className="knx-canvas-group" style={{ marginBottom: 16 }}>
           <div className="knx-canvas-group-head">
             <span className="knx-canvas-group-name">Tareas</span>
@@ -1170,8 +1390,51 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
             )}
           </div>
 
+          {tasks.length > 0 && (() => {
+            const preStatusTasks = tasks.filter((t) =>
+              (taskResponsableFilter === 'all' || (t.responsables ?? []).includes(taskResponsableFilter))
+              && (taskGrupoFilter === 'all' || t.fase === taskGrupoFilter)
+            );
+            const statusCounts = [{ id: 'all', label: 'Todas' }, ...TASK_STATUSES].map((s) => ({
+              ...s,
+              count: s.id === 'all' ? preStatusTasks.length : preStatusTasks.filter((t) => t.status === s.id).length,
+            }));
+            return (
+              <div className="knx-roadmap-status-filters" style={{ marginBottom: 10, flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                {level.isSupervisorLevel && !inactive && (
+                  <button type="button" className="knx-new-chat" onClick={() => setNewTaskOpen(true)}>+ Nueva tarea</button>
+                )}
+                {statusCounts.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`knx-filter-pill${taskStatusFilter === s.id ? ' knx-filter-pill--active' : ''}`}
+                    onClick={() => setTaskStatusFilter(s.id)}
+                  >
+                    {s.label} · {s.count}
+                  </button>
+                ))}
+                <select className="knx-canvas-meta-select" style={{ width: 'auto' }} value={taskResponsableFilter} onChange={(e) => setTaskResponsableFilter(e.target.value)}>
+                  <option value="all">Todos los responsables</option>
+                  {people
+                    .filter((p) => tasks.some((t) => (t.responsables ?? []).includes(p.id)))
+                    .map((p) => <option key={p.id} value={p.id}>{p.name || p.email}</option>)}
+                </select>
+                {grupos.length > 0 && (
+                  <select className="knx-canvas-meta-select" style={{ width: 'auto' }} value={taskGrupoFilter} onChange={(e) => setTaskGrupoFilter(e.target.value)}>
+                    <option value="all">Todos los mini proyectos</option>
+                    {grupos.map((g) => <option key={g.id} value={g.name}>{g.name}</option>)}
+                  </select>
+                )}
+              </div>
+            );
+          })()}
+          {newTaskOpen && <NewTaskQuickModal people={people} grupos={grupos} onCreate={createTask} onClose={() => setNewTaskOpen(false)} />}
+
           {!tasks.length ? (
             <p className="knx-knowledge-empty">Sin tareas todavía.</p>
+          ) : !visibleTasks.length ? (
+            <p className="knx-knowledge-empty">Ninguna tarea coincide con el filtro.</p>
           ) : view === 'list' ? (
             <div className="knx-task-table">
               <div className="knx-task-table-head">
@@ -1184,7 +1447,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
                 <span>Horas</span>
                 <span />
               </div>
-              {tasks.map((t) => (
+              {visibleTasks.map((t) => (
                 <TaskTableRow
                   key={t.id}
                   task={t}
@@ -1196,12 +1459,12 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
                   onOpen={() => setSelectedTaskId(t.id)}
                 />
               ))}
-              {level.isSupervisorLevel && !inactive && <TaskQuickAdd onCreate={createTask} />}
             </div>
           ) : view === 'canvas' ? (
             <KaiNextTaskCanvas
-              tasks={tasks}
+              tasks={visibleTasks}
               people={people}
+              grupos={grupos}
               canManage={level.isSupervisorLevel && !inactive}
               onStatusChange={setStatus}
               selectedTaskId={selectedTaskId}
@@ -1209,17 +1472,18 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
             />
           ) : (
             <KaiNextGantt
-              grouped={groupTasksByFase(tasks)}
+              grouped={groupTasksByFase(visibleTasks)}
               people={people}
+              grupos={grupos}
               savingTaskId={savingTaskId}
               canToggleTask={(t) => !inactive && (level.isSupervisorLevel || (t.responsables ?? []).includes(personId))}
               onToggle={toggleTaskDone}
               selectedTaskId={selectedTaskId}
               onSelectTask={setSelectedTaskId}
+              canManage={level.isSupervisorLevel && !inactive}
+              onCreate={createTask}
             />
           )}
-
-          {view !== 'list' && level.isSupervisorLevel && !inactive && <NewTaskForm people={people} onCreate={createTask} />}
         </div>
       )}
 
@@ -1227,6 +1491,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
         <TaskDetailPanel
           task={tasks.find((t) => t.id === selectedTaskId)}
           people={people}
+          grupos={grupos}
           canManage={level.isSupervisorLevel && !inactive}
           onClose={() => setSelectedTaskId(null)}
           onSave={(patch) => saveTaskDetail(selectedTaskId, patch)}
@@ -1299,16 +1564,26 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
 export default function KaiNextProjects({
   tenant, tenantName, basePath, userName, userHandle, isTeamUser, personId, level, initialProjects, people,
 }) {
+  const searchParams = useSearchParams();
   const [loggingOut, setLoggingOut] = useState(false);
   const [chats, setChats] = useState([]);
   const [projects, setProjects] = useState(initialProjects ?? []);
-  const [activeProjectId, setActiveProjectId] = useState(null);
-  const [creating, setCreating] = useState(false);
+  const [activeProjectId, setActiveProjectId] = useState(() => searchParams.get('p') || null);
+  const [creating, setCreating] = useState(() => searchParams.get('new') === '1' && !!level?.isSupervisorLevel);
   const [deleteChatTarget, setDeleteChatTarget] = useState(null);
 
   useEffect(() => {
     fetch(`/api/kai-next/${tenant}`).then((r) => r.json()).then((d) => setChats(d.conversations ?? [])).catch(() => null);
   }, [tenant]);
+
+  // Deep-link desde el sidebar (lista de proyectos / "+ Nuevo proyecto") — ?p=<id> abre ese
+  // proyecto directo, ?new=1 abre el modal de creación, sin tener que esperar a que cargue la
+  // lista primero y clickear ahí.
+  useEffect(() => {
+    const p = searchParams.get('p');
+    if (p) setActiveProjectId(p);
+    if (searchParams.get('new') === '1' && level?.isSupervisorLevel) setCreating(true);
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogout = async () => {
     if (loggingOut) return;

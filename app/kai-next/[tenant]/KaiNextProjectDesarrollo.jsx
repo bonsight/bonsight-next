@@ -146,20 +146,37 @@ function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragS
 function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose, onAction, onRemove, allTasks, onCreateSubtask, onToggleSubtask, onOpenSubtask }) {
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? '');
+  const [taskType, setTaskType] = useState(task.taskType ?? '');
+  const [priority, setPriority] = useState(task.priority ?? '');
+  const [severity, setSeverity] = useState(task.severity ?? '');
+  const [responsableId, setResponsableId] = useState(task.responsableId ?? '');
   const [startDate, setStartDate] = useState(task.startDate ?? '');
   const [endDate, setEndDate] = useState(task.dueDate ?? '');
   const [estimatedHours, setEstimatedHours] = useState(task.estimatedHours ?? '');
   const [actualHours, setActualHours] = useState(task.actualHours ?? '');
   const [newSubtask, setNewSubtask] = useState('');
   const [savingSubtask, setSavingSubtask] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const saveTitle = () => { if (title.trim() && title !== task.title) onAction('update_task_details', { title: title.trim() }); };
-  const saveDescription = () => { if (description !== (task.description ?? '')) onAction('update_task_details', { description }); };
-  const saveSchedule = () => onAction('update_schedule', { startDate, endDate, estimatedHours: estimatedHours === '' ? null : Number(estimatedHours) });
-  const saveActualHours = () => onAction('update_actual_hours', { actualHours: actualHours === '' ? null : Number(actualHours) });
-  const saveTaskType = (taskType) => onAction('update_task_details', { taskType, ...(SEVERITY_APPLIES_TO.has(taskType) ? {} : { severity: '' }) });
-  const savePriority = (priority) => onAction('update_task_details', { priority });
-  const saveSeverity = (severity) => onAction('update_task_details', { severity });
+  // Un solo botón "Guardar" para todos los campos de edición libre — Estado queda aparte,
+  // inmediato, porque no es "editar un campo" sino disparar una transición con sus propias
+  // validaciones (ver requestStatusChange/ScheduleModal/HoursModal en el padre).
+  const dirty = title !== task.title || description !== (task.description ?? '') || taskType !== (task.taskType ?? '')
+    || priority !== (task.priority ?? '') || severity !== (task.severity ?? '') || responsableId !== (task.responsableId ?? '')
+    || startDate !== (task.startDate ?? '') || endDate !== (task.dueDate ?? '')
+    || String(estimatedHours) !== String(task.estimatedHours ?? '') || String(actualHours) !== String(task.actualHours ?? '');
+
+  const saveAll = async () => {
+    setSaving(true);
+    try {
+      await onAction('update_task_details', { title: title.trim() || task.title, description, taskType, priority, severity: SEVERITY_APPLIES_TO.has(taskType) ? severity : '' });
+      await onAction('update_schedule', { startDate, endDate, estimatedHours: estimatedHours === '' ? null : Number(estimatedHours) });
+      await onAction('update_responsable', { responsableId: responsableId || null });
+      await onAction('update_actual_hours', { actualHours: actualHours === '' ? null : Number(actualHours) });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const parentTask = task.parentId ? allTasks?.find((t) => t.id === task.parentId) : null;
   const children = task.childIds?.length ? task.childIds.map((id) => allTasks?.find((t) => t.id === id)).filter(Boolean) : [];
@@ -194,31 +211,31 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
         )}
         <div className="knx-board-field">
           <label>Título</label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} onBlur={saveTitle} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} />
         </div>
         <div className="knx-board-field">
           <label>Descripción</label>
-          <textarea rows={8} value={description} onChange={(e) => setDescription(e.target.value)} onBlur={saveDescription} />
+          <textarea rows={8} value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
         <div className="knx-board-field-row">
           <div className="knx-board-field">
             <label>Tipo</label>
-            <select value={task.taskType ?? ''} onChange={(e) => saveTaskType(e.target.value)}>
+            <select value={taskType} onChange={(e) => setTaskType(e.target.value)}>
               <option value="">Sin definir</option>
               {TASK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div className="knx-board-field">
             <label>Prioridad</label>
-            <select value={task.priority ?? ''} onChange={(e) => savePriority(e.target.value)}>
+            <select value={priority} onChange={(e) => setPriority(e.target.value)}>
               <option value="">Sin definir</option>
               {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
-          {SEVERITY_APPLIES_TO.has(task.taskType) && (
+          {SEVERITY_APPLIES_TO.has(taskType) && (
             <div className="knx-board-field">
               <label>Severidad</label>
-              <select value={task.severity ?? ''} onChange={(e) => saveSeverity(e.target.value)}>
+              <select value={severity} onChange={(e) => setSeverity(e.target.value)}>
                 <option value="">Sin definir</option>
                 {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -228,7 +245,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
         <div className="knx-board-field-row">
           <div className="knx-board-field">
             <label>Responsable</label>
-            <select value={task.responsableId ?? ''} onChange={(e) => onAction('update_responsable', { responsableId: e.target.value || null })}>
+            <select value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
               <option value="">Sin asignar</option>
               {talento.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
@@ -243,21 +260,24 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
         <div className="knx-board-field-row">
           <div className="knx-board-field">
             <label>Inicio</label>
-            <input type="date" value={startDate ?? ''} onChange={(e) => setStartDate(e.target.value)} onBlur={saveSchedule} />
+            <input type="date" value={startDate ?? ''} onChange={(e) => setStartDate(e.target.value)} />
           </div>
           <div className="knx-board-field">
             <label>Fin</label>
-            <input type="date" value={endDate ?? ''} onChange={(e) => setEndDate(e.target.value)} onBlur={saveSchedule} />
+            <input type="date" value={endDate ?? ''} onChange={(e) => setEndDate(e.target.value)} />
           </div>
           <div className="knx-board-field">
             <label>Estimación (hs)</label>
-            <input type="number" min="0" step="0.5" value={estimatedHours ?? ''} onChange={(e) => setEstimatedHours(e.target.value)} onBlur={saveSchedule} />
+            <input type="number" min="0" step="0.5" value={estimatedHours ?? ''} onChange={(e) => setEstimatedHours(e.target.value)} />
           </div>
         </div>
         <div className="knx-board-field">
           <label>Horas reales</label>
-          <input type="number" min="0" step="0.5" value={actualHours ?? ''} onChange={(e) => setActualHours(e.target.value)} onBlur={saveActualHours} />
+          <input type="number" min="0" step="0.5" value={actualHours ?? ''} onChange={(e) => setActualHours(e.target.value)} />
         </div>
+        <button type="button" className="knx-new-chat" disabled={!dirty || saving} onClick={saveAll} style={{ width: '100%', justifyContent: 'center' }}>
+          {saving ? 'Guardando…' : 'Guardar cambios'}
+        </button>
         <div className="knx-board-field">
           <label>Subtareas{children.length > 0 ? ` (${children.filter((c) => c.status === 'Done').length}/${children.length})` : ''}</label>
           <div className="knx-board-subtask-list">
@@ -288,7 +308,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
             </div>
           </div>
         </div>
-        <button type="button" className="knx-doc-card-error" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 8 }} onClick={onRemove}>
+        <button type="button" className="knx-delete-task-btn" onClick={onRemove}>
           Eliminar tarea
         </button>
       </div>

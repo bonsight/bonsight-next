@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 function initials(name = '') {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') || '·';
@@ -29,6 +30,8 @@ export default function KaiNextSidebar({
   active = 'chat',
 }) {
   const navLinkClass = (id) => `knx-nav-link${active === id ? ' knx-nav-link--active' : ''}`;
+  const searchParams = useSearchParams();
+  const activeProjectId = searchParams.get('p');
 
   // Rollout por tiers (ver lib/kaiNext/capabilities.js) — si el admin apagó una sección para
   // este tenant, el link ni se muestra. Se consulta acá (no vía props) para no tener que
@@ -41,6 +44,18 @@ export default function KaiNextSidebar({
       .catch(() => null);
   }, [tenant]);
   const showSection = (id) => !sections?.length || sections.includes(id);
+
+  // Lista de proyectos directo en el sidebar — para no tener que entrar a Proyectos y esperar
+  // a que cargue solo para elegir uno o crear uno nuevo. Mismo criterio que `sections` arriba:
+  // se consulta acá, no por prop, así cualquier página que use este sidebar lo tiene gratis.
+  const [projects, setProjects] = useState(null);
+  useEffect(() => {
+    if (!showSection('proyectos')) return;
+    fetch(`/api/kai-next/${tenant}/projects`)
+      .then((r) => r.json())
+      .then((d) => setProjects(d.projects ?? []))
+      .catch(() => null);
+  }, [tenant, sections]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <aside className="knx-sidebar">
@@ -95,6 +110,24 @@ export default function KaiNextSidebar({
           <a className={navLinkClass('proyectos')} href={`${basePath}/${tenant}/proyectos`}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
             Proyectos
+          </a>
+        )}
+        {showSection('proyectos') && projects?.length > 0 && (
+          <div className="knx-sidebar-sublist">
+            {projects.map((p) => (
+              <a
+                key={p.id}
+                className={`knx-sidebar-subitem${p.id === activeProjectId ? ' knx-sidebar-subitem--active' : ''}`}
+                href={`${basePath}/${tenant}/proyectos?p=${p.id}`}
+              >
+                {p.name}
+              </a>
+            ))}
+          </div>
+        )}
+        {showSection('proyectos') && (
+          <a className="knx-sidebar-subitem knx-sidebar-subitem--add" href={`${basePath}/${tenant}/proyectos?new=1`}>
+            + Nuevo proyecto
           </a>
         )}
       </nav>
