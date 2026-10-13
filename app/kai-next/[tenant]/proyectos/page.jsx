@@ -5,7 +5,7 @@ import { getCurrentTeamUser } from '@/lib/team/auth';
 import { getCurrentTenantUser } from '@/lib/kai/tenantAuth';
 import { listTenantUsers, sanitizeTenantUser } from '@/lib/kai/tenantUsers';
 import { isSectionAllowed, accessFromUsers } from '@/lib/kaiNext/capabilities';
-import { listProjectsForPerson, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
+import { listProjectsForPerson, resolveProjectAccessLevel, summarizeProjectForList } from '@/lib/kaiNext/projects';
 import { kaiNextBasePath } from '@/lib/kaiNext/paths';
 import KaiNextProjects from '../KaiNextProjects';
 
@@ -37,10 +37,11 @@ export default async function KaiNextProjectsPage({ params }) {
   }
 
   const level = resolveProjectAccessLevel({ isTeamUser: !!teamUser, access });
-  const [projects, people] = await Promise.all([
+  const [metas, people] = await Promise.all([
     listProjectsForPerson(tenant, { ...level, personId: tenantUser?.id ?? null }),
     listTenantUsers(tenant),
   ]);
+  const projects = await Promise.all(metas.map(async (m) => ({ ...m, summary: await summarizeProjectForList(tenant, m) })));
 
   const userName = teamUser?.name ?? teamUser?.username ?? tenantUser?.name ?? 'Equipo Bonsight';
   const userHandle = teamUser?.username ?? tenantUser?.email ?? '';

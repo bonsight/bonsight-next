@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { listProjectsForPerson, createProject, createDevProjectPointer, resolveProjectAccessLevel, PROJECT_KINDS } from '@/lib/kaiNext/projects';
+import { listProjectsForPerson, createProject, createDevProjectPointer, resolveProjectAccessLevel, PROJECT_KINDS, summarizeProjectForList } from '@/lib/kaiNext/projects';
 import { getNotionToken, createDevProyecto } from '@/lib/kaiNext/projectsNotion';
 
 export async function GET(req, { params }) {
@@ -13,7 +13,8 @@ export async function GET(req, { params }) {
     return Response.json({ error: 'Proyectos no está habilitado para tu usuario.' }, { status: 403 });
   }
   const level = resolveProjectAccessLevel(identity);
-  const projects = await listProjectsForPerson(tenant, { ...level, personId: identity.personId });
+  const metas = await listProjectsForPerson(tenant, { ...level, personId: identity.personId });
+  const projects = await Promise.all(metas.map(async (m) => ({ ...m, summary: await summarizeProjectForList(tenant, m) })));
   return Response.json({ projects, level });
 }
 

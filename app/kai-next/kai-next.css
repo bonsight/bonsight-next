@@ -7808,3 +7808,240 @@
   background: transparent;
   width: 130px;
 }
+
+/* ── Listado de Proyectos enriquecido ────────────────────────────────────── */
+
+.knx-project-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.knx-project-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 16px;
+  border: 1px solid var(--knx-border);
+  border-radius: 12px;
+}
+
+.knx-project-kpi-label {
+  font-size: 12.5px;
+  color: var(--knx-text-muted);
+}
+
+.knx-project-kpi-value {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--knx-text);
+}
+
+.knx-project-kpi-value--bad {
+  color: #8A2E25;
+}
+
+.knx-project-kpi-sub {
+  font-size: 11.5px;
+  color: var(--knx-text-muted);
+}
+
+.knx-project-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.knx-project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.knx-project-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) 100px 90px 18px;
+  gap: 12px 20px;
+  align-items: center;
+  width: 100%;
+  padding: 14px 18px;
+  border: 1px solid var(--knx-border);
+  border-radius: 14px;
+  background: #fff;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.knx-project-row:hover {
+  border-color: var(--knx-primary);
+}
+
+.knx-project-row-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.knx-project-row-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--knx-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.knx-project-row-sub {
+  font-size: 12px;
+  color: var(--knx-text-muted);
+}
+
+.knx-project-row-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.knx-project-row-metric-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--knx-text);
+}
+
+.knx-project-row-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--knx-sidebar-bg);
+}
+
+.knx-project-row-bar-fill {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--knx-primary);
+}
+
+.knx-project-row-bar-tick {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  background: var(--knx-text);
+}
+
+.knx-fase-stepper-mini {
+  display: flex;
+  gap: 3px;
+}
+
+.knx-fase-stepper-mini-seg {
+  flex: 1 1 0;
+  height: 6px;
+  border-radius: 3px;
+}
+
+.knx-project-row-squares {
+  display: flex;
+  gap: 3px;
+}
+
+.knx-project-row-square {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--knx-border);
+}
+
+.knx-project-row-square--éxito {
+  background: var(--knx-primary);
+}
+
+.knx-project-row-square--parcial {
+  background: #B7791F;
+}
+
+.knx-project-row-square--fallo {
+  background: #B3261E;
+}
+
+.knx-project-row-square--referencia {
+  background: #6B7A9A;
+}
+
+.knx-project-row-team {
+  display: flex;
+}
+
+.knx-project-row-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  margin-left: -8px;
+  background: var(--knx-sidebar-bg);
+  color: var(--knx-primary);
+  font-size: 10.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.knx-project-row-team .knx-project-row-avatar:first-child {
+  margin-left: 0;
+}
+
+.knx-project-risk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.knx-project-risk::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.knx-project-risk--ok {
+  color: #085041;
+  background: #E8F4EE;
+}
+
+.knx-project-risk--warn {
+  color: #8A5A00;
+  background: #FBF1DC;
+}
+
+.knx-project-risk--bad {
+  color: #8A2E25;
+  background: #FBE9E7;
+}
+
+.knx-project-completados {
+  border-top: 1px solid var(--knx-border);
+  padding-top: 14px;
+  margin-top: 6px;
+}
+
+.knx-project-completados summary {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--knx-text-muted);
+  cursor: pointer;
+}

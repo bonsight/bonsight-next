@@ -8,6 +8,20 @@ import { PruebasSection } from './KaiNextProjectExperimental';
 import KaiNextProjectDesarrollo from './KaiNextProjectDesarrollo';
 
 const STATUS_LABEL = { activo: 'Activo', pausado: 'Pausado', completado: 'Completado' };
+const RISK_LABEL = { en_plan: 'En plan', en_riesgo: 'En riesgo', atrasado: 'Atrasado' };
+const RISK_CLASS = { en_plan: 'knx-project-risk--ok', en_riesgo: 'knx-project-risk--warn', atrasado: 'knx-project-risk--bad' };
+// Mismo listado/colores que KaiNextProjectDesarrollo.jsx (FaseStepper) — duplicado a propósito,
+// no se importa entre sí (mismo criterio que ya existe ahí: son valores de Notion, no un enum
+// compartido en código).
+const FASE_OPTIONS = ['Preparación', 'Análisis', 'Diseño', 'Desarrollo', 'Pruebas', 'Producción', 'Monitoreo y Cierre'];
+const FASE_COLORS = {
+  'Preparación': '#9CA3AF', 'Análisis': '#A47148', 'Diseño': '#A78BFA', 'Desarrollo': '#60A5FA',
+  'Pruebas': '#FBBF24', 'Producción': '#34D399', 'Monitoreo y Cierre': '#6B7280',
+};
+
+function initials(name = '') {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') || '·';
+}
 const PROJECT_KIND_LABEL = { seguimiento: 'Seguimiento', civil: 'Civil', experimental: 'Experimental', desarrollo: 'Desarrollo' };
 const TASK_STATUSES = [
   { id: 'todo', label: 'Por hacer' },
@@ -2016,6 +2030,85 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
   );
 }
 
+// Fila enriquecida del listado — cada tipo de proyecto muestra lo que realmente importa para
+// ese tipo (avance físico/plan en civil, ensayos en experimental, actividades en seguimiento).
+// 'desarrollo' no tiene `summary` todavía (ver summarizeProjectForList, vive en Notion) — se
+// muestra con el tratamiento simple de antes.
+function ProjectRow({ p, people, onSelect }) {
+  const s = p.summary;
+  const teamIds = s?.teamIds ?? [];
+  return (
+    <button type="button" className="knx-project-row" onClick={onSelect}>
+      <span className="knx-project-row-name">
+        <span className="knx-project-row-title">{p.name}</span>
+        <span className="knx-project-row-sub">{p.code ? `${p.code} · ` : ''}{p.type || PROJECT_KIND_LABEL[p.projectKind] || p.projectKind}</span>
+      </span>
+
+      <span className="knx-project-row-metric">
+        {!s && <span className="knx-project-row-sub">{STATUS_LABEL[p.status] ?? p.status}</span>}
+        {s?.kind === 'desarrollo' && (
+          <>
+            <span className="knx-project-row-metric-label">{s.faseActual ? `Fase: ${s.faseActual}` : 'Sin épicas todavía'}</span>
+            <span className="knx-fase-stepper-mini">
+              {FASE_OPTIONS.map((fase, i) => (
+                <span
+                  key={fase}
+                  title={fase}
+                  className="knx-fase-stepper-mini-seg"
+                  style={{ background: i <= s.faseIndex ? FASE_COLORS[fase] : 'var(--knx-border)' }}
+                />
+              ))}
+            </span>
+            <span className="knx-project-row-sub">Épicas {s.epicasDone}/{s.epicasTotal} · {s.historias} historia{s.historias !== 1 ? 's' : ''}</span>
+          </>
+        )}
+        {s?.kind === 'civil' && (
+          <>
+            <span className="knx-project-row-metric-label">Avance físico {s.pctFisico}%{s.hasPlan ? <span style={{ fontWeight: 400, color: 'var(--knx-text-muted)' }}> · plan {s.pctPlan}%</span> : null}</span>
+            <span className="knx-project-row-bar">
+              <span className="knx-project-row-bar-fill" style={{ width: `${s.pctFisico}%` }} />
+              {s.hasPlan && <span className="knx-project-row-bar-tick" style={{ left: `${Math.min(100, s.pctPlan)}%` }} />}
+            </span>
+          </>
+        )}
+        {s?.kind === 'seguimiento' && (
+          <>
+            <span className="knx-project-row-metric-label">{s.activas} de {s.total} tareas activas</span>
+            <span className="knx-project-row-bar"><span className="knx-project-row-bar-fill" style={{ width: `${s.total ? ((s.total - s.activas) / s.total) * 100 : 0}%` }} /></span>
+            {s.vencidas > 0 && <span className="knx-project-row-sub" style={{ color: '#B3261E' }}>{s.vencidas} vencida{s.vencidas !== 1 ? 's' : ''}</span>}
+          </>
+        )}
+        {s?.kind === 'experimental' && (
+          <>
+            <span className="knx-project-row-metric-label">Ensayos {s.conEjecucion}/{s.total}</span>
+            <span className="knx-project-row-squares">
+              {s.porPrueba.map((tag, i) => (
+                <span key={i} className={`knx-project-row-square${tag ? ` knx-project-row-square--${tag}` : ''}`} />
+              ))}
+            </span>
+          </>
+        )}
+      </span>
+
+      <span className="knx-project-row-team">
+        {teamIds.slice(0, 4).map((id) => (
+          <span key={id} className="knx-project-row-avatar" title={personName(people, id)}>{initials(personName(people, id))}</span>
+        ))}
+        {teamIds.length > 4 && <span className="knx-project-row-avatar">+{teamIds.length - 4}</span>}
+      </span>
+
+      {s?.statusTag ? (
+        <span className={`knx-project-risk ${RISK_CLASS[s.statusTag]}`}>{RISK_LABEL[s.statusTag]}</span>
+      ) : (
+        <span className={`knx-activity-status knx-activity-status--${p.status === 'activo' ? 'active' : p.status === 'pausado' ? 'ready' : 'finished'}`}>
+          {STATUS_LABEL[p.status] ?? p.status}
+        </span>
+      )}
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
+    </button>
+  );
+}
+
 export default function KaiNextProjects({
   tenant, tenantName, basePath, userName, userHandle, isTeamUser, personId, level, initialProjects, people,
 }) {
@@ -2026,6 +2119,7 @@ export default function KaiNextProjects({
   const [activeProjectId, setActiveProjectId] = useState(() => searchParams.get('p') || null);
   const [creating, setCreating] = useState(() => searchParams.get('new') === '1' && !!level?.isSupervisorLevel);
   const [deleteChatTarget, setDeleteChatTarget] = useState(null);
+  const [kindFilter, setKindFilter] = useState('all');
 
   useEffect(() => {
     fetch(`/api/kai-next/${tenant}`).then((r) => r.json()).then((d) => setChats(d.conversations ?? [])).catch(() => null);
@@ -2104,24 +2198,65 @@ export default function KaiNextProjects({
                 <div className="knx-analisis-empty">
                   <p>Todavía no hay ningún proyecto con este cliente.</p>
                 </div>
-              ) : (
-                <div className="knx-activity-list">
-                  {projects.map((p) => (
-                    <div className="knx-activity-row" key={p.id}>
-                      <button type="button" className="knx-activity-row-main" onClick={() => setActiveProjectId(p.id)}>
-                        <div className="knx-activity-row-text">
-                          <span className="knx-activity-row-title">{p.name}</span>
-                          <span className="knx-activity-row-sub">{p.code ? `${p.code} · ` : ''}{p.type || PROJECT_KIND_LABEL[p.projectKind] || p.projectKind}</span>
-                        </div>
-                        <span className={`knx-activity-status knx-activity-status--${p.status === 'activo' ? 'active' : p.status === 'pausado' ? 'ready' : 'finished'}`}>
-                          {STATUS_LABEL[p.status] ?? p.status}
-                        </span>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
-                      </button>
+              ) : (() => {
+                const activos = projects.filter((p) => p.status === 'activo');
+                const completados = projects.filter((p) => p.status !== 'activo');
+                const riesgoCount = activos.filter((p) => p.summary?.statusTag && p.summary.statusTag !== 'en_plan').length;
+                const vencidasTotal = activos.reduce((sum, p) => sum + (p.summary?.vencidas ?? 0), 0);
+                const kinds = ['desarrollo', 'civil', 'seguimiento', 'experimental'].filter((k) => projects.some((p) => p.projectKind === k));
+                const visibleActivos = kindFilter === 'all' ? activos : activos.filter((p) => p.projectKind === kindFilter);
+                return (
+                  <>
+                    <div className="knx-project-kpis">
+                      <div className="knx-project-kpi">
+                        <span className="knx-project-kpi-label">Activos</span>
+                        <span className="knx-project-kpi-value">{activos.length}</span>
+                        <span className="knx-project-kpi-sub">{kinds.map((k) => `${activos.filter((p) => p.projectKind === k).length} ${PROJECT_KIND_LABEL[k].toLowerCase()}`).join(' · ')}</span>
+                      </div>
+                      <div className="knx-project-kpi">
+                        <span className="knx-project-kpi-label">Requieren atención</span>
+                        <span className="knx-project-kpi-value knx-project-kpi-value--bad">{riesgoCount}</span>
+                        <span className="knx-project-kpi-sub">en riesgo o atrasados</span>
+                      </div>
+                      <div className="knx-project-kpi">
+                        <span className="knx-project-kpi-label">Actividades vencidas</span>
+                        <span className="knx-project-kpi-value">{vencidasTotal}</span>
+                        <span className="knx-project-kpi-sub">en proyectos de seguimiento</span>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
+
+                    {kinds.length > 1 && (
+                      <div className="knx-project-filters">
+                        <button type="button" className={`knx-filter-pill${kindFilter === 'all' ? ' knx-filter-pill--active' : ''}`} onClick={() => setKindFilter('all')}>
+                          Todos · {activos.length}
+                        </button>
+                        {kinds.map((k) => (
+                          <button key={k} type="button" className={`knx-filter-pill${kindFilter === k ? ' knx-filter-pill--active' : ''}`} onClick={() => setKindFilter(k)}>
+                            {PROJECT_KIND_LABEL[k]} · {activos.filter((p) => p.projectKind === k).length}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="knx-project-list">
+                      {visibleActivos.map((p) => (
+                        <ProjectRow key={p.id} p={p} people={people} onSelect={() => setActiveProjectId(p.id)} />
+                      ))}
+                    </div>
+
+                    {completados.length > 0 && (
+                      <details className="knx-project-completados">
+                        <summary>Completados · {completados.length}</summary>
+                        <div className="knx-project-list" style={{ marginTop: 10 }}>
+                          {completados.map((p) => (
+                            <ProjectRow key={p.id} p={p} people={people} onSelect={() => setActiveProjectId(p.id)} />
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </>
+                );
+              })()}
             </>
           )}
         </div>
