@@ -739,6 +739,7 @@ const GANTT_INFO_WIDTH = 200;
 // posicionadas por fecha de inicio/fin, agrupadas por fase, con un pill a la derecha para
 // marcar terminada/pendiente (togglea status 'todo'⇄'done', mismo setTaskStatus que la Lista).
 function KaiNextGantt({ grouped, people, grupos, savingTaskId, canToggleTask, onToggle, selectedTaskId, onSelectTask }) {
+  const scrollRef = useRef(null);
   const allTasks = grouped.flatMap((g) => g.tasks);
   const withDates = allTasks.filter((t) => t.fechaInicio && t.fechaFin);
   if (!withDates.length) {
@@ -755,6 +756,17 @@ function KaiNextGantt({ grouped, people, grupos, savingTaskId, canToggleTask, on
   const showToday = todayIso >= domainStart && todayIso <= domainEnd;
   const todayLeft = GANTT_INFO_WIDTH + daysBetween(domainStart, todayIso) * GANTT_PX_PER_DAY;
 
+  // Al entrar, el cronograma arranca centrado en "hoy" (o lo más cerca posible) — antes siempre
+  // abría desde el inicio del rango, así que un proyecto largo escondía la fecha actual varios
+  // scrolls a la derecha. Si el proyecto ya terminó, muestra el final; si todavía no arrancó,
+  // el inicio (que ya es el default natural, sin nada que hacer).
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const target = todayIso > domainEnd ? GANTT_INFO_WIDTH + trackWidth : todayLeft;
+    el.scrollLeft = Math.max(0, target - el.clientWidth / 2);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const tickEvery = totalDays <= 14 ? 1 : totalDays <= 45 ? 3 : totalDays <= 120 ? 7 : 14;
   const ticks = [];
   for (let d = 0; d <= totalDays; d += tickEvery) {
@@ -765,7 +777,7 @@ function KaiNextGantt({ grouped, people, grupos, savingTaskId, canToggleTask, on
 
   return (
     <>
-      <div className="knx-gantt-scroll">
+      <div className="knx-gantt-scroll" ref={scrollRef}>
         <div className="knx-gantt-wrap" style={{ width: GANTT_INFO_WIDTH + trackWidth + 160, position: 'relative' }}>
           <div className="knx-gantt-grid" style={{ left: GANTT_INFO_WIDTH, width: trackWidth }}>
             {ticks.map((tk) => <div key={tk.left} style={{ left: tk.left }} />)}
