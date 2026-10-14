@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
 
 // Proyecto de Desarrollo — a diferencia de los otros 3 kinds, su contenido (Proyecto/
@@ -181,6 +181,21 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
   const parentTask = task.parentId ? allTasks?.find((t) => t.id === task.parentId) : null;
   const children = task.childIds?.length ? task.childIds.map((id) => allTasks?.find((t) => t.id === id)).filter(Boolean) : [];
 
+  // Clic afuera del panel lo cierra — pero clickear otra tarjeta de tarea NO debe pasar por acá:
+  // eso ya navega directo a la otra tarea (vía onOpen/setSelectedTaskId, con el key={task.id}
+  // que fuerza el remount). Si este handler igual llamara onClose() en ese caso, se dispararían
+  // dos renders separados (cerrar, después volver a abrir con la otra tarea) y se vería un
+  // parpadeo — por eso se excluye explícitamente cualquier click dentro de una tarjeta.
+  const panelRef = useRef(null);
+  useEffect(() => {
+    const onDocMouseDown = (e) => {
+      if (e.target.closest('.knx-board-card')) return;
+      if (panelRef.current && !panelRef.current.contains(e.target)) onClose();
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [onClose]);
+
   const addSubtask = async () => {
     if (!newSubtask.trim() || savingSubtask) return;
     setSavingSubtask(true);
@@ -193,7 +208,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
   };
 
   return (
-    <div className="knx-side-panel">
+    <div className="knx-side-panel" ref={panelRef}>
       <div className="knx-side-panel-header">
         <span className="knx-side-panel-title">Tarea</span>
         {task.url && (
@@ -1876,6 +1891,7 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
       )}
       {selectedTask && (
         <DevTaskDetailPanel
+          key={selectedTask.id}
           tenant={tenant}
           projectId={projectId}
           task={selectedTask}
@@ -2307,6 +2323,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
       )}
       {selectedTask && (
         <DevTaskDetailPanel
+          key={selectedTask.id}
           tenant={tenant}
           projectId={projectId}
           task={selectedTask}

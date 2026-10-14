@@ -1492,6 +1492,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
   const [taskTipologiaFilter, setTaskTipologiaFilter] = useState([]); // array de ids, o '__none__' para "Sin tipología"; [] = todas
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
   const [taskGroupBy, setTaskGroupBy] = useState('none');
+  const [dateSort, setDateSort] = useState(null); // { field: 'fechaInicio'|'fechaFin', dir: 'asc'|'desc' } | null
   const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
   const [tipologiasModalOpen, setTipologiasModalOpen] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
@@ -1527,6 +1528,23 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
     && (taskTipologiaFilter.length === 0 || taskTipologiaFilter.includes(t.tipologiaId ?? '__none__'))
     && (!taskSearchQuery.trim() || t.nombre.toLowerCase().includes(taskSearchQuery.trim().toLowerCase()))
   );
+  // Sin fecha siempre al final, sea cual sea la dirección — no tiene sentido que "sin fecha"
+  // compita por el primer o último lugar según se invierta el orden.
+  if (dateSort) {
+    const { field, dir } = dateSort;
+    visibleTasks.sort((a, b) => {
+      if (!a[field] && !b[field]) return 0;
+      if (!a[field]) return 1;
+      if (!b[field]) return -1;
+      const cmp = a[field].localeCompare(b[field]);
+      return dir === 'asc' ? cmp : -cmp;
+    });
+  }
+  const cycleDateSort = (field) => setDateSort((prev) => {
+    if (!prev || prev.field !== field) return { field, dir: 'asc' };
+    if (prev.dir === 'asc') return { field, dir: 'desc' };
+    return null;
+  });
   const miniProyectoCandidate = findMiniProyectoCandidate(tasks);
   const toggleGroupCollapsed = (key) => setCollapsedGroups((prev) => {
     const next = new Set(prev);
@@ -1891,7 +1909,14 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
                 <span>Tarea</span>
                 <span>Tipología</span>
                 <span>Responsable</span>
-                <span>Fechas</span>
+                <span className="knx-task-table-sort-head">
+                  <button type="button" onClick={() => cycleDateSort('fechaInicio')}>
+                    Inicio{dateSort?.field === 'fechaInicio' ? (dateSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+                  </button>
+                  <button type="button" onClick={() => cycleDateSort('fechaFin')}>
+                    Fin{dateSort?.field === 'fechaFin' ? (dateSort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+                  </button>
+                </span>
                 <span>Estado</span>
                 <span>Prioridad</span>
                 <span>Horas</span>

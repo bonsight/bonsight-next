@@ -5530,6 +5530,27 @@
   padding: 9px 10px;
 }
 
+.knx-task-table-sort-head {
+  display: flex;
+  gap: 8px;
+}
+
+.knx-task-table-sort-head button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-weight: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.knx-task-table-sort-head button:hover {
+  color: var(--knx-text);
+}
+
 .knx-task-table-head {
   background: var(--knx-sidebar-bg);
   font-size: 11px;
