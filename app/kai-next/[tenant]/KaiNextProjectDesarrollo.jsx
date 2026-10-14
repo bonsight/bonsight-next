@@ -1115,6 +1115,7 @@ function EpicaTareas({ tenant, projectId, epicaId, activeSprint, onReload }) {
 }
 
 function EditEpicaForm({ tenant, projectId, epica, onSaved, onCancel }) {
+  const [name, setName] = useState(epica.name ?? '');
   const [fase, setFase] = useState(epica.fase ?? '');
   const [startDate, setStartDate] = useState(epica.startDate ?? '');
   const [endDate, setEndDate] = useState(epica.endDate ?? '');
@@ -1122,12 +1123,13 @@ function EditEpicaForm({ tenant, projectId, epica, onSaved, onCancel }) {
   const [err, setErr] = useState(null);
 
   const save = async () => {
+    if (!name.trim()) { setErr('El nombre no puede quedar vacío.'); return; }
     setSaving(true);
     setErr(null);
     try {
       const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/dev/epicas/${epica.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fase: fase || null, startDate: startDate || null, endDate: endDate || null }),
+        body: JSON.stringify({ name: name.trim(), fase: fase || null, startDate: startDate || null, endDate: endDate || null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo guardar.');
@@ -1142,6 +1144,10 @@ function EditEpicaForm({ tenant, projectId, epica, onSaved, onCancel }) {
   return (
     <div className="knx-epica-edit">
       {err && <p className="knx-canvas-error" style={{ flexBasis: '100%' }}>{err}</p>}
+      <div className="knx-canvas-meta-field" style={{ flexBasis: '100%' }}>
+        <label className="knx-canvas-meta-field-label">Nombre</label>
+        <input className="knx-canvas-meta-select" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+      </div>
       <div className="knx-canvas-meta-field">
         <label className="knx-canvas-meta-field-label">Fase</label>
         <select className="knx-canvas-meta-select" value={fase} onChange={(e) => setFase(e.target.value)}>
@@ -1177,6 +1183,26 @@ function EpicaDetailPanel({ tenant, projectId, epica, index, total, activeSprint
   const [messages, setMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteErr, setDeleteErr] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setDeleteErr(null);
+    try {
+      const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/dev/epicas/${epica.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo eliminar.');
+      setConfirmDelete(false);
+      onClose();
+      onReload();
+    } catch (e) {
+      setDeleteErr(e.message || 'No se pudo eliminar.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const loadHistorias = () => {
     fetch(`/api/kai-next/${tenant}/projects/${projectId}/dev/epicas/${epica.id}/tareas`)
@@ -1229,8 +1255,10 @@ function EpicaDetailPanel({ tenant, projectId, epica, index, total, activeSprint
         <h3 className="knx-epica-panel-title">{epica.name}</h3>
         <div className="knx-epica-panel-badges">
           <span className="knx-epica-fase-badge" style={{ color, background: `${color}1A` }}>{epica.fase ?? 'Sin fase'}</span>
-          <button type="button" className="knx-canvas-icon-btn" title="Editar fase/fechas" onClick={() => setEditing((v) => !v)}>✎</button>
+          <button type="button" className="knx-canvas-icon-btn" title="Editar nombre/fase/fechas" onClick={() => setEditing((v) => !v)}>✎</button>
+          <button type="button" className="knx-canvas-icon-btn knx-canvas-icon-btn--danger" title="Eliminar épica" onClick={() => setConfirmDelete(true)}>🗑</button>
         </div>
+        {deleteErr && <p className="knx-canvas-error">{deleteErr}</p>}
 
         {editing && (
           <EditEpicaForm
@@ -1272,6 +1300,13 @@ function EpicaDetailPanel({ tenant, projectId, epica, index, total, activeSprint
         <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Preguntale a Kai sobre esta épica…" disabled={sending} />
         <button type="submit" disabled={sending || !chatInput.trim()}>Enviar</button>
       </form>
+      <KaiNextConfirmDialog
+        open={confirmDelete}
+        title="Eliminar épica"
+        message={`¿Eliminar "${epica.name}"? No se puede deshacer (se puede recuperar desde la papelera de Notion). Solo se puede borrar si no tiene historias.`}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }
