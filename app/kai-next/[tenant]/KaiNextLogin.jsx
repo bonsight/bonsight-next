@@ -18,6 +18,7 @@ const ERROR_MESSAGES = {
   google: 'No pudimos verificar tu cuenta de Google. Intenta de nuevo.',
   sin_cuenta: 'No encontramos una cuenta con ese email para este cliente — pedile acceso a tu administrador.',
   credenciales: 'Email o contraseña incorrectos.',
+  magic_expirado: 'Ese enlace de acceso ya expiró o no es válido — pedí uno nuevo desde "Enviarme un enlace de acceso".',
 };
 
 // Server component puro, sin 'use client': los tres caminos (contraseña, enlace mágico,
