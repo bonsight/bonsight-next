@@ -15,9 +15,9 @@ export async function POST(req, { params }) {
   if (!(await isKaiAuthorized())) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
-  const { firstName, lastName, cargo, email, access } = await req.json();
+  const { firstName, lastName, cargo, email, access, timezone } = await req.json();
   try {
-    const user = await createTenantUser(tenant, { firstName, lastName, cargo, email, access });
+    const user = await createTenantUser(tenant, { firstName, lastName, cargo, email, access, timezone });
     return Response.json({ ok: true, user: sanitizeTenantUser(user, { includeCredentials: true }) });
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo crear.' }, { status: 400 });

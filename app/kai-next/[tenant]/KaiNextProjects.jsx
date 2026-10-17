@@ -543,7 +543,7 @@ function TaskRow({ task, people, canManage, canToggle, onStatusChange, onDelete,
 
 // Panel de detalle de una tarea de Proyecto de Seguimiento — mismo shell visual
 // (.knx-side-panel) que ya usa DevTaskDetailPanel en Proyecto de Desarrollo.
-function TaskDetailPanel({ task, people, grupos, tipologias, canManage, onClose, onSave, onStatusChange, onDelete }) {
+function TaskDetailPanel({ task, people, grupos, tipologias, canManage, documents = [], onUploadDocument, onDeleteDocument, onClose, onSave, onStatusChange, onDelete }) {
   const [nombre, setNombre] = useState(task.nombre);
   const [descripcion, setDescripcion] = useState(task.descripcion ?? '');
   const [fase, setFase] = useState(task.fase ?? '');
@@ -555,6 +555,22 @@ function TaskDetailPanel({ task, people, grupos, tipologias, canManage, onClose,
   const [actualHours, setActualHours] = useState(task.actualHours ?? '');
   const [responsables, setResponsables] = useState(task.responsables ?? []);
   const [saving, setSaving] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [docErr, setDocErr] = useState(null);
+
+  const uploadDoc = async (file) => {
+    if (!file) return;
+    setUploadingDoc(true);
+    setDocErr(null);
+    try {
+      const data = await readFileAsBase64(file);
+      await onUploadDocument({ name: file.name, mimeType: file.type, data });
+    } catch (e) {
+      setDocErr(e.message || 'No se pudo subir el archivo.');
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
 
   const toggleResponsable = (id) => {
     setResponsables((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -661,6 +677,31 @@ function TaskDetailPanel({ task, people, grupos, tipologias, canManage, onClose,
                 {p.name || p.email}
               </label>
             ))}
+          </div>
+        </div>
+        <div className="knx-board-field">
+          <label>Documentos</label>
+          {docErr && <p className="knx-canvas-error">{docErr}</p>}
+          <div className="knx-entregables-list">
+            {documents.map((d) => (
+              <div key={d.id} className="knx-entregable-row">
+                {d.driveUrl ? (
+                  <a href={d.driveUrl} target="_blank" rel="noreferrer" className="knx-entregable-link">{d.name}</a>
+                ) : (
+                  <span>{d.name}</span>
+                )}
+                {canManage && (
+                  <button type="button" className="knx-side-panel-close" aria-label="Quitar" onClick={() => onDeleteDocument(d.id)}>×</button>
+                )}
+              </div>
+            ))}
+            {!documents.length && <p className="knx-knowledge-empty">Sin documentos en esta tarea todavía.</p>}
+            {canManage && (
+              <label className="knx-board-subtask-add-btn" style={{ cursor: uploadingDoc ? 'default' : 'pointer', opacity: uploadingDoc ? 0.5 : 1, display: 'inline-block' }}>
+                {uploadingDoc ? 'Subiendo…' : '+ Subir documento'}
+                <input type="file" style={{ display: 'none' }} disabled={uploadingDoc} onChange={(e) => uploadDoc(e.target.files?.[0])} />
+              </label>
+            )}
           </div>
         </div>
         {canManage && (
@@ -1999,6 +2040,9 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
           grupos={grupos}
           tipologias={tipologias}
           canManage={level.isSupervisorLevel && !inactive}
+          documents={documents.filter((d) => d.taskId === selectedTaskId)}
+          onUploadDocument={(payload) => uploadDocument({ ...payload, taskId: selectedTaskId })}
+          onDeleteDocument={deleteDocument}
           onClose={() => setSelectedTaskId(null)}
           onSave={(patch) => saveTaskDetail(selectedTaskId, patch)}
           onStatusChange={(status) => setStatus(selectedTaskId, status)}
@@ -2043,7 +2087,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
       {!isDesarrollo && level.isSupervisorLevel && (
         <DocumentacionSection
           projectKind={meta.projectKind}
-          documents={documents}
+          documents={documents.filter((d) => !d.taskId)}
           canManage={!inactive}
           onUpload={uploadDocument}
           onDelete={deleteDocument}

@@ -130,6 +130,15 @@ export default function KaiNextSidebar({
             + Nuevo proyecto
           </a>
         )}
+        {/* Meetings solo existe para Proyecto de Desarrollo, que a su vez solo existe bajo el
+            tenant bonsight (ver lib/kaiNext/projects.js) — mostrarlo en otros tenants llevaría
+            a una pantalla sin ningún proyecto para elegir. */}
+        {tenant === 'bonsight' && showSection('reuniones') && (
+          <a className={navLinkClass('meetings')} href={`${basePath}/${tenant}/meetings`}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+            Reuniones
+          </a>
+        )}
       </nav>
 
       <div className="knx-chat-list">

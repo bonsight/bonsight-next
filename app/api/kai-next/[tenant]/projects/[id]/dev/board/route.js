@@ -6,6 +6,7 @@ import {
   STATUS_COLUMNS, loadTalentoMap, moveTask, updateTaskDatesAndHours, updateTaskResponsable, addExistingTask,
   updateTaskDetails, updateTaskActualHours, deleteTask, createTask,
 } from '@/lib/aria/board';
+import { getNotionPageRaw, pageToFields } from '@/lib/aria/notion';
 
 // Tablero agregado de TODO el proyecto (todas las iniciativas) — a diferencia de EpicaTareas
 // (lista plana por épica), esto alimenta el tab "Tablero" con drag-and-drop entre columnas de
@@ -81,6 +82,7 @@ export async function PATCH(req, { params }) {
       await updateTaskDetails(token, pageId, {
         title: body.title, description: body.description,
         taskType: body.taskType, priority: body.priority, severity: body.severity,
+        entregables: body.entregables,
       });
     } else if (action === 'update_actual_hours') {
       await updateTaskActualHours(token, pageId, body.actualHours);
@@ -90,12 +92,26 @@ export async function PATCH(req, { params }) {
       // pageId acá es la tarea PADRE (mismo criterio que el resto de las acciones: pageId es a
       // qué apunta la acción). Arranca en Backlog — createTask no exige fecha/estimación como sí
       // lo hace moveTask al sacar algo de Backlog, así que un "+ agregar" solo con título no
-      // queda en un estado inconsistente (Por hacer sin fechas).
+      // queda en un estado inconsistente (Por hacer sin fechas). Hereda el sprint de la tarea
+      // padre (si tiene uno) para que no quede huérfana de su sprint en el tablero.
       if (!body.title?.trim()) return Response.json({ error: 'El título es requerido.' }, { status: 400 });
-      await createTask(token, null, {
+      const parentPage = await getNotionPageRaw(token, pageId);
+      const parentSprintId = parentPage ? (pageToFields(parentPage).fields['Sprint']?.[0] ?? null) : null;
+      const subtaskPayload = {
         title: body.title, status: 'Backlog', parentId: pageId,
         proyectoId: body.proyectoId, iniciativaId: body.iniciativaId, epicaId: body.epicaId, fase: body.fase,
-      });
+      };
+      try {
+        await createTask(token, parentSprintId, subtaskPayload);
+      } catch (e) {
+        // El sprint del padre puede estar cerrado — en ese caso la subtarea nace sin sprint
+        // (como antes de esta regla) en vez de bloquear la creación por completo.
+        if (parentSprintId && /cerrado/i.test(e.message || '')) {
+          await createTask(token, null, subtaskPayload);
+        } else {
+          throw e;
+        }
+      }
     } else {
       return Response.json({ error: 'Acción inválida.' }, { status: 400 });
     }

@@ -2006,8 +2006,23 @@ function eqInitials(name = '') {
   return name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('');
 }
 
-// Campos de nombre/apellido/cargo/email, reusados por el panel de "agregar" y por la fila en
-// modo edición — mismo shape de inputs en los dos lugares.
+// Zonas horarias de dónde suele estar repartido el equipo de un cliente — un mismo cliente
+// puede tener gente en varios países (ver AttendeePicker en KaiNextMeetings.jsx, que usa esto
+// para mostrar a qué hora local le cae una reunión a cada quien). Lista curada, no las ~400
+// zonas IANA completas — alcanza con los países donde Bonsight de verdad tiene clientes/equipo.
+const TIMEZONE_OPTIONS = [
+  { id: 'America/Mexico_City', label: 'México' },
+  { id: 'America/Bogota', label: 'Colombia' },
+  { id: 'America/Lima', label: 'Perú' },
+  { id: 'America/Caracas', label: 'Venezuela' },
+  { id: 'America/Santiago', label: 'Chile' },
+  { id: 'America/Argentina/Buenos_Aires', label: 'Argentina' },
+  { id: 'America/Sao_Paulo', label: 'Brasil' },
+  { id: 'America/New_York', label: 'Estados Unidos (Este)' },
+];
+
+// Campos de nombre/apellido/cargo/email/zona horaria, reusados por el panel de "agregar" y por
+// la fila en modo edición — mismo shape de inputs en los dos lugares.
 function EquipoFieldsGrid({ values, onChange, disabled }) {
   return (
     <div className="eq-edit-grid">
@@ -2015,6 +2030,13 @@ function EquipoFieldsGrid({ values, onChange, disabled }) {
       <div><div className="eq-label">Apellido</div><input className="eq-input" value={values.lastName} onChange={(e) => onChange({ ...values, lastName: e.target.value })} disabled={disabled} /></div>
       <div><div className="eq-label">Cargo</div><input className="eq-input" value={values.cargo} onChange={(e) => onChange({ ...values, cargo: e.target.value })} disabled={disabled} placeholder="Opcional" /></div>
       <div><div className="eq-label">Email</div><input className="eq-input" value={values.email} onChange={(e) => onChange({ ...values, email: e.target.value })} disabled={disabled} placeholder="Opcional" /></div>
+      <div>
+        <div className="eq-label">Zona horaria</div>
+        <select className="eq-input" value={values.timezone || ''} onChange={(e) => onChange({ ...values, timezone: e.target.value })} disabled={disabled}>
+          <option value="">Sin definir</option>
+          {TIMEZONE_OPTIONS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+      </div>
     </div>
   );
 }
@@ -2022,7 +2044,7 @@ function EquipoFieldsGrid({ values, onChange, disabled }) {
 // Panel colapsable de "+ Agregar persona" — separado del listado para no ensuciar la tabla
 // con un formulario siempre visible (a diferencia de la versión anterior).
 function EquipoAddPanel({ tenant, onCreated, onClose }) {
-  const [draft, setDraft] = useState({ firstName: '', lastName: '', cargo: '', email: '' });
+  const [draft, setDraft] = useState({ firstName: '', lastName: '', cargo: '', email: '', timezone: '' });
   const [access, setAccess] = useState({ kai: true, aria: false, kaiNext: false });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
@@ -2119,7 +2141,7 @@ function EquipoRow({ tenant, user: u, onSaved }) {
   const [err, setErr] = useState(null);
 
   const openEdit = () => {
-    setDraft({ firstName: u.firstName ?? '', lastName: u.lastName ?? '', cargo: u.cargo ?? '', email: u.email ?? '' });
+    setDraft({ firstName: u.firstName ?? '', lastName: u.lastName ?? '', cargo: u.cargo ?? '', email: u.email ?? '', timezone: u.timezone ?? '' });
     setMode('edit');
   };
 

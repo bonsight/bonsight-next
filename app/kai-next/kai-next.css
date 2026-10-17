@@ -4854,6 +4854,7 @@
 .knx-board-field-row {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .knx-board-popover-actions {
@@ -5054,7 +5055,13 @@
   border-color: var(--knx-primary);
 }
 
-.knx-board-subtask-add-btn {
+/* El selector ".knx-board-field label" (color muted, font-size chico) le gana en especificidad
+   a esta clase sola cuando el botón es un <label> (caso "+ Subir a Drive"/"+ Subir documento",
+   que envuelven un <input type="file"> oculto) — de ahí el texto casi invisible. Se repite el
+   selector completo acá para ganar esa pulseada en vez de bajarle la especificidad a la regla
+   genérica de labels de campo. */
+.knx-board-subtask-add-btn,
+.knx-board-field .knx-board-subtask-add-btn {
   flex-shrink: 0;
   border: 1px solid var(--knx-primary);
   border-radius: 7px;
@@ -5073,6 +5080,810 @@
 .knx-board-subtask-add-btn:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* ── Entregables (tareas y épicas) ────────────────────────────────────────── */
+
+.knx-entregables-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.knx-entregable-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.knx-entregable-row input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--knx-border);
+  border-radius: 7px;
+  padding: 6px 9px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--knx-text);
+}
+
+.knx-entregable-row input:focus {
+  outline: none;
+  border-color: var(--knx-primary);
+}
+
+.knx-entregable-link {
+  font-size: 12.5px;
+  color: var(--knx-primary);
+  text-decoration: underline;
+  word-break: break-word;
+}
+
+/* ── Meetings (Proyecto de Desarrollo) ────────────────────────────────────── */
+
+.knx-meetings-meet-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--knx-text);
+}
+
+.knx-meeting-avatar {
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Lista */
+
+.knx-meeting-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.knx-meeting-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--knx-border);
+  border-radius: 10px;
+  background: var(--knx-bg);
+  cursor: pointer;
+  text-align: left;
+}
+
+.knx-meeting-card-type {
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+}
+
+.knx-meeting-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--knx-text);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knx-meeting-card-dates {
+  font-size: 11.5px;
+  color: var(--knx-text-muted);
+  flex-shrink: 0;
+}
+
+/* Toolbar / filtros / vista */
+
+.knx-meetings-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 14px 0 10px;
+}
+
+.knx-meetings-week-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.knx-meetings-week-nav button[aria-label] {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--knx-border);
+  border-radius: 9px;
+  background: var(--knx-bg);
+}
+
+.knx-meetings-week-range {
+  font-size: 14px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.knx-meetings-view-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--knx-soft-bg);
+}
+
+.knx-meetings-view-toggle button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--knx-text-muted);
+}
+
+.knx-meetings-view-toggle--active {
+  background: var(--knx-bg) !important;
+  box-shadow: 0 1px 2px rgba(11, 16, 32, 0.1);
+  font-weight: 600;
+  color: var(--knx-text) !important;
+}
+
+.knx-meetings-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--knx-text-muted);
+  margin-bottom: 8px;
+}
+
+.knx-meetings-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.knx-meetings-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+/* Modal de agendar */
+
+.knx-meetings-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 16, 32, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 50;
+}
+
+.knx-meetings-modal {
+  width: 960px;
+  max-width: 100%;
+  max-height: 90vh;
+  background: var(--knx-bg);
+  border-radius: 18px;
+  box-shadow: 0 30px 80px rgba(11, 16, 32, 0.25);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  overflow: hidden;
+}
+
+.knx-meetings-modal-left {
+  padding: 22px;
+  border-right: 1px solid var(--knx-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.knx-meetings-modal-left h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.knx-meetings-modal-right {
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.knx-meetings-modal-right-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.knx-meetings-modal-footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--knx-border);
+}
+
+.knx-meetings-modal-footer-time {
+  font-size: 12.5px;
+  color: var(--knx-text-muted);
+}
+
+.knx-meetings-tipo-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.knx-meetings-tipo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--knx-border);
+  border-radius: 999px;
+  background: var(--knx-bg);
+  font-size: 12.5px;
+  color: var(--knx-text);
+}
+
+.knx-meetings-tipo-pill--active {
+  border-width: 2px;
+  font-weight: 600;
+}
+
+.knx-meetings-tipo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.knx-time-select {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--knx-border);
+  border-radius: 9px;
+  padding: 0 6px;
+  height: 36px;
+}
+
+.knx-time-select select {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--knx-text);
+  padding: 0;
+}
+
+.knx-time-select span {
+  color: var(--knx-text-muted);
+}
+
+/* Asistentes (picker) */
+
+.knx-attendee-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--knx-border);
+  border-radius: 10px;
+}
+
+.knx-attendee-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 6px 0 4px;
+  border-radius: 999px;
+  background: var(--knx-soft-bg);
+  border: 1px solid var(--knx-border);
+  font-size: 12.5px;
+}
+
+.knx-attendee-chip button {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: transparent;
+  color: var(--knx-text-muted);
+  padding: 0;
+}
+
+.knx-attendee-organizer-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--knx-deep);
+}
+
+.knx-attendee-input-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 140px;
+}
+
+.knx-attendee-input-wrap input {
+  border: 0;
+  outline: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  width: 100%;
+  height: 30px;
+}
+
+.knx-attendee-suggestions {
+  position: absolute;
+  top: 34px;
+  left: 0;
+  right: 0;
+  background: var(--knx-bg);
+  border: 1px solid var(--knx-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(11, 16, 32, 0.12);
+  z-index: 5;
+  overflow: hidden;
+}
+
+.knx-attendee-suggestions button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.knx-attendee-suggestions button:hover {
+  background: var(--knx-soft-bg);
+}
+
+.knx-meetings-tz-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--knx-sidebar-bg);
+}
+
+.knx-meetings-tz-list span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--knx-text);
+}
+
+/* Asistente de disponibilidad */
+
+.knx-avail-slots {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.knx-avail-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--knx-border);
+  border-radius: 10px;
+  background: var(--knx-bg);
+  text-align: left;
+}
+
+.knx-avail-slot--picked {
+  border: 2px solid var(--knx-deep);
+  background: var(--knx-soft-bg);
+}
+
+.knx-avail-slot-time {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--knx-text);
+}
+
+.knx-avail-slot-note {
+  font-size: 11px;
+  color: var(--knx-text-muted);
+}
+
+.knx-avail-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.knx-avail-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.knx-avail-row-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--knx-text);
+}
+
+.knx-avail-row-track {
+  position: relative;
+  height: 24px;
+  background: var(--knx-sidebar-bg);
+  border-radius: 6px;
+}
+
+.knx-avail-busy-block {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(45deg, #DDE3E0, #DDE3E0 4px, #EEF2F0 4px, #EEF2F0 8px);
+}
+
+.knx-avail-row-err {
+  font-size: 11px;
+  color: var(--knx-text-muted);
+}
+
+/* Calendario semanal */
+
+.knx-week {
+  border: 1px solid var(--knx-border);
+  border-radius: 14px;
+  background: var(--knx-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.knx-week-header {
+  border-radius: 14px 14px 0 0;
+  display: grid;
+  grid-template-columns: 48px repeat(5, minmax(0, 1fr));
+  border-bottom: 1px solid var(--knx-border);
+}
+
+.knx-week-header-day {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 9px 8px;
+}
+
+.knx-week-header-dow {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--knx-text-muted);
+  text-transform: capitalize;
+}
+
+.knx-week-header-num {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.knx-week-header-num--today {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--knx-deep);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.knx-week-body {
+  display: grid;
+  grid-template-columns: 48px repeat(5, minmax(0, 1fr));
+  position: relative;
+  overflow-y: auto;
+  max-height: calc(100vh - 320px);
+  border-radius: 0 0 14px 14px;
+}
+
+.knx-week-hours {
+  position: relative;
+}
+
+.knx-week-hour-label {
+  position: absolute;
+  right: 8px;
+  font-size: 10.5px;
+  color: var(--knx-text-muted);
+}
+
+.knx-week-col {
+  position: relative;
+  border-left: 1px solid var(--knx-border);
+}
+
+.knx-week-gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--knx-border);
+  opacity: 0.6;
+}
+
+.knx-week-now-line {
+  position: absolute;
+  left: -1px;
+  right: 0;
+  height: 2px;
+  background: #C2554B;
+  z-index: 3;
+}
+
+.knx-week-now-line span {
+  position: absolute;
+  left: 0;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #C2554B;
+}
+
+.knx-week-col--clickable {
+  cursor: pointer;
+}
+
+.knx-week-drag-selection {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  border-radius: 8px;
+  background: rgba(63, 148, 97, 0.25);
+  border: 1.5px solid var(--knx-deep);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.knx-week-event {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 7px;
+  border-radius: 8px;
+  border: 0;
+  border-left: 3px solid;
+  text-align: left;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.knx-week-event-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.knx-week-event-time {
+  font-size: 10.5px;
+  opacity: 0.85;
+}
+
+.knx-week-event-foot {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: auto;
+}
+
+.knx-week-event-organizer {
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.knx-week-event-extra {
+  margin-left: auto;
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+/* Panel de detalle */
+
+.knx-meeting-detail-type {
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.knx-meeting-detail-title {
+  margin: 10px 0 2px;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.knx-meeting-detail-meta {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  color: var(--knx-text-muted);
+}
+
+.knx-meeting-detail-organizer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--knx-sidebar-bg);
+  margin-bottom: 10px;
+}
+
+.knx-meeting-detail-organizer-label {
+  display: block;
+  font-size: 11px;
+  color: var(--knx-text-muted);
+}
+
+.knx-meeting-detail-organizer-name {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.knx-meeting-attendee-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--knx-text);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.knx-meeting-attendee-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.knx-rsvp-badge {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  border-radius: 5px;
+  padding: 1px 7px;
+}
+
+.knx-rsvp--ok { color: var(--knx-deep); background: var(--knx-soft-bg); }
+.knx-rsvp--no { color: #8A3B2F; background: #FBEAE6; }
+.knx-rsvp--maybe { color: #8A5A00; background: #FBF1DC; }
+.knx-rsvp--pending { color: #8A5A00; background: #FBF1DC; }
+
+.knx-meeting-agenda-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.knx-meeting-project-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--knx-border);
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--knx-text);
+  font-size: 12.5px;
+}
+
+.knx-meetings-modal--small {
+  grid-template-columns: 1fr;
+  width: 460px;
+}
+
+.knx-week-event--ghost {
+  background: transparent !important;
+  border: 1.5px dashed var(--knx-deep) !important;
+  border-left-width: 1.5px !important;
+  color: var(--knx-deep) !important;
+}
+
+.knx-proposal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.knx-proposal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--knx-soft);
+  background: var(--knx-soft-bg);
+}
+
+.knx-proposal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.knx-proposal-head-name {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--knx-text);
+}
+
+.knx-proposal-head-time {
+  display: block;
+  font-size: 11px;
+  color: var(--knx-text-muted);
+}
+
+.knx-proposal-change {
+  margin: 0;
+  font-size: 13px;
+  color: var(--knx-text);
+}
+
+.knx-proposal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.knx-proposal-counter-link {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  color: var(--knx-deep);
+  font-size: 12px;
+  text-decoration: underline;
+  padding: 0;
 }
 
 /* ── Sprints — drag and drop entre columnas ───────────────────────────────── */
@@ -5119,6 +5930,35 @@
 .knx-board-card--entering {
   animation: knx-board-card-enter 0.4s ease;
   border-color: var(--knx-primary);
+}
+
+/* ── Rechazo de drop (ej. subtareas pendientes al soltar en Hecho) ────────── */
+
+@keyframes knx-board-card-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+
+.knx-board-card--shake {
+  animation: knx-board-card-shake 0.45s ease;
+  border-color: #E07B5A;
+  background: #2A1208;
+}
+
+.knx-board-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--knx-border);
+  border-radius: 9px;
+  padding: 4px 6px;
+}
+
+.knx-board-filter-group select {
+  max-width: 180px;
 }
 
 /* ── Activities — chat embebido de "+ Nueva actividad" ────────────────────── */

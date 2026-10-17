@@ -25,6 +25,29 @@ const TASK_TYPES = ['Desarrollo', 'Soporte', 'Bug', 'Mejora', 'Reunión'];
 const SEVERITIES = ['Crítica', 'Alta', 'Media', 'Baja'];
 const SEVERITY_APPLIES_TO = new Set(['Bug']);
 
+// Convierte el archivo elegido a base64 y lo sube a la carpeta "Entregables" del proyecto (ver
+// uploadEntregableToDrive en lib/kaiNext/projects.js) — usado tanto desde DevTaskDetailPanel
+// como desde EditEpicaForm, de ahí vivir acá arriba en vez de adentro de uno de los dos.
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '');
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadEntregableFile(tenant, projectId, file) {
+  const data = await readFileAsBase64(file);
+  const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/dev/entregable-upload`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: file.name, mimeType: file.type, data }),
+  });
+  const payload = await res.json();
+  if (!res.ok) throw new Error(payload.error || 'No se pudo subir el archivo.');
+  return payload.entregable;
+}
+
 // "2026-09-07" sin forzar UTC se interpreta como medianoche UTC y renderiza en la hora LOCAL
 // del navegador — en cualquier timezone detrás de UTC (toda Latinoamérica) eso corre la fecha
 // un día para atrás (6 sept en vez de 7 sept). Mismo fix que ya usa formatShortDate más abajo.
@@ -60,7 +83,7 @@ function TrashIcon() {
 
 // Tarjeta compartida por Tablero y el tab Sprints — misma estructura/clases que TaskCard del
 // tablero real (KaiNextSprints.jsx), para que una tarea se vea igual en los dos lugares.
-function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragStart, onDragEnd, dragging, entering, showStatusSelect = true, allTasks }) {
+function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragStart, onDragEnd, dragging, entering, shake, showStatusSelect = true, allTasks }) {
   const [childrenOpen, setChildrenOpen] = useState(false);
   const hasDates = task.startDate || task.dueDate;
   const vencida = task.status !== 'Done' && !!task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10);
@@ -68,7 +91,7 @@ function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragS
   const childrenDone = children.filter((c) => c.status === 'Done').length;
   return (
     <div
-      className={`knx-board-card${dragging ? ' knx-board-card--dragging' : ''}${entering ? ' knx-board-card--entering' : ''}`}
+      className={`knx-board-card${dragging ? ' knx-board-card--dragging' : ''}${entering ? ' knx-board-card--entering' : ''}${shake ? ' knx-board-card--shake' : ''}`}
       onClick={() => onOpen(task.id)}
       draggable={draggable}
       onDragStart={onDragStart}
@@ -154,6 +177,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
   const [endDate, setEndDate] = useState(task.dueDate ?? '');
   const [estimatedHours, setEstimatedHours] = useState(task.estimatedHours ?? '');
   const [actualHours, setActualHours] = useState(task.actualHours ?? '');
+  const [entregables, setEntregables] = useState(task.entregables ?? []);
   const [newSubtask, setNewSubtask] = useState('');
   const [savingSubtask, setSavingSubtask] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -164,17 +188,44 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
   const dirty = title !== task.title || description !== (task.description ?? '') || taskType !== (task.taskType ?? '')
     || priority !== (task.priority ?? '') || severity !== (task.severity ?? '') || responsableId !== (task.responsableId ?? '')
     || startDate !== (task.startDate ?? '') || endDate !== (task.dueDate ?? '')
-    || String(estimatedHours) !== String(task.estimatedHours ?? '') || String(actualHours) !== String(task.actualHours ?? '');
+    || String(estimatedHours) !== String(task.estimatedHours ?? '') || String(actualHours) !== String(task.actualHours ?? '')
+    || JSON.stringify(entregables) !== JSON.stringify(task.entregables ?? []);
 
   const saveAll = async () => {
     setSaving(true);
     try {
-      await onAction('update_task_details', { title: title.trim() || task.title, description, taskType, priority, severity: SEVERITY_APPLIES_TO.has(taskType) ? severity : '' });
+      await onAction('update_task_details', {
+        title: title.trim() || task.title, description, taskType, priority,
+        severity: SEVERITY_APPLIES_TO.has(taskType) ? severity : '',
+        entregables: entregables.filter((e) => e.label?.trim() || e.url?.trim()),
+      });
       await onAction('update_schedule', { startDate, endDate, estimatedHours: estimatedHours === '' ? null : Number(estimatedHours) });
       await onAction('update_responsable', { responsableId: responsableId || null });
       await onAction('update_actual_hours', { actualHours: actualHours === '' ? null : Number(actualHours) });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const [uploadingEntregable, setUploadingEntregable] = useState(false);
+  const [uploadErr, setUploadErr] = useState(null);
+
+  const updateEntregable = (idx, field, value) => {
+    setEntregables((prev) => prev.map((e, i) => (i === idx ? { ...e, [field]: value } : e)));
+  };
+  const addEntregable = () => setEntregables((prev) => [...prev, { label: '', url: '' }]);
+  const removeEntregable = (idx) => setEntregables((prev) => prev.filter((_, i) => i !== idx));
+  const uploadEntregable = async (file) => {
+    if (!file) return;
+    setUploadingEntregable(true);
+    setUploadErr(null);
+    try {
+      const entregable = await uploadEntregableFile(tenant, projectId, file);
+      setEntregables((prev) => [...prev, entregable]);
+    } catch (e) {
+      setUploadErr(e.message || 'No se pudo subir el archivo.');
+    } finally {
+      setUploadingEntregable(false);
     }
   };
 
@@ -289,6 +340,26 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
         <div className="knx-board-field">
           <label>Horas reales</label>
           <input type="number" min="0" step="0.5" value={actualHours ?? ''} onChange={(e) => setActualHours(e.target.value)} />
+        </div>
+        <div className="knx-board-field">
+          <label>Entregables</label>
+          {uploadErr && <p className="knx-canvas-error">{uploadErr}</p>}
+          <div className="knx-entregables-list">
+            {entregables.map((e, idx) => (
+              <div key={idx} className="knx-entregable-row">
+                <input placeholder="Nombre (ej. Grabación)" value={e.label ?? ''} onChange={(ev) => updateEntregable(idx, 'label', ev.target.value)} />
+                <input placeholder="URL" value={e.url ?? ''} onChange={(ev) => updateEntregable(idx, 'url', ev.target.value)} />
+                <button type="button" className="knx-side-panel-close" aria-label="Quitar" onClick={() => removeEntregable(idx)}>×</button>
+              </div>
+            ))}
+            <div className="knx-entregable-row">
+              <button type="button" className="knx-board-subtask-add-btn" onClick={addEntregable}>+ Agregar link</button>
+              <label className="knx-board-subtask-add-btn" style={{ cursor: uploadingEntregable ? 'default' : 'pointer', opacity: uploadingEntregable ? 0.5 : 1 }}>
+                {uploadingEntregable ? 'Subiendo…' : '+ Subir a Drive'}
+                <input type="file" style={{ display: 'none' }} disabled={uploadingEntregable} onChange={(ev) => uploadEntregable(ev.target.files?.[0])} />
+              </label>
+            </div>
+          </div>
         </div>
         <button type="button" className="knx-new-chat" disabled={!dirty || saving} onClick={saveAll} style={{ width: '100%', justifyContent: 'center' }}>
           {saving ? 'Guardando…' : 'Guardar cambios'}
@@ -630,6 +701,7 @@ function NewIniciativaForm({ tenant, projectId, iniciativas, onCreate, onReload 
 function NewEpicaModal({ tenant, projectId, iniciativas, onClose, onCreated }) {
   const [iniciativaId, setIniciativaId] = useState(iniciativas[0]?.id || '');
   const [name, setName] = useState('');
+  const [fase, setFase] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -640,7 +712,7 @@ function NewEpicaModal({ tenant, projectId, iniciativas, onClose, onCreated }) {
     setError(null);
     try {
       const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/dev/epicas`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, iniciativaId }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, iniciativaId, fase: fase || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo crear.');
@@ -669,6 +741,13 @@ function NewEpicaModal({ tenant, projectId, iniciativas, onClose, onCreated }) {
         <div className="knx-ficha-review-field">
           <label>Nombre</label>
           <input className="knx-canvas-meta-select" placeholder="Nombre de la épica…" value={name} onChange={(e) => setName(e.target.value)} autoFocus onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
+        </div>
+        <div className="knx-ficha-review-field" style={{ marginTop: 14 }}>
+          <label>Fase</label>
+          <select className="knx-canvas-meta-select" value={fase} onChange={(e) => setFase(e.target.value)}>
+            <option value="">Sin fase</option>
+            {FASE_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
         </div>
         <div className="knx-canvas-ficha-draft-actions" style={{ marginTop: 16 }}>
           <button type="button" className="knx-canvas-mini" onClick={onClose} disabled={saving}>Cancelar</button>
@@ -1134,8 +1213,31 @@ function EditEpicaForm({ tenant, projectId, epica, onSaved, onCancel }) {
   const [fase, setFase] = useState(epica.fase ?? '');
   const [startDate, setStartDate] = useState(epica.startDate ?? '');
   const [endDate, setEndDate] = useState(epica.endDate ?? '');
+  const [entregables, setEntregables] = useState(epica.entregables ?? []);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
+
+  const [uploadingEntregable, setUploadingEntregable] = useState(false);
+  const [uploadErr, setUploadErr] = useState(null);
+
+  const updateEntregable = (idx, field, value) => {
+    setEntregables((prev) => prev.map((e, i) => (i === idx ? { ...e, [field]: value } : e)));
+  };
+  const addEntregable = () => setEntregables((prev) => [...prev, { label: '', url: '' }]);
+  const removeEntregable = (idx) => setEntregables((prev) => prev.filter((_, i) => i !== idx));
+  const uploadEntregable = async (file) => {
+    if (!file) return;
+    setUploadingEntregable(true);
+    setUploadErr(null);
+    try {
+      const entregable = await uploadEntregableFile(tenant, projectId, file);
+      setEntregables((prev) => [...prev, entregable]);
+    } catch (e) {
+      setUploadErr(e.message || 'No se pudo subir el archivo.');
+    } finally {
+      setUploadingEntregable(false);
+    }
+  };
 
   const save = async () => {
     if (!name.trim()) { setErr('El nombre no puede quedar vacío.'); return; }
@@ -1144,7 +1246,10 @@ function EditEpicaForm({ tenant, projectId, epica, onSaved, onCancel }) {
     try {
       const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/dev/epicas/${epica.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), fase: fase || null, startDate: startDate || null, endDate: endDate || null }),
+        body: JSON.stringify({
+          name: name.trim(), fase: fase || null, startDate: startDate || null, endDate: endDate || null,
+          entregables: entregables.filter((e) => e.label?.trim() || e.url?.trim()),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo guardar.');
@@ -1177,6 +1282,26 @@ function EditEpicaForm({ tenant, projectId, epica, onSaved, onCancel }) {
       <div className="knx-canvas-meta-field">
         <label className="knx-canvas-meta-field-label">Fin</label>
         <input type="date" className="knx-canvas-meta-select" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+      </div>
+      <div className="knx-canvas-meta-field" style={{ flexBasis: '100%' }}>
+        <label className="knx-canvas-meta-field-label">Entregables</label>
+        {uploadErr && <p className="knx-canvas-error">{uploadErr}</p>}
+        <div className="knx-entregables-list">
+          {entregables.map((e, idx) => (
+            <div key={idx} className="knx-entregable-row">
+              <input placeholder="Nombre (ej. Organigrama)" value={e.label ?? ''} onChange={(ev) => updateEntregable(idx, 'label', ev.target.value)} />
+              <input placeholder="URL" value={e.url ?? ''} onChange={(ev) => updateEntregable(idx, 'url', ev.target.value)} />
+              <button type="button" className="knx-side-panel-close" aria-label="Quitar" onClick={() => removeEntregable(idx)}>×</button>
+            </div>
+          ))}
+          <div className="knx-entregable-row">
+            <button type="button" className="knx-canvas-mini" onClick={addEntregable}>+ Agregar link</button>
+            <label className="knx-canvas-mini" style={{ cursor: uploadingEntregable ? 'default' : 'pointer', opacity: uploadingEntregable ? 0.5 : 1 }}>
+              {uploadingEntregable ? 'Subiendo…' : '+ Subir a Drive'}
+              <input type="file" style={{ display: 'none' }} disabled={uploadingEntregable} onChange={(ev) => uploadEntregable(ev.target.files?.[0])} />
+            </label>
+          </div>
+        </div>
       </div>
       <div className="knx-canvas-newcol-actions">
         <button type="button" className="knx-canvas-mini" disabled={saving} onClick={save}>Guardar</button>
@@ -1300,6 +1425,19 @@ function EpicaDetailPanel({ tenant, projectId, epica, index, total, activeSprint
         </div>
 
         {epica.notas && <p className="knx-epica-notas" style={{ marginLeft: 0 }}>{epica.notas}</p>}
+
+        {epica.entregables?.length > 0 && (
+          <div className="knx-epica-panel-stat-item" style={{ marginTop: 10 }}>
+            <span className="knx-canvas-meta-field-label">Entregables</span>
+            <div className="knx-entregables-list">
+              {epica.entregables.map((e, idx) => (
+                <a key={idx} href={e.url} target="_blank" rel="noreferrer" className="knx-entregable-link">
+                  {e.label || e.url}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div style={{ marginTop: 10 }}>
           <h4 className="knx-canvas-meta-field-label">Historias · {totalCount}</h4>
@@ -1640,6 +1778,8 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
   const [justMovedTaskId, setJustMovedTaskId] = useState(null);
   const [collapsedLanes, setCollapsedLanes] = useState(new Set());
   const [err, setErr] = useState(null);
+  const [responsableFilter, setResponsableFilter] = useState('');
+  const [epicaFilter, setEpicaFilter] = useState('');
 
   // Se limpia recién después de que `board` ya trajo a la tarea en su nueva columna — así la
   // animación de "acabo de llegar" (.knx-board-card--entering) juega sobre la tarjeta ya
@@ -1655,7 +1795,27 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
   if (!board) return <p className="knx-knowledge-empty">Cargando…</p>;
   const { tasks, columns, talento } = board;
   const selectedTask = selectedTaskId ? tasks.find((t) => t.id === selectedTaskId) : null;
-  const lanes = buildEpicaLanes(tasks, iniciativas);
+  // Anidados entre sí: elegir un Responsable acota el select de Épica a solo las épicas donde
+  // ESE responsable tiene tareas, y viceversa — no son dos filtros independientes.
+  const epicaIdsForResponsable = new Set(tasks.filter((t) => !responsableFilter || t.responsableName === responsableFilter).map((t) => t.epicaId).filter(Boolean));
+  const epicaOptions = iniciativas.flatMap((ini) => ini.epicas.map((e) => ({ id: e.id, name: e.name }))).filter((e) => epicaIdsForResponsable.has(e.id));
+  const responsableOptions = Array.from(new Set(
+    tasks.filter((t) => !epicaFilter || t.epicaId === epicaFilter).map((t) => t.responsableName).filter(Boolean),
+  )).sort();
+  const onResponsableFilterChange = (value) => {
+    setResponsableFilter(value);
+    if (epicaFilter && !tasks.some((t) => t.epicaId === epicaFilter && (!value || t.responsableName === value))) setEpicaFilter('');
+  };
+  const onEpicaFilterChange = (value) => {
+    setEpicaFilter(value);
+    if (responsableFilter && !tasks.some((t) => t.responsableName === responsableFilter && (!value || t.epicaId === value))) setResponsableFilter('');
+  };
+  const filteredTasks = tasks.filter((t) => {
+    if (responsableFilter && t.responsableName !== responsableFilter) return false;
+    if (epicaFilter && t.epicaId !== epicaFilter) return false;
+    return true;
+  });
+  const lanes = buildEpicaLanes(filteredTasks, iniciativas);
   const toggleLane = (id) => setCollapsedLanes((prev) => {
     const next = new Set(prev);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -1803,7 +1963,17 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
   return (
     <div className="knx-board">
       {err && <p className="knx-canvas-error">{err}</p>}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <div className="knx-board-filter-group">
+          <select className="knx-canvas-meta-select" value={responsableFilter} onChange={(e) => onResponsableFilterChange(e.target.value)}>
+            <option value="">Todos los responsables</option>
+            {responsableOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+          <select className="knx-canvas-meta-select" value={epicaFilter} onChange={(e) => onEpicaFilterChange(e.target.value)}>
+            <option value="">Todas las épicas</option>
+            {epicaOptions.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
+        </div>
         {lanes.length > 1 && (
           <button type="button" className="knx-analisis-compare" onClick={allLanesCollapsed ? expandAll : collapseAll}>
             {allLanesCollapsed ? 'Expandir todo' : 'Colapsar todo'}
@@ -1812,12 +1982,14 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
         <button type="button" className="knx-new-chat" onClick={() => setNewTareaOpen(true)}>+ Nueva tarea</button>
       </div>
       {!lanes.length ? (
-        <p className="knx-knowledge-empty">Sin tareas en este proyecto todavía.</p>
+        <p className="knx-knowledge-empty">
+          {responsableFilter || epicaFilter ? 'Ninguna tarea coincide con el filtro.' : 'Sin tareas en este proyecto todavía.'}
+        </p>
       ) : (
         <>
           <div className="knx-sprintboard-row knx-sprintboard-header" style={gridCols}>
             {columns.map((col) => (
-              <span key={col.id} className="knx-sprintboard-col-label">{col.name} <span className="knx-sprintboard-col-total">{tasks.filter((t) => t.status === col.id).length}</span></span>
+              <span key={col.id} className="knx-sprintboard-col-label">{col.name} <span className="knx-sprintboard-col-total">{filteredTasks.filter((t) => t.status === col.id).length}</span></span>
             ))}
           </div>
           {lanes.map((lane) => {
@@ -1974,6 +2146,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
   const [viewedSprintId, setViewedSprintId] = useState(null); // null = sigue al sprint activo
   const [collapsedLanes, setCollapsedLanes] = useState(new Set());
   const [err, setErr] = useState(null);
+  const [shakeTaskId, setShakeTaskId] = useState(null);
 
   // El selector deja ver cualquier sprint de este proyecto (incluidos los cerrados), igual que
   // el tablero real — por defecto sigue al sprint activo hasta que el usuario elige otro.
@@ -2060,6 +2233,19 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
     setDragOverCell(null);
     setDragInfo(null);
     if (!info || info.laneId !== laneId) return;
+    // Bloqueo visual, no solo de servidor: si hay subtareas pendientes, la tarjeta ni siquiera
+    // "pega" en Hecho — tiembla en rojo donde estaba y el mensaje aparece al lado, en vez de
+    // dejar que se suelte y recién after fallar en el servidor la vuelva a su lugar.
+    if (status === 'Done') {
+      const task = tasks.find((t) => t.id === info.taskId);
+      const pending = (task?.childIds ?? []).some((id) => tasks.find((t) => t.id === id)?.status !== 'Done');
+      if (pending) {
+        setErr('Esta tarea tiene subtareas sin terminar — marcalas como Hecho antes de cerrar la tarea padre.');
+        setShakeTaskId(info.taskId);
+        setTimeout(() => setShakeTaskId(null), 500);
+        return;
+      }
+    }
     requestStatusChange(info.taskId, status);
   };
 
@@ -2294,6 +2480,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
                               onDragEnd={() => setDragInfo(null)}
                               dragging={dragInfo?.taskId === t.id}
                               entering={justMovedTaskId === t.id}
+                              shake={shakeTaskId === t.id}
                               allTasks={tasks}
                             />
                           ))}

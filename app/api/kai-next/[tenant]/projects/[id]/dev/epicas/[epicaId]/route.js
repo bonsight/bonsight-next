@@ -1,17 +1,26 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
+import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
 import { getNotionToken, updateDevEpica, deleteDevEpica } from '@/lib/kaiNext/projectsNotion';
 
-async function gate(tenant) {
+// `projectId` es opcional por compatibilidad hacia atrás con cualquier caller que no lo pase
+// todavía, pero SIEMPRE debería mandarse — sin él no se puede revalidar que el Supervisor esté
+// asignado a ESTE proyecto puntual (mismo criterio que projects/[id]/route.js para 'desarrollo').
+async function gate(tenant, projectId) {
   if (!(await isAuthorizedForTenant(tenant))) return { error: Response.json({ error: 'No autorizado.' }, { status: 401 }) };
   const identity = await getCurrentKaiNextIdentity(tenant);
   if (!isSectionAllowed(identity.access, 'proyectos')) {
     return { error: Response.json({ error: 'Proyectos no está habilitado para tu usuario.' }, { status: 403 }) };
   }
-  const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
-  if (!isSupervisorLevel) {
+  const level = resolveProjectAccessLevel(identity);
+  if (!level.isSupervisorLevel) {
     return { error: Response.json({ error: 'No tenés permiso para gestionar esta épica.' }, { status: 403 }) };
+  }
+  if (projectId && !level.isDirectorLevel) {
+    const meta = await getProjectMeta(tenant, projectId);
+    if (!meta?.supervisorIds?.includes(identity.personId)) {
+      return { error: Response.json({ error: 'No tenés permiso para gestionar esta épica.' }, { status: 403 }) };
+    }
   }
   const token = await getNotionToken(tenant);
   if (!token) return { error: Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 }) };
@@ -19,8 +28,8 @@ async function gate(tenant) {
 }
 
 export async function PATCH(req, { params }) {
-  const { tenant, epicaId } = await params;
-  const { error, token } = await gate(tenant);
+  const { tenant, id, epicaId } = await params;
+  const { error, token } = await gate(tenant, id);
   if (error) return error;
 
   let body;
@@ -41,8 +50,8 @@ export async function PATCH(req, { params }) {
 // Soft delete (archiva en Notion) — bloqueado si la épica todavía tiene historias asociadas,
 // ver deleteEpica en lib/aria/board.js.
 export async function DELETE(req, { params }) {
-  const { tenant, epicaId } = await params;
-  const { error, token } = await gate(tenant);
+  const { tenant, id, epicaId } = await params;
+  const { error, token } = await gate(tenant, id);
   if (error) return error;
 
   try {
