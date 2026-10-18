@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { updateBusinessMemory } from '@/lib/businessMemory';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 
 const TENANT_ID = 'bonsight';
 
@@ -112,12 +113,24 @@ Cuando en la conversación hayas identificado con confianza: empresa (o industri
 Hazlo solo UNA vez por conversación — cuando tengas datos suficientemente confiables. Si no los tienes aún, omite el bloque.
 `.trim();
 
+// Endpoint público sin auth que le pega a OpenAI en cada mensaje — sin esto, alguien puede
+// scriptear la conversación sin límite y quemar la cuenta de OpenAI directamente.
+const MAX_MESSAGES = 40;
+const MAX_MESSAGE_CHARS = 4000;
+
 export async function POST(req) {
   try {
+    if (!(await checkRateLimit(`advisor-chat:${getClientIp(req)}`, 20, 600))) {
+      return Response.json({ reply: 'Demasiados mensajes. Espera unos minutos e intenta de nuevo.' }, { status: 429 });
+    }
+
     const { messages, locale = 'es', source } = await req.json();
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return Response.json({ reply: 'Falta el mensaje.' }, { status: 400 });
+    }
+    if (messages.length > MAX_MESSAGES || messages.some((m) => typeof m?.content === 'string' && m.content.length > MAX_MESSAGE_CHARS)) {
+      return Response.json({ reply: 'La conversación es demasiado larga.' }, { status: 400 });
     }
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });

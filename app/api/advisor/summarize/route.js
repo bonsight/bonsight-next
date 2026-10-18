@@ -1,9 +1,18 @@
 import OpenAI from 'openai';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+
+const MAX_MESSAGES = 40;
+const MAX_MESSAGE_CHARS = 4000;
 
 // Para precargar "Lo que conversamos" en el booking (ver BookingPanel.jsx) — el main_pain del
 // <advisor-capture> de app/api/advisor/route.js es una etiqueta de una línea, no alcanza para un
 // resumen legible, así que esto es un llamado aparte, una sola vez, al abrir el panel de reserva.
 export async function POST(req) {
+  // Público sin auth y le pega a OpenAI — mismo motivo que el rate limit de app/api/advisor.
+  if (!(await checkRateLimit(`advisor-summarize:${getClientIp(req)}`, 20, 600))) {
+    return Response.json({ summary: '' }, { status: 429 });
+  }
+
   let body;
   try {
     body = await req.json();
@@ -12,6 +21,9 @@ export async function POST(req) {
   }
   const { messages } = body;
   if (!Array.isArray(messages) || !messages.length) {
+    return Response.json({ summary: '' });
+  }
+  if (messages.length > MAX_MESSAGES || messages.some((m) => typeof m?.content === 'string' && m.content.length > MAX_MESSAGE_CHARS)) {
     return Response.json({ summary: '' });
   }
 

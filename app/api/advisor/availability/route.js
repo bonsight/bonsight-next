@@ -1,4 +1,5 @@
 import { getFreeBusy } from '@/lib/kai/calendar';
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 
 // Disponibilidad pública para el booking embebido del Advisor (ver BookingPanel.jsx) — el evento
 // siempre lo agenda kai@bonsight.co (ver createCalendarEvent), así que la disponibilidad real a
@@ -31,12 +32,18 @@ function hostInstant(y, m, d, h) {
 
 export async function GET(req) {
   try {
+    // Endpoint público sin auth — sin esto, alguien puede scriptear requests sin límite.
+    if (!(await checkRateLimit(`advisor-availability:${getClientIp(req)}`, 30, 600))) {
+      return Response.json({ error: 'Demasiadas solicitudes. Intenta de nuevo en unos minutos.' }, { status: 429 });
+    }
+
     const { searchParams } = new URL(req.url);
     // Duración del bloque a reservar — default 30 (llamada de discovery del Advisor), pero
     // también se usa con 15 (agendar conexión de fuente desde Kai Next, ver
-    // KaiNextSourceConnectModal). Solo afecta qué tan largo tiene que estar libre cada
-    // candidato, no los horarios de inicio en sí (BUSINESS_HOURS).
-    const duration = Number(searchParams.get('duration')) || 30;
+    // KaiNextSourceConnectModal). Acotada a [5, 120] — es un endpoint público sin auth, no hay
+    // que confiar en que el valor venga del UI.
+    const rawDuration = Number(searchParams.get('duration'));
+    const duration = Number.isFinite(rawDuration) && rawDuration >= 5 && rawDuration <= 120 ? rawDuration : 30;
 
     const now = new Date();
     const minLead = new Date(now.getTime() + MIN_LEAD_HOURS * 3600000);
