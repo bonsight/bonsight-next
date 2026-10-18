@@ -26,8 +26,12 @@ export default async function KaiNextTenantPage({ params, searchParams }) {
   const host = (await headers()).get('host') ?? '';
   const basePath = kaiNextBasePath(host);
 
-  const teamUser = await getCurrentTeamUser();
-  const tenantUser = teamUser ? null : await getCurrentTenantUser(tenant);
+  // Si además hay una sesión de tenant activa (se logueó explícito como ese usuario — ej.
+  // para probar qué ve un cliente puntual), esa identidad más específica gana sobre la sesión
+  // global de equipo — antes la de equipo ganaba siempre, sin importar si también había una
+  // sesión de tenant activa en el mismo navegador.
+  const [rawTeamUser, tenantUser] = await Promise.all([getCurrentTeamUser(), getCurrentTenantUser(tenant)]);
+  const teamUser = tenantUser ? null : rawTeamUser;
 
   // Sin sesión de ningún tipo — pantalla de login de cliente (contraseña / enlace mágico). Ya
   // no redirige a /team: eso es el picker interno de Bonsight, no un login de cara al cliente.

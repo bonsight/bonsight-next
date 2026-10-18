@@ -4,8 +4,8 @@ import './kai-next.css';
 const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-dm-sans' });
 
 export const metadata = {
-  title: 'Kai Next — Bonsight',
-  description: 'Próxima generación de Kai — loop agéntico, MVP interno.',
+  title: 'Kai — Bonsight',
+  description: 'Kai conecta lo que tu empresa sabe con lo que ocurre en tus datos, para ayudarte a entender, decidir y actuar.',
   robots: { index: false, follow: false },
 };
 
