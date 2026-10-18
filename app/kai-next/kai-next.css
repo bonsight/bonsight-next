@@ -5889,6 +5889,238 @@
   width: 460px;
 }
 
+/* ── Conectar con Bonsight — banner + modal comercial (KaiNextSourceConnectModal) ───────── */
+
+.knx-source-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border: 1px solid var(--knx-soft);
+  background: var(--knx-soft-bg);
+  border-radius: 16px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.knx-source-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.knx-source-banner-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--knx-deep);
+}
+
+.knx-source-banner-sub {
+  font-size: 13px;
+  color: var(--knx-text-muted);
+}
+
+.knx-source-banner-cta {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--knx-primary);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.knx-source-banner-cta:hover {
+  opacity: 0.92;
+}
+
+.knx-pill-action--bonsight {
+  border-color: var(--knx-primary);
+  color: var(--knx-primary);
+  font-weight: 600;
+}
+
+.knx-pill-action--bonsight:hover {
+  background: var(--knx-soft-bg);
+  border-color: var(--knx-primary);
+}
+
+.knx-source-modal {
+  width: 560px;
+  max-width: 100%;
+  max-height: 90vh;
+  background: var(--knx-bg);
+  border-radius: 18px;
+  box-shadow: 0 30px 80px rgba(11, 16, 32, 0.25);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.knx-source-modal--booking {
+  padding: 0;
+}
+
+.knx-source-modal--booking .knx-source-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1;
+}
+
+.knx-source-modal--booking .consulta-book {
+  padding: 28px 24px;
+}
+
+.knx-source-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.knx-source-modal-head h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.knx-source-modal-sub {
+  margin: -8px 0 0;
+  font-size: 13.5px;
+  color: var(--knx-text-muted);
+}
+
+.knx-source-modal-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--knx-border);
+  border-radius: 12px;
+  background: var(--knx-sidebar-bg);
+}
+
+.knx-source-modal-check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.knx-source-modal-block h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--knx-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.knx-source-modal-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.knx-source-modal-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border: 1px solid var(--knx-soft);
+  border-radius: 999px;
+  background: var(--knx-soft-bg);
+  color: var(--knx-deep);
+  font-size: 12.5px;
+}
+
+.knx-source-modal-needs {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13.5px;
+  color: var(--knx-text);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.knx-source-modal-cost {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--knx-sidebar-bg);
+  color: var(--knx-text-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.knx-source-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.knx-source-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 9px;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+
+.knx-source-modal-btn--line {
+  border-color: var(--knx-border);
+  background: #FFFFFF;
+  color: var(--knx-text);
+}
+
+.knx-source-modal-btn--line:hover {
+  background: var(--knx-sidebar-bg);
+}
+
+.knx-source-modal-btn--ghost {
+  background: transparent;
+  color: var(--knx-text-muted);
+}
+
+.knx-source-modal-btn--ghost:hover {
+  color: var(--knx-text);
+}
+
+.knx-source-modal-btn--green {
+  background: var(--knx-primary);
+  color: #fff;
+  margin-left: auto;
+}
+
+.knx-source-modal-btn--green:hover {
+  opacity: 0.92;
+}
+
+.knx-source-modal-btn--green:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .knx-week-event--ghost {
   background: transparent !important;
   border: 1.5px dashed var(--knx-deep) !important;

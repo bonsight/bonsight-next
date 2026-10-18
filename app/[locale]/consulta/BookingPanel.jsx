@@ -35,7 +35,11 @@ function startOfLocalDay(date, zone) {
   return new Date(shifted.getTime() - offset * 60000);
 }
 
-export default function BookingPanel({ messages, locale }) {
+export default function BookingPanel({
+  messages, locale, duration = 30, purpose = null,
+  title: panelTitle, lead: panelLead, hostNote: panelHostNote,
+  prefill = {}, fixedSummary = null,
+}) {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const en = locale === 'en';
 
@@ -51,9 +55,9 @@ export default function BookingPanel({ messages, locale }) {
   const [selDay, setSelDay] = useState(null);
   const [selSlot, setSelSlot] = useState(null);
   const [step, setStep] = useState(1);
-  const [summary, setSummary] = useState('');
+  const [summary, setSummary] = useState(fixedSummary || '');
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', company: '' });
+  const [form, setForm] = useState({ name: prefill.name || '', email: prefill.email || '', company: prefill.company || '' });
   const [formErr, setFormErr] = useState(null);
   const [booking, setBooking] = useState(false);
   const [bookErr, setBookErr] = useState(null);
@@ -61,11 +65,11 @@ export default function BookingPanel({ messages, locale }) {
   const nameRef = useRef(null);
 
   useEffect(() => {
-    fetch('/api/advisor/availability')
+    fetch(`/api/advisor/availability?duration=${duration}`)
       .then((r) => r.json())
       .then((d) => setSlots((d.slots ?? []).map((s) => new Date(s))))
       .catch(() => setLoadErr(true));
-  }, []);
+  }, [duration]);
 
   const today = startOfLocalDay(new Date(), tz);
 
@@ -91,7 +95,7 @@ export default function BookingPanel({ messages, locale }) {
   function label(t) {
     const s = fmtLong.format(t);
     const cap = s.charAt(0).toUpperCase() + s.slice(1);
-    const end = new Date(t.getTime() + 30 * 60000);
+    const end = new Date(t.getTime() + duration * 60000);
     return `${cap} · ${fmtTime.format(t)}–${fmtTime.format(end)}`;
   }
 
@@ -104,6 +108,10 @@ export default function BookingPanel({ messages, locale }) {
   const goStep2 = async () => {
     if (!selSlot) return;
     setStep(2);
+    if (fixedSummary !== null) {
+      setTimeout(() => nameRef.current?.focus(), 50);
+      return;
+    }
     setSummaryLoading(true);
     try {
       const res = await fetch('/api/advisor/summarize', {
@@ -131,11 +139,11 @@ export default function BookingPanel({ messages, locale }) {
     setBookErr(null);
     try {
       const startDateTime = selSlot.toISOString();
-      const endDateTime = new Date(selSlot.getTime() + 30 * 60000).toISOString();
+      const endDateTime = new Date(selSlot.getTime() + duration * 60000).toISOString();
       const res = await fetch('/api/advisor/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ startDateTime, endDateTime, name: form.name, email: form.email, company: form.company, summary, timeZone: tz }),
+        body: JSON.stringify({ startDateTime, endDateTime, name: form.name, email: form.email, company: form.company, summary, timeZone: tz, purpose }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -161,11 +169,11 @@ export default function BookingPanel({ messages, locale }) {
   const downloadIcs = () => {
     if (!done) return;
     const f = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-    const end = new Date(done.start.getTime() + 30 * 60000);
+    const end = new Date(done.start.getTime() + duration * 60000);
     const ics = [
       'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Bonsight//Advisor//ES', 'BEGIN:VEVENT',
       `UID:${Date.now()}@bonsight.co`, `DTSTAMP:${f(new Date())}`, `DTSTART:${f(done.start)}`, `DTEND:${f(end)}`,
-      'SUMMARY:Llamada de discovery · Bonsight',
+      `SUMMARY:${purpose || 'Llamada de discovery'} · Bonsight`,
       'DESCRIPTION:Con el equipo de Bonsight. El enlace de Google Meet va en la invitación.',
       'END:VEVENT', 'END:VCALENDAR',
     ].join('\r\n');
@@ -202,12 +210,12 @@ export default function BookingPanel({ messages, locale }) {
 
       {step === 1 && (
         <>
-          <h2>{en ? 'Schedule your discovery call' : 'Agenda tu llamada de discovery'}</h2>
-          <p className="consulta-book-lead">{en ? '30 minutes to understand your case and see how we can help.' : '30 minutos para entender tu caso y ver cómo podemos ayudarte.'}</p>
+          <h2>{panelTitle || (en ? 'Schedule your discovery call' : 'Agenda tu llamada de discovery')}</h2>
+          <p className="consulta-book-lead">{panelLead || (en ? '30 minutes to understand your case and see how we can help.' : '30 minutos para entender tu caso y ver cómo podemos ayudarte.')}</p>
 
           <div className="consulta-book-host">
             <span className="consulta-book-ph">B</span>
-            <div><b>Bonsight</b><span>{en ? '30 min · Google Meet · free' : '30 min · Google Meet · sin costo'}</span></div>
+            <div><b>Bonsight</b><span>{panelHostNote || (en ? '30 min · Google Meet · free' : '30 min · Google Meet · sin costo')}</span></div>
           </div>
 
           {loadErr && <p className="consulta-book-empty">{en ? "Couldn't load availability." : 'No se pudo cargar la disponibilidad.'}</p>}
@@ -299,7 +307,9 @@ export default function BookingPanel({ messages, locale }) {
               <label htmlFor="bp-summary">{en ? "What we talked about" : 'Lo que conversamos'}</label>
               <textarea id="bp-summary" value={summaryLoading ? (en ? 'Summarizing…' : 'Resumiendo…') : summary} onChange={(e) => setSummary(e.target.value)} disabled={summaryLoading} />
             </div>
-            <div className="consulta-book-ctx">{en ? 'The Advisor summarized the conversation. You can edit it: this is what the host will read before the call.' : 'El Advisor resumió la conversación. Puedes editarla: es lo que el equipo leerá antes de la llamada.'}</div>
+            <div className="consulta-book-ctx">{fixedSummary !== null
+              ? (en ? 'You can edit it: this is what the team will read before the call.' : 'Puedes editarla: es lo que el equipo leerá antes de la llamada.')
+              : (en ? 'The Advisor summarized the conversation. You can edit it: this is what the host will read before the call.' : 'El Advisor resumió la conversación. Puedes editarla: es lo que el equipo leerá antes de la llamada.')}</div>
           </div>
           {formErr && <p className="consulta-book-err">{formErr}</p>}
           {bookErr && <p className="consulta-book-err">{bookErr}</p>}

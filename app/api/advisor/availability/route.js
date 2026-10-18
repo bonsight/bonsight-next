@@ -29,8 +29,15 @@ function hostInstant(y, m, d, h) {
   return new Date(guess.getTime() - off * 60000);
 }
 
-export async function GET() {
+export async function GET(req) {
   try {
+    const { searchParams } = new URL(req.url);
+    // Duración del bloque a reservar — default 30 (llamada de discovery del Advisor), pero
+    // también se usa con 15 (agendar conexión de fuente desde Kai Next, ver
+    // KaiNextSourceConnectModal). Solo afecta qué tan largo tiene que estar libre cada
+    // candidato, no los horarios de inicio en sí (BUSINESS_HOURS).
+    const duration = Number(searchParams.get('duration')) || 30;
+
     const now = new Date();
     const minLead = new Date(now.getTime() + MIN_LEAD_HOURS * 3600000);
 
@@ -49,12 +56,12 @@ export async function GET() {
     if (!candidates.length) return Response.json({ slots: [], timezone: HOST_TZ });
 
     const timeMin = candidates[0].toISOString();
-    const timeMax = new Date(candidates[candidates.length - 1].getTime() + 30 * 60000).toISOString();
+    const timeMax = new Date(candidates[candidates.length - 1].getTime() + duration * 60000).toISOString();
     const busy = await getFreeBusy([HOST_EMAIL], timeMin, timeMax);
     const busyRanges = (busy[HOST_EMAIL]?.busy ?? []).map((b) => ({ start: new Date(b.start), end: new Date(b.end) }));
 
     const free = candidates.filter((start) => {
-      const end = new Date(start.getTime() + 30 * 60000);
+      const end = new Date(start.getTime() + duration * 60000);
       return !busyRanges.some((b) => start < b.end && end > b.start);
     });
 

@@ -6,6 +6,7 @@ import { getCurrentTenantUser } from '@/lib/kai/tenantAuth';
 import { getIntelligenceSources } from '@/lib/kai/intelligenceSources';
 import { buildBIC } from '@/lib/kai/bic';
 import { listInvestigations } from '@/lib/aria/memory';
+import { getDbSources } from '@/lib/aria/databases';
 import { isSectionAllowed, accessFromUsers } from '@/lib/kaiNext/capabilities';
 import { kaiNextBasePath } from '@/lib/kaiNext/paths';
 import KaiNextFuentes from '../KaiNextFuentes';
@@ -40,15 +41,17 @@ export default async function KaiNextFuentesPage({ params }) {
     redirect(`${basePath}/${tenant}`);
   }
 
-  const [intelligenceSources, bic, investigations] = await Promise.all([
+  const [intelligenceSources, bic, investigations, dbSources] = await Promise.all([
     getIntelligenceSources(tenant),
     buildBIC(tenant),
     listInvestigations(tenant, 'ALL'),
+    getDbSources(tenant),
   ]);
   const archivedCount = investigations.filter((inv) => inv.estado === 'archivada').length;
 
   const userName = teamUser?.name ?? teamUser?.username ?? tenantUser?.name ?? 'Equipo Bonsight';
   const userHandle = teamUser?.username ?? tenantUser?.email ?? '';
+  const userEmail = teamUser?.email ?? tenantUser?.email ?? null;
 
   return (
     <KaiNextFuentes
@@ -57,11 +60,13 @@ export default async function KaiNextFuentesPage({ params }) {
       basePath={basePath}
       userName={userName}
       userHandle={userHandle}
+      userEmail={userEmail}
       isTeamUser={!!teamUser}
       intelligenceSources={intelligenceSources}
       bic={bic}
       archivedCount={archivedCount}
       saEmail={process.env.GOOGLE_SA_EMAIL ?? null}
+      dbConnected={dbSources.length > 0}
     />
   );
 }

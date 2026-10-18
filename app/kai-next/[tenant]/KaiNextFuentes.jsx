@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import KaiNextSidebar from './KaiNextSidebar';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
+import KaiNextSourceConnectModal from './KaiNextSourceConnectModal';
 import { draftChatUrl } from '@/lib/kaiNext/draftChat';
 
 const TYPE_LABELS = { file: 'Documento', url: 'Sitio web', text: 'Nota', drive: 'Drive' };
@@ -19,6 +20,9 @@ const DATA_SOURCES = [
   { id: 'ga4', label: 'Google Analytics 4', desc: (s) => s?.config?.propertyId ? `Propiedad ${s.config.propertyId}` : 'Tráfico, conversiones y comportamiento' },
   { id: 'search_console', label: 'Google Search Console', desc: (s) => s?.config?.siteUrl ?? 'Búsqueda orgánica' },
   { id: 'google_ads', label: 'Google Ads', desc: (s) => s?.config?.customerId ? `Cuenta ${s.config.customerId}` : 'Campañas, keywords, costos y conversiones' },
+  // Esta no tiene estado propio en intelligence_sources — refleja la conexión real de bases de
+  // datos que ya vive en el admin de Aria (lib/aria/databases.js), ver prop `dbConnected`.
+  { id: 'database', label: 'Base de datos propia', desc: () => 'PostgreSQL, MySQL, SQL Server o BigQuery' },
 ];
 
 // Mismo flujo de conexión que ya existe en el admin de Aria (AriaAdminDetail.jsx) — un solo
@@ -57,9 +61,12 @@ function SearchIcon() {
 function AdsIcon() {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 11l15-6v14L3 13z" /><path d="M7 13v5h3" /></svg>;
 }
+function DatabaseIcon() {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5" /><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" /></svg>;
+}
 
 const TYPE_ICON = { file: FileIcon, url: GlobeIcon, text: NoteIcon, drive: FileIcon };
-const DATA_ICON = { ga4: DataBarsIcon, search_console: SearchIcon, google_ads: AdsIcon };
+const DATA_ICON = { ga4: DataBarsIcon, search_console: SearchIcon, google_ads: AdsIcon, database: DatabaseIcon };
 
 function formatDate(iso) {
   if (!iso) return null;
@@ -79,11 +86,12 @@ const DATA_ACTION = {
   ga4: { label: '📈 Auditar tráfico reciente', prompt: (name) => `Dame un resumen del tráfico y las conversiones más recientes de ${name} en Google Analytics 4 — qué cambió y qué deberíamos mirar con más atención.` },
   search_console: { label: '🔑 Analizar keywords SEO', prompt: (name) => `Dame un resumen del rendimiento de búsqueda orgánica de ${name} en Search Console — qué keywords están funcionando y dónde hay oportunidad.` },
   google_ads: { label: '💰 Revisar campañas', prompt: (name) => `Dame un resumen del rendimiento de las campañas de Google Ads de ${name} — costo, conversiones y dónde hay oportunidad de optimizar.` },
+  database: { label: '🗄️ Consultar la base', prompt: (name) => `Dame un resumen de lo más relevante que encuentres en la base de datos de ${name} — qué deberíamos mirar con más atención.` },
 };
 
 export default function KaiNextFuentes({
-  tenant, tenantName, basePath, userName, userHandle, isTeamUser,
-  intelligenceSources, bic, archivedCount, saEmail,
+  tenant, tenantName, basePath, userName, userHandle, userEmail, isTeamUser,
+  intelligenceSources, bic, archivedCount, saEmail, dbConnected,
 }) {
   const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -103,12 +111,10 @@ export default function KaiNextFuentes({
 
   // Conectar una carpeta de Drive y después elegir qué archivos importar como conocimiento —
   // misma conexión (`kai:{tenant}:drive:config`) que ya usa el admin de Kai Legacy, mismo
-  // lib/kai/googleDrive.js, solo con UI propia de Kai Next. Antes esta tarjeta decía
-  // "Próximamente" y no hacía nada.
+  // lib/kai/googleDrive.js, solo con UI propia de Kai Next. Conectar la carpeta (compartirla con
+  // la cuenta de servicio) ahora pasa por el flujo comercial, igual que las demás fuentes sin
+  // conectar — ver KaiNextSourceConnectModal.
   const [driveConfig, setDriveConfig] = useState(null);
-  const [driveFolderInput, setDriveFolderInput] = useState('');
-  const [driveConnecting, setDriveConnecting] = useState(false);
-  const [driveConnectError, setDriveConnectError] = useState('');
   const [driveFiles, setDriveFiles] = useState([]);
   const [driveFilesLoading, setDriveFilesLoading] = useState(false);
   const [driveSelected, setDriveSelected] = useState({});
@@ -187,21 +193,6 @@ export default function KaiNextFuentes({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant]);
 
-  const connectDrive = async (e) => {
-    e.preventDefault();
-    setDriveConnecting(true); setDriveConnectError('');
-    const res = await fetch(`/api/kai-next/${tenant}/drive`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folderId: driveFolderInput }),
-    });
-    const data = await res.json();
-    setDriveConnecting(false);
-    if (!res.ok) { setDriveConnectError(data.error ?? 'Error al conectar.'); return; }
-    setDriveConfig(data.config);
-    setDriveFolderInput('');
-    loadDriveFiles();
-  };
-
   const disconnectDrive = async () => {
     setDriveDisconnecting(true);
     await fetch(`/api/kai-next/${tenant}/drive`, { method: 'DELETE' });
@@ -265,6 +256,10 @@ export default function KaiNextFuentes({
   // Un solo modal de confirmación genérico para las dos acciones destructivas de esta página
   // (borrar chat, borrar fuente) — `deleteTarget.type` decide qué hace confirmDelete().
   const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'chat'|'source', id, title, message }
+
+  // Modal comercial "Conectar con Bonsight" — fuente única (desde una fila) o bundle (desde el
+  // banner de arriba, con checklist de todas las fuentes faltantes). Ver KaiNextSourceConnectModal.
+  const [sourceModal, setSourceModal] = useState(null); // { mode: 'single', source } | { mode: 'bundle', sources }
 
   const handleDeleteChat = (id) => {
     const chat = chats.find((c) => c.id === id);
@@ -380,8 +375,13 @@ export default function KaiNextFuentes({
   ].filter(Boolean);
   const hasLearnings = (bic?.recent_learnings?.length ?? 0) > 0;
 
-  const dataSources = DATA_SOURCES.map((d) => ({ ...d, source: intelSources.find((s) => s.id === d.id) }));
-  const activeDataCount = dataSources.filter((d) => d.source?.status === 'active').length;
+  const dataSources = DATA_SOURCES.map((d) => ({
+    ...d,
+    source: intelSources.find((s) => s.id === d.id),
+    active: d.id === 'database' ? !!dbConnected : intelSources.find((s) => s.id === d.id)?.status === 'active',
+  }));
+  const activeDataCount = dataSources.filter((d) => d.active).length;
+  const missingSources = dataSources.filter((d) => !d.active).map((d) => ({ id: d.id, label: d.label }));
   const totalCount = 3 + activeDataCount + sources.length; // Memoria (3) + Datos activas + Conocimiento
 
   // Salud del contexto — composite real, no decorativo: promedio de memoria (confianza 0-1 del
@@ -392,7 +392,7 @@ export default function KaiNextFuentes({
   const datosScore = dataSources.length ? activeDataCount / dataSources.length : 0;
   const conocimientoScore = sources.length > 0 ? 1 : 0;
   const healthScore = Math.round(((memoriaScore + datosScore + conocimientoScore) / 3) * 100);
-  const missingDataSources = dataSources.filter((d) => d.source?.status !== 'active').map((d) => d.label);
+  const missingDataSources = missingSources.map((d) => d.label);
   const healthGaps = [
     !hasProfile && 'el Business Profile está incompleto',
     missingDataSources.length > 0 && `falta conectar ${missingDataSources.join(', ')}`,
@@ -428,6 +428,22 @@ export default function KaiNextFuentes({
               </div>
             </div>
           </div>
+
+          {missingSources.length > 0 && (
+            <div className="knx-source-banner">
+              <div className="knx-source-banner-text">
+                <span className="knx-source-banner-title">
+                  {missingSources.length === dataSources.length ? 'Kai todavía no ve tus datos' : 'A Kai le faltan algunas fuentes'}
+                </span>
+                <span className="knx-source-banner-sub">
+                  Faltan {missingSources.length} fuente{missingSources.length !== 1 ? 's' : ''} de datos. El equipo de Bonsight las conecta por ti.
+                </span>
+              </div>
+              <button type="button" className="knx-source-banner-cta" onClick={() => setSourceModal({ mode: 'bundle', sources: missingSources })}>
+                Completar con Bonsight →
+              </button>
+            </div>
+          )}
 
           <div className="knx-health-banner">
             <div className="knx-health-banner-main">
@@ -512,7 +528,7 @@ export default function KaiNextFuentes({
             <div className="knx-knowledge-table">
               {dataSources.map((d) => {
                 const Icon = DATA_ICON[d.id];
-                const active = d.source?.status === 'active';
+                const active = d.active;
                 const cfg = CONNECT_CONFIG[d.id];
                 const isConnecting = connectingId === d.id;
                 return (
@@ -530,14 +546,19 @@ export default function KaiNextFuentes({
                         {active && DATA_ACTION[d.id] && (
                           <a className="knx-pill-action" href={draftChatUrl(basePath, tenant, DATA_ACTION[d.id].prompt(tenantName))}>{DATA_ACTION[d.id].label}</a>
                         )}
-                        {isTeamUser && (
+                        {active && cfg && isTeamUser && (
                           <button type="button" className="knx-pill-action knx-pill-action--secondary" onClick={() => (isConnecting ? closeConnect() : openConnect(d))}>
-                            {isConnecting ? 'Cancelar' : active ? '⚙️ Configurar' : '🔌 Conectar fuente'}
+                            {isConnecting ? 'Cancelar' : '⚙️ Configurar'}
+                          </button>
+                        )}
+                        {!active && (
+                          <button type="button" className="knx-pill-action knx-pill-action--bonsight" onClick={() => setSourceModal({ mode: 'single', source: { id: d.id, label: d.label } })}>
+                            Conectar con Bonsight →
                           </button>
                         )}
                       </div>
                     </div>
-                    {isConnecting && (
+                    {isConnecting && cfg && (
                       <div className="knx-connect-form">
                         {cfg.needsSaEmail && saEmail && (
                           <p className="knx-connect-note">
@@ -591,15 +612,16 @@ export default function KaiNextFuentes({
                 type="button"
                 className="knx-knowledge-add-tile"
                 onClick={() => {
+                  if (!driveConfig) { setSourceModal({ mode: 'single', source: { id: 'drive', label: 'Google Drive' } }); return; }
                   const next = addMode === 'drive' ? null : 'drive';
                   setAddMode(next);
-                  if (next === 'drive' && driveConfig) loadDriveFiles();
+                  if (next === 'drive') loadDriveFiles();
                 }}
               >
                 <span className="knx-knowledge-add-icon"><GlobeIcon /></span>
                 <span>
                   <span className="knx-knowledge-add-title">Desde Drive</span>
-                  <span className="knx-knowledge-add-sub">{driveConfig ? driveConfig.folderName : 'Conectar carpeta'}</span>
+                  <span className="knx-knowledge-add-sub">{driveConfig ? driveConfig.folderName : 'Conectar con Bonsight →'}</span>
                 </span>
               </button>
 
@@ -636,24 +658,8 @@ export default function KaiNextFuentes({
                 <button type="submit" disabled={busy}>{busy ? 'Guardando…' : 'Guardar nota'}</button>
               </form>
             )}
-            {addMode === 'drive' && (
+            {addMode === 'drive' && driveConfig && (
               <div className="knx-drive-panel">
-                {!driveConfig ? (
-                  <form onSubmit={connectDrive} className="knx-knowledge-add-form">
-                    <p className="knx-drive-hint">
-                      Comparte tu carpeta de Drive con {saEmail ? <code>{saEmail}</code> : 'la cuenta de servicio'} (solo lectura) y pega el link o ID de la carpeta acá.
-                    </p>
-                    <input
-                      value={driveFolderInput}
-                      onChange={(e) => setDriveFolderInput(e.target.value)}
-                      placeholder="Link o ID de la carpeta de Drive"
-                      required
-                      autoFocus
-                    />
-                    <button type="submit" disabled={driveConnecting}>{driveConnecting ? 'Conectando…' : 'Conectar'}</button>
-                    {driveConnectError && <p className="knx-login-error">{driveConnectError}</p>}
-                  </form>
-                ) : (
                   <div className="knx-drive-connected">
                     <div className="knx-drive-connected-head">
                       <span className="knx-drive-dot" />
@@ -714,7 +720,6 @@ export default function KaiNextFuentes({
                       </button>
                     )}
                   </div>
-                )}
               </div>
             )}
 
@@ -767,6 +772,18 @@ export default function KaiNextFuentes({
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {sourceModal && (
+        <KaiNextSourceConnectModal
+          tenant={tenant}
+          tenantName={tenantName}
+          userName={userName}
+          userEmail={userEmail}
+          source={sourceModal.mode === 'single' ? sourceModal.source : undefined}
+          sources={sourceModal.mode === 'bundle' ? sourceModal.sources : undefined}
+          onClose={() => setSourceModal(null)}
+        />
+      )}
     </div>
   );
 }

@@ -14,7 +14,7 @@ export async function POST(req) {
   } catch {
     return Response.json({ error: 'Body inválido.' }, { status: 400 });
   }
-  const { startDateTime, endDateTime, name, email, company, summary, timeZone } = body;
+  const { startDateTime, endDateTime, name, email, company, summary, timeZone, purpose } = body;
   if (!startDateTime || !endDateTime) return Response.json({ error: 'Falta el horario.' }, { status: 400 });
   if (!name?.trim()) return Response.json({ error: 'Falta el nombre.' }, { status: 400 });
   if (!/^\S+@\S+\.\S+$/.test(email || '')) return Response.json({ error: 'Email inválido.' }, { status: 400 });
@@ -29,7 +29,9 @@ export async function POST(req) {
     }
 
     const zone = timeZone || 'America/New_York';
-    const title = `Llamada de discovery · ${company?.trim() || name.trim()}`;
+    // `purpose` viene de llamadores internos (ej. "Conectar Google Search Console" desde el
+    // modal de Fuentes de Kai Next) — sin eso, sigue siendo la llamada de discovery del Advisor.
+    const title = `${purpose?.trim() || 'Llamada de discovery'} · ${company?.trim() || name.trim()}`;
     const event = await createCalendarEvent({
       title,
       description: summary || undefined,
