@@ -4,6 +4,14 @@ import { resolveProjectAccessLevel, getProjectMeta } from '@/lib/kaiNext/project
 import { getDevMeeting } from '@/lib/kaiNext/devMeetings';
 import { getCalendarEventById } from '@/lib/kai/calendar';
 
+// Ver dev-meetings/route.js — kai@bonsight.co ahora siempre está en los attendees reales de
+// Calendar (así cuenta como organizador ahí), pero no tiene sentido mostrarlo en "Asistentes"
+// acá, donde ya se muestra "Organizada por" aparte.
+const KAI_EMAIL = 'kai@bonsight.co';
+function withoutKai(attendees) {
+  return (attendees ?? []).filter((a) => a.email !== KAI_EMAIL);
+}
+
 // Detalle de UNA reunión — fusiona lo guardado (notes/documentLinks/projectId, lo que Calendar no
 // modela) con una lectura EN VIVO del evento real (attendees[].responseStatus cambia con el
 // tiempo, la foto de cuando se agendó queda vieja apenas alguien responde la invitación).
@@ -41,7 +49,7 @@ export async function GET(req, { params }) {
   return Response.json({
     meeting: {
       ...meeting,
-      attendees: liveEvent?.attendees ?? meeting.attendees,
+      attendees: withoutKai(liveEvent?.attendees ?? meeting.attendees),
       meetLink: liveEvent?.meet?.meetLink ?? meeting.meetLink,
       description: liveEvent?.description ?? null,
     },

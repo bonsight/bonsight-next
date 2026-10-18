@@ -206,14 +206,15 @@ function AttendeePicker({ roster, externalContacts = [], value, onChange, organi
     : [];
   const looksLikeEmail = /\S+@\S+\.\S+/.test(query.trim());
 
-  const addPerson = (p) => { onChange([...value, { email: p.email, name: p.name, timezone: p.timezone ?? null, external: !!p.isExternal }]); setQuery(''); };
+  const addPerson = (p) => { onChange([...value, { email: p.email, name: p.name, timezone: p.timezone ?? null, external: !!p.isExternal, optional: false }]); setQuery(''); };
   const addExternal = () => {
     const email = query.trim();
     if (!looksLikeEmail || selectedEmails.has(email)) return;
-    onChange([...value, { email, name: email.split('@')[0], external: true }]);
+    onChange([...value, { email, name: email.split('@')[0], external: true, optional: false }]);
     setQuery('');
   };
   const remove = (email) => onChange(value.filter((a) => a.email !== email));
+  const toggleOptional = (email) => onChange(value.map((a) => (a.email === email ? { ...a, optional: !a.optional } : a)));
 
   return (
     <div className="knx-attendee-picker">
@@ -223,9 +224,18 @@ function AttendeePicker({ roster, externalContacts = [], value, onChange, organi
         <span className="knx-attendee-organizer-badge">ORGANIZA</span>
       </span>
       {value.map((a) => (
-        <span key={a.email} className="knx-attendee-chip">
+        <span key={a.email} className={`knx-attendee-chip${a.optional ? ' knx-attendee-chip--optional' : ''}`}>
           <Avatar name={a.name} />
           {a.name?.split(' ')[0] || a.email}
+          <button
+            type="button"
+            className="knx-attendee-optional-toggle"
+            aria-pressed={!!a.optional}
+            title={a.optional ? 'Marcar como obligatorio' : 'Marcar como opcional'}
+            onClick={() => toggleOptional(a.email)}
+          >
+            {a.optional ? 'Opcional' : 'Marcar opcional'}
+          </button>
           <button type="button" aria-label="Quitar" onClick={() => remove(a.email)}>×</button>
         </span>
       ))}
@@ -379,7 +389,7 @@ function ScheduleMeetingModal({ tenant, roster, externalContacts, projects, orga
         body: JSON.stringify({
           ...(isEditing ? { meetingId: initialData.meetingId } : {}),
           title: title.trim(), description, tipo, timeZone, withMeet, repeat,
-          attendees: attendees.map((a) => ({ name: a.name, email: a.email })),
+          attendees: attendees.map((a) => ({ name: a.name, email: a.email, optional: !!a.optional })),
           projectId: projectId || null,
           startDateTime: `${date}T${startTime}:00`, endDateTime: `${date}T${endTime}:00`,
         }),
@@ -938,6 +948,7 @@ function MeetingDetailPanel({ tenant, basePath, meetingId, userName, roster, onC
               return (
                 <li key={a.email}>
                   <Avatar name={a.name || a.email} size={22} /> {a.name || a.email}
+                  {a.optional && <span className="knx-rsvp-badge knx-rsvp--optional">Opcional</span>}
                   {proposal ? (
                     <span className="knx-rsvp-badge knx-rsvp--maybe">Propuso otro horario</span>
                   ) : (
@@ -1054,7 +1065,7 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
     openSchedule({
       meetingId: meeting.id,
       title: meeting.title, tipo: meeting.tipo, description: meeting.description,
-      attendees: (meeting.attendees ?? []).map((a) => ({ email: a.email, name: a.name || a.email, external: !roster.some((p) => p.email === a.email) })),
+      attendees: (meeting.attendees ?? []).map((a) => ({ email: a.email, name: a.name || a.email, external: !roster.some((p) => p.email === a.email), optional: !!a.optional })),
       projectId: meeting.projectId ?? '',
       date: toDateInput(startDate), startTime: `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`,
       duration: Math.round((endDate - startDate) / 60000),

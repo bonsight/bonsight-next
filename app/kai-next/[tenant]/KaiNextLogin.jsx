@@ -129,11 +129,15 @@ export default async function KaiNextLogin({ tenant, tenantName, searchParams, b
 
             <label htmlFor="password">Contraseña</label>
             <input id="password" name="password" type="password" />
+            {/* "Ingresar" va antes que "¿La olvidaste?" a propósito — con varios
+                <button type="submit"> en el mismo form, tocar Enter dispara el PRIMERO del DOM,
+                no el botón principal. Antes "¿La olvidaste?" quedaba primero, así que loguearse
+                con Enter mandaba un mail de recuperar contraseña en vez de entrar. */}
+            <button type="submit" formAction={doLoginWithPassword} className="knx-login-primary-btn">Ingresar</button>
+
             <div className="knx-login-forgot-row">
               <button type="submit" formAction={doForgotPassword} className="knx-login-forgot-btn">¿La olvidaste?</button>
             </div>
-
-            <button type="submit" formAction={doLoginWithPassword} className="knx-login-primary-btn">Ingresar</button>
 
             <div className="knx-login-divider"><span>o sin contraseña</span></div>
 

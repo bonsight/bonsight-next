@@ -3,7 +3,29 @@ import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
 import { listDevMeetings, addDevMeeting, updateDevMeeting, removeDevMeeting, getDevMeeting, rememberExternalContacts } from '@/lib/kaiNext/devMeetings';
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '@/lib/kai/calendar';
+import { addCohost } from '@/lib/kai/meet';
 import { listTenantUsers } from '@/lib/kai/tenantUsers';
+
+// Ahora createCalendarEvent/updateCalendarEvent siempre suman a kai@bonsight.co a los
+// `attendees` reales de Calendar (así cuenta como organizador en la lista de invitados que ve
+// la gente, no solo en los metadatos — ver withOrganizerAttendee en lib/kai/calendar.js). Pero
+// en la lista de "Asistentes" DENTRO de Reuniones no tiene sentido mostrarlo: ya se muestra
+// "Organizada por {la persona real}" aparte, y Kai no es alguien que tenga que confirmar
+// asistencia — así que se filtra acá antes de guardar/mostrar en nuestra propia UI.
+const KAI_EMAIL = 'kai@bonsight.co';
+function withoutKai(attendees) {
+  return (attendees ?? []).filter((a) => a.email !== KAI_EMAIL);
+}
+
+// Quien crea la reunión queda como coanfitrión (ver addCohost más abajo), pero eso es un permiso
+// de la LLAMADA, no lo hace invitado del evento — el picker de invitados arranca vacío y nada
+// la agrega sola. Sin esto, la persona que agendó termina con control de la sala de espera pero
+// sin la invitación real de Calendar ni la reunión en su propio calendario.
+function withCreator(attendees, identity) {
+  const list = attendees ?? [];
+  if (!identity?.personEmail || list.some((a) => a.email === identity.personEmail)) return list;
+  return [...list, { email: identity.personEmail, name: identity.personName || undefined }];
+}
 
 // Guarda los invitados que NO son del roster de Bonsight — solo para reuniones tipo "Cliente"
 // (ver rememberExternalContacts). No bloquea ni demora la respuesta si falla.
@@ -86,17 +108,29 @@ export async function POST(req, { params }) {
   try {
     const event = await createCalendarEvent({
       title: title.trim(), description, startDateTime, endDateTime,
-      timeZone: timeZone || 'America/Bogota', attendees, withMeet: withMeet !== false,
+      timeZone: timeZone || 'America/Bogota', attendees: withCreator(attendees, identity), withMeet: withMeet !== false,
       recurrence: recurrence?.rrule,
     });
     const meeting = await addDevMeeting(tenant, {
       calendarEventId: event.id, title: event.title, tipo, recurrence: recurrence?.meta ?? null,
       start: event.start, end: event.end,
-      attendees: event.attendees, meetLink: event.meet?.meetLink ?? null, createdBy: identity.personId ?? null,
+      attendees: withoutKai(event.attendees), meetLink: event.meet?.meetLink ?? null, createdBy: identity.personId ?? null,
       createdByName: identity.personName ?? null, createdByEmail: identity.personEmail ?? null,
       projectId: projectId || null, projectName,
     });
     await rememberIfClientMeeting(tenant, tipo, attendees);
+    // Coanfitrión de Meet para quien crea la reunión — kai@bonsight.co es el organizador real
+    // pero nunca entra a la llamada, así que sin esto nadie puede admitir gente de la sala de
+    // espera. Esperado (no fire-and-forget: en serverless la función puede cortarse apenas se
+    // manda la respuesta) pero con su propio try/catch — si falla (ej. el scope de Meet todavía
+    // no está autorizado), la reunión ya quedó creada igual, no se cae la respuesta por esto.
+    if (identity.personEmail) {
+      try {
+        await addCohost(event.meet?.conferenceId, identity.personEmail);
+      } catch (err) {
+        console.error('[dev-meetings] no se pudo asignar coanfitrión:', err.message);
+      }
+    }
     return Response.json({ meeting });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });
@@ -137,7 +171,7 @@ export async function PATCH(req, { params }) {
     const meeting = await updateDevMeeting(tenant, meetingId, {
       title: event.title, tipo, recurrence: recurrence?.meta ?? null,
       start: event.start, end: event.end,
-      attendees: event.attendees, meetLink: event.meet?.meetLink ?? existing.meetLink,
+      attendees: withoutKai(event.attendees), meetLink: event.meet?.meetLink ?? existing.meetLink,
       projectId: projectId || null, projectName,
     });
     await rememberIfClientMeeting(tenant, tipo, attendees);
