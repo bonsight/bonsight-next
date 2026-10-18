@@ -10,7 +10,7 @@ export async function POST(req, { params }) {
 
   const ref = await getActivityByCode(code);
   if (!ref) {
-    return Response.json({ error: 'No encontramos esta actividad. Verificá el código o el link.' }, { status: 404 });
+    return Response.json({ error: 'No encontramos esta actividad. Verifica el código o el link.' }, { status: 404 });
   }
 
   try {

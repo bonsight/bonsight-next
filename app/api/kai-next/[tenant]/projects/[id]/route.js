@@ -33,7 +33,7 @@ export async function GET(req, { params }) {
   // los otros kinds (ver canSeeProject más abajo) — alcanza con Director, o Supervisor asignado.
   if (meta.projectKind === 'desarrollo') {
     if (!level.isDirectorLevel && !(level.isSupervisorLevel && meta.supervisorIds?.includes(identity.personId))) {
-      return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+      return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
     }
     const token = await getNotionToken(tenant);
     if (!token) return Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 });
@@ -46,7 +46,7 @@ export async function GET(req, { params }) {
 
   const project = await getProject(tenant, id);
   if (!canSeeProject(project.meta, project.tasks, project.tests, { ...level, personId: identity.personId })) {
-    return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+    return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
   }
 
   // Un Registrador solo ve SUS tareas/pruebas, nunca las del resto del equipo ni el presupuesto

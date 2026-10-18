@@ -1,5 +1,15 @@
-export function getFooter(locale) {
+import { mainSiteUrl, kaiNextUrl } from '@/lib/shared/crossProductLinks';
+
+// `host`: si se pasa, los links a bonsight.co salen como <a href> absolutos (resueltos con
+// mainSiteUrl, que respeta localhost) en vez de data-route — hace falta fuera de app/[locale]
+// (ej. la landing de Kai Next en kai.bonsight.co), donde NavigationBehavior no corre porque es
+// otro subdominio y un router.push() relativo caería mal bajo el proxy de kai. Los links a Kai
+// (columna KAI) siempre son absolutos vía kaiNextUrl, con o sin host — nunca son same-origin.
+export function getFooter(locale, { host } = {}) {
   const en = locale === 'en';
+  const link = (path) => (host ? `href="${mainSiteUrl(host, '/' + locale + path)}"` : `data-route="${path}"`);
+  const kaiHome = kaiNextUrl(host);
+  const kaiLogin = kaiNextUrl(host, '/entrar');
   return `
 <footer class="footer-main">
 <div class="footer-main-inner">
@@ -16,17 +26,24 @@ export function getFooter(locale) {
 <div class="footer-col">
 <div class="footer-col-label">Bonsight Growth</div>
 <nav class="footer-nav">
-<a data-route="/services/data-strategy">Data Strategy</a>
-<a data-route="/services/growth">Growth Digital</a>
-<a data-route="/services/cro">CRO</a>
+<a ${link('/services/data-strategy')}>Data Strategy</a>
+<a ${link('/services/growth')}>Growth Digital</a>
+<a ${link('/services/cro')}>CRO</a>
 </nav>
 </div>
 <div class="footer-col">
 <div class="footer-col-label">Bonsight Boost</div>
 <nav class="footer-nav">
-<a data-route="/services/mentoring">${en ? 'Team Mentoring' : 'Mentoring de Equipos'}</a>
-<a data-route="/services/procesos">${en ? 'Process Improvement' : 'Mejora de Procesos'}</a>
-<a data-route="/services/liderazgo">${en ? 'Leadership Support' : 'Soporte a Líderes'}</a>
+<a ${link('/services/mentoring')}>${en ? 'Team Mentoring' : 'Mentoring de Equipos'}</a>
+<a ${link('/services/procesos')}>${en ? 'Process Improvement' : 'Mejora de Procesos'}</a>
+<a ${link('/services/liderazgo')}>${en ? 'Leadership Support' : 'Soporte a Líderes'}</a>
+</nav>
+</div>
+<div class="footer-col">
+<div class="footer-col-label">KAI</div>
+<nav class="footer-nav">
+<a href="${kaiHome}">${en ? 'Meet Kai' : 'Conocer Kai'}</a>
+<a href="${kaiLogin}">${en ? 'Sign in' : 'Iniciar sesión'}</a>
 </nav>
 </div>
 <div class="footer-col">

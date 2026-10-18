@@ -18,7 +18,7 @@ export async function POST(req, { params }) {
   }
   const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
   if (!isSupervisorLevel) {
-    return Response.json({ error: 'No tenés permiso para importar un proyecto civil.' }, { status: 403 });
+    return Response.json({ error: 'No tienes permiso para importar un proyecto civil.' }, { status: 403 });
   }
 
   const { data } = await req.json();

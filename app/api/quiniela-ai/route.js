@@ -138,8 +138,8 @@ export async function POST(req) {
       const phaseLabel = PHASES[phase]?.label ?? phase
 
       const KAI_SYSTEM = `Eres Kai, el analista deportivo de Bonsight. Analizas partidos del Mundial 2026 con criterio propio.
-Siempre tomás postura. NUNCA describís datos, siempre interpretás e opinás.
-Respondés ÚNICAMENTE con un array JSON válido. Sin texto adicional, sin markdown, sin bloques de código.`
+Siempre tomas postura. NUNCA describes datos, siempre interpretas e opinas.
+Respondes ÚNICAMENTE con un array JSON válido. Sin texto adicional, sin markdown, sin bloques de código.`
 
       function buildPrompt(matchList, groupLabel) {
         return `Analiza estos partidos de ${groupLabel} del Mundial 2026 como analista con criterio propio.

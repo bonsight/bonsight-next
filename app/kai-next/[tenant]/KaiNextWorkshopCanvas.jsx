@@ -21,6 +21,14 @@ export default function KaiNextWorkshopCanvas({ tenant, activity, onBack }) {
   const [sending, setSending] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  // Acá el panel vive siempre montado (no es un componente separado que se monta/desmonta como
+  // en los otros knx-side-panel) — el closing se resetea a mano cuando se vuelve a abrir.
+  const [panelClosing, setPanelClosing] = useState(false);
+  useEffect(() => { if (panelOpen) setPanelClosing(false); }, [panelOpen]);
+  const closePanel = () => {
+    setPanelClosing(true);
+    setTimeout(() => setPanelOpen(false), 200);
+  };
   const [mutating, setMutating] = useState(false);
   const [fusionReviewOpen, setFusionReviewOpen] = useState(false);
   const threadRef = useRef(null);
@@ -242,10 +250,10 @@ export default function KaiNextWorkshopCanvas({ tenant, activity, onBack }) {
       </main>
 
       {panelOpen && (
-        <div className="knx-side-panel">
+        <div className={`knx-side-panel${panelClosing ? ' knx-side-panel--closing' : ''}`}>
           <div className="knx-side-panel-header">
             <span className="knx-side-panel-title">Pedile a Kai</span>
-            <button type="button" className="knx-side-panel-close" onClick={() => setPanelOpen(false)} aria-label="Cerrar panel">×</button>
+            <button type="button" className="knx-side-panel-close" onClick={closePanel} aria-label="Cerrar panel">×</button>
           </div>
           <div className="knx-side-panel-thread" ref={threadRef}>
             {!chatMessages.length && (

@@ -971,7 +971,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
                 value={selectedMeetingId}
                 onChange={(e) => handleSelectCalendarMeeting(e.target.value)}
               >
-                <option value="">Elegí una reunión del calendario de Kai…</option>
+                <option value="">Elige una reunión del calendario de Kai…</option>
                 {calendarMeetings.map((m) => (
                   <option key={m.id} value={m.id} disabled={!m.meet?.phoneEntries?.length}>
                     {m.title} — {m.start ? new Date(m.start).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }) : ''}
@@ -981,7 +981,7 @@ export default function KaiClientChat({ tenant, tenantName, knowledgeScore, curr
               </select>
             )}
             {!calendarLoading && calendarMeetings.length === 0 && (
-              <p className="kai-meeting-hint">No hay reuniones próximas en el calendario de Kai — invitá a kai@bonsight.co, o completá los datos a mano abajo.</p>
+              <p className="kai-meeting-hint">No hay reuniones próximas en el calendario de Kai — invita a kai@bonsight.co, o completa los datos a mano abajo.</p>
             )}
             <input
               className="kai-meeting-form-input"

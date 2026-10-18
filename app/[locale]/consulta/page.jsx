@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
+import BookingPanel from './BookingPanel';
 
-const CALENDLY = 'https://calendly.com/rafa-bonsight/30min';
 const WA_NUMBER = '13123509796';
 const dl = (obj) => { if (typeof window !== 'undefined') { window.dataLayer = window.dataLayer || []; window.dataLayer.push(obj); } };
 const MAX_MESSAGES = 20;
@@ -21,6 +21,7 @@ const T = {
     error: 'Algo salió mal. Intenta de nuevo.',
     limitMsg: 'Has llegado al límite de esta conversación. Para continuar, agenda una llamada o escríbenos por WhatsApp.',
     initialMessage: 'Hola, bienvenido a Bonsight. Estoy aquí para entender qué necesitas y ver si podemos ayudarte.\n\n¿A qué se dedica tu empresa?',
+    initialMessageKai: 'Hola, veo que quieres conocer más sobre Kai. Cuéntame un poco de tu empresa — ¿en qué te gustaría usar Kai, o qué te gustaría que te resuelva?',
   },
   en: {
     chatSub: 'BONSIGHT LLC · ONLINE',
@@ -32,6 +33,7 @@ const T = {
     error: 'Something went wrong. Please try again.',
     limitMsg: "You've reached the limit for this conversation. To continue, schedule a call or reach out on WhatsApp.",
     initialMessage: "Hi, welcome to Bonsight. I'm here to understand what you need and see if we can help.\n\nWhat does your company do?",
+    initialMessageKai: "Hi, looks like you want to learn more about Kai. Tell me a bit about your company — what would you want to use Kai for, or what would you want it to solve?",
   },
 };
 
@@ -149,15 +151,21 @@ function writeStorage(count) {
 
 export default function ConsultaPage() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const locale = pathname?.startsWith('/es') ? 'es' : 'en';
   const t = T[locale];
+  // ?src=kai — llegó desde "Conocer Kai" (ver app/kai-next/landing/page.jsx): saludo distinto y
+  // se le avisa al Advisor (ver app/api/advisor/route.js) para que arranque la conversación ya
+  // centrada en Kai en vez de preguntar genéricamente a qué se dedica la empresa.
+  const source = searchParams.get('src') === 'kai' ? 'kai' : null;
 
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: t.initialMessage },
+    { role: 'assistant', content: source === 'kai' ? t.initialMessageKai : t.initialMessage },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [showCta, setShowCta] = useState(false);
+  const [bookingOpen, setBookingOpen] = useState(false);
   const [limited, setLimited] = useState(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
@@ -173,7 +181,7 @@ export default function ConsultaPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading, showCta]);
+  }, [messages, loading, showCta, bookingOpen]);
 
   useEffect(() => {
     if (assistantCount >= 4) setShowCta(true);
@@ -201,7 +209,7 @@ export default function ConsultaPage() {
       const res = await fetch('/api/advisor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages, locale }),
+        body: JSON.stringify({ messages: newMessages, locale, source }),
       });
       const data = await res.json();
       const reply = data.reply;
@@ -286,14 +294,18 @@ export default function ConsultaPage() {
           </div>
         )}
 
-        {showCta && (
+        {showCta && !bookingOpen && (
           <div className="consulta-cta">
             <div className="consulta-cta-label">{t.ctaTitle}</div>
             <div className="consulta-cta-actions">
-              <a className="consulta-cta-primary" href={CALENDLY} target="_blank" rel="noopener noreferrer" onClick={() => dl({ event: 'cta_click', cta_text: 'calendly', cta_location: 'kai_cta', destination: 'calendly', page_path: window.location.pathname })}>
+              <button
+                type="button"
+                className="consulta-cta-primary"
+                onClick={() => { setBookingOpen(true); dl({ event: 'cta_click', cta_text: 'agendar', cta_location: 'kai_cta', destination: 'booking_panel', page_path: window.location.pathname }); }}
+              >
                 <IconCalendar />
                 {t.ctaCall}
-              </a>
+              </button>
               <a
                 className="consulta-cta-wa"
                 href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(t.waMsg)}`}
@@ -307,6 +319,8 @@ export default function ConsultaPage() {
             </div>
           </div>
         )}
+
+        {bookingOpen && <BookingPanel messages={messages} locale={locale} />}
 
       </div>
     </div>

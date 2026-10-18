@@ -18,12 +18,12 @@ export async function GET(req, { params }) {
   // de esas pruebas), no las del resto del equipo.
   if (user.role === 'Supervisor') {
     if (!experiment.meta.supervisorIds?.includes(user.id)) {
-      return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+      return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
     }
   } else if (user.role === 'Registrador' && TASK_TRACKING_KINDS.includes(experiment.meta.projectKind)) {
     const visibleTasks = experiment.tasks.filter((t) => taskResponsables(t).includes(user.id));
     if (visibleTasks.length === 0) {
-      return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+      return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
     }
     experiment.tasks = visibleTasks;
     experiment.partidas = []; // presupuesto: cosa de Director/Supervisor únicamente
@@ -35,7 +35,7 @@ export async function GET(req, { params }) {
   } else if (user.role === 'Registrador') {
     const visibleTests = experiment.tests.filter((t) => t.registradorIds?.includes(user.id));
     if (visibleTests.length === 0) {
-      return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+      return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
     }
     const visibleTestIds = new Set(visibleTests.map((t) => t.id));
     experiment.tests = visibleTests;

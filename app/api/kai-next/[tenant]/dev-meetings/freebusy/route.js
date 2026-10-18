@@ -16,7 +16,7 @@ export async function POST(req, { params }) {
     return Response.json({ error: 'Reuniones no está habilitado para tu usuario.' }, { status: 403 });
   }
   if (!resolveProjectAccessLevel(identity).isSupervisorLevel) {
-    return Response.json({ error: 'No tenés permiso para gestionar reuniones.' }, { status: 403 });
+    return Response.json({ error: 'No tienes permiso para gestionar reuniones.' }, { status: 403 });
   }
 
   let body;

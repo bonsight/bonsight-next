@@ -1097,7 +1097,7 @@ function ConversationsTab({ conversations, slug, tenantUserNameById = {} }) {
   const [copied, setCopied] = useState(false);
 
   const copyLink = () => {
-    navigator.clipboard.writeText(`https://kai.bonsight.co/${slug}`);
+    navigator.clipboard.writeText(`https://kai.bonsight.co/legacy/${slug}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   };
@@ -1291,7 +1291,7 @@ function DriveConnectPanel({ slug, driveConfig, setDriveConfig, onImported, sour
           <span className="ks-drive-panel-title">Conectar Google Drive</span>
         </div>
         <p className="ks-drive-instructions">
-          Compartí tu carpeta de Drive con <code className="ks-drive-sa-email">{SA_EMAIL}</code> (solo lectura) y pegá el link o ID de la carpeta.
+          Comparte tu carpeta de Drive con <code className="ks-drive-sa-email">{SA_EMAIL}</code> (solo lectura) y pega el link o ID de la carpeta.
         </p>
         <form onSubmit={connect} className="ks-drive-connect-form">
           <input
@@ -1460,7 +1460,7 @@ function KnowledgeSourcesTab({ slug }) {
     let res, data;
 
     if (form.sourceType === 'file') {
-      if (!form.file) { setErr('Seleccioná un archivo.'); setSaving(false); return; }
+      if (!form.file) { setErr('Selecciona un archivo.'); setSaving(false); return; }
       const fd = new FormData();
       fd.append('file', form.file);
       fd.append('name', form.name || form.file.name);
@@ -1569,7 +1569,7 @@ function KnowledgeSourcesTab({ slug }) {
       {sources.length === 0 && !form.open && (
         <div className="admin-conv-empty">
           <div style={{ fontSize: 28, opacity: 0.2, marginBottom: 10 }}>📚</div>
-          Sin fuentes todavía. Agregá una URL o texto para que Kai llegue mejor preparado a cada conversación.
+          Sin fuentes todavía. Agrega una URL o texto para que Kai llegue mejor preparado a cada conversación.
         </div>
       )}
 
@@ -2190,7 +2190,7 @@ function EquipoRow({ tenant, user: u, onSaved }) {
 
   const removeUser = () => {
     setMode(null);
-    if (!confirm('¿Eliminar a esta persona del equipo? Es permanente — si solo querés bloquearle el acceso, mejor usá "Desactivar".')) return;
+    if (!confirm('¿Eliminar a esta persona del equipo? Es permanente — si solo quieres bloquearle el acceso, mejor usa "Desactivar".')) return;
     fetch(`/api/kai/${tenant}/tenant-users/${u.id}`, { method: 'DELETE' }).then(onSaved);
   };
 
@@ -2432,7 +2432,7 @@ function KaiNextProjectsDrivePanel({ tenant }) {
       {config === null && (
         <>
           <p style={{ fontSize: 12.5, color: '#bbb', marginBottom: 10 }}>
-            Antes de conectar, compartí la carpeta en Drive con <b style={{ fontFamily: 'monospace', fontSize: 11.5 }}>{PROJECTS_SA_EMAIL}</b> como <b>Editor</b> — Proyectos necesita crear carpetas y subir archivos ahí, no solo leer.
+            Antes de conectar, comparte la carpeta en Drive con <b style={{ fontFamily: 'monospace', fontSize: 11.5 }}>{PROJECTS_SA_EMAIL}</b> como <b>Editor</b> — Proyectos necesita crear carpetas y subir archivos ahí, no solo leer.
           </p>
           <form onSubmit={connect} style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <input type="text" placeholder="Link o ID de la carpeta de Drive" value={folderInput} onChange={(e) => setFolderInput(e.target.value)} style={{ flex: 1, minWidth: 220 }} />
@@ -2789,7 +2789,7 @@ export default function TenantDetail({ meta, profile, conversations, allLearning
   const [isDemo, setIsDemo] = useState(!!meta.isDemo);
   const [demoLoading, setDemoLoading] = useState(false);
 
-  const clientUrl = `https://kai.bonsight.co/${meta.slug}`;
+  const clientUrl = `https://kai.bonsight.co/legacy/${meta.slug}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(clientUrl);
@@ -2821,7 +2821,7 @@ export default function TenantDetail({ meta, profile, conversations, allLearning
           <div>
             <div className="admin-topbar-name">{meta.name}</div>
             <div className="admin-topbar-url">
-              kai.bonsight.co/{meta.slug}
+              kai.bonsight.co/legacy/{meta.slug}
               {meta.country && <span style={{ color: '#ccc', margin: '0 4px' }}>·</span>}
               {meta.country && <span>{meta.country}</span>}
               {meta.industry && <span style={{ color: '#ccc', margin: '0 4px' }}>·</span>}

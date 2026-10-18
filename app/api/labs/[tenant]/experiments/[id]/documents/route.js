@@ -9,12 +9,12 @@ async function requireProjectManager(tenant, id) {
   const user = await getCurrentLabsUser(tenant);
   if (!user) return { error: Response.json({ error: 'No autorizado.' }, { status: 401 }) };
   if (user.role === 'Registrador') {
-    return { error: Response.json({ error: 'No tenés acceso a la documentación del proyecto.' }, { status: 403 }) };
+    return { error: Response.json({ error: 'No tienes acceso a la documentación del proyecto.' }, { status: 403 }) };
   }
   const meta = await getExperimentMeta(tenant, id);
   if (!meta) return { error: Response.json({ error: 'Experimento no encontrado.' }, { status: 404 }) };
   if (user.role === 'Supervisor' && !meta.supervisorIds?.includes(user.id)) {
-    return { error: Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 }) };
+    return { error: Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 }) };
   }
   return { user };
 }

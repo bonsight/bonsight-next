@@ -236,7 +236,7 @@ const ONBOARDING_STEPS = [
     title: '¿Qué es "Vs. consenso"?',
     desc: 'Kai compara tu pick con el del resto de tu quiniela.',
     items: [
-      { e: '⚠️', label: 'Vs. consenso', desc: 'Vas contra la mayoría — si acertás, adelantás en la tabla' },
+      { e: '⚠️', label: 'Vs. consenso', desc: 'Vas contra la mayoría — si aciertas, adelantas en la tabla' },
       { e: '✅', label: 'Con la mayoría', desc: 'Pick más seguro, menor diferencial frente al grupo' },
     ],
   },
@@ -297,13 +297,13 @@ function KaiHelpModal({ onClose }) {
         { e: '🔥', label: 'Muy favorable', desc: 'El partido tiene un claro favorito. Pick confiable (85%+).' },
         { e: '🟢', label: 'Favorable', desc: 'Un equipo lleva ventaja real. Bastante predecible (70–84%).' },
         { e: '🟡', label: 'Partido abierto', desc: 'Equilibrado. Cualquier resultado es posible. Riesgo medio (55–69%).' },
-        { e: '🔴', label: 'Muy incierto', desc: 'Pick difícil, alto riesgo. Si acertás, más diferencial en la tabla.' },
+        { e: '🔴', label: 'Muy incierto', desc: 'Pick difícil, alto riesgo. Si aciertas, más diferencial en la tabla.' },
       ],
     },
     {
       title: 'Consenso de la quiniela',
       items: [
-        { e: '⚠️', label: 'Vs. consenso', desc: 'Tu pick va contra la mayoría. Si acertás, adelantás a varios en la tabla.' },
+        { e: '⚠️', label: 'Vs. consenso', desc: 'Tu pick va contra la mayoría. Si aciertas, adelantas a varios en la tabla.' },
         { e: '✅', label: 'Con la mayoría', desc: 'Tu pick coincide con el del grupo. Más seguro, menor diferencial.' },
         { e: '💡', label: 'Oportunidad estratégica', desc: 'Kai detecta que según tu posición en la tabla, ir contra el consenso puede convenir o no.' },
       ],
@@ -604,13 +604,13 @@ export default function PicksPage() {
     // Solo mostrar oportunidad en casos accionables
     if (goingAgainst) {
       if (pct >= 75) {
-        if (isNearLast) return { icon: '⚡', text: `Vas abajo — ir contra el ${pct}% puede ser el diferencial que necesitás.` }
+        if (isNearLast) return { icon: '⚡', text: `Vas abajo — ir contra el ${pct}% puede ser el diferencial que necesitas.` }
         if (isLeading)  return { icon: '⚠️', text: `Vas primero — alejarte del ${pct}% en este partido tiene riesgo real.` }
         return { icon: '💡', text: `Un acierto aquí descuenta puntos a gran parte de la quiniela.` }
       }
       if (pct >= 56) {
         if (isNearLast) return { icon: '⚡', text: `Ir contra la mayoría puede ser el diferencial para remontar.` }
-        return { icon: '💡', text: `Vas contra el consenso — si acertás, ganás terreno en la tabla.` }
+        return { icon: '💡', text: `Vas contra el consenso — si aciertas, ganas terreno en la tabla.` }
       }
     }
 

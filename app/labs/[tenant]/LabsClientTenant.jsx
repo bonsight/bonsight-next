@@ -492,7 +492,7 @@ function ExperimentPicker({ tenant, tenantMeta, identity, onIdentityUpdate, expe
       </div>
       {changePasswordOpen && <ChangePasswordModal tenant={tenant} onClose={() => setChangePasswordOpen(false)} />}
       <p style={{ fontSize: 13.5, color: 'var(--labs-cream-dim)', marginBottom: 24 }}>
-        Hola <EditableName tenant={tenant} identity={identity} onUpdated={onIdentityUpdate} /> · {identity.role} — elegí un proyecto{canCreate ? ' o creá uno nuevo' : ''}.
+        Hola <EditableName tenant={tenant} identity={identity} onUpdated={onIdentityUpdate} /> · {identity.role} — elige un proyecto{canCreate ? ' o crea uno nuevo' : ''}.
       </p>
 
       {canCreate && (
@@ -504,7 +504,7 @@ function ExperimentPicker({ tenant, tenantMeta, identity, onIdentityUpdate, expe
           {identity.role === 'Director'
             ? 'Todavía no hay ningún proyecto en este espacio.'
             : identity.role === 'Supervisor'
-              ? 'Todavía no te asignaron como Supervisor a ningún proyecto — podés crear uno nuevo.'
+              ? 'Todavía no te asignaron como Supervisor a ningún proyecto — puedes crear uno nuevo.'
               : 'Todavía no te asignaron a ninguna prueba en ningún proyecto.'}
         </p>
       )}
@@ -682,8 +682,8 @@ function EditableName({ tenant, identity, onUpdated }) {
 }
 
 // Autoservicio: cambiar la propia contraseña estando ya adentro — a diferencia del "olvidé mi
-// contraseña" del login (por email, para cuando no podés entrar), acá pide la contraseña
-// actual porque sí podés entrar (ver PATCH .../users/me).
+// contraseña" del login (por email, para cuando no puedes entrar), acá pide la contraseña
+// actual porque sí puedes entrar (ver PATCH .../users/me).
 function ChangePasswordModal({ tenant, onClose }) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -694,7 +694,7 @@ function ChangePasswordModal({ tenant, onClose }) {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!currentPassword) { setErr('Ingresá tu contraseña actual.'); return; }
+    if (!currentPassword) { setErr('Ingresa tu contraseña actual.'); return; }
     if (!isStrongPassword(newPassword)) { setErr('La contraseña nueva no cumple los requisitos de abajo.'); return; }
     if (newPassword !== confirm) { setErr('Las contraseñas nuevas no coinciden.'); return; }
     setBusy(true);
@@ -738,7 +738,7 @@ function ChangePasswordModal({ tenant, onClose }) {
                 <li key={c.label} className={c.ok ? 'labs-field-hint--ok' : ''}>{c.ok ? '✓' : '•'} {c.label}</li>
               ))}
             </ul>
-            <label className="field-label">Repetí la contraseña nueva</label>
+            <label className="field-label">Repite la contraseña nueva</label>
             <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} style={{ marginBottom: 14 }} />
             {err && <p className="labs-login-error" style={{ marginTop: 4 }}>{err}</p>}
             <div className="modal-footer">
@@ -986,7 +986,7 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
             <>
               <label className="field-label">Cronograma + Presupuesto (Excel)</label>
               <p style={{ fontSize: 12, color: 'var(--labs-cream-faint)', marginTop: -8, marginBottom: 10 }}>
-                Subí el mismo Excel que ya usan — se interpreta automáticamente. Revisá y corregí antes de crear el proyecto.
+                Sube el mismo Excel que ya usan — se interpreta automáticamente. Revisa y corregí antes de crear el proyecto.
               </p>
               <input
                 ref={excelInputRef}
@@ -1141,7 +1141,7 @@ function ViewResumenCivil({ tenant, experiment, identity, onUpdate }) {
           <span className="view-eyebrow">Resumen · {experiment.meta.name}</span>
           <h1 className="view-title">Tus tareas</h1>
         </div>
-        {experiment.tasks.length === 0 && <p className="empty-note">No tenés tareas asignadas en este proyecto.</p>}
+        {experiment.tasks.length === 0 && <p className="empty-note">No tienes tareas asignadas en este proyecto.</p>}
         {experiment.tasks.map((t) => (
           <div className="labs-tenant-row" key={t.id}>
             <div>
@@ -1641,7 +1641,7 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
       // El video no viaja por nuestro backend (el body de una Serverless Function de Vercel
       // tiene un límite de ~4.5MB) — se sube directo del navegador a Drive con una sesión
       // de subida resumible. Se guarda solo como evidencia de soporte, nunca se analiza.
-      if (!testId) { setErr('Elegí una prueba antes de adjuntar un video.'); return; }
+      if (!testId) { setErr('Elige una prueba antes de adjuntar un video.'); return; }
       setAttachments((prev) => [...prev, { id, name: file.name, mimeType: file.type, kind: 'video', uploading: true, previewUrl: null }]);
       try {
         const urlRes = await fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/executions/video-upload-url`, {
@@ -1750,7 +1750,7 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
       <div className="view-header">
         <span className="view-eyebrow">Aportar · {experiment.meta.name}</span>
         <h1 className="view-title">Contanos qué pasó</h1>
-        <p className="view-sub">Elegí la prueba, hablá o escribí — la IA organiza el resto contra sus campos.</p>
+        <p className="view-sub">Elige la prueba, habla o escribe — la IA organiza el resto contra sus campos.</p>
       </div>
 
       <div className="stepper-track">
@@ -1798,11 +1798,11 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
               <span style={{ fontSize: 18 }}>🎙️</span>
             )}
             <div style={{ fontSize: 13, color: 'var(--labs-cream-dim)' }}>
-              {recording ? 'Grabando… tocá para terminar.' : transcribing ? 'Transcribiendo…' : 'Tocá para grabar por voz, o escribí abajo.'}
+              {recording ? 'Grabando… toca para terminar.' : transcribing ? 'Transcribiendo…' : 'Toca para grabar por voz, o escribe abajo.'}
             </div>
           </div>
           <label className="field-label">Qué pasó en "{test.name}"</label>
-          <textarea rows={6} value={freeText} onChange={(e) => setFreeText(e.target.value)} placeholder="Contá los resultados, condiciones, y cualquier cosa que valga la pena registrar… (podés adjuntar una foto o documento con los resultados y la IA completa los campos sola)" />
+          <textarea rows={6} value={freeText} onChange={(e) => setFreeText(e.target.value)} placeholder="Cuenta los resultados, condiciones, y cualquier cosa que valga la pena registrar… (puedes adjuntar una foto o documento con los resultados y la IA completa los campos sola)" />
 
           <input
             ref={fileInputRef}
@@ -1880,7 +1880,7 @@ function ViewAportar({ tenant, experiment, identity, onDone }) {
                       <input
                         type={f.type === 'number' ? 'number' : 'text'}
                         value={val}
-                        placeholder="Sin especificar — completá a mano"
+                        placeholder="Sin especificar — completa a mano"
                         onChange={(e) => setEditedValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
                         style={{ flex: 1 }}
                       />
@@ -2291,7 +2291,7 @@ function CommentsModal({ tenant, experimentId, canComment, targetType, targetId,
                 <button type="button" className="chip-btn" style={{ fontSize: 11 }} onClick={() => setReplyingTo(null)}>✕ Cancelar</button>
               </div>
             )}
-            <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Escribí tu feedback… (o adjuntá evidencia sin texto)" style={{ marginTop: replyingTo ? 8 : 14 }} />
+            <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Escribe tu feedback… (o adjunta evidencia sin texto)" style={{ marginTop: replyingTo ? 8 : 14 }} />
 
             <input
               ref={fileInputRef} type="file" accept={EVIDENCE_ACCEPT} multiple style={{ display: 'none' }}
@@ -3755,7 +3755,7 @@ function CreateTestModal({ tenant, experimentId, successCriteria, onClose, onCre
       <div className="modal-card" style={{ position: 'relative' }}>
         <button className="modal-x" style={{ position: 'absolute', top: 18, right: 18 }} onClick={onClose}>✕</button>
         <span className="eyebrow-mini on-dark">Nueva prueba</span>
-        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Definí el formato</h2>
+        <h2 style={{ fontFamily: 'var(--labs-serif)', fontSize: 22, fontWeight: 600, margin: '6px 0 16px' }}>Define el formato</h2>
         <form onSubmit={handleCreate}>
           <label className="field-label">Nombre de la prueba</label>
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={{ marginBottom: 14 }} required />
@@ -3810,7 +3810,7 @@ function ViewHistoria({ experiment, identity, onGoToEvent }) {
       <div className="view-header">
         <span className="view-eyebrow">Historia · {experiment.meta.name}</span>
         <h1 className="view-title">Memoria del proyecto</h1>
-        <p className="view-sub">No se escribe a mano — emerge de los aportes, validaciones y feedback del equipo. Tocá un punto para ir directo a lo que pasó.</p>
+        <p className="view-sub">No se escribe a mano — emerge de los aportes, validaciones y feedback del equipo. Toca un punto para ir directo a lo que pasó.</p>
       </div>
       {experiment.events.length === 0 && <p className="empty-note">Todavía no hay historia — el primer aporte la va a empezar.</p>}
       <div className="timeline">
@@ -3856,9 +3856,9 @@ function FeedbackCompose({ tenant, experiment, identity, onUpdate }) {
 
   const handleSend = async () => {
     if (!text.trim() || busy) return;
-    if (targetType === 'prueba' && !testId) { setErr('Elegí una prueba.'); return; }
-    if (targetType === 'aporte' && !testId) { setErr('Elegí una prueba.'); return; }
-    if (targetType === 'aporte' && !executionId) { setErr('Elegí un aporte.'); return; }
+    if (targetType === 'prueba' && !testId) { setErr('Elige una prueba.'); return; }
+    if (targetType === 'aporte' && !testId) { setErr('Elige una prueba.'); return; }
+    if (targetType === 'aporte' && !executionId) { setErr('Elige un aporte.'); return; }
     setBusy(true);
     setErr(null);
     try {
@@ -3883,7 +3883,7 @@ function FeedbackCompose({ tenant, experiment, identity, onUpdate }) {
       <div className="view-header">
         <span className="view-eyebrow">Feedback · {experiment.meta.name}</span>
         <h1 className="view-title">Dejar feedback</h1>
-        <p className="view-sub">{canTargetAll ? 'Sobre el proyecto en general o algo puntual.' : 'Sobre un aporte puntual del equipo.'} Vos decidís quién lo ve.</p>
+        <p className="view-sub">{canTargetAll ? 'Sobre el proyecto en general o algo puntual.' : 'Sobre un aporte puntual del equipo.'} Vos decides quién lo ve.</p>
       </div>
       <div className="feedback-compose">
         {canTargetAll && (
@@ -3914,7 +3914,7 @@ function FeedbackCompose({ tenant, experiment, identity, onUpdate }) {
 
         {targetType === 'aporte' && testId && (
           <div style={{ marginTop: 8, marginBottom: 14 }}>
-            <label className="field-label">Elegí el aporte (dentro de esta prueba)</label>
+            <label className="field-label">Elige el aporte (dentro de esta prueba)</label>
             <select value={executionId ?? ''} onChange={(e) => setExecutionId(e.target.value || null)} style={{ width: '100%' }}>
               <option value="">— Elegir —</option>
               {executionsOfTest.map((e) => (
@@ -3925,7 +3925,7 @@ function FeedbackCompose({ tenant, experiment, identity, onUpdate }) {
           </div>
         )}
 
-        <textarea rows={4} placeholder="Escribí tu feedback…" value={text} onChange={(e) => setText(e.target.value)} />
+        <textarea rows={4} placeholder="Escribe tu feedback…" value={text} onChange={(e) => setText(e.target.value)} />
         <div className="visibility-row">
           <div className="vis-toggle">
             <button className={`vis-btn ${visibility === 'Todo el equipo' ? 'active' : ''}`} onClick={() => setVisibility('Todo el equipo')}>Todo el equipo</button>
@@ -4146,7 +4146,7 @@ function GenerateReportCard({ tenant, experiment, onUpdate }) {
 
       {pickerOpen && (
         <>
-          <p className="empty-note" style={{ marginTop: 14 }}>{availablePhotos.length === 0 ? 'Todavía no hay fotos de evidencia en el feedback de tareas/partidas — el reporte igual se puede generar sin fotos.' : 'Elegí qué fotos de evidencia entran al reporte (preseleccioné las más recientes).'}</p>
+          <p className="empty-note" style={{ marginTop: 14 }}>{availablePhotos.length === 0 ? 'Todavía no hay fotos de evidencia en el feedback de tareas/partidas — el reporte igual se puede generar sin fotos.' : 'Elige qué fotos de evidencia entran al reporte (preseleccioné las más recientes).'}</p>
           {availablePhotos.length > 0 && (
             <div className="report-photo-grid" style={{ marginTop: 10 }}>
               {availablePhotos.map((p) => (

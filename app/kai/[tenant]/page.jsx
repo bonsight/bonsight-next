@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { getTenantMeta, getBusinessProfile } from '@/lib/kai/tenants';
 import {
@@ -7,6 +8,7 @@ import { loginTenantSession, logoutTenantSession, getCurrentTenantUser } from '@
 import { isBonsightTeamAuthorized } from '@/lib/team/auth';
 import { sendEmail } from '@/lib/labs/gmail';
 import { forgotPasswordEmailHtml } from '@/lib/labs/emailTemplates';
+import { kaiBasePath } from '@/lib/kai/paths';
 import KaiClientView from './KaiClientView';
 import KaiAvatar from '../components/KaiAvatar';
 
@@ -17,12 +19,12 @@ function maskEmail(email) {
   return `${local[0]}***@${domain}`;
 }
 
-async function sendResetEmail(tenant, meta, email) {
+async function sendResetEmail(tenant, meta, email, base) {
   if (!email) return;
   try {
     const result = await requestTenantPasswordReset(tenant, email);
     if (result) {
-      const resetUrl = `https://kai.bonsight.co/${tenant}/reset-password?token=${result.token}`;
+      const resetUrl = `https://kai.bonsight.co${base}/${tenant}/reset-password?token=${result.token}`;
       await sendEmail({
         to: result.user.email,
         subject: `Tu código de acceso es ${result.token}`,
@@ -46,6 +48,8 @@ export async function generateMetadata({ params }) {
 export default async function KaiTenantPage({ params, searchParams }) {
   const { tenant } = await params;
   const sp = await searchParams;
+  const host = (await headers()).get('host') ?? '';
+  const base = kaiBasePath(host);
 
   const [meta, realProfile] = await Promise.all([
     getTenantMeta(tenant),
@@ -75,25 +79,25 @@ export default async function KaiTenantPage({ params, searchParams }) {
       const password = String(formData.get('password') ?? '');
       const user = await getTenantUserByUsername(tenant, username);
       if (!user || !checkTenantUserPassword(user, password)) {
-        redirect(`/${tenant}?username=${encodeURIComponent(username)}&err=${encodeURIComponent('Usuario o contraseña incorrectos.')}`);
+        redirect(`${base}/${tenant}?username=${encodeURIComponent(username)}&err=${encodeURIComponent('Usuario o contraseña incorrectos.')}`);
       }
       await loginTenantSession(tenant, user.id);
-      redirect(`/${tenant}`);
+      redirect(`${base}/${tenant}`);
     }
 
     async function doForgotPasswordByUsername(formData) {
       'use server';
       const username = String(formData.get('username') ?? '').trim();
       const user = username ? await getTenantUserByUsername(tenant, username) : null;
-      await sendResetEmail(tenant, meta, user?.email);
+      await sendResetEmail(tenant, meta, user?.email, base);
       const masked = maskEmail(user?.email);
-      redirect(`/${tenant}?step=sent${masked ? `&masked=${encodeURIComponent(masked)}` : ''}`);
+      redirect(`${base}/${tenant}?step=sent${masked ? `&masked=${encodeURIComponent(masked)}` : ''}`);
     }
 
     async function doForgotPassword(formData) {
       'use server';
-      await sendResetEmail(tenant, meta, String(formData.get('email') ?? '').trim());
-      redirect(`/${tenant}?step=sent`);
+      await sendResetEmail(tenant, meta, String(formData.get('email') ?? '').trim(), base);
+      redirect(`${base}/${tenant}?step=sent`);
     }
 
     return (
@@ -113,7 +117,7 @@ export default async function KaiTenantPage({ params, searchParams }) {
                 <input type="password" name="password" placeholder="Contraseña" className="kai-login-input" required />
                 <button type="submit" className="kai-login-button">Entrar</button>
               </form>
-              <a href={`/${tenant}?step=forgot&username=${encodeURIComponent(sp?.username ?? '')}`} className="kai-login-link">¿Olvidaste tu contraseña?</a>
+              <a href={`${base}/${tenant}?step=forgot&username=${encodeURIComponent(sp?.username ?? '')}`} className="kai-login-link">¿Olvidaste tu contraseña?</a>
             </>
           )}
 
@@ -138,7 +142,7 @@ export default async function KaiTenantPage({ params, searchParams }) {
                   </form>
                 </>
               )}
-              <a href={`/${tenant}`} className="kai-login-link">Volver</a>
+              <a href={`${base}/${tenant}`} className="kai-login-link">Volver</a>
             </>
           )}
 
@@ -149,7 +153,7 @@ export default async function KaiTenantPage({ params, searchParams }) {
               ) : (
                 <p className="kai-login-subtitle">Si ese email está registrado con una cuenta, te va a llegar un código para elegir una nueva contraseña.</p>
               )}
-              <a href={`/${tenant}`} className="kai-login-link">Volver a entrar</a>
+              <a href={`${base}/${tenant}`} className="kai-login-link">Volver a entrar</a>
             </>
           )}
         </div>
@@ -161,7 +165,7 @@ export default async function KaiTenantPage({ params, searchParams }) {
     async function doLogout() {
       'use server';
       await logoutTenantSession(tenant);
-      redirect(`/${tenant}`);
+      redirect(`${base}/${tenant}`);
     }
     return (
       <div className="kai-login-wrap">
@@ -170,7 +174,7 @@ export default async function KaiTenantPage({ params, searchParams }) {
             <KaiAvatar size={56} />
           </div>
           <h1 className="kai-login-title">Kai</h1>
-          <p className="kai-login-subtitle">Hola, {currentUser.name} — todavía no tenés acceso a Kai para {meta.name}. Pedile a Bonsight que te lo habilite.</p>
+          <p className="kai-login-subtitle">Hola, {currentUser.name} — todavía no tienes acceso a Kai para {meta.name}. Pedile a Bonsight que te lo habilite.</p>
           <form action={doLogout}><button type="submit" className="kai-login-link" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>Cerrar sesión</button></form>
         </div>
       </div>

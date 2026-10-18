@@ -13,7 +13,7 @@ export async function PATCH(req, { params }) {
   }
   const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
   if (!isSupervisorLevel) {
-    return Response.json({ error: 'No tenés permiso para gestionar esta prueba.' }, { status: 403 });
+    return Response.json({ error: 'No tienes permiso para gestionar esta prueba.' }, { status: 403 });
   }
 
   let body;

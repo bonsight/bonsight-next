@@ -73,9 +73,9 @@ export async function POST(req, { params }) {
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const userTurn = isPresentSentinel
-    ? 'Presentá la pregunta.'
+    ? 'Presenta la pregunta.'
     : isSubmittedMultiple
-      ? 'Confirmá que se registraron las iniciativas.'
+      ? 'Confirma que se registraron las iniciativas.'
       : content;
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -126,7 +126,7 @@ async function handleSelfPacedChat({ tenant, activityId, meta, participantId, co
       isFirstQuestion: progress.currentIndex === 0,
       progressLabel: `pregunta ${progress.currentIndex + 1} de ${progress.total}`,
     });
-    const reply = await askKai(tenant, systemPrompt, 'Presentá la pregunta.');
+    const reply = await askKai(tenant, systemPrompt, 'Presenta la pregunta.');
     return Response.json({ reply, questionIndex: progress.currentIndex, questionCount: progress.total, finished: false, personalComplete: false });
   }
 
@@ -141,7 +141,7 @@ async function handleSelfPacedChat({ tenant, activityId, meta, participantId, co
   let systemPrompt, userTurn;
   if (progressAfter.currentIndex === -1) {
     systemPrompt = buildActivityScriptPrompt({ mode: 'closing_self_paced', activityName: meta.name });
-    userTurn = 'Agradecé y cerrá.';
+    userTurn = 'Agradece y cierra.';
   } else {
     const nextQuestion = progressAfter.template[progressAfter.currentIndex];
     await recordQuestionViewed(tenant, activityId, participantId, nextQuestion.id).catch(() => null);
@@ -152,7 +152,7 @@ async function handleSelfPacedChat({ tenant, activityId, meta, participantId, co
       nextQuestionText: nextQuestion.text,
       progressLabel: `pregunta ${progressAfter.currentIndex + 1} de ${progressAfter.total}`,
     });
-    userTurn = 'Agradecé y presentá la siguiente.';
+    userTurn = 'Agradece y presenta la siguiente.';
   }
 
   const reply = await askKai(tenant, systemPrompt, userTurn);

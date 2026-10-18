@@ -11,7 +11,7 @@ function ConflictPicker({ label, valueA, valueB, selected, onSelect }) {
 
   return (
     <div className="knx-fusion-conflict">
-      <span className="knx-fusion-conflict-label">{label} — elegí cuál queda:</span>
+      <span className="knx-fusion-conflict-label">{label} — elige cuál queda:</span>
       <div className="knx-fusion-conflict-opts">
         {options.map((opt) => (
           <button
@@ -114,7 +114,7 @@ function FusionCard({ suggestion, tenant, activityId, onCanvasUpdate }) {
       <ConflictPicker label="Responsable" valueA={groupA.responsable} valueB={groupB.responsable} selected={responsable} onSelect={setResponsable} />
 
       <p className="knx-fusion-preview">
-        Resultado si fusionás: 1 agrupación · {preview.combinedIniciativas} iniciativas · {preview.combinedInvolucrados} involucrados (sin duplicados)
+        Resultado si fusionas: 1 agrupación · {preview.combinedIniciativas} iniciativas · {preview.combinedInvolucrados} involucrados (sin duplicados)
       </p>
 
       {err && <p className="knx-canvas-error">{err}</p>}

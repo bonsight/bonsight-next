@@ -8,7 +8,7 @@ async function gate(tenant, id) {
   const identity = await getCurrentKaiNextIdentity(tenant);
   if (!isSectionAllowed(identity.access, 'proyectos')) return { error: 'Proyectos no está habilitado para tu usuario.', status: 403 };
   const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
-  if (!isSupervisorLevel) return { error: 'No tenés permiso para editar iniciativas en este proyecto.', status: 403 };
+  if (!isSupervisorLevel) return { error: 'No tienes permiso para editar iniciativas en este proyecto.', status: 403 };
   const meta = await getProjectMeta(tenant, id);
   if (!meta || meta.projectKind !== 'desarrollo') return { error: 'Proyecto no encontrado.', status: 404 };
   const token = await getNotionToken(tenant);

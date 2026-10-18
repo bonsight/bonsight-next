@@ -164,7 +164,7 @@ export default async function AriaTenantPage({ params, searchParams }) {
             <AriaAvatar size={56} />
           </div>
           <h1 className="aria-login-title aria-gradient-text">Aria</h1>
-          <p className="aria-login-subtitle">Hola, {currentUser.name} — todavía no tenés acceso a Aria para {meta.name}. Pedile a Bonsight que te lo habilite.</p>
+          <p className="aria-login-subtitle">Hola, {currentUser.name} — todavía no tienes acceso a Aria para {meta.name}. Pedile a Bonsight que te lo habilite.</p>
           <form action={doLogout}><button type="submit" className="aria-login-link" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>Cerrar sesión</button></form>
         </div>
       </div>

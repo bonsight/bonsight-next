@@ -3,6 +3,7 @@ import Navbar from '@/components/Navbar';
 import NavigationBehavior from '@/components/NavigationBehavior';
 import Analytics from '@/components/Analytics';
 import ChatWidget from '@/components/ChatWidget';
+import { kaiNextUrl } from '@/lib/shared/crossProductLinks';
 
 const BASE = 'https://bonsight.co';
 
@@ -38,9 +39,10 @@ export async function generateMetadata({ params }) {
 
 export default async function LocaleLayout({ children, params }) {
   const { locale } = await params;
+  const host = (await headers()).get('host') ?? '';
   return (
     <>
-      <Navbar locale={locale} />
+      <Navbar locale={locale} kaiHref={kaiNextUrl(host)} />
       <NavigationBehavior />
       <Analytics />
       {children}

@@ -632,7 +632,7 @@ export default function KaiNextFuentes({
             {addMode === 'text' && (
               <form action={handleAddText} className="knx-knowledge-add-form knx-knowledge-add-form--note">
                 <input name="name" placeholder="Título de la nota" autoFocus />
-                <textarea name="text" placeholder="Escribí el contexto acá..." rows={4} required />
+                <textarea name="text" placeholder="Escribe el contexto acá..." rows={4} required />
                 <button type="submit" disabled={busy}>{busy ? 'Guardando…' : 'Guardar nota'}</button>
               </form>
             )}

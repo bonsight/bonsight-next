@@ -9,6 +9,7 @@ import {
 import { loginTenantSession } from '@/lib/kai/tenantAuth';
 import { sendEmail } from '@/lib/labs/gmail';
 import { magicLoginEmailHtml, forgotPasswordEmailHtml } from '@/lib/labs/emailTemplates';
+import { mainSiteUrl } from '@/lib/shared/crossProductLinks';
 
 // Ya funciona (ver lib/kaiNext/googleOAuth.js), pero se oculta un tiempo antes de anunciarlo —
 // solo UI, no se toca nada del back.
@@ -18,7 +19,7 @@ const ERROR_MESSAGES = {
   google: 'No pudimos verificar tu cuenta de Google. Intenta de nuevo.',
   sin_cuenta: 'No encontramos una cuenta con ese email para este cliente — pedile acceso a tu administrador.',
   credenciales: 'Email o contraseña incorrectos.',
-  magic_expirado: 'Ese enlace de acceso ya expiró o no es válido — pedí uno nuevo desde "Enviarme un enlace de acceso".',
+  magic_expirado: 'Ese enlace de acceso ya expiró o no es válido — pide uno nuevo desde "Enviarme un enlace de acceso".',
 };
 
 // Server component puro, sin 'use client': los tres caminos (contraseña, enlace mágico,
@@ -83,10 +84,10 @@ export default async function KaiNextLogin({ tenant, tenantName, searchParams, b
   return (
     <div className="knx-login-shell">
       <div className="knx-login-hero">
-        <div className="knx-login-hero-top">
+        <a className="knx-login-hero-top" href={mainSiteUrl(host)}>
           <img src="/assets/bonsight-isotipo.svg" alt="" width="36" height="20" />
           <span className="knx-login-wordmark">Bonsight</span>
-        </div>
+        </a>
         <div className="knx-login-hero-mid">
           <h1>La inteligencia de tu empresa.</h1>
           <p>Lo que tu organización sabe y lo que muestran tus datos, en una sola conversación.</p>

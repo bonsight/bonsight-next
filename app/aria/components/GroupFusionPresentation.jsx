@@ -8,7 +8,7 @@ function ConflictPicker({ label, valueA, valueB, selected, onSelect }) {
 
   return (
     <div className="aria-fusion-conflict">
-      <span className="aria-fusion-conflict-label">{label} — elegí cuál queda:</span>
+      <span className="aria-fusion-conflict-label">{label} — elige cuál queda:</span>
       <div className="aria-fusion-conflict-opts">
         {options.map((opt) => (
           <button
@@ -112,7 +112,7 @@ function FusionCard({ suggestion, tenant, investigationId, messageIndex, onCanva
       <ConflictPicker label="Responsable" valueA={groupA.responsable} valueB={groupB.responsable} selected={responsable} onSelect={setResponsable} />
 
       <p className="aria-fusion-preview">
-        Resultado si fusionás: 1 agrupación · {preview.combinedIniciativas} iniciativas · {preview.combinedInvolucrados} involucrados (sin duplicados)
+        Resultado si fusionas: 1 agrupación · {preview.combinedIniciativas} iniciativas · {preview.combinedInvolucrados} involucrados (sin duplicados)
       </p>
 
       {err && <p className="aria-canvas-error">{err}</p>}

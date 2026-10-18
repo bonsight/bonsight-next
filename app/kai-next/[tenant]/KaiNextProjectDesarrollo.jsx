@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
+import { useSidePanelClose } from '@/lib/kaiNext/useSidePanelClose';
 
 // Proyecto de Desarrollo — a diferencia de los otros 3 kinds, su contenido (Proyecto/
 // Iniciativas/Épicas/Tareas) vive en el Notion interno de Bonsight, el mismo que ya usa
@@ -167,6 +168,7 @@ function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragS
 // Panel de detalle/edición de una tarea — mismos campos/acciones que TaskDetailPanel del
 // tablero real, pegando a /dev/board en vez de /board.
 function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose, onAction, onRemove, allTasks, onCreateSubtask, onToggleSubtask, onOpenSubtask }) {
+  const [closing, handleClose] = useSidePanelClose(onClose);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? '');
   const [taskType, setTaskType] = useState(task.taskType ?? '');
@@ -241,11 +243,11 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
   useEffect(() => {
     const onDocMouseDown = (e) => {
       if (e.target.closest('.knx-board-card')) return;
-      if (panelRef.current && !panelRef.current.contains(e.target)) onClose();
+      if (panelRef.current && !panelRef.current.contains(e.target)) handleClose();
     };
     document.addEventListener('mousedown', onDocMouseDown);
     return () => document.removeEventListener('mousedown', onDocMouseDown);
-  }, [onClose]);
+  }, [handleClose]);
 
   const addSubtask = async () => {
     if (!newSubtask.trim() || savingSubtask) return;
@@ -259,7 +261,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
   };
 
   return (
-    <div className="knx-side-panel" ref={panelRef}>
+    <div className={`knx-side-panel${closing ? ' knx-side-panel--closing' : ''}`} ref={panelRef}>
       <div className="knx-side-panel-header">
         <span className="knx-side-panel-title">Tarea</span>
         {task.url && (
@@ -267,7 +269,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
             <NotionLinkIcon /> Ver en Notion
           </a>
         )}
-        <button type="button" className="knx-side-panel-close" onClick={onClose} aria-label="Cerrar">×</button>
+        <button type="button" className="knx-side-panel-close" onClick={handleClose} aria-label="Cerrar">×</button>
       </div>
       <div className="knx-side-panel-thread knx-board-detail-body">
         {parentTask && (
@@ -707,7 +709,7 @@ function NewEpicaModal({ tenant, projectId, iniciativas, onClose, onCreated }) {
 
   const submit = async () => {
     if (!name.trim()) { setError('Ponele un nombre a la épica.'); return; }
-    if (!iniciativaId) { setError('Elegí una iniciativa.'); return; }
+    if (!iniciativaId) { setError('Elige una iniciativa.'); return; }
     setSaving(true);
     setError(null);
     try {
@@ -773,7 +775,7 @@ function NewTareaForm({ activeSprint, onCreate }) {
 
   const submit = async () => {
     if (!title.trim() || !description.trim() || !startDate || !endDate || !estimatedHours) {
-      setErr('Completá título, descripción, fechas y estimación.');
+      setErr('Completa título, descripción, fechas y estimación.');
       return;
     }
     setSaving(true);
@@ -868,8 +870,8 @@ function ImportDocModal({ tenant, projectId, iniciativas, onClose, onImported })
   };
 
   const extract = async () => {
-    if (!iniciativaId) { setError('Elegí una iniciativa primero.'); return; }
-    if (!text.trim()) { setError('Pegá texto o subí un documento primero.'); return; }
+    if (!iniciativaId) { setError('Elige una iniciativa primero.'); return; }
+    if (!text.trim()) { setError('Pega texto o sube un documento primero.'); return; }
     setLoading(true);
     setError(null);
     try {
@@ -1018,8 +1020,8 @@ function ImportDocModal({ tenant, projectId, iniciativas, onClose, onImported })
                   <input type="file" accept=".txt,.md,.markdown,.html,.htm" onChange={onFile} />
                 </div>
                 <div className="knx-ficha-review-field" style={{ marginBottom: 14 }}>
-                  <label>O pegá el texto acá</label>
-                  <textarea rows={10} value={text} onChange={(e) => setText(e.target.value)} placeholder="Pegá el contenido del documento…" />
+                  <label>O pega el texto acá</label>
+                  <textarea rows={10} value={text} onChange={(e) => setText(e.target.value)} placeholder="Pega el contenido del documento…" />
                 </div>
               </>
             )}
@@ -1053,7 +1055,7 @@ function ImportDocModal({ tenant, projectId, iniciativas, onClose, onImported })
               <textarea rows={3} value={preview.objetivo} onChange={(e) => setPreview((p) => ({ ...p, objetivo: e.target.value }))} />
             </div>
             <div className="knx-import-toolbar">
-              <span className="knx-canvas-ficha-progress">Marcá lo que querés crear. Podés editar nombres antes de confirmar.</span>
+              <span className="knx-canvas-ficha-progress">Marca lo que quieres crear. Puedes editar nombres antes de confirmar.</span>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button type="button" className="knx-epica-inline-add-link" onClick={() => toggleAll(true)}>Seleccionar todo</button>
                 <button type="button" className="knx-epica-inline-add-link" onClick={() => toggleAll(false)}>Ninguno</button>
@@ -1318,6 +1320,7 @@ function EditEpicaForm({ tenant, projectId, epica, onSaved, onCancel }) {
 // (.../dev/epicas/{epicaId}/ask) en vez del chat agéntico completo, para que las respuestas queden
 // ancladas a esta épica y no se mezclen con el historial general de conversaciones.
 function EpicaDetailPanel({ tenant, projectId, epica, index, total, activeSprint, onPrev, onNext, onClose, onReload }) {
+  const [closing, handleClose] = useSidePanelClose(onClose);
   const [editing, setEditing] = useState(false);
   const [historias, setHistorias] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -1335,7 +1338,7 @@ function EpicaDetailPanel({ tenant, projectId, epica, index, total, activeSprint
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo eliminar.');
       setConfirmDelete(false);
-      onClose();
+      handleClose();
       onReload();
     } catch (e) {
       setDeleteErr(e.message || 'No se pudo eliminar.');
@@ -1382,14 +1385,14 @@ function EpicaDetailPanel({ tenant, projectId, epica, index, total, activeSprint
   };
 
   return (
-    <div className="knx-side-panel">
+    <div className={`knx-side-panel${closing ? ' knx-side-panel--closing' : ''}`}>
       <div className="knx-side-panel-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <button type="button" className="knx-side-panel-close" aria-label="Épica anterior" onClick={onPrev} disabled={index <= 0}>‹</button>
           <button type="button" className="knx-side-panel-close" aria-label="Épica siguiente" onClick={onNext} disabled={index >= total - 1}>›</button>
           <span className="knx-canvas-ficha-progress" style={{ marginLeft: 6 }}>{index + 1} de {total}</span>
         </div>
-        <button type="button" className="knx-side-panel-close" aria-label="Cerrar panel" onClick={onClose}>×</button>
+        <button type="button" className="knx-side-panel-close" aria-label="Cerrar panel" onClick={handleClose}>×</button>
       </div>
       <div className="knx-side-panel-thread">
         <h3 className="knx-epica-panel-title">{epica.name}</h3>
@@ -1518,9 +1521,9 @@ function NewTareaModal({ tenant, projectId, iniciativas, talento, activeSprint, 
   const [err, setErr] = useState(null);
 
   const submit = async () => {
-    if (!epicaId) { setErr('Elegí una épica.'); return; }
+    if (!epicaId) { setErr('Elige una épica.'); return; }
     if (!title.trim() || !description.trim() || !startDate || !endDate || !estimatedHours) {
-      setErr('Completá título, descripción, fechas y estimación.');
+      setErr('Completa título, descripción, fechas y estimación.');
       return;
     }
     setSaving(true);
@@ -1620,7 +1623,7 @@ function ScheduleModal({ onCancel, onConfirm }) {
   const [err, setErr] = useState(null);
 
   const submit = () => {
-    if (!startDate || !endDate || !estimatedHours) { setErr('Completá fecha de inicio, fin y estimación.'); return; }
+    if (!startDate || !endDate || !estimatedHours) { setErr('Completa fecha de inicio, fin y estimación.'); return; }
     onConfirm({ startDate, endDate, estimatedHours });
   };
 
@@ -1628,7 +1631,7 @@ function ScheduleModal({ onCancel, onConfirm }) {
     <div className="knx-ficha-share-backdrop" onClick={onCancel}>
       <div className="knx-ficha-review-modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(420px, 92vw)' }}>
         <div className="knx-ficha-review-head">
-          <div><h3 className="knx-ficha-review-title">Completá la tarea antes de moverla</h3></div>
+          <div><h3 className="knx-ficha-review-title">Completa la tarea antes de moverla</h3></div>
           <button type="button" className="knx-side-panel-close" aria-label="Cerrar" onClick={onCancel}>×</button>
         </div>
         {err && <p className="knx-canvas-error">{err}</p>}
@@ -1659,7 +1662,7 @@ function HoursModal({ onCancel, onConfirm }) {
   const [err, setErr] = useState(null);
 
   const submit = () => {
-    if (actualHours === '') { setErr('Completá las horas reales.'); return; }
+    if (actualHours === '') { setErr('Completa las horas reales.'); return; }
     onConfirm({ actualHours });
   };
 
@@ -1667,7 +1670,7 @@ function HoursModal({ onCancel, onConfirm }) {
     <div className="knx-ficha-share-backdrop" onClick={onCancel}>
       <div className="knx-ficha-review-modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(360px, 92vw)' }}>
         <div className="knx-ficha-review-head">
-          <div><h3 className="knx-ficha-review-title">Cargá las horas reales antes de marcarla Hecho</h3></div>
+          <div><h3 className="knx-ficha-review-title">Carga las horas reales antes de marcarla Hecho</h3></div>
           <button type="button" className="knx-side-panel-close" aria-label="Cerrar" onClick={onCancel}>×</button>
         </div>
         {err && <p className="knx-canvas-error">{err}</p>}
@@ -2612,7 +2615,7 @@ function SuggestFechasModal({ tenant, projectId, epicasSinFecha, epicasConFecha,
           <>
             <div className="knx-import-summary">
               <span className="knx-canvas-avatar">K</span>
-              <p>Propuse fechas para <strong>{items.length} épica{items.length !== 1 ? 's' : ''}</strong> sin fecha, respetando el orden de fases. Revisalas y ajustá lo que haga falta antes de confirmar.</p>
+              <p>Propuse fechas para <strong>{items.length} épica{items.length !== 1 ? 's' : ''}</strong> sin fecha, respetando el orden de fases. Revisalas y ajusta lo que haga falta antes de confirmar.</p>
             </div>
             {items.map((it) => (
               <div className="knx-import-epica" key={it.id}>

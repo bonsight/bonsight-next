@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { headers } from 'next/headers';
 import RawHtml from '@/components/RawHtml';
 import { getFooter } from '@/utils/footer';
 
@@ -73,7 +74,7 @@ function jsonLd() {
           {
             '@type': 'Question',
             name: '¿Por qué no simplemente pedirle el reporte a ChatGPT o Claude cada semana?',
-            acceptedAnswer: { '@type': 'Answer', text: 'Un chat responde bien cuando vos le pegás los datos a mano. El problema es lo que pasa antes: conectarse a las fuentes, limpiar y validar la información, y decidir cuándo disparar el reporte y a quién enviarlo. Eso es justamente lo que resuelve la automatización — el chat es el último paso, no la solución completa.' },
+            acceptedAnswer: { '@type': 'Answer', text: 'Un chat responde bien cuando vos le pegas los datos a mano. El problema es lo que pasa antes: conectarse a las fuentes, limpiar y validar la información, y decidir cuándo disparar el reporte y a quién enviarlo. Eso es justamente lo que resuelve la automatización — el chat es el último paso, no la solución completa.' },
           },
           {
             '@type': 'Question',
@@ -86,7 +87,7 @@ function jsonLd() {
   };
 }
 
-function getHtml() {
+function getHtml(host) {
   return `
 <div class="crumb-bar"><div class="crumb-bar-inner"><a data-route="/">Inicio</a><span>／</span><a data-route="/services/data-strategy">Data Strategy</a><span>／</span><span>Automatización de Reportes con IA</span></div></div>
 
@@ -133,22 +134,23 @@ function getHtml() {
 
 <div class="cmp-section"><div class="eyebrow" data-animate>Comparación</div><h2 style="font-family:var(--serif);font-size:1.8rem;font-weight:400;margin-bottom:2rem;color:var(--text)">Reporte manual vs. pipeline automatizado</h2><div class="cmp-table-wrap"><table class="cmp-table"><thead><tr><th>Criterio</th><th>Armado manual (incluido "pedirle a un chat")</th><th>Pipeline automatizado</th></tr></thead><tbody><tr><th scope="row">Tiempo semanal</th><td>Horas de exportar, pegar y revisar cada vez</td><td class="cmp-good">Minutos de supervisión, una vez configurado</td></tr><tr><th scope="row">Dependencia de una persona</th><td>Alta — si no está, no sale</td><td class="cmp-good">Baja — corre solo, en el horario definido</td></tr><tr><th scope="row">Cálculo de cifras</th><td>Manual o copiado a un chat sin validar</td><td class="cmp-good">Determinístico, antes de que la IA participe</td></tr><tr><th scope="row">Consistencia entre reportes</th><td>Varía según quién lo arme</td><td class="cmp-good">Misma lógica siempre</td></tr><tr><th scope="row">Conexión a las fuentes</th><td>Copiar y pegar a mano</td><td class="cmp-good">Directa, vía orquestador</td></tr></tbody></table></div></div>
 
-<div class="cta-band" data-animate><h2>¿Quieres dejar de armar el reporte a mano?</h2><p>Conversemos sobre qué fuentes tenés hoy y qué pipeline tiene sentido para tu equipo.</p><div class="cta-band-actions"><a class="btn-white" href="https://calendly.com/rafa-bonsight/30min" target="_blank" rel="noopener noreferrer">Agendar llamada →</a><a class="btn-wa-outline" href="https://wa.me/13123509796?text=Hola%2C%20vengo%20del%20sitio%20de%20Bonsight%20y%20quisiera%20hablar%20sobre%20automatizaci%C3%B3n%20de%20reportes%20con%20IA." target="_blank" rel="noopener noreferrer">WhatsApp</a></div></div>
+<div class="cta-band" data-animate><h2>¿Quieres dejar de armar el reporte a mano?</h2><p>Conversemos sobre qué fuentes tienes hoy y qué pipeline tiene sentido para tu equipo.</p><div class="cta-band-actions"><a class="btn-white" href="https://calendly.com/rafa-bonsight/30min" target="_blank" rel="noopener noreferrer">Agendar llamada →</a><a class="btn-wa-outline" href="https://wa.me/13123509796?text=Hola%2C%20vengo%20del%20sitio%20de%20Bonsight%20y%20quisiera%20hablar%20sobre%20automatizaci%C3%B3n%20de%20reportes%20con%20IA." target="_blank" rel="noopener noreferrer">WhatsApp</a></div></div>
 
 <div class="faq-section"><div class="eyebrow" data-animate>Preguntas frecuentes</div><h2 style="font-family:var(--serif);font-size:1.8rem;font-weight:400;margin-bottom:2rem;color:var(--text)">Dudas antes de empezar</h2><div class="faq-list">
 <details class="faq-item"><summary>¿Cuánto cuesta operar esto en tokens y APIs?</summary><p>Depende del volumen de datos, la frecuencia de los reportes y cuántos canales de entrega se necesiten. Lo dimensionamos en la auditoría inicial junto con el resto de la arquitectura, antes de construir nada.</p></details>
 <details class="faq-item"><summary>¿Qué margen de error tiene un reporte generado con IA?</summary><p>Los cálculos y agregaciones se hacen antes de que la IA participe, con lógica determinística (SQL, Python o el orquestador). La IA se usa para interpretar y redactar esos valores ya calculados, no para calcularlos — así se reduce el riesgo de que invente un número.</p></details>
-<details class="faq-item"><summary>¿Por qué no simplemente pedirle el reporte a ChatGPT o Claude cada semana?</summary><p>Un chat responde bien cuando vos le pegás los datos a mano. El problema es lo que pasa antes: conectarse a las fuentes, limpiar y validar la información, y decidir cuándo disparar el reporte y a quién enviarlo. Eso es justamente lo que resuelve la automatización.</p></details>
+<details class="faq-item"><summary>¿Por qué no simplemente pedirle el reporte a ChatGPT o Claude cada semana?</summary><p>Un chat responde bien cuando vos le pegas los datos a mano. El problema es lo que pasa antes: conectarse a las fuentes, limpiar y validar la información, y decidir cuándo disparar el reporte y a quién enviarlo. Eso es justamente lo que resuelve la automatización.</p></details>
 <details class="faq-item"><summary>¿Sirve si mis datos están repartidos en varias herramientas?</summary><p>Sí — ese es habitualmente el punto de partida: CRM, planillas, GA4, bases de datos internas. El rol del orquestador es justamente traer esas fuentes a un mismo lugar antes de que la IA entre a interpretar nada.</p></details>
 </div></div>
 
-${getFooter('es')}
+${getFooter('es', { host })}
 `;
 }
 
 export default async function AutomatizacionReportesAIPage({ params }) {
   const { locale } = await params;
   if (locale !== 'es') notFound();
+  const host = (await headers()).get('host') ?? '';
 
   return (
     <>
@@ -156,7 +158,7 @@ export default async function AutomatizacionReportesAIPage({ params }) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd()) }}
       />
-      <RawHtml html={getHtml()} />
+      <RawHtml html={getHtml(host)} />
     </>
   );
 }

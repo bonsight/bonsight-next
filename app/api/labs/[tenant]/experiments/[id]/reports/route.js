@@ -19,7 +19,7 @@ export async function POST(req, { params }) {
     return Response.json({ error: 'Solo un Supervisor puede generar un reporte.' }, { status: 403 });
   }
   if (!experiment.meta.supervisorIds?.includes(user.id)) {
-    return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+    return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
   }
 
   try {

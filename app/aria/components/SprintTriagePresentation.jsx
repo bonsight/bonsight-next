@@ -103,7 +103,7 @@ export default function SprintTriagePresentation({ tenant, investigationId, onCo
       <div className="aria-card">
         <p className="aria-canvas-header-eyebrow">Workshop</p>
         <h3 className="aria-canvas-title">Triage de iniciativas</h3>
-        <p className="aria-sd-page-sub">Antes de generar tareas de sprint, decidí qué agrupaciones avanzan ahora. Aria sugiere según valor para Bonsight y esfuerzo estimado.</p>
+        <p className="aria-sd-page-sub">Antes de generar tareas de sprint, decide qué agrupaciones avanzan ahora. Aria sugiere según valor para Bonsight y esfuerzo estimado.</p>
 
         <div className="aria-triage-quadrant">
           <div className="aria-triage-axis-y">VALOR PARA BONSIGHT</div>

@@ -33,7 +33,7 @@ export default async function TeamPage({ searchParams }) {
       <div style={WRAP}>
         <div style={{ ...CARD, maxWidth: 420 }}>
           <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Hola, {currentUser.name}</h1>
-          <p style={{ fontSize: 13, color: '#888', marginBottom: 24 }}>¿A qué panel querés entrar?</p>
+          <p style={{ fontSize: 13, color: '#888', marginBottom: 24 }}>¿A qué panel quieres entrar?</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <a href={urls.labs} style={{ ...BUTTON, textDecoration: 'none', textAlign: 'center', boxSizing: 'border-box' }}>Labs Admin</a>
             <a href={urls.kai} style={{ ...BUTTON, textDecoration: 'none', textAlign: 'center', boxSizing: 'border-box', background: '#20C997' }}>Kai Admin</a>
@@ -69,12 +69,12 @@ export default async function TeamPage({ searchParams }) {
       <div style={WRAP}>
         <div style={CARD}>
           <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Crear cuenta de admin</h1>
-          <p style={{ fontSize: 13, color: '#888', marginBottom: 24 }}>Primera vez — esta pantalla solo aparece una vez. De acá en más entrás con usuario y contraseña.</p>
+          <p style={{ fontSize: 13, color: '#888', marginBottom: 24 }}>Primera vez — esta pantalla solo aparece una vez. De acá en más entras con usuario y contraseña.</p>
           {errMsg && <p style={{ color: '#c0392b', fontSize: 13, marginBottom: 12 }}>{errMsg}</p>}
           <form action={doBootstrap}>
             <input type="text" name="name" placeholder="Tu nombre" style={INPUT} autoFocus required />
-            <input type="text" name="username" placeholder="Elegí un usuario" style={INPUT} required />
-            <input type="password" name="password" placeholder="Elegí una contraseña" style={INPUT} required />
+            <input type="text" name="username" placeholder="Elige un usuario" style={INPUT} required />
+            <input type="password" name="password" placeholder="Elige una contraseña" style={INPUT} required />
             <p style={{ fontSize: 11.5, color: '#aaa', marginTop: -6, marginBottom: 12 }}>Al menos 8 caracteres, con letras y números.</p>
             <button type="submit" style={BUTTON}>Crear cuenta</button>
           </form>

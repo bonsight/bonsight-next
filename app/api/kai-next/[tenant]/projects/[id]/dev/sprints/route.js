@@ -56,7 +56,7 @@ export async function PATCH(req, { params }) {
   }
   const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
   if (!isSupervisorLevel) {
-    return Response.json({ error: 'No tenés permiso para editar sprints en este proyecto.' }, { status: 403 });
+    return Response.json({ error: 'No tienes permiso para editar sprints en este proyecto.' }, { status: 403 });
   }
 
   const meta = await loadMeta(tenant, id);

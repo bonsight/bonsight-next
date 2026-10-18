@@ -1,7 +1,8 @@
+import { headers } from 'next/headers';
 import RawHtml from '@/components/RawHtml';
 import { getFooter } from '@/utils/footer';
 
-function getHtml(locale) {
+function getHtml(locale, host) {
   const en = locale === 'en';
   return `
 <div class="svc-hero"><div class="svc-hero-inner"><div><button class="back-btn" data-route="/">← ${en ? 'Back' : 'Volver'}</button><div class="svc-hero-badge" data-animate><svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="12"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg><span>Bonsight Boost</span></div><h1 data-animate data-animate-delay="1">${en ? 'Leadership Support' : 'Soporte a Líderes'}</h1><a class="btn-primary" href="https://calendly.com/rafa-bonsight/30min" target="_blank" rel="noopener noreferrer" data-animate data-animate-delay="2">${en ? 'Schedule a call' : 'Agendar llamada'}</a></div><p class="svc-hero-desc" data-animate data-animate-delay="1">${en ? 'We enhance leadership with vision and strategy. We provide support to decision-makers so they lead with greater clarity, effectiveness, and real impact.' : 'Potenciamos el liderazgo con visión y estrategia. Brindamos acompañamiento a quienes toman decisiones clave para que lideren con mayor claridad, efectividad e impacto real.'}</p></div></div>
@@ -47,11 +48,12 @@ function getHtml(locale) {
 
 <div class="cta-band" data-animate><h2>${en ? 'Want to lead with more impact?' : '¿Quieres liderar con más impacto?'}</h2><p>${en ? "Let's talk about how to strengthen your leadership and your executive team's." : 'Conversemos sobre cómo potenciar tu liderazgo y el de tu equipo directivo.'}</p><div class="cta-band-actions"><a class="btn-white" href="https://calendly.com/rafa-bonsight/30min" target="_blank" rel="noopener noreferrer">${en ? 'Schedule a call →' : 'Agendar llamada →'}</a><a class="btn-wa-outline" href="${en ? 'https://wa.me/13123509796?text=Hi%2C%20I%20came%20from%20the%20Bonsight%20website%20and%20would%20like%20to%20speak%20with%20the%20team.' : 'https://wa.me/13123509796?text=Hola%2C%20vengo%20del%20sitio%20de%20Bonsight%20y%20quisiera%20hablar%20con%20el%20equipo.'}" target="_blank" rel="noopener noreferrer">WhatsApp</a></div></div>
 
-${getFooter(locale)}
+${getFooter(locale, { host })}
 `;
 }
 
 export default async function LiderazgoPage({ params }) {
   const { locale } = await params;
-  return <RawHtml html={getHtml(locale)} />;
+  const host = (await headers()).get('host') ?? '';
+  return <RawHtml html={getHtml(locale, host)} />;
 }

@@ -13,7 +13,7 @@ export async function DELETE(req, { params }) {
   }
   const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
   if (!isSupervisorLevel) {
-    return Response.json({ error: 'No tenés permiso para gestionar documentación de este proyecto.' }, { status: 403 });
+    return Response.json({ error: 'No tienes permiso para gestionar documentación de este proyecto.' }, { status: 403 });
   }
 
   try {

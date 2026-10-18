@@ -14,12 +14,12 @@ async function gate(tenant, projectId) {
   }
   const level = resolveProjectAccessLevel(identity);
   if (!level.isSupervisorLevel) {
-    return { error: Response.json({ error: 'No tenés permiso para gestionar esta épica.' }, { status: 403 }) };
+    return { error: Response.json({ error: 'No tienes permiso para gestionar esta épica.' }, { status: 403 }) };
   }
   if (projectId && !level.isDirectorLevel) {
     const meta = await getProjectMeta(tenant, projectId);
     if (!meta?.supervisorIds?.includes(identity.personId)) {
-      return { error: Response.json({ error: 'No tenés permiso para gestionar esta épica.' }, { status: 403 }) };
+      return { error: Response.json({ error: 'No tienes permiso para gestionar esta épica.' }, { status: 403 }) };
     }
   }
   const token = await getNotionToken(tenant);

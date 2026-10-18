@@ -77,7 +77,7 @@ export function CreateTestModal({ tenant, projectId, people, onClose, onCreated 
           type: f.type,
           ...(f.type === 'number' && f.operator && f.value !== '' && f.value != null ? { operator: f.operator, value: f.value, unit: (f.unit || '').trim() } : {}),
         }));
-      if (!cleanFields.length) { setErr('Agregá al menos un campo.'); return; }
+      if (!cleanFields.length) { setErr('Agrega al menos un campo.'); return; }
       const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/tests`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, fields: cleanFields, registradorIds }),
       });
@@ -93,7 +93,7 @@ export function CreateTestModal({ tenant, projectId, people, onClose, onCreated 
     <div className="knx-ficha-share-backdrop" onClick={onClose}>
       <div className="knx-ficha-review-modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px, 92vw)' }}>
         <div className="knx-ficha-review-head">
-          <div><span className="knx-ficha-review-badge">Nueva prueba</span><h3 className="knx-ficha-review-title">Definí el formato</h3></div>
+          <div><span className="knx-ficha-review-badge">Nueva prueba</span><h3 className="knx-ficha-review-title">Define el formato</h3></div>
           <button type="button" className="knx-side-panel-close" aria-label="Cerrar" onClick={onClose}>×</button>
         </div>
         {err && <p className="knx-canvas-error">{err}</p>}
@@ -328,7 +328,7 @@ export function AportarFlow({ tenant, projectId, tests, personId, onClose, onDon
     }
 
     if (isVideo) {
-      if (!testId) { setErr('Elegí una prueba antes de adjuntar un video.'); return; }
+      if (!testId) { setErr('Elige una prueba antes de adjuntar un video.'); return; }
       setAttachments((prev) => [...prev, { id, name: file.name, mimeType: file.type, kind: 'video', uploading: true, previewUrl: null }]);
       try {
         const urlRes = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/executions/video-upload-url`, {
@@ -424,11 +424,11 @@ export function AportarFlow({ tenant, projectId, tests, personId, onClose, onDon
               onClick={recording ? stopRecording : startRecording}
             >
               <span style={{ fontSize: 18 }}>{recording ? '⏺' : '🎙️'}</span>
-              <span>{recording ? 'Grabando… tocá para terminar.' : transcribing ? 'Transcribiendo…' : 'Tocá para grabar por voz, o escribí abajo.'}</span>
+              <span>{recording ? 'Grabando… toca para terminar.' : transcribing ? 'Transcribiendo…' : 'Toca para grabar por voz, o escribe abajo.'}</span>
             </button>
             <div className="knx-ficha-review-field">
               <label>Qué pasó en "{test.name}"</label>
-              <textarea rows={5} value={freeText} onChange={(e) => setFreeText(e.target.value)} placeholder="Contá los resultados, condiciones, y cualquier cosa que valga la pena registrar… (podés adjuntar una foto o documento con los resultados y la IA completa los campos sola)" />
+              <textarea rows={5} value={freeText} onChange={(e) => setFreeText(e.target.value)} placeholder="Cuenta los resultados, condiciones, y cualquier cosa que valga la pena registrar… (puedes adjuntar una foto o documento con los resultados y la IA completa los campos sola)" />
             </div>
             <input ref={fileInputRef} type="file" accept={EVIDENCE_ACCEPT} multiple style={{ display: 'none' }} onChange={(e) => { Array.from(e.target.files).forEach(processFile); e.target.value = ''; }} />
             <button type="button" className="knx-canvas-mini" onClick={() => fileInputRef.current?.click()} style={{ marginTop: 8 }}>📎 Adjuntar archivo</button>
@@ -468,7 +468,7 @@ export function AportarFlow({ tenant, projectId, tests, personId, onClose, onDon
                     className="knx-canvas-meta-select"
                     type={f.type === 'number' ? 'number' : 'text'}
                     value={editedValues[f.key] ?? ''}
-                    placeholder="Sin especificar — completá a mano"
+                    placeholder="Sin especificar — completa a mano"
                     onChange={(e) => setEditedValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
                   />
                 </div>

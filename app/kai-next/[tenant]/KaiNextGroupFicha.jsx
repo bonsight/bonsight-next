@@ -242,7 +242,7 @@ export default function KaiNextGroupFicha({ tenant, activityId, questionId, grou
           {err && <p className="knx-canvas-error">{err}</p>}
           {participants.length === 0 ? (
             <>
-              <p className="knx-knowledge-empty">Compartí el link o el QR — todavía nadie se unió.</p>
+              <p className="knx-knowledge-empty">Comparte el link o el QR — todavía nadie se unió.</p>
               <button type="button" className="knx-analisis-sources-save knx-canvas-ficha-share-btn" onClick={() => setShareOpen(true)}><IconQrSmall /> Compartir</button>
             </>
           ) : (

@@ -955,7 +955,7 @@ export default function AriaClientTenant({ tenant, tenantMeta, profile, usr, cur
                   ) : m.board ? (
                     <>
                       <div className="aria-msg-content">
-                        {renderMessage(m.content?.trim() || 'Abrí el tablero de tareas.')}
+                        {renderMessage(m.content?.trim() || 'Abre el tablero de tareas.')}
                       </div>
                       <button type="button" className="aria-msg-pointer" onClick={() => { setSprintsPin(i); setActiveSection('sprints'); setVisited((v) => ({ ...v, sprints: true })); }}>
                         → Ver en Sprints

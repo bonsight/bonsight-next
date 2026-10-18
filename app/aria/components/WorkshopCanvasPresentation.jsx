@@ -630,7 +630,7 @@ function FichaPanel({ group, tenant, investigationId, messageIndex, questionId, 
           {err && <p className="aria-canvas-error">{err}</p>}
           {participants.length === 0 ? (
             <>
-              <p className="aria-board-hint">Compartí el link o el QR — todavía nadie se unió.</p>
+              <p className="aria-board-hint">Comparte el link o el QR — todavía nadie se unió.</p>
               <button type="button" className="aria-canvas-export-btn aria-ficha-primary-btn" onClick={() => setShareOpen(true)}>
                 <IconQrSmall /> Compartir
               </button>

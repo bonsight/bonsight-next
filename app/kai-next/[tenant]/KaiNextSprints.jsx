@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import KaiNextSidebar from './KaiNextSidebar';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
+import { useSidePanelClose } from '@/lib/kaiNext/useSidePanelClose';
 
 const PRIORITIES = ['Alta', 'Media', 'Baja'];
 const TASK_TYPES = ['Desarrollo', 'Soporte', 'Bug', 'Mejora', 'Reunión'];
@@ -113,6 +114,7 @@ function TaskCard({ task, columns, busy, onOpen, onStatusChange, onRemove, onDra
 
 // ── Panel de detalle / edición ───────────────────────────────────────────────
 function TaskDetailPanel({ task, data, busy, onClose, onAction, onRemove }) {
+  const [closing, handleClose] = useSidePanelClose(onClose);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? '');
   const [startDate, setStartDate] = useState(task.committedStartDate ?? task.startDate ?? '');
@@ -126,7 +128,7 @@ function TaskDetailPanel({ task, data, busy, onClose, onAction, onRemove }) {
   const saveActualHours = () => onAction('update_task_actual_hours', { pageId: task.id, actualHours: actualHours === '' ? null : Number(actualHours) });
 
   return (
-    <div className="knx-side-panel">
+    <div className={`knx-side-panel${closing ? ' knx-side-panel--closing' : ''}`}>
       <div className="knx-side-panel-header">
         <span className="knx-side-panel-title">Tarea</span>
         {task.url && (
@@ -134,7 +136,7 @@ function TaskDetailPanel({ task, data, busy, onClose, onAction, onRemove }) {
             <NotionLinkIcon /> Ver en Notion
           </a>
         )}
-        <button type="button" className="knx-side-panel-close" onClick={onClose} aria-label="Cerrar">×</button>
+        <button type="button" className="knx-side-panel-close" onClick={handleClose} aria-label="Cerrar">×</button>
       </div>
       <div className="knx-side-panel-thread knx-board-detail-body">
         <div className="knx-board-field">

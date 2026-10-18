@@ -18,7 +18,7 @@ export async function GET(req, { params }) {
   }
   const level = resolveProjectAccessLevel(identity);
   if (!level.isSupervisorLevel) {
-    return Response.json({ error: 'No tenés permiso para ver reuniones.' }, { status: 403 });
+    return Response.json({ error: 'No tienes permiso para ver reuniones.' }, { status: 403 });
   }
 
   const meeting = await getDevMeeting(tenant, meetingId);
@@ -27,7 +27,7 @@ export async function GET(req, { params }) {
   if (meeting.projectId && !level.isDirectorLevel) {
     const meta = await getProjectMeta(tenant, meeting.projectId);
     if (!meta?.supervisorIds?.includes(identity.personId)) {
-      return Response.json({ error: 'No tenés acceso a esta reunión.' }, { status: 403 });
+      return Response.json({ error: 'No tienes acceso a esta reunión.' }, { status: 403 });
     }
   }
 

@@ -497,7 +497,7 @@ get_sprint_tasks → Cuando el usuario pregunte o pida análisis sobre las tarea
 
 present_sprint_draft → Cuando el usuario pida convertir un workshop ya trabajado (con al menos una ficha de objetivos consolidada) en tareas de sprint — ej. "armemos el sprint de esto", "pasá el workshop al tablero", "generá las tareas de esta agrupación". Distinto de present_sprint_board: acá el punto de partida es el workshop, no el tablero directamente. No necesitas ningún dato previo — arranca con un triage (valor vs. esfuerzo por agrupación) donde el usuario elige qué avanza; recién después se genera el borrador de tareas para revisión. Nada se escribe en Notion hasta que el usuario confirma cada agrupación ahí.
 
-present_group_fusion → Cuando el usuario pida revisar si hay agrupaciones de preguntas distintas del workshop que en realidad son el mismo tema y convendría fusionar, antes de armar fichas — ej. "revisá si hay grupos repetidos", "che, esto y esto de otra pregunta no es lo mismo?". Solo tiene sentido si el workshop tiene más de una pregunta y todavía NINGÚN grupo tiene ficha — si ya hay una ficha en curso, no la uses, ya pasó el momento. No requiere datos previos.
+present_group_fusion → Cuando el usuario pida revisar si hay agrupaciones de preguntas distintas del workshop que en realidad son el mismo tema y convendría fusionar, antes de armar fichas — ej. "revisa si hay grupos repetidos", "che, esto y esto de otra pregunta no es lo mismo?". Solo tiene sentido si el workshop tiene más de una pregunta y todavía NINGÚN grupo tiene ficha — si ya hay una ficha en curso, no la uses, ya pasó el momento. No requiere datos previos.
 
 Al cerrar una sesión de análisis importante, usa save_session_memory para persistir hallazgos, decisiones e insights.
 
@@ -507,7 +507,7 @@ generate_gtm_container → Cuando el usuario solicite una configuración de Goog
 
 generate_measurement_excel → Cuando el usuario solicite un plan de medición, matriz de eventos, auditoría de analytics, inventario de tags, backlog de implementación, o cualquier entregable tabular en Excel. Puede tener múltiples hojas.
 
-generate_measurement_pdf → Cuando el usuario solicite una guía de medición formal, manual de implementación, o documento entregable de tracking/analytics — no asumas que es GA4 salvo que el usuario lo pida o el tenant lo tenga configurado como fuente activa; puede ser tracking a un backend propio, otra plataforma de analytics, o cualquier esquema de eventos. Usa el schema completo — cuanto más detallado, mejor el documento generado. Si conoces los eventos reales del cliente desde el Business Profile, Intelligence Sources o el historial, inclúyelos con sus parámetros; en el campo "tools" listá las herramientas que realmente aplican (solo poné GA4 ahí si de verdad es parte de la implementación).
+generate_measurement_pdf → Cuando el usuario solicite una guía de medición formal, manual de implementación, o documento entregable de tracking/analytics — no asumas que es GA4 salvo que el usuario lo pida o el tenant lo tenga configurado como fuente activa; puede ser tracking a un backend propio, otra plataforma de analytics, o cualquier esquema de eventos. Usa el schema completo — cuanto más detallado, mejor el documento generado. Si conoces los eventos reales del cliente desde el Business Profile, Intelligence Sources o el historial, inclúyelos con sus parámetros; en el campo "tools" lista las herramientas que realmente aplican (solo pon GA4 ahí si de verdad es parte de la implementación).
 
 Regla de documentos: no combines generate_* con present_analysis en el mismo turno. El documento es el entregable; puedes acompañarlo con una breve explicación de qué contiene y qué cubre.
 
@@ -768,9 +768,9 @@ function buildTools() {
     {
       name: 'present_workshop_canvas',
       description: `Presenta un mapa visual de clusters cuando el usuario pide agrupar, consolidar o mapear las iniciativas/respuestas de un workshop (Activity) ya finalizado. Usalo DESPUÉS de get_activity_results, en vez de (o además de) present_analysis, cuando el pedido es organizar respuestas en grupos — no para análisis narrativo puro.
-Para cada pregunta del workshop, agrupá las respuestas de itemsByQuestion en clusters: eliminá ruido, detectá duplicados/similares, y para cada grupo dale un nombre corto y redactá un texto consolidado que capture la idea común. Cada respuesta individual va en un solo grupo — si una respuesta no encaja en ningún patrón, ponela en un grupo propio (grupo de 1) en vez de forzarla.
+Para cada pregunta del workshop, agrupa las respuestas de itemsByQuestion en clusters: elimina ruido, detecta duplicados/similares, y para cada grupo dale un nombre corto y redacta un texto consolidado que capture la idea común. Cada respuesta individual va en un solo grupo — si una respuesta no encaja en ningún patrón, ponela en un grupo propio (grupo de 1) en vez de forzarla.
 itemIndexes DEBE usar los índices exactos de itemsByQuestion[questionId] que te llegaron en get_activity_results — no inventes índices nuevos.
-No repitas el texto original de cada respuesta en tu output (ya está en itemsByQuestion, se cruza automáticamente) — solo mandá los índices.`,
+No repitas el texto original de cada respuesta en tu output (ya está en itemsByQuestion, se cruza automáticamente) — solo manda los índices.`,
       input_schema: {
         type: 'object',
         properties: {
@@ -1171,7 +1171,7 @@ No describas el contenido del archivo en detalle — la card lo hace.`,
       input_schema: {
         type: 'object',
         properties: {
-          title: { type: 'string', description: 'Título del documento, ej: Guía de Medición — TopK9 (adaptá "Medición" a lo que corresponda: GA4, tracking interno, etc.)' },
+          title: { type: 'string', description: 'Título del documento, ej: Guía de Medición — TopK9 (adapta "Medición" a lo que corresponda: GA4, tracking interno, etc.)' },
           filename: { type: 'string', description: 'Nombre del archivo, ej: guia-medicion-topk9.pdf' },
           description: { type: 'string' },
           date: { type: 'string', description: 'Ej: Julio 2026' },
@@ -1226,7 +1226,7 @@ No describas el contenido del archivo en detalle — la card lo hace.`,
     },
     {
       name: 'get_activity_results',
-      description: `Trae el detalle completo, pregunta por pregunta y participante por participante, de una Activity (workshop/dinámica colaborativa) ya finalizada. Las Activities finalizadas disponibles aparecen listadas en el contexto del cliente (sección ACTIVITIES FINALIZADAS) — usá esta tool cuando el usuario pida analizar, priorizar o profundizar en los resultados de alguna de ellas.
+      description: `Trae el detalle completo, pregunta por pregunta y participante por participante, de una Activity (workshop/dinámica colaborativa) ya finalizada. Las Activities finalizadas disponibles aparecen listadas en el contexto del cliente (sección ACTIVITIES FINALIZADAS) — usa esta tool cuando el usuario pida analizar, priorizar o profundizar en los resultados de alguna de ellas.
 No la uses para Activities que todavía están en curso — solo existen resultados una vez finalizadas.
 Después de llamarla, es obligatorio llamar present_analysis con los hallazgos.`,
       input_schema: {

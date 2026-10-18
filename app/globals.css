@@ -146,6 +146,58 @@ nav{position:sticky;top:0;z-index:100;background:var(--white);border-bottom:1px 
 .pill-text h4{font-size:0.85rem;font-weight:500;color:var(--white);margin-bottom:0.3rem}
 .pill-text p{font-size:0.775rem;color:rgba(255,255,255,0.45);line-height:1.6;font-weight:300}
 
+/* KAI — sección completa en la home (réplica del hero de kai.bonsight.co), enlaza a otro
+   subdominio por eso todo es <a href> absoluto en vez de data-route. --kai-sans se alía a la
+   --sans del sitio (mismo stack); --kai-serif/--kai-mono son Source Serif 4 / IBM Plex Mono,
+   propias de la marca Kai (no las que ya usa el resto de bonsight.co) — cargadas via next/font
+   en app/[locale]/page.jsx y expuestas como --font-source-serif/--font-ibm-plex-mono. */
+.bs-kai {
+  --kai-serif: var(--font-source-serif), Georgia, "Times New Roman", serif;
+  --kai-sans: var(--sans);
+  --kai-mono: var(--font-ibm-plex-mono), ui-monospace, Menlo, monospace;
+  --kai-ink: #111111; --kai-green: #1D5C45; --kai-green-2: #2E7D5B; --kai-sage: #A8D7BB; --kai-mint: #E2F1EA; --kai-line: #262626;
+  background: var(--kai-ink); color: #fff; padding: 112px 0; font-family: var(--kai-sans); font-weight: 300; -webkit-font-smoothing: antialiased; overflow: hidden;
+}
+.bs-kai *, .bs-kai *::before, .bs-kai *::after { box-sizing: border-box; }
+.bs-kai__wrap { width: min(1180px, 100% - 48px); margin-inline: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 72px; align-items: center; }
+.bs-kai__label { display: flex; align-items: center; gap: 14px; font-family: var(--kai-mono); font-size: 12px; letter-spacing: .28em; text-transform: uppercase; color: var(--kai-green-2); margin: 0 0 24px; }
+.bs-kai__label::before { content: ""; width: 24px; height: 1px; background: currentColor; }
+.bs-kai__title { font-family: var(--kai-serif); font-weight: 600; font-size: clamp(36px, 4.2vw, 56px); line-height: 1.08; letter-spacing: -.01em; margin: 0 0 24px; }
+.bs-kai__title em { display: block; font-style: italic; font-weight: 500; color: var(--kai-sage); }
+.bs-kai__lead { font-size: 18px; line-height: 1.7; color: #BDBDBD; margin: 0 0 32px; max-width: 46ch; }
+.bs-kai__points { list-style: none; margin: 0 0 40px; padding: 0; border-top: 1px solid var(--kai-line); }
+.bs-kai__points li { display: grid; grid-template-columns: 36px 1fr; gap: 16px; align-items: start; padding: 18px 0; border-bottom: 1px solid var(--kai-line); }
+.bs-kai__ic { width: 36px; height: 36px; background: #13281F; display: flex; align-items: center; justify-content: center; color: var(--kai-green-2); }
+.bs-kai__ic svg { width: 17px; height: 17px; }
+.bs-kai__points b { display: block; font-weight: 500; font-size: 16px; color: #fff; margin-bottom: 2px; }
+.bs-kai__points span { font-size: 15px; color: #9A9A9A; }
+.bs-kai__ctas { display: flex; flex-wrap: wrap; align-items: center; gap: 28px; }
+.bs-kai__btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 30px; background: var(--kai-green); color: #fff; text-decoration: none; font: 500 14px/1 var(--kai-sans); letter-spacing: .08em; text-transform: uppercase; transition: background .2s; }
+.bs-kai__btn:hover { background: #174A37; }
+.bs-kai__link { font-size: 15px; font-weight: 400; color: #CFCFCF; text-decoration: none; border-bottom: 1px solid #3A3A3A; padding-bottom: 2px; }
+.bs-kai__link:hover { color: #fff; border-color: var(--kai-green-2); }
+.bs-kai a:focus-visible { outline: 2px solid var(--kai-green-2); outline-offset: 3px; }
+
+.bs-kai__card { background: #fff; color: var(--kai-ink); padding: 28px; box-shadow: 0 30px 80px rgba(0, 0, 0, .55); margin: 0; }
+.bs-kai__q { margin-left: auto; width: fit-content; max-width: 86%; background: var(--kai-mint); padding: 12px 18px; font-size: 16px; font-weight: 400; }
+.bs-kai__who { display: flex; align-items: center; gap: 8px; margin-top: 20px; font-size: 13px; font-weight: 600; color: var(--kai-green); }
+.bs-kai__k { width: 26px; height: 26px; border-radius: 50%; background: var(--kai-green); color: #fff; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; }
+.bs-kai__trace { font-family: var(--kai-mono); font-size: 11px; color: #7A7A7A; margin-top: 8px; }
+.bs-kai__a { font-size: 17px; line-height: 1.5; margin: 10px 0 0; font-weight: 400; }
+.bs-kai__a b { color: var(--kai-green); font-weight: 600; }
+.bs-kai__bars { display: flex; flex-direction: column; gap: 9px; margin-top: 16px; }
+.bs-kai__bar { display: grid; grid-template-columns: 110px 1fr 52px; gap: 12px; align-items: center; font-size: 13px; color: #4D4D4D; }
+.bs-kai__t { height: 10px; background: #EDEFEC; }
+.bs-kai__t i { display: block; height: 10px; }
+.bs-kai__bar b { text-align: right; color: var(--kai-ink); font-weight: 600; }
+.bs-kai__foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 18px; padding-top: 16px; border-top: 1px solid #E6E2D9; }
+.bs-kai__chip { font-family: var(--kai-mono); font-size: 11px; color: #4D4D4D; background: #F7F6F2; padding: 4px 8px; }
+.bs-kai__act { margin-left: auto; font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: #fff; background: var(--kai-green); padding: 8px 12px; }
+.bs-kai__note { font-family: var(--kai-mono); font-size: 11px; color: #6F6F6F; margin: 12px 0 0; text-align: right; letter-spacing: .04em; }
+
+@media (max-width: 980px) { .bs-kai { padding: 80px 0; } .bs-kai__wrap { grid-template-columns: 1fr; gap: 48px; } }
+@media (max-width: 600px) { .bs-kai__wrap { width: calc(100% - 32px); } .bs-kai__btn { flex: 1 1 100%; } .bs-kai__card { padding: 20px; } .bs-kai__bar { grid-template-columns: 84px 1fr 44px; } }
+
 /* PROCESS */
 .process-wrap{padding:5rem 4rem;background:var(--bg2)}
 .process-inner{max-width:1200px;margin:0 auto}
@@ -251,7 +303,7 @@ nav{position:sticky;top:0;z-index:100;background:var(--white);border-bottom:1px 
 
 /* ── FOOTER ── */
 footer,.footer-main{background:var(--dark2);border-top:1px solid rgba(255,255,255,0.05)}
-.footer-main-inner{max-width:1200px;margin:0 auto;padding:5rem 4rem 4rem;display:grid;grid-template-columns:2fr 1fr 1fr 1.4fr;gap:3rem}
+.footer-main-inner{max-width:1200px;margin:0 auto;padding:5rem 4rem 4rem;display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.4fr;gap:3rem}
 .footer-col-brand{}
 .footer-logo{font-family:var(--mono);font-size:1rem;color:rgba(255,255,255,0.7);letter-spacing:0.08em;margin-bottom:1rem;text-transform:uppercase}
 .footer-logo span{color:var(--accent-mid)}
@@ -836,6 +888,65 @@ a.svc-card { text-decoration: none; color: inherit; }
 .consulta-send:disabled{opacity:0.3;cursor:not-allowed}
 .consulta-powered{font-size:0.65rem;color:#bbb;text-align:center;letter-spacing:0.02em}
 .consulta-powered span{color:#1D9E75}
+
+/* ===== Panel de reserva embebido (BookingPanel.jsx) — reemplaza el link a Calendly ===== */
+.consulta-book{border-top:0.5px solid #e0e0dc;background:#fff;flex-shrink:0;padding:1.25rem 2rem 1.5rem;max-height:min(560px,70vh);overflow-y:auto;animation:slideInUp 0.3s ease-out}
+.consulta-book-kicker{font-family:var(--mono);font-size:0.58rem;color:#1D9E75;text-transform:uppercase;letter-spacing:0.14em;margin:0 0 0.625rem}
+.consulta-book h2{font-family:var(--serif);font-weight:600;font-size:1.3rem;line-height:1.2;margin:0 0 0.3rem;color:#111}
+.consulta-book-lead{color:#666;margin:0 0 1.1rem;font-size:0.85rem}
+.consulta-book-host{display:flex;align-items:center;gap:0.75rem;padding:0.7rem 0.875rem;background:#f7f7f5;border:0.5px solid #e0e0dc;border-radius:8px;margin-bottom:1.1rem}
+.consulta-book-ph{width:36px;height:36px;border-radius:50%;background:#1D9E75;color:#fff;font-weight:600;font-size:0.8rem;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.consulta-book-host b{display:block;font-weight:500;font-size:0.85rem}
+.consulta-book-host span{font-size:0.72rem;color:#888}
+.consulta-book-pick{display:grid;grid-template-columns:1fr 1fr;gap:1.4rem}
+.consulta-book-lbl{font-family:var(--mono);font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:#555;margin:0 0 0.5rem}
+.consulta-book-days{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.consulta-book-day{border:0.5px solid #e0e0dc;background:#fff;padding:0.5rem 0.2rem;text-align:center;line-height:1.2;border-radius:6px;cursor:pointer;font:inherit}
+.consulta-book-day small{display:block;font-family:var(--mono);font-size:0.52rem;letter-spacing:0.08em;text-transform:uppercase;color:#999}
+.consulta-book-day b{display:block;font-family:var(--serif);font-size:1.05rem;font-weight:600;margin-top:2px;color:#111}
+.consulta-book-day em{display:block;font-style:normal;font-size:0.52rem;color:#1D9E75;margin-top:2px}
+.consulta-book-day[disabled]{opacity:0.35;cursor:not-allowed}
+.consulta-book-day[aria-pressed="true"]{border-color:#1D9E75;background:rgba(29,158,117,0.08)}
+.consulta-book-day:not([disabled]):hover{border-color:#1D9E75}
+.consulta-book-weeknav{display:flex;justify-content:space-between;align-items:center;margin:0.6rem 0 0;font-size:0.75rem;color:#555}
+.consulta-book-weeknav button{border:0.5px solid #e0e0dc;background:#fff;padding:0.3rem 0.6rem;border-radius:6px;cursor:pointer;font:inherit}
+.consulta-book-weeknav button[disabled]{opacity:0.35;cursor:not-allowed}
+.consulta-book-slots{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.consulta-book-slot{border:0.5px solid #e0e0dc;background:#fff;padding:0.65rem 0.3rem;font-size:0.8rem;border-radius:6px;cursor:pointer;font:inherit}
+.consulta-book-slot:hover{border-color:#1D9E75}
+.consulta-book-slot[aria-pressed="true"]{background:#1D9E75;border-color:#1D9E75;color:#fff}
+.consulta-book-tz{font-size:0.68rem;color:#999;margin:0.6rem 0 0}
+.consulta-book-empty{font-size:0.78rem;color:#999;padding:1rem;border:1px dashed #e0e0dc;border-radius:8px;text-align:center}
+.consulta-book-form{display:grid;grid-template-columns:1fr 1fr;gap:0.8rem}
+.consulta-book-full{grid-column:1/-1}
+.consulta-book-form label{display:block;font-family:var(--mono);font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;color:#555;margin-bottom:0.3rem}
+.consulta-book-form input,.consulta-book-form textarea{width:100%;border:0.5px solid #e0e0dc;background:#f7f7f5;border-radius:6px;padding:0.6rem 0.75rem;font:inherit;color:#111;box-sizing:border-box}
+.consulta-book-form textarea{resize:vertical;min-height:72px;line-height:1.5}
+.consulta-book-ctx{grid-column:1/-1;display:flex;gap:0.5rem;padding:0.6rem 0.75rem;background:rgba(29,158,117,0.08);border-radius:6px;font-size:0.72rem;color:#1a5c43}
+.consulta-book-summary-line{display:flex;align-items:center;gap:0.6rem;padding:0.6rem 0.75rem;border:0.5px solid #e0e0dc;border-radius:8px;margin-bottom:0.9rem;font-size:0.8rem}
+.consulta-book-summary-line button{margin-left:auto;border:0;background:none;color:#1D9E75;font-size:0.75rem;text-decoration:underline;cursor:pointer;font:inherit}
+.consulta-book-bar{display:flex;justify-content:space-between;align-items:center;gap:0.75rem;margin-top:1.1rem;padding-top:1rem;border-top:0.5px solid #e0e0dc}
+.consulta-book-sel{font-size:0.78rem;color:#555}
+.consulta-book-sel b{color:#111;font-weight:500}
+.consulta-book-btn-green{display:inline-flex;align-items:center;gap:0.5rem;background:#1D9E75;color:#fff;border:none;padding:0.65rem 1.25rem;border-radius:8px;font-size:0.8rem;font-weight:500;cursor:pointer;font:inherit}
+.consulta-book-btn-green:disabled{background:#a8d7c5;cursor:not-allowed}
+.consulta-book-err{font-size:0.78rem;color:#c0392b;background:#fdecec;border-radius:6px;padding:0.5rem 0.7rem;margin:0.6rem 0 0}
+.consulta-book-done{text-align:center;padding:0.4rem 0}
+.consulta-book-check{width:48px;height:48px;border-radius:50%;background:#1D9E75;color:#fff;display:inline-flex;align-items:center;justify-content:center;margin-bottom:0.9rem}
+.consulta-book-done h2{margin-bottom:0.3rem}
+.consulta-book-card{max-width:360px;margin:1.1rem auto 0;text-align:left;border:0.5px solid #e0e0dc;border-radius:8px;overflow:hidden}
+.consulta-book-card div{display:flex;gap:0.6rem;padding:0.6rem 0.9rem;border-top:0.5px solid #e0e0dc;font-size:0.8rem}
+.consulta-book-card div:first-child{border-top:0}
+.consulta-book-card span{width:72px;flex:0 0 auto;font-family:var(--mono);font-size:0.6rem;letter-spacing:0.06em;text-transform:uppercase;color:#999;padding-top:1px}
+.consulta-book-actions{display:flex;justify-content:center;gap:0.6rem;flex-wrap:wrap;margin-top:1.2rem}
+.consulta-book-btn-line{display:inline-flex;align-items:center;gap:0.5rem;border:0.5px solid #e0e0dc;background:#fff;color:#111;padding:0.6rem 1.1rem;border-radius:8px;font-size:0.78rem;font-weight:500;text-decoration:none;cursor:pointer;font:inherit}
+.consulta-book-btn-line:hover{border-color:#1D9E75}
+@media(max-width:720px){
+  .consulta-book{padding:1rem 1rem 1.25rem}
+  .consulta-book-pick,.consulta-book-form{grid-template-columns:1fr}
+  .consulta-book-bar{flex-direction:column;align-items:stretch}
+  .consulta-book-btn-green{justify-content:center}
+}
 @media(max-width:900px){
   .consulta-chat{max-width:100%;border:none}
   .consulta-messages{padding:1.25rem}

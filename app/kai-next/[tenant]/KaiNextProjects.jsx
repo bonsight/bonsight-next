@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import KaiNextSidebar from './KaiNextSidebar';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
+import { useSidePanelClose } from '@/lib/kaiNext/useSidePanelClose';
 import { PruebasSection } from './KaiNextProjectExperimental';
 import KaiNextProjectDesarrollo from './KaiNextProjectDesarrollo';
 
@@ -202,7 +203,7 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
 
   const submit = async () => {
     if (!name.trim()) { setError('El nombre es requerido.'); return; }
-    if (importando && !notionProyectoId) { setError('Elegí qué proyecto de Notion importar.'); return; }
+    if (importando && !notionProyectoId) { setError('Elige qué proyecto de Notion importar.'); return; }
     setSaving(true);
     setError(null);
     try {
@@ -298,7 +299,7 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
                       if (p) setName(p.name);
                     }}
                   >
-                    <option value="">Elegí un proyecto…</option>
+                    <option value="">Elige un proyecto…</option>
                     {proyectosExistentes.map((p) => <option key={p.id} value={p.id}>{p.name}{p.clienteName ? ` · ${p.clienteName}` : ''}</option>)}
                   </select>
                 )}
@@ -544,6 +545,7 @@ function TaskRow({ task, people, canManage, canToggle, onStatusChange, onDelete,
 // Panel de detalle de una tarea de Proyecto de Seguimiento — mismo shell visual
 // (.knx-side-panel) que ya usa DevTaskDetailPanel en Proyecto de Desarrollo.
 function TaskDetailPanel({ task, people, grupos, tipologias, canManage, documents = [], onUploadDocument, onDeleteDocument, onClose, onSave, onStatusChange, onDelete }) {
+  const [closing, handleClose] = useSidePanelClose(onClose);
   const [nombre, setNombre] = useState(task.nombre);
   const [descripcion, setDescripcion] = useState(task.descripcion ?? '');
   const [fase, setFase] = useState(task.fase ?? '');
@@ -597,10 +599,10 @@ function TaskDetailPanel({ task, people, grupos, tipologias, canManage, document
   };
 
   return (
-    <div className="knx-side-panel">
+    <div className={`knx-side-panel${closing ? ' knx-side-panel--closing' : ''}`}>
       <div className="knx-side-panel-header">
         <span className="knx-side-panel-title">Tarea</span>
-        <button type="button" className="knx-side-panel-close" onClick={onClose} aria-label="Cerrar">×</button>
+        <button type="button" className="knx-side-panel-close" onClick={handleClose} aria-label="Cerrar">×</button>
       </div>
       <div className="knx-side-panel-thread knx-board-detail-body">
         <div className="knx-board-field">
@@ -784,7 +786,7 @@ function KaiNextGantt({ grouped, people, grupos, savingTaskId, canToggleTask, on
   const allTasks = grouped.flatMap((g) => g.tasks);
   const withDates = allTasks.filter((t) => t.fechaInicio && t.fechaFin);
   if (!withDates.length) {
-    return <p className="knx-knowledge-empty">Ninguna tarea tiene fecha de inicio y fin cargadas todavía — usá la vista Lista o editalas para ver el cronograma.</p>;
+    return <p className="knx-knowledge-empty">Ninguna tarea tiene fecha de inicio y fin cargadas todavía — usa la vista Lista o editalas para ver el cronograma.</p>;
   }
 
   const starts = withDates.map((t) => t.fechaInicio).sort();
@@ -1115,7 +1117,7 @@ function PresupuestoSection({ metrics, alerts, partidas, gastos, canManage, onAd
       )}
 
       <div className="knx-canvas-cards">
-        {!partidas.length ? <p className="knx-knowledge-empty">Sin partidas todavía — creá una para poder cargarle gastos.</p> : partidas.map((p) => (
+        {!partidas.length ? <p className="knx-knowledge-empty">Sin partidas todavía — crea una para poder cargarle gastos.</p> : partidas.map((p) => (
           <PartidaRow
             key={p.id}
             partida={p}

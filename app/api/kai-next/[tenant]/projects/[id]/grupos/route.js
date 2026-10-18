@@ -28,7 +28,7 @@ export async function POST(req, { params }) {
   }
   const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
   if (!isSupervisorLevel) {
-    return Response.json({ error: 'No tenés permiso para gestionar mini proyectos acá.' }, { status: 403 });
+    return Response.json({ error: 'No tienes permiso para gestionar mini proyectos acá.' }, { status: 403 });
   }
 
   const meta = await getProjectMeta(tenant, id);

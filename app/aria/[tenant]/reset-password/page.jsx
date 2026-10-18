@@ -46,16 +46,16 @@ export default async function AriaResetPasswordPage({ params, searchParams }) {
         <h1 className="aria-login-title aria-gradient-text">{meta.name}</h1>
         {!user ? (
           <>
-            <p className="aria-login-subtitle">Este link ya expiró o no es válido — pedí uno nuevo desde "¿Olvidaste tu contraseña?".</p>
+            <p className="aria-login-subtitle">Este link ya expiró o no es válido — pide uno nuevo desde "¿Olvidaste tu contraseña?".</p>
             <a href={`/${tenant}?step=forgot`} className="aria-login-link">Pedir un link nuevo</a>
           </>
         ) : (
           <>
-            <p className="aria-login-subtitle">Hola, {user.name} — elegí tu nueva contraseña</p>
+            <p className="aria-login-subtitle">Hola, {user.name} — elige tu nueva contraseña</p>
             {errMsg && <p className="aria-login-error">{errMsg}</p>}
             <form action={doReset}>
               <input type="password" name="password" placeholder="Contraseña nueva" className="aria-login-input" autoFocus required />
-              <input type="password" name="confirm" placeholder="Repetí la contraseña" className="aria-login-input" required />
+              <input type="password" name="confirm" placeholder="Repite la contraseña" className="aria-login-input" required />
               <button type="submit" className="aria-login-button">Guardar y entrar</button>
             </form>
           </>

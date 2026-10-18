@@ -52,26 +52,39 @@ export async function proxy(request) {
       return NextResponse.rewrite(url);
     }
 
+    // Raíz pública — landing de Kai Next, sin gate. El login interno de Bonsight se movió acá
+    // arriba, explícito en /login y /team (ya no comparte la raíz).
+    if (pathname === '/') {
+      url.pathname = '/kai-next/landing';
+      return NextResponse.rewrite(url);
+    }
+
     // Admin routes — requieren el login único de Bonsight
-    if (pathname === '/' || pathname.startsWith('/admin')) {
+    if (pathname.startsWith('/admin')) {
       if (!(await isTeamAuthed(request))) {
         url.pathname = '/team';
         return NextResponse.rewrite(url);
       }
-      url.pathname = pathname === '/' ? '/kai' : `/kai${pathname}`;
+      url.pathname = `/kai${pathname}`;
       return NextResponse.rewrite(url);
     }
 
-    // /next/* — Kai Next (MVP): vive bajo kai. sin subdominio nuevo; se pisa /next por
-    // /kai-next para mantener el código separado de Kai legacy. Auth por tenant se resuelve a
+    // Login genérico de Kai Next (sin tenant en la URL) — resuelve a qué tenant pertenece el
+    // email server-side (ver findTenantUserByEmailAnywhere).
+    if (pathname === '/entrar') {
+      url.pathname = '/kai-next/entrar';
+      return NextResponse.rewrite(url);
+    }
+
+    // /legacy/* — Kai legacy, movido de la raíz acá cuando Kai Next pasó a ser el default.
+    if (pathname === '/legacy' || pathname.startsWith('/legacy/')) {
+      url.pathname = `/kai${pathname.slice('/legacy'.length)}`;
+      return NextResponse.rewrite(url);
+    }
+
+    // Tenant routes (/[slug], /[slug]/*) — Kai Next es el default. Auth por tenant se resuelve a
     // nivel de page (lib/kaiNext/auth.js), no acá.
-    if (pathname.startsWith('/next')) {
-      url.pathname = `/kai-next${pathname.slice('/next'.length)}`;
-      return NextResponse.rewrite(url);
-    }
-
-    // Tenant routes (/[slug], /[slug]/*) — per-tenant auth handled at page level
-    url.pathname = `/kai${pathname}`;
+    url.pathname = `/kai-next${pathname}`;
     return NextResponse.rewrite(url);
   }
 

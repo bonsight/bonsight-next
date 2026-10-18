@@ -29,9 +29,9 @@ export async function POST(req, { params }) {
     const hint = msg.includes('accessNotConfigured') || msg.includes('disabled')
       ? 'La API de Google Drive no está habilitada en el proyecto de Google Cloud. Habilitala en console.cloud.google.com.'
       : msg.includes('notFound') || msg.includes('404')
-      ? 'Carpeta no encontrada. Verificá el ID o el link.'
+      ? 'Carpeta no encontrada. Verifica el ID o el link.'
       : msg.includes('forbidden') || msg.includes('403')
-      ? 'Sin permiso. Compartí la carpeta con la cuenta de servicio como Editor (no solo Lector — Proyectos necesita crear carpetas y subir archivos ahí).'
+      ? 'Sin permiso. Comparte la carpeta con la cuenta de servicio como Editor (no solo Lector — Proyectos necesita crear carpetas y subir archivos ahí).'
       : `Error: ${msg}`;
     return Response.json({ error: hint }, { status: 400 });
   }

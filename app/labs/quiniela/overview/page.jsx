@@ -79,7 +79,7 @@ function buildGroupedSignals(quinielas) {
       kaiPendiente.push({
         quiniela: q.nombre, id: q.id, adminTel: q.adminTel, adminNombre: q.adminNombre,
         detail: 'Falta el análisis narrativo de jornada',
-        msg: `Hola ${q.adminNombre} 👋 Ya podés activar el análisis narrativo de Kai para *${q.nombre}*.\n\nEntra al panel admin y genera el análisis de jornada 🤖\n\n👉 ${getBase()}/quiniela/${q.id}/admin`,
+        msg: `Hola ${q.adminNombre} 👋 Ya puedes activar el análisis narrativo de Kai para *${q.nombre}*.\n\nEntra al panel admin y genera el análisis de jornada 🤖\n\n👉 ${getBase()}/quiniela/${q.id}/admin`,
       })
     }
     if (q.participants.length > 0 && q.participants.length < 3) {

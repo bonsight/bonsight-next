@@ -64,7 +64,7 @@ const IconClose = () => (
   </svg>
 );
 
-export default function Navbar({ locale = 'es' }) {
+export default function Navbar({ locale = 'es', kaiHref = 'https://kai.bonsight.co' }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const en = locale === 'en';
@@ -152,6 +152,13 @@ export default function Navbar({ locale = 'es' }) {
             </div>
           </div>
 
+          <a
+            href={kaiHref}
+            onClick={() => dl({ event: 'nav_link_click', link_text: 'kai', destination: kaiHref, menu_name: 'desktop' })}
+          >
+            KAI
+          </a>
+
           <Link
             className="nav-cta"
             href={`/${locale}/consulta`}
@@ -206,6 +213,14 @@ export default function Navbar({ locale = 'es' }) {
           <Link className="nav-mobile-subitem" href={`/${locale}/services/liderazgo`} onClick={() => closeAndTrack(en ? 'Leadership Support' : 'Soporte a Líderes', `/${locale}/services/liderazgo`, 'boost')}>
             <IconLeadership /> {en ? 'Leadership support' : 'Soporte a líderes'}
           </Link>
+
+          <a
+            className="nav-mobile-item"
+            href={kaiHref}
+            onClick={() => closeAndTrack('KAI', kaiHref)}
+          >
+            KAI
+          </a>
 
           <Link
             className="nav-mobile-cta"

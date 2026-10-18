@@ -1,7 +1,8 @@
+import { headers } from 'next/headers';
 import RawHtml from '@/components/RawHtml';
 import { getFooter } from '@/utils/footer';
 
-function getHtml(locale) {
+function getHtml(locale, host) {
   const en = locale === 'en';
   return `
 <div class="svc-hero">
@@ -78,11 +79,12 @@ function getHtml(locale) {
 <button class="btn-white" data-route="/#contacto">${en ? "Let's talk →" : 'Conversemos →'}</button>
 </div>
 
-${getFooter(locale)}
+${getFooter(locale, { host })}
 `;
 }
 
 export default async function OlaClickPage({ params }) {
   const { locale } = await params;
-  return <RawHtml html={getHtml(locale)} />;
+  const host = (await headers()).get('host') ?? '';
+  return <RawHtml html={getHtml(locale, host)} />;
 }

@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { headers } from 'next/headers';
 import RawHtml from '@/components/RawHtml';
 import { getFooter } from '@/utils/footer';
 
@@ -69,7 +70,7 @@ function jsonLd() {
           {
             '@type': 'Question',
             name: '¿La IA puede equivocarse al calcular una métrica?',
-            acceptedAnswer: { '@type': 'Answer', text: 'Sí, si le pedís que haga la aritmética. Por eso en una automatización real los cálculos se hacen antes, de forma determinística, y la IA solo interpreta y redacta el resultado ya calculado.' },
+            acceptedAnswer: { '@type': 'Answer', text: 'Sí, si le pides que haga la aritmética. Por eso en una automatización real los cálculos se hacen antes, de forma determinística, y la IA solo interpreta y redacta el resultado ya calculado.' },
           },
           {
             '@type': 'Question',
@@ -82,22 +83,22 @@ function jsonLd() {
   };
 }
 
-function getHtml() {
+function getHtml(host) {
   return `
 <div class="crumb-bar"><div class="crumb-bar-inner"><a data-route="/">Inicio</a><span>／</span><span>Blog</span><span>／</span><span>¿Qué IA puede generar reportes?</span></div></div>
 
-<div class="article-hero"><div class="article-hero-inner"><div class="article-meta">IA · Automatización de datos</div><h1>¿Qué IA puede generar reportes (y qué no)?</h1><p class="article-hero-desc">Casi cualquier modelo de lenguaje puede redactar un reporte si le pegás los datos a mano. La pregunta que importa es otra: qué parte del trabajo sigue siendo tuya después de eso.</p></div></div>
+<div class="article-hero"><div class="article-hero-inner"><div class="article-meta">IA · Automatización de datos</div><h1>¿Qué IA puede generar reportes (y qué no)?</h1><p class="article-hero-desc">Casi cualquier modelo de lenguaje puede redactar un reporte si le pegas los datos a mano. La pregunta que importa es otra: qué parte del trabajo sigue siendo tuya después de eso.</p></div></div>
 
 <div class="article-body">
 
-<p>Si le pedís a ChatGPT, Claude o Gemini que "arme un reporte de ventas", los tres van a poder hacerlo — siempre que vos les pegues los números. Eso no es automatización de reportes, es redacción asistida. La diferencia importa porque define cuánto trabajo manual te sigue quedando cada semana.</p>
+<p>Si le pides a ChatGPT, Claude o Gemini que "arme un reporte de ventas", los tres van a poder hacerlo — siempre que vos les pegues los números. Eso no es automatización de reportes, es redacción asistida. La diferencia importa porque define cuánto trabajo manual te sigue quedando cada semana.</p>
 
 <p>Este artículo cubre qué puede y qué no puede hacer una IA en este proceso, y en qué punto exacto empieza a valer la pena construir algo más que un prompt. No es sobre atribución publicitaria ni tracking — es específicamente sobre reportes internos: ventas, operaciones, finanzas, marketing.</p>
 
 <h2>El enfoque ingenuo vs. el pipeline real</h2>
 <p>Hay dos formas muy distintas de usar IA para esto, y se confunden seguido:</p>
 
-<div class="cmp-table-wrap"><table class="cmp-table"><thead><tr><th>Criterio</th><th>Chat + copiar datos a mano</th><th>Pipeline de automatización</th></tr></thead><tbody><tr><th scope="row">Quién trae los datos</th><td>Vos, exportando de cada fuente</td><td class="cmp-good">Un conector u orquestador, automático</td></tr><tr><th scope="row">Quién calcula las métricas</th><td>El chat, si se lo pedís (riesgo de error)</td><td class="cmp-good">Lógica determinística, antes de la IA</td></tr><tr><th scope="row">Frecuencia</th><td>Cuando alguien se acuerde de hacerlo</td><td class="cmp-good">Programada — diaria, semanal, etc.</td></tr><tr><th scope="row">Entrega</th><td>Copiar y pegar el resultado</td><td class="cmp-good">Directo a Slack, email o PDF</td></tr></tbody></table></div>
+<div class="cmp-table-wrap"><table class="cmp-table"><thead><tr><th>Criterio</th><th>Chat + copiar datos a mano</th><th>Pipeline de automatización</th></tr></thead><tbody><tr><th scope="row">Quién trae los datos</th><td>Vos, exportando de cada fuente</td><td class="cmp-good">Un conector u orquestador, automático</td></tr><tr><th scope="row">Quién calcula las métricas</th><td>El chat, si se lo pides (riesgo de error)</td><td class="cmp-good">Lógica determinística, antes de la IA</td></tr><tr><th scope="row">Frecuencia</th><td>Cuando alguien se acuerde de hacerlo</td><td class="cmp-good">Programada — diaria, semanal, etc.</td></tr><tr><th scope="row">Entrega</th><td>Copiar y pegar el resultado</td><td class="cmp-good">Directo a Slack, email o PDF</td></tr></tbody></table></div>
 
 <p class="article-callout">La IA no debería ser responsable de calcular una métrica que se puede calcular de forma determinística antes. Pedirle a un modelo que sume, promedie o compare cifras agrega un punto de falla evitable — el cálculo va en el paso anterior, la IA interpreta el resultado.</p>
 
@@ -142,7 +143,7 @@ variacion = (valor_actual - valor_anterior) / valor_anterior
 
 <div class="faq-section" style="padding-left:0;padding-right:0;max-width:none"><h2 style="margin-top:0">Preguntas frecuentes</h2><div class="faq-list">
 <details class="faq-item"><summary>¿Alguna IA puede conectarse sola a mis fuentes de datos y armar el reporte?</summary><p>Un modelo de lenguaje por sí solo no se conecta a tus sistemas — necesita algo que le entregue los datos ya extraídos. Eso lo resuelve la capa de orquestación (n8n, un script propio, etc.), no el modelo de IA.</p></details>
-<details class="faq-item"><summary>¿La IA puede equivocarse al calcular una métrica?</summary><p>Sí, si le pedís que haga la aritmética. Por eso en una automatización real los cálculos se hacen antes, de forma determinística, y la IA solo interpreta y redacta el resultado ya calculado.</p></details>
+<details class="faq-item"><summary>¿La IA puede equivocarse al calcular una métrica?</summary><p>Sí, si le pides que haga la aritmética. Por eso en una automatización real los cálculos se hacen antes, de forma determinística, y la IA solo interpreta y redacta el resultado ya calculado.</p></details>
 <details class="faq-item"><summary>¿Cuál es la diferencia entre esto y usar directamente ChatGPT o Claude?</summary><p>Ninguna en la parte de redacción — la diferencia está en todo lo anterior: la conexión a las fuentes, la validación de los datos y el disparo automático. Un chat no hace nada de eso solo.</p></details>
 </div></div>
 
@@ -153,13 +154,14 @@ variacion = (valor_actual - valor_anterior) / valor_anterior
 <div class="svc-card" data-route="/services/data-strategy"><div class="svc-card-tag">Servicio</div><h3>Data Strategy</h3><p>Auditoría, arquitectura y gobierno de datos — la base sobre la que se construye cualquier automatización.</p><div class="svc-card-link"><svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="14"><path d="M5 12h14M12 5l7 7-7 7"></path></svg>Ver servicio</div></div>
 </div></div></div>
 
-${getFooter('es')}
+${getFooter('es', { host })}
 `;
 }
 
 export default async function QueIAPuedeGenerarReportesPage({ params }) {
   const { locale } = await params;
   if (locale !== 'es') notFound();
+  const host = (await headers()).get('host') ?? '';
 
   return (
     <>
@@ -167,7 +169,7 @@ export default async function QueIAPuedeGenerarReportesPage({ params }) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd()) }}
       />
-      <RawHtml html={getHtml()} />
+      <RawHtml html={getHtml(host)} />
     </>
   );
 }

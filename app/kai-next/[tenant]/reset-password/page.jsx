@@ -59,10 +59,10 @@ export default async function KaiNextResetPasswordPage({ params, searchParams })
             </>
           ) : (
             <form action={doReset} className="knx-login-form">
-              <p className="knx-login-hint">Hola, {user.name} — elegí tu nueva contraseña.</p>
+              <p className="knx-login-hint">Hola, {user.name} — elige tu nueva contraseña.</p>
               {errMsg && <p className="knx-login-error">{errMsg}</p>}
               <input type="password" name="password" placeholder="Contraseña nueva" autoFocus required />
-              <input type="password" name="confirm" placeholder="Repetí la contraseña" required />
+              <input type="password" name="confirm" placeholder="Repite la contraseña" required />
               <button type="submit" className="knx-login-primary-btn">Guardar y entrar</button>
             </form>
           )}

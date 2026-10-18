@@ -1,7 +1,8 @@
+import { headers } from 'next/headers';
 import RawHtml from '@/components/RawHtml';
 import { getFooter } from '@/utils/footer';
 
-function getHtml(locale) {
+function getHtml(locale, host) {
   const en = locale === 'en';
   return `
 <div class="svc-hero"><div class="svc-hero-inner"><div><button class="back-btn" data-route="/">← ${en ? 'Back' : 'Volver'}</button><div class="svc-hero-badge" data-animate><svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="12"><circle cx="11" cy="11" r="8"></circle><path d="M21 21l-4.35-4.35"></path></svg><span>Bonsight Growth</span></div><h1 data-animate data-animate-delay="1">${en ? 'CRO — Conversion Optimization' : 'CRO — Optimización de Conversión'}</h1><a class="btn-primary" href="https://calendly.com/rafa-bonsight/30min" target="_blank" rel="noopener noreferrer" data-animate data-animate-delay="2">${en ? 'Schedule a call' : 'Agendar llamada'}</a></div><p class="svc-hero-desc" data-animate data-animate-delay="1">${en ? 'We optimize conversion and user experience. We apply analytics, experimentation, and design to increase sales and elevate satisfaction at every touchpoint.' : 'Optimizamos la conversión y la experiencia del usuario. Aplicamos analítica, experimentación y diseño para incrementar ventas y elevar la satisfacción en cada punto de contacto.'}</p></div></div>
@@ -47,11 +48,12 @@ function getHtml(locale) {
 
 <div class="cta-band" data-animate><h2>${en ? 'Want to improve your conversion?' : '¿Quieres mejorar tu conversión?'}</h2><p>${en ? "Let's talk about converting more with the users you already have." : 'Hablemos sobre cómo convertir más con los usuarios que ya tienes.'}</p><div class="cta-band-actions"><a class="btn-white" href="https://calendly.com/rafa-bonsight/30min" target="_blank" rel="noopener noreferrer">${en ? 'Schedule a call →' : 'Agendar llamada →'}</a><a class="btn-wa-outline" href="${en ? 'https://wa.me/13123509796?text=Hi%2C%20I%20came%20from%20the%20Bonsight%20website%20and%20would%20like%20to%20speak%20with%20the%20team.' : 'https://wa.me/13123509796?text=Hola%2C%20vengo%20del%20sitio%20de%20Bonsight%20y%20quisiera%20hablar%20con%20el%20equipo.'}" target="_blank" rel="noopener noreferrer">WhatsApp</a></div></div>
 
-${getFooter(locale)}
+${getFooter(locale, { host })}
 `;
 }
 
 export default async function CroPage({ params }) {
   const { locale } = await params;
-  return <RawHtml html={getHtml(locale)} />;
+  const host = (await headers()).get('host') ?? '';
+  return <RawHtml html={getHtml(locale, host)} />;
 }

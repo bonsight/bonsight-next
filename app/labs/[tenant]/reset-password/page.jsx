@@ -56,17 +56,17 @@ export default async function ResetPasswordPage({ params, searchParams }) {
           <h1 className="labs-entry-title">{meta.name}</h1>
           {!user ? (
             <>
-              <p className="labs-entry-subtitle">Este link ya expiró o no es válido — pedí uno nuevo desde "¿Olvidaste tu contraseña?".</p>
+              <p className="labs-entry-subtitle">Este link ya expiró o no es válido — pide uno nuevo desde "¿Olvidaste tu contraseña?".</p>
               <a href={`/${tenant}?step=forgot`} className="labs-login-link">Pedir un link nuevo</a>
             </>
           ) : (
             <>
-              <p className="labs-entry-subtitle">Hola, {user.name} — elegí tu nueva contraseña</p>
+              <p className="labs-entry-subtitle">Hola, {user.name} — elige tu nueva contraseña</p>
               {errMsg && <p className="labs-login-error">{errMsg}</p>}
               <form action={doReset}>
                 <input type="password" name="password" placeholder="Contraseña nueva" className="labs-entry-input" autoFocus required />
                 <p className="labs-entry-hint">Al menos 8 caracteres, con letras y números.</p>
-                <input type="password" name="confirm" placeholder="Repetí la contraseña" className="labs-entry-input" required />
+                <input type="password" name="confirm" placeholder="Repite la contraseña" className="labs-entry-input" required />
                 <button type="submit" className="labs-entry-button">Guardar y entrar</button>
               </form>
             </>

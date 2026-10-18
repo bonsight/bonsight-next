@@ -50,10 +50,10 @@ export async function POST(req, { params }) {
 
   const { sprintIds, clienteName } = await req.json();
   if (!Array.isArray(sprintIds) || !sprintIds.length) {
-    return Response.json({ error: 'Elegí al menos un sprint.' }, { status: 400 });
+    return Response.json({ error: 'Elige al menos un sprint.' }, { status: 400 });
   }
   if (!clienteName?.trim()) {
-    return Response.json({ error: 'Elegí un cliente.' }, { status: 400 });
+    return Response.json({ error: 'Elige un cliente.' }, { status: 400 });
   }
 
   try {

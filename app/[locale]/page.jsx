@@ -1,9 +1,17 @@
+import { headers } from 'next/headers';
+import { Source_Serif_4, IBM_Plex_Mono } from 'next/font/google';
 import RawHtml from '@/components/RawHtml';
 import { getFooter } from '@/utils/footer';
+import { kaiNextUrl } from '@/lib/shared/crossProductLinks';
 
-function getHtml(locale) {
+const sourceSerif = Source_Serif_4({ subsets: ['latin'], variable: '--font-source-serif' });
+const ibmPlexMono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--font-ibm-plex-mono' });
+
+function getHtml(locale, host) {
   const en = locale === 'en';
-  const footer = getFooter(locale);
+  const footer = getFooter(locale, { host });
+  const kaiHome = kaiNextUrl(host);
+  const kaiLogin = kaiNextUrl(host, '/entrar');
   return `
 <!-- HERO -->
 <div class="hero">
@@ -107,6 +115,40 @@ function getHtml(locale) {
 </div>
 </div>
 </div>
+
+<!-- KAI -->
+<section class="bs-kai" id="kai" aria-labelledby="bs-kai-title">
+<div class="bs-kai__wrap">
+<div>
+<p class="bs-kai__label">Kai</p>
+<h2 class="bs-kai__title" id="bs-kai-title">${en ? "Your company's intelligence, <em>in one conversation.</em>" : 'La inteligencia de tu empresa, <em>en una conversación.</em>'}</h2>
+<p class="bs-kai__lead">${en ? "Kai is the intelligence we built at Bonsight. It connects what your company knows with what's happening in your data, and helps your team understand, decide, and act." : 'Kai es la inteligencia que construimos en Bonsight. Conecta lo que tu empresa sabe con lo que ocurre en tus datos, y ayuda a tu equipo a entender, decidir y actuar.'}</p>
+<ul class="bs-kai__points">
+<li><span class="bs-kai__ic"><svg viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path></svg></span><div><b>${en ? 'Ask in your own words' : 'Pregúntale en tus palabras'}</b><span>${en ? 'About your data, documents, and meetings.' : 'Sobre tus datos, documentos y reuniones.'}</span></div></li>
+<li><span class="bs-kai__ic"><svg viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg></span><div><b>${en ? 'Answers with evidence' : 'Respuestas con evidencia'}</b><span>${en ? 'Every finding comes with its chart and its source.' : 'Cada hallazgo llega con su gráfico y su fuente.'}</span></div></li>
+<li><span class="bs-kai__ic"><svg viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"></path><path d="M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h11"></path></svg></span><div><b>${en ? 'From insight to action' : 'Del hallazgo a la acción'}</b><span>${en ? 'Projects, tasks, and meetings in one place.' : 'Proyectos, tareas y reuniones en el mismo lugar.'}</span></div></li>
+</ul>
+<div class="bs-kai__ctas">
+<a class="bs-kai__btn" href="${kaiHome}">${en ? 'Meet Kai →' : 'Conocer Kai →'}</a>
+<a class="bs-kai__link" href="${kaiLogin}">${en ? 'Already using Kai? Sign in' : '¿Ya usas Kai? Inicia sesión'}</a>
+</div>
+</div>
+<figure class="bs-kai__fig" style="margin:0">
+<div class="bs-kai__card">
+<div class="bs-kai__q">${en ? 'Why did production drop this month?' : '¿Por qué bajó la producción este mes?'}</div>
+<div class="bs-kai__who"><span class="bs-kai__k">K</span>Kai</div>
+<div class="bs-kai__trace">${en ? 'Checked operational data · operations meeting' : 'Consultó datos operativos · reunión de operaciones'}</div>
+<p class="bs-kai__a">${en ? "It's not demand, it's capacity. The replacement units carry <b>a third less</b> per trip." : 'No es demanda, es capacidad. Las unidades de reemplazo cargan <b>un tercio menos</b> por viaje.'}</p>
+<div class="bs-kai__bars">
+<div class="bs-kai__bar"><span>${en ? 'Own fleet' : 'Flota propia'}</span><span class="bs-kai__t"><i style="width:100%;background:#A8D7BB"></i></span><b>10 t</b></div>
+<div class="bs-kai__bar"><span>${en ? 'Replacement' : 'Reemplazo'}</span><span class="bs-kai__t"><i style="width:67%;background:#1D5C45"></i></span><b>${en ? '6.7 t' : '6,7 t'}</b></div>
+</div>
+<div class="bs-kai__foot"><span class="bs-kai__chip">${en ? 'Operational data' : 'Datos operativos'}</span><span class="bs-kai__chip">${en ? 'Operations meeting' : 'Reunión de operaciones'}</span><span class="bs-kai__act">${en ? 'Create task' : 'Crear tarea'}</span></div>
+</div>
+<figcaption class="bs-kai__note">${en ? 'Illustrative example' : 'Ejemplo ilustrativo'}</figcaption>
+</figure>
+</div>
+</section>
 
 <!-- ABOUT -->
 <div class="about-wrap">
@@ -246,6 +288,7 @@ function getHtml(locale) {
                 <option value="procesos">${en ? 'Process Improvement' : 'Mejora de procesos'}</option>
                 <option value="liderazgo">${en ? 'Leadership Support' : 'Soporte a líderes'}</option>
               </optgroup>
+              <option value="kai">Kai</option>
               <option value="no-se">${en ? "I'm not sure yet" : 'No estoy seguro aún'}</option>
             </select>
           </div>
@@ -315,5 +358,10 @@ async function handleContactSubmit(e) {
 
 export default async function HomePage({ params }) {
   const { locale } = await params;
-  return <RawHtml html={getHtml(locale)} />;
+  const host = (await headers()).get('host') ?? '';
+  return (
+    <div className={`${sourceSerif.variable} ${ibmPlexMono.variable}`}>
+      <RawHtml html={getHtml(locale, host)} />
+    </div>
+  );
 }

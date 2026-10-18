@@ -13,7 +13,7 @@ async function gate(tenant) {
     return { error: Response.json({ error: 'Reuniones no está habilitado para tu usuario.' }, { status: 403 }) };
   }
   if (!resolveProjectAccessLevel(identity).isSupervisorLevel) {
-    return { error: Response.json({ error: 'No tenés permiso para gestionar reuniones.' }, { status: 403 }) };
+    return { error: Response.json({ error: 'No tienes permiso para gestionar reuniones.' }, { status: 403 }) };
   }
   return { identity };
 }

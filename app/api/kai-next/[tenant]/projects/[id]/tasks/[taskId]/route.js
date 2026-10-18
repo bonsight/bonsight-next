@@ -10,7 +10,7 @@ async function guard(tenant, id) {
   }
   const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
   if (!isSupervisorLevel) {
-    return { error: Response.json({ error: 'No tenés permiso para gestionar tareas de este proyecto.' }, { status: 403 }) };
+    return { error: Response.json({ error: 'No tienes permiso para gestionar tareas de este proyecto.' }, { status: 403 }) };
   }
   const meta = await getProjectMeta(tenant, id);
   if (!meta) return { error: Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 }) };

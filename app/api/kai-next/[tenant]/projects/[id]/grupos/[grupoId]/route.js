@@ -10,7 +10,7 @@ async function guard(tenant) {
   }
   const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
   if (!isSupervisorLevel) {
-    return { error: Response.json({ error: 'No tenés permiso para gestionar mini proyectos acá.' }, { status: 403 }) };
+    return { error: Response.json({ error: 'No tienes permiso para gestionar mini proyectos acá.' }, { status: 403 }) };
   }
   return {};
 }

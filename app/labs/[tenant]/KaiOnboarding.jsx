@@ -355,7 +355,7 @@ export default function KaiOnboarding({ tenant, tenantMeta, identity, experiment
   const rect = resolved.el.getBoundingClientRect();
 
   // Pasos como "create-experiment" o cualquier "nav-*" apuntan a un botón/tab real — "Vamos"
-  // ahí no es solo "entendido", es "hacé el siguiente paso por mí": si no lo clickeamos
+  // ahí no es solo "entendido", es "haz el siguiente paso por mí": si no lo clickeamos
   // nosotros, la persona ve desaparecer el tooltip sin que pase nada visible y no sabe que
   // tiene que clickear el mismo botón que Kai le estaba señalando. Los anchors "field-*" son
   // solo informativos (apuntan a campos ya visibles dentro de un modal abierto), esos no se

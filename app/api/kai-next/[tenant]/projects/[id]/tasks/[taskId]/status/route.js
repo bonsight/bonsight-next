@@ -24,7 +24,7 @@ export async function PATCH(req, { params }) {
     const tasks = await getTasksList(tenant, id);
     const task = tasks.find((t) => t.id === taskId);
     if (!task || !(task.responsables ?? []).includes(identity.personId)) {
-      return Response.json({ error: 'Solo podés actualizar tus propias tareas.' }, { status: 403 });
+      return Response.json({ error: 'Solo puedes actualizar tus propias tareas.' }, { status: 403 });
     }
   }
 

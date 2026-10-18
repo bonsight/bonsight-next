@@ -9,7 +9,7 @@ const MODEL = 'claude-sonnet-4-6';
 async function suggestConversion(tenant, experimentName, targetLabel, text) {
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const prompt = `Un feedback sobre el experimento "${experimentName}" (respecto a: ${targetLabel}) dice:\n"""${text}"""\n\n¿Este feedback pide o implica claramente una nueva ejecución de prueba (ej. repetir algo con otras condiciones, probar a mayor escala)? Si sí, respondé con UNA frase corta describiendo qué ejecución nueva sugiere, en español, sin comillas. Si no lo implica claramente, respondé exactamente: NINGUNA`;
+    const prompt = `Un feedback sobre el experimento "${experimentName}" (respecto a: ${targetLabel}) dice:\n"""${text}"""\n\n¿Este feedback pide o implica claramente una nueva ejecución de prueba (ej. repetir algo con otras condiciones, probar a mayor escala)? Si sí, responde con UNA frase corta describiendo qué ejecución nueva sugiere, en español, sin comillas. Si no lo implica claramente, responde exactamente: NINGUNA`;
     const response = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 150,
@@ -38,15 +38,15 @@ export async function GET(req, { params }) {
   if (!experiment) return Response.json({ error: 'Experimento no encontrado.' }, { status: 404 });
 
   if (user.role === 'Supervisor' && !experiment.meta.supervisorIds?.includes(user.id)) {
-    return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+    return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
   }
   if (user.role === 'Registrador' && TASK_TRACKING_KINDS.includes(experiment.meta.projectKind)) {
     const visibleTaskIds = new Set(experiment.tasks.filter((t) => taskResponsables(t).includes(user.id)).map((t) => t.id));
-    if (visibleTaskIds.size === 0) return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+    if (visibleTaskIds.size === 0) return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
     experiment.feedback = experiment.feedback.filter((f) => f.targetType === 'tarea' && visibleTaskIds.has(f.targetId));
   } else if (user.role === 'Registrador') {
     const visibleTestIds = new Set(experiment.tests.filter((t) => t.registradorIds?.includes(user.id)).map((t) => t.id));
-    if (visibleTestIds.size === 0) return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+    if (visibleTestIds.size === 0) return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
     const visibleExecutionIds = new Set(experiment.executions.filter((e) => visibleTestIds.has(e.testId)).map((e) => e.id));
     experiment.feedback = experiment.feedback.filter((f) => (
       f.targetType === 'proyecto'
@@ -76,14 +76,14 @@ export async function POST(req, { params }) {
   // Un comentario puede ser solo evidencia (una foto sin texto) — no forzamos texto si ya
   // hay al menos un adjunto.
   if (!text?.trim() && cleanAttachments.length === 0) {
-    return Response.json({ error: 'Escribí un texto o adjuntá un archivo.' }, { status: 400 });
+    return Response.json({ error: 'Escribe un texto o adjunta un archivo.' }, { status: 400 });
   }
 
   const experiment = await getExperiment(tenant, id);
   if (!experiment) return Response.json({ error: 'Experimento no encontrado.' }, { status: 404 });
 
   if (user.role === 'Supervisor' && !experiment.meta.supervisorIds?.includes(user.id)) {
-    return Response.json({ error: 'No tenés acceso a este proyecto.' }, { status: 403 });
+    return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
   }
 
   // Una respuesta hereda el target del feedback original (mismo targetType/targetId/
@@ -92,7 +92,7 @@ export async function POST(req, { params }) {
   let targetType, targetId;
   if (replyTo) {
     const parent = experiment.feedback.find((f) => f.id === replyTo);
-    if (!parent) return Response.json({ error: 'El feedback al que respondés ya no existe.' }, { status: 400 });
+    if (!parent) return Response.json({ error: 'El feedback al que respondes ya no existe.' }, { status: 400 });
     ({ targetType, targetId } = parent);
   } else {
     ({ targetType, targetId } = body);

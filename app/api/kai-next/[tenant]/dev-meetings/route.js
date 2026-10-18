@@ -38,14 +38,14 @@ async function gate(tenant, projectId) {
   }
   const level = resolveProjectAccessLevel(identity);
   if (!level.isSupervisorLevel) {
-    return { error: Response.json({ error: 'No tenés permiso para gestionar reuniones.' }, { status: 403 }) };
+    return { error: Response.json({ error: 'No tienes permiso para gestionar reuniones.' }, { status: 403 }) };
   }
   let projectName = null;
   if (projectId) {
     const meta = await getProjectMeta(tenant, projectId);
     if (!meta || meta.projectKind !== 'desarrollo') return { error: Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 }) };
     if (!level.isDirectorLevel && !meta.supervisorIds?.includes(identity.personId)) {
-      return { error: Response.json({ error: 'No tenés acceso a las reuniones de este proyecto.' }, { status: 403 }) };
+      return { error: Response.json({ error: 'No tienes acceso a las reuniones de este proyecto.' }, { status: 403 }) };
     }
     projectName = meta.name;
   }
@@ -79,7 +79,7 @@ export async function POST(req, { params }) {
 
   if (!title?.trim()) return Response.json({ error: 'El título es requerido.' }, { status: 400 });
   if (!startDateTime || !endDateTime) return Response.json({ error: 'Fecha/hora de inicio y fin son requeridas.' }, { status: 400 });
-  if (!Array.isArray(attendees) || !attendees.length) return Response.json({ error: 'Agregá al menos un invitado.' }, { status: 400 });
+  if (!Array.isArray(attendees) || !attendees.length) return Response.json({ error: 'Agrega al menos un invitado.' }, { status: 400 });
 
   const recurrence = RECURRENCE[repeat] ?? null;
 
@@ -122,7 +122,7 @@ export async function PATCH(req, { params }) {
 
   if (!title?.trim()) return Response.json({ error: 'El título es requerido.' }, { status: 400 });
   if (!startDateTime || !endDateTime) return Response.json({ error: 'Fecha/hora de inicio y fin son requeridas.' }, { status: 400 });
-  if (!Array.isArray(attendees) || !attendees.length) return Response.json({ error: 'Agregá al menos un invitado.' }, { status: 400 });
+  if (!Array.isArray(attendees) || !attendees.length) return Response.json({ error: 'Agrega al menos un invitado.' }, { status: 400 });
 
   const existing = await getDevMeeting(tenant, meetingId);
   if (!existing) return Response.json({ error: 'Reunión no encontrada.' }, { status: 404 });

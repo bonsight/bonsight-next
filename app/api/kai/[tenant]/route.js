@@ -281,26 +281,26 @@ ACTIVITIES — WORKSHOPS Y DINÁMICAS COLABORATIVAS
 
 Este modo solo se activa si el usuario pide explícitamente crear un workshop, brainstorming, retrospectiva, sesión de OKRs, discovery, focus group u otra dinámica grupal ("Activity"). No lo actives por iniciativa propia ni lo confundas con la exploración normal del Business Profile.
 
-Cuando el usuario quiera crear una Activity, ayúdalo a co-diseñarla conversando (no un formulario): nombre, objetivo, tipo de dinámica, descripción breve, y las preguntas que se les harán a los participantes (proponé opciones si no tiene claro qué preguntar, pero dejá que decida él).
+Cuando el usuario quiera crear una Activity, ayúdalo a co-diseñarla conversando (no un formulario): nombre, objetivo, tipo de dinámica, descripción breve, y las preguntas que se les harán a los participantes (propón opciones si no tiene claro qué preguntar, pero deja que decida él).
 
-Para cada pregunta, definí también si acepta una sola respuesta por participante o múltiples (ej. "¿Qué iniciativas propones?" suele aceptar varias; "¿Cuál es tu rol?" suele ser una sola). Si no es obvio por el contexto, preguntalo explícitamente. Cuando la pregunta es de múltiples respuestas, el participante va a poder ir agregando ítems uno por uno antes de enviar la lista completa — tenelo en cuenta al redactarla (ej. "¿Qué iniciativas propones para X?" en vez de "Iniciativa").
+Para cada pregunta, define también si acepta una sola respuesta por participante o múltiples (ej. "¿Qué iniciativas propones?" suele aceptar varias; "¿Cuál es tu rol?" suele ser una sola). Si no es obvio por el contexto, preguntalo explícitamente. Cuando la pregunta es de múltiples respuestas, el participante va a poder ir agregando ítems uno por uno antes de enviar la lista completa — tenelo en cuenta al redactarla (ej. "¿Qué iniciativas propones para X?" en vez de "Iniciativa").
 
 Excepción a la regla de "sin listas": cuando le muestres al usuario un resumen de campos (nombre/objetivo/tipo/descripción) o la lista de preguntas propuestas, formatealo como lista con guiones markdown, una por línea, por ejemplo:
 - **Nombre:** ...
 - **Objetivo:** ...
 No uses líneas sueltas con negrita sin guión para este tipo de resumen — se ve inconsistente con el resto de la lista.
 
-A medida que se van confirmando nombre/objetivo/tipo/descripción, emití (puede repetirse turno a turno, solo con los campos ya confirmados):
+A medida que se van confirmando nombre/objetivo/tipo/descripción, emite (puede repetirse turno a turno, solo con los campos ya confirmados):
 
 [ACTIVITY_DRAFT]{"name": "...", "objective": "...", "type": "...", "description": "..."}[/ACTIVITY_DRAFT]
 
-Cuando el usuario confirme explícitamente que la lista de preguntas está lista y quiere arrancar la Activity, emití UNA VEZ:
+Cuando el usuario confirme explícitamente que la lista de preguntas está lista y quiere arrancar la Activity, emite UNA VEZ:
 
 [ACTIVITY_LOCK]{"questions": [{"text": "primera pregunta", "responseType": "single"}, {"text": "segunda pregunta", "responseType": "multiple"}]}[/ACTIVITY_LOCK]
 
 "responseType" es siempre "single" o "multiple" — nunca lo omitas.
 
-Importante: una vez emitido [ACTIVITY_LOCK] la plantilla queda bloqueada — no la repitas ni la modifiques en turnos siguientes. No inventes ni menciones un código o QR: el sistema los genera automáticamente y se le van a mostrar al usuario en pantalla. Solo confirmá que la Activity quedó lista para compartir.`;
+Importante: una vez emitido [ACTIVITY_LOCK] la plantilla queda bloqueada — no la repitas ni la modifiques en turnos siguientes. No inventes ni menciones un código o QR: el sistema los genera automáticamente y se le van a mostrar al usuario en pantalla. Solo confirma que la Activity quedó lista para compartir.`;
 }
 
 function buildSystemPrompt(tenantName, businessProfile, previousConvs = [], pendingSuggestions = [], knowledgeDigest = null) {

@@ -209,7 +209,7 @@ export default function ActivityParticipantChat({ code, activityId, activityName
       if (data.finished) setFinished(true);
       if (data.personalComplete) setPersonalComplete(true);
     } catch {
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'Error de conexión. Probá de nuevo.' }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Error de conexión. Prueba de nuevo.' }]);
     } finally {
       setLoading(false);
     }
@@ -308,7 +308,7 @@ export default function ActivityParticipantChat({ code, activityId, activityName
       setParticipantId(data.participantId);
       setStep('chat');
     } catch {
-      setError('Error de conexión. Probá de nuevo.');
+      setError('Error de conexión. Prueba de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -327,7 +327,7 @@ export default function ActivityParticipantChat({ code, activityId, activityName
         <form className="act-panel" onSubmit={handleJoin}>
           <span className="act-eyebrow">Bienvenido</span>
           <h1 className="act-panel-title">Estás ingresando a: {activityName}</h1>
-          <p className="act-panel-text">Antes de comenzar… ¿cómo te llamás?</p>
+          <p className="act-panel-text">Antes de comenzar… ¿cómo te llamas?</p>
           <input
             className="act-input"
             value={name}
@@ -351,7 +351,7 @@ export default function ActivityParticipantChat({ code, activityId, activityName
         <div className="act-panel">
           <span className="act-eyebrow">Estás dentro</span>
           <h1 className="act-panel-title">{activityName}</h1>
-          <p className="act-panel-text">Esperá a que el organizador inicie la dinámica. Esta pantalla se actualiza sola — no hace falta que hagas nada.</p>
+          <p className="act-panel-text">Espera a que el organizador inicie la dinámica. Esta pantalla se actualiza sola — no hace falta que hagas nada.</p>
         </div>
       </div>
     );
@@ -408,7 +408,7 @@ export default function ActivityParticipantChat({ code, activityId, activityName
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Escribí tu respuesta…"
+            placeholder="Escribe tu respuesta…"
             disabled={loading}
           />
           <button className="act-btn act-btn--primary" onClick={handleSend} disabled={loading || !input.trim()}>

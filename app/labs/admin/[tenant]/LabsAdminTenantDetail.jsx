@@ -325,7 +325,7 @@ function TeamPanel({ tenant }) {
     <div className="card">
       <div className="section-title" style={{ color: 'var(--labs-cream)' }}>Equipo</div>
       <p style={{ fontSize: 12.5, color: 'var(--labs-cream-faint)', marginTop: 4, marginBottom: 12 }}>
-        Le asignás usuario y contraseña a cada persona y se los pasás vos — el rol define qué puede hacer adentro (solo Director crea proyectos, Supervisor asigna Registradores en las pruebas).
+        Le asignas usuario y contraseña a cada persona y se los pasas vos — el rol define qué puede hacer adentro (solo Director crea proyectos, Supervisor asigna Registradores en las pruebas).
       </p>
 
       <form onSubmit={handleCreate} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -426,7 +426,7 @@ function DriveConnectPanel({ tenant }) {
           <div className="missing-prompt" style={{ marginBottom: 14 }}>
             <span className="mp-ic">⚠</span>
             <div className="mp-text">
-              Antes de conectar, compartí la carpeta en Drive con <b style={{ fontFamily: 'var(--labs-mono)', fontSize: 12 }}>{SA_EMAIL}</b> como <b>Editor</b> — Labs necesita crear carpetas y subir archivos ahí, no solo leer.
+              Antes de conectar, comparte la carpeta en Drive con <b style={{ fontFamily: 'var(--labs-mono)', fontSize: 12 }}>{SA_EMAIL}</b> como <b>Editor</b> — Labs necesita crear carpetas y subir archivos ahí, no solo leer.
             </div>
           </div>
           <form onSubmit={connect} style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

@@ -72,6 +72,14 @@ export default function KaiNextAnalisis({
   // Es un chat de verdad (misma API que el chat principal), solo que se muestra en un panel
   // angosto a la derecha en vez de ocupar toda la pantalla.
   const [panelOpen, setPanelOpen] = useState(false);
+  // Acá el panel vive siempre montado (no es un componente separado que se monta/desmonta como
+  // en los otros knx-side-panel) — el closing se resetea a mano cuando se vuelve a abrir.
+  const [panelClosing, setPanelClosing] = useState(false);
+  useEffect(() => { if (panelOpen) setPanelClosing(false); }, [panelOpen]);
+  const closePanel = () => {
+    setPanelClosing(true);
+    setTimeout(() => setPanelOpen(false), 200);
+  };
   const [panelMessages, setPanelMessages] = useState([]);
   const [panelSending, setPanelSending] = useState(false);
   const [panelWorkingLabel, setPanelWorkingLabel] = useState(null);
@@ -523,10 +531,10 @@ export default function KaiNextAnalisis({
       </main>
 
       {panelOpen && (
-        <div className="knx-side-panel">
+        <div className={`knx-side-panel${panelClosing ? ' knx-side-panel--closing' : ''}`}>
           <div className="knx-side-panel-header">
             <span className="knx-side-panel-title">Kai</span>
-            <button type="button" className="knx-side-panel-close" onClick={() => setPanelOpen(false)} aria-label="Cerrar panel">×</button>
+            <button type="button" className="knx-side-panel-close" onClick={closePanel} aria-label="Cerrar panel">×</button>
           </div>
           <div className="knx-side-panel-thread">
             {panelMessages.map((m, i) => (

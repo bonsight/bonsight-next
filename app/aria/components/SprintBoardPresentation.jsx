@@ -577,7 +577,7 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, tasks, busy, pe
             onChange={(e) => { setIniciativaId(e.target.value); setParentId(''); }}
             disabled={!proyectoId}
           >
-            <option value="">{proyectoId ? 'Sin definir' : 'Elegí un proyecto primero'}</option>
+            <option value="">{proyectoId ? 'Sin definir' : 'Elige un proyecto primero'}</option>
             {iniciativasDelProyecto.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
           </select>
         </div>
@@ -591,7 +591,7 @@ function AddTaskForm({ proyectos, talento, iniciativas, columns, tasks, busy, pe
           <option value="">Ninguna</option>
           {parentOptions.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
         </select>
-        <p className="aria-board-hint">Elegí una si esta tarea es una subtarea de otra ya en el sprint.</p>
+        <p className="aria-board-hint">Elige una si esta tarea es una subtarea de otra ya en el sprint.</p>
       </div>
       <div className="aria-board-field">
         <label className="aria-board-field-label">Responsable</label>

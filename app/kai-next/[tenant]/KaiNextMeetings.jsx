@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import KaiNextSidebar from './KaiNextSidebar';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
+import { useSidePanelClose } from '@/lib/kaiNext/useSidePanelClose';
 
 // Pantalla propia en el sidebar (no un tab dentro de un Proyecto puntual) — agenda/registra/
 // documenta reuniones del equipo de Proyecto de Desarrollo. El proyecto es OPCIONAL. Crea el
@@ -18,6 +19,9 @@ const TIPO_OPTIONS = [
   { id: 'equipo', label: 'Equipo', color: '#085041', chipBg: '#E8F4EE', border: '#3F9461' },
   { id: 'cliente', label: 'Cliente', color: '#24406B', chipBg: '#EAF0F8', border: '#4A6FA5' },
   { id: '1:1', label: '1:1', color: '#4C2F7A', chipBg: '#F1ECF8', border: '#8A63C7' },
+  // No se crea desde el modal de agendar de acá — la arma el booking público del Advisor
+  // (app/api/advisor/book/route.js) cuando un visitante de bonsight.co reserva una llamada.
+  { id: 'prospecto', label: 'Prospecto', color: '#8A4B1F', chipBg: '#F7ECE1', border: '#C27A3C' },
 ];
 const tipoInfo = (id) => TIPO_OPTIONS.find((t) => t.id === id) ?? TIPO_OPTIONS[0];
 
@@ -284,10 +288,10 @@ function AvailabilityAssistant({ tenant, internalAttendees, date, duration, onPi
   }, [busyByEmail, date, duration]);
 
   if (!internalEmails.length) {
-    return <p className="knx-knowledge-empty">Elegí asistentes de Bonsight para ver su disponibilidad.</p>;
+    return <p className="knx-knowledge-empty">Elige asistentes de Bonsight para ver su disponibilidad.</p>;
   }
   if (!date) {
-    return <p className="knx-knowledge-empty">Elegí una fecha para ver horarios libres.</p>;
+    return <p className="knx-knowledge-empty">Elige una fecha para ver horarios libres.</p>;
   }
   if (loading) return <p className="knx-knowledge-empty">Buscando horarios libres…</p>;
 
@@ -365,8 +369,8 @@ function ScheduleMeetingModal({ tenant, roster, externalContacts, projects, orga
   const submit = async () => {
     setErr(null);
     if (!title.trim()) { setErr('Ponele un título a la reunión.'); return; }
-    if (!date || !startTime) { setErr('Elegí fecha y hora.'); return; }
-    if (!attendees.length) { setErr('Agregá al menos un invitado.'); return; }
+    if (!date || !startTime) { setErr('Elige fecha y hora.'); return; }
+    if (!attendees.length) { setErr('Agrega al menos un invitado.'); return; }
     setSaving(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -683,7 +687,7 @@ function ProposeTimeModal({ tenant, meeting, roster, onClose, onProposed }) {
 
   const submit = async () => {
     setErr(null);
-    if (!date || !startTime) { setErr('Elegí fecha y hora.'); return; }
+    if (!date || !startTime) { setErr('Elige fecha y hora.'); return; }
     setSaving(true);
     try {
       const res = await fetch(`/api/kai-next/${tenant}/dev-meetings/${meeting.id}/propose`, {
@@ -738,7 +742,7 @@ function ProposeTimeModal({ tenant, meeting, roster, onClose, onProposed }) {
           </div>
           <div className="knx-board-field">
             <label>Motivo (opcional)</label>
-            <textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="¿Por qué proponés otro horario?" />
+            <textarea rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="¿Por qué propones otro horario?" />
           </div>
           <p className="knx-canvas-ficha-progress">
             {externalCount > 0 && `Los ${externalCount} invitados externos solo reciben el cambio si ${meeting.createdByName?.split(' ')[0] ?? 'el organizador'} lo acepta. `}
@@ -758,6 +762,7 @@ function ProposeTimeModal({ tenant, meeting, roster, onClose, onProposed }) {
 }
 
 function MeetingDetailPanel({ tenant, basePath, meetingId, userName, roster, onClose, onDeleted, onReschedule }) {
+  const [closing, handleClose] = useSidePanelClose(onClose);
   const [meeting, setMeeting] = useState(undefined);
   const [removeConfirm, setRemoveConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -777,17 +782,17 @@ function MeetingDetailPanel({ tenant, basePath, meetingId, userName, roster, onC
   useEffect(() => {
     const onDocMouseDown = (e) => {
       if (e.target.closest('.knx-week-event') || e.target.closest('.knx-meeting-card') || e.target.closest('.knx-meetings-modal-backdrop')) return;
-      if (panelRef.current && !panelRef.current.contains(e.target)) onClose();
+      if (panelRef.current && !panelRef.current.contains(e.target)) handleClose();
     };
     document.addEventListener('mousedown', onDocMouseDown);
     return () => document.removeEventListener('mousedown', onDocMouseDown);
-  }, [onClose]);
+  }, [handleClose]);
 
   const confirmDelete = async () => {
     setDeleting(true);
     try {
       await fetch(`/api/kai-next/${tenant}/dev-meetings?meetingId=${meetingId}`, { method: 'DELETE' });
-      onDeleted(meetingId);
+      handleClose(() => onDeleted(meetingId));
     } finally {
       setDeleting(false);
       setRemoveConfirm(false);
@@ -855,11 +860,11 @@ function MeetingDetailPanel({ tenant, basePath, meetingId, userName, roster, onC
   const proposals = meeting.proposals ?? [];
 
   return (
-    <div className="knx-side-panel" ref={panelRef}>
+    <div className={`knx-side-panel${closing ? ' knx-side-panel--closing' : ''}`} ref={panelRef}>
       <div className="knx-side-panel-header">
         <span className="knx-meeting-detail-type" style={{ color: info.color, background: info.chipBg }}>{info.label}</span>
         <span style={{ marginLeft: 'auto' }} />
-        <button type="button" className="knx-side-panel-close" onClick={onClose} aria-label="Cerrar">×</button>
+        <button type="button" className="knx-side-panel-close" onClick={() => handleClose()} aria-label="Cerrar">×</button>
       </div>
       <div className="knx-side-panel-thread knx-board-detail-body">
         <h2 className="knx-meeting-detail-title">{meeting.title}</h2>
@@ -1083,7 +1088,7 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
               <h1>Reuniones</h1>
               <p>
                 {meetings === null ? 'Cargando…' : todaysMeetings.length
-                  ? `Hoy tenés ${todaysMeetings.length} reunión${todaysMeetings.length !== 1 ? 'es' : ''}${minutesToNext != null ? ` · la próxima empieza en ${minutesToNext} min` : ''}`
+                  ? `Hoy tienes ${todaysMeetings.length} reunión${todaysMeetings.length !== 1 ? 'es' : ''}${minutesToNext != null ? ` · la próxima empieza en ${minutesToNext} min` : ''}`
                   : 'Sin reuniones hoy.'}
               </p>
             </div>

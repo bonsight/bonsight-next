@@ -216,11 +216,11 @@ export default function SprintClientReportPresentation({ tenant }) {
     <div className="aria-presentation">
       <div className="aria-card">
         <div className="aria-card-title">Reporte de servicio con marca Bonsight</div>
-        <p className="aria-board-hint" style={{ marginBottom: 16 }}>Elegí el cliente y qué sprints entran (por ejemplo, los dos del mes) — se arma un borrador editable antes de exportar el PDF.</p>
+        <p className="aria-board-hint" style={{ marginBottom: 16 }}>Elige el cliente y qué sprints entran (por ejemplo, los dos del mes) — se arma un borrador editable antes de exportar el PDF.</p>
 
         <label className="aria-report-label">Cliente</label>
         <select className="aria-report-input" value={cliente} onChange={(e) => setCliente(e.target.value)}>
-          <option value="">Elegí un cliente…</option>
+          <option value="">Elige un cliente…</option>
           {picker.clientes.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
 
