@@ -193,7 +193,7 @@ export async function POST(req, { params }) {
           system,
           messages: conversation,
           tools: allowedTools,
-          context: { tenant, intelligenceSources, dbSources, identity },
+          context: { tenant, intelligenceSources, dbSources, identity, conversationId: convoId },
           executeTool,
           isStopTool: (name) => name === 'present_analysis',
           onToolStart: (name) => {
