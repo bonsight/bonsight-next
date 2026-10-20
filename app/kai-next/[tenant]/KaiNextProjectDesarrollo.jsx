@@ -2669,6 +2669,17 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
       .then((r) => r.json())
       .then((d) => setBoard(d));
   };
+
+  // Marcar varias subtareas seguidas (ej. desde el panel de detalle) dispara un `move()` por
+  // cada una, y cada `move()` exitoso pide recargar el tablero — si eso llamara a loadBoard()
+  // directo, saldrían N pedidos GET en paralelo que pueden volver en cualquier orden; el que
+  // responda último pisa el estado con una foto más vieja, aunque sea de un cambio más reciente.
+  // Debounced a un solo loadBoard() real, recién cuando se aquieta la racha de cambios.
+  const loadBoardTimeoutRef = useRef(null);
+  const scheduleBoardReload = () => {
+    clearTimeout(loadBoardTimeoutRef.current);
+    loadBoardTimeoutRef.current = setTimeout(loadBoard, 600);
+  };
   // Sprint activo de ESTE proyecto (o null si todavía no inició ninguno) — se carga una vez
   // acá y se pasa a Tablero/Sprints/Historias, así ninguno de esos tiene que elegir entre
   // sprints de otros proyectos (ver plan en /Users/itriagor/.claude/plans/serene-spinning-mochi.md).
@@ -2771,7 +2782,7 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
         </>
       )}
 
-      {tab === 'tablero' && <ProjectBoard tenant={tenant} projectId={projectId} board={board} onReload={loadBoard} iniciativas={iniciativas} activeSprint={activeSprint} onOptimisticMove={setTaskStatusLocally} />}
+      {tab === 'tablero' && <ProjectBoard tenant={tenant} projectId={projectId} board={board} onReload={scheduleBoardReload} iniciativas={iniciativas} activeSprint={activeSprint} onOptimisticMove={setTaskStatusLocally} />}
 
       {tab === 'sprints' && (
         board ? (
@@ -2784,7 +2795,7 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
             iniciativas={iniciativas}
             activeSprint={activeSprint}
             sprints={projectSprints}
-            onReload={loadBoard}
+            onReload={scheduleBoardReload}
             onSprintReload={loadActiveSprint}
             onOptimisticMove={setTaskStatusLocally}
           />

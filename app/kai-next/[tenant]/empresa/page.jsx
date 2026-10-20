@@ -66,7 +66,7 @@ export default async function KaiNextEmpresaPage({ params }) {
       bic={bic}
       score={score}
       learnings={learnings}
-      diagnosis={diagnosisResult?.diagnosis ?? null}
+      diagnosis={diagnosisResult?.diagnosis ? { ...diagnosisResult.diagnosis, generatedAt: diagnosisResult.generatedAt } : null}
       resolvedRefs={resolvedRefs}
     />
   );

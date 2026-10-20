@@ -3,7 +3,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import KaiNextSidebar from './KaiNextSidebar';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
+import KaiNextEmpresaMapa, { MAPA_CATEGORIES } from './KaiNextEmpresaMapa';
 import { draftChatUrl } from '@/lib/kaiNext/draftChat';
+
+const STALE_DAYS = 14;
 
 const IMPACT_LABELS = { alto: 'Urgente', medio: 'Info', bajo: 'Info' };
 const SOURCE_LABELS = { 'conversación': 'Conversación', documento: 'Documento', aria: 'Aria' };
@@ -71,6 +74,35 @@ export default function KaiNextEmpresa({
   const [merging, setMerging] = useState(false);
   const [dupDismissed, setDupDismissed] = useState(false);
   const [diagError, setDiagError] = useState('');
+
+  // Copia local de resolvedRefs — el prop viene del server una sola vez, pero ahora hay botones
+  // directos (Mapa del negocio, Revisa lo que Kai entendió) que resuelven/reabren sin pasar por
+  // el chat, así que hace falta reflejarlo al toque en esta misma sesión.
+  const [localResolved, setLocalResolved] = useState(resolvedRefs ?? []);
+  // "Sigue activo" en una sugerencia de riesgo/dolor resuelto no escribe nada — solo la saca de
+  // la cola de revisión por esta sesión (no hay nada que "reabrir" si nunca se marcó resuelto).
+  const [suggestionDismissed, setSuggestionDismissed] = useState(() => new Set());
+
+  const markItemResolved = async (type, ref, note) => {
+    const res = await fetch(`/api/kai-next/${tenant}/resolutions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, ref, note }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setLocalResolved(data.resolvedRefs ?? []);
+    }
+  };
+
+  const reopenItem = async (type, ref) => {
+    const res = await fetch(`/api/kai-next/${tenant}/resolutions?type=${encodeURIComponent(type)}&ref=${encodeURIComponent(ref)}`, {
+      method: 'DELETE',
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setLocalResolved(data.resolvedRefs ?? []);
+    }
+  };
 
   // Campos editables del Business Profile — solo se usan en el estado 0 (empresa recién creada,
   // sin nada todavía). Se inicializan desde bic una sola vez; el resto de la página (empresas
@@ -199,8 +231,9 @@ export default function KaiNextEmpresa({
       const res = await fetch(`/api/kai-next/${tenant}/diagnosis`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) { setDiagError(data.error ?? 'No se pudo actualizar el diagnóstico.'); return; }
-      setDiag(data.diagnosis);
+      setDiag({ ...data.diagnosis, generatedAt: data.generatedAt });
       setDupDismissed(false);
+      setSuggestionDismissed(new Set());
     } finally {
       setRegenerating(false);
     }
@@ -278,6 +311,41 @@ export default function KaiNextEmpresa({
   ].filter(([, v]) => v);
 
   const totalDupItems = diag?.duplicados?.reduce((sum, g) => sum + (g.items?.length ?? 0), 0) ?? 0;
+
+  // "Lo que Kai conoce" — reemplaza el % de madurez por un conteo honesto: de las 8 categorías
+  // del Mapa del negocio, cuántas tienen al menos un dato real (sin inventar fecha/severidad).
+  const areasWithData = MAPA_CATEGORIES.filter((c) => (bic?.[c.id]?.length ?? 0) > 0);
+  const missingAreas = MAPA_CATEGORIES.filter((c) => !(bic?.[c.id]?.length ?? 0));
+
+  // Riesgos/dolores/oportunidades que un aprendizaje reciente sugiere que ya no aplican (mismo
+  // mecanismo que `duplicados`, mismo llamado a Claude — ver lib/kai/diagnosis.js).
+  const resolvedSuggestions = (diag?.resueltos_sugeridos ?? []).filter((s) => {
+    const resolveType = MAPA_CATEGORIES.find((c) => c.id === s.categoria)?.resolveType;
+    return resolveType && !isResolved(localResolved, resolveType, s.texto) && !suggestionDismissed.has(s.texto);
+  });
+
+  // Hallazgo de alto impacto, sin resolver, de hace más de STALE_DAYS — no es un juicio de la
+  // IA, es una fecha + un filtro simple sobre datos que ya existen.
+  const staleFinding = (learnings ?? []).find((l) =>
+    l.impact === 'alto' && !isResolved(localResolved, 'learning', l.id)
+    && (Date.now() - new Date(l.createdAt).getTime()) > STALE_DAYS * 86400000
+  ) ?? null;
+
+  // Hasta 3 tarjetas en "Revisa lo que Kai entendió", en este orden de prioridad — duplicados
+  // primero (ya automatizable de un clic), después sugerencias de resolución, al final el
+  // hallazgo estancado si todavía queda lugar.
+  const reviewCards = [];
+  if (diag?.duplicados?.length > 0 && !dupDismissed) reviewCards.push({ kind: 'duplicados' });
+  for (const s of resolvedSuggestions) {
+    if (reviewCards.length >= 3) break;
+    reviewCards.push({ kind: 'resuelto_sugerido', data: s });
+  }
+  if (reviewCards.length < 3 && staleFinding) reviewCards.push({ kind: 'stale', data: staleFinding });
+
+  const diagnosisAgeDays = diag?.generatedAt ? Math.floor((Date.now() - new Date(diag.generatedAt).getTime()) / 86400000) : null;
+  const changesSinceDiagnosis = diag?.generatedAt
+    ? (learnings ?? []).filter((l) => new Date(l.createdAt).getTime() > new Date(diag.generatedAt).getTime()).length
+    : 0;
 
   // Estado 0: empresa recién creada, sin nada todavía. Acá sí tiene sentido ofrecer edición
   // directa de Información General/Objetivos (no hay nada que una edición manual pueda pisar o
@@ -435,11 +503,19 @@ export default function KaiNextEmpresa({
             </div>
             <div className="knx-empresa-header-actions">
               <div className="knx-empresa-score">
-                <div className="knx-empresa-score-label">Madurez del perfil</div>
+                <div className="knx-empresa-score-label">Lo que Kai conoce</div>
                 <div className="knx-empresa-score-row">
-                  <span className="knx-empresa-score-pct">{score}%</span>
-                  <span className="knx-empresa-score-meta">({learningsCount} aprendizaje{learningsCount === 1 ? '' : 's'})</span>
+                  <span className="knx-empresa-score-pct">{areasWithData.length} de {MAPA_CATEGORIES.length}</span>
+                  <span className="knx-empresa-score-meta">áreas</span>
                 </div>
+                {missingAreas.length > 0 && (
+                  <p className="knx-empresa-score-gap">
+                    Le falta saber de <b>{missingAreas.slice(0, 2).map((a) => a.label.toLowerCase()).join(' y ')}</b>.{' '}
+                    <a href={draftChatUrl(basePath, tenant, `Todavía no sabes casi nada sobre ${missingAreas.slice(0, 2).map((a) => a.label.toLowerCase()).join(' y ')} de ${tenantName}. Hazme las preguntas que necesites.`)}>
+                      Contarle a Kai →
+                    </a>
+                  </p>
+                )}
                 {!isZeroState && (
                   <a
                     className="knx-empresa-update-btn"
@@ -490,18 +566,58 @@ export default function KaiNextEmpresa({
           )}
           {shareError && <p className="knx-login-error">{shareError}</p>}
 
-          {diag?.duplicados?.length > 0 && !dupDismissed && (
-            <div className="knx-dup-alert">
-              <span className="knx-dup-alert-icon">⚡</span>
-              <div className="knx-dup-alert-body">
-                <span className="knx-dup-alert-title">Optimización sugerida: {totalDupItems} ítems repetidos detectados</span>
-                <span className="knx-dup-alert-sub">{diag.duplicados.map((g) => g.resumen).join(' · ')}</span>
+          {reviewCards.length > 0 && (
+            <section className="knx-empresa-section">
+              <div className="knx-fuentes-section-head">
+                <h2>Revisa lo que Kai entendió <span>· {reviewCards.length}</span></h2>
+                <p>Kai propone, tú confirmas. Nada cambia en el perfil sin tu visto bueno.</p>
               </div>
-              <div className="knx-dup-alert-actions">
-                <button type="button" onClick={fusionarDuplicados} disabled={merging}>{merging ? 'Fusionando…' : 'Fusionar automáticamente'}</button>
-                <button type="button" className="knx-dup-alert-ignore" onClick={() => setDupDismissed(true)} disabled={merging}>Ignorar</button>
+              <div className="knx-review-grid">
+                {reviewCards.map((card, i) => {
+                  if (card.kind === 'duplicados') {
+                    return (
+                      <article className="knx-review-card" key={i}>
+                        <span className="knx-review-lab knx-review-lab--dup">Duplicados</span>
+                        <h3>{totalDupItems} ítems dicen casi lo mismo</h3>
+                        <p>{diag.duplicados.map((g) => g.resumen).join(' · ')}</p>
+                        <div className="knx-review-acts">
+                          <button type="button" className="knx-review-btn-primary" onClick={fusionarDuplicados} disabled={merging}>{merging ? 'Fusionando…' : 'Unir en uno'}</button>
+                          <button type="button" onClick={() => setDupDismissed(true)} disabled={merging}>Ignorar</button>
+                        </div>
+                      </article>
+                    );
+                  }
+                  if (card.kind === 'resuelto_sugerido') {
+                    const { categoria, texto, razon } = card.data;
+                    const resolveType = MAPA_CATEGORIES.find((c) => c.id === categoria)?.resolveType;
+                    return (
+                      <article className="knx-review-card" key={i}>
+                        <span className="knx-review-lab knx-review-lab--res">Riesgo resuelto</span>
+                        <h3>«{texto}» ya no aplica</h3>
+                        <p>{razon}</p>
+                        <div className="knx-review-acts">
+                          <button type="button" className="knx-review-btn-primary" onClick={() => markItemResolved(resolveType, texto, razon)}>Marcar resuelto</button>
+                          <button type="button" onClick={() => setSuggestionDismissed((prev) => new Set(prev).add(texto))}>Sigue activo</button>
+                        </div>
+                      </article>
+                    );
+                  }
+                  const l = card.data;
+                  const learningRef = { type: 'learning', refId: l.id, label: `Aprendizaje: "${l.content}"` };
+                  return (
+                    <article className="knx-review-card" key={i}>
+                      <span className="knx-review-lab knx-review-lab--urg">Sin acción · {formatDate(l.createdAt)}</span>
+                      <h3>{l.content}</h3>
+                      <p>{l.area ? `Hallazgo de alto impacto en ${l.area}.` : 'Hallazgo de alto impacto.'}</p>
+                      <div className="knx-review-acts">
+                        <a className="knx-review-btn-primary" href={draftChatUrl(basePath, tenant, `Detectaste esto: "${l.content}". Ayúdame a resolverlo — dame un primer borrador o un plan de acción concreto.`, learningRef)}>Pedir borrador a Kai</a>
+                        <a href={draftChatUrl(basePath, tenant, `Ayúdame a crear una tarea para resolver esto: "${l.content}".`, learningRef)}>Crear tarea</a>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
-            </div>
+            </section>
           )}
 
           <section className="knx-empresa-section">
@@ -573,8 +689,11 @@ export default function KaiNextEmpresa({
 
           <section className="knx-empresa-section">
             <div className="knx-fuentes-section-head">
-              <h2>Ejes estratégicos & activadores de acción</h2>
+              <h2>Diagnóstico de Kai</h2>
               <span className="knx-diagnosis-refresh">
+                {diagnosisAgeDays !== null && (
+                  <span className="knx-diagnosis-age">Del {formatDate(diag.generatedAt)} · {changesSinceDiagnosis} cambios desde entonces</span>
+                )}
                 {diag && <span className="knx-diagnosis-conf">{CONFIANZA_LABELS[diag.confianza] ?? diag.confianza}</span>}
                 <button type="button" onClick={regenerateDiagnosis} disabled={regenerating || merging}>
                   {regenerating ? 'Actualizando…' : diag ? 'Actualizar diagnóstico' : 'Generar diagnóstico'}
@@ -582,10 +701,28 @@ export default function KaiNextEmpresa({
               </span>
             </div>
             {diagError && <p className="knx-login-error">{diagError}</p>}
+            {(diag?.problema_principal || diag?.oportunidad_principal) && (
+              <div className="knx-diagnosis-grid">
+                {diag.problema_principal && (
+                  <div className="knx-diagnosis-col knx-diagnosis-col--problema">
+                    <small>Problema principal</small>
+                    <b>{diag.problema_principal}</b>
+                    {diag.impacto && <span>{diag.impacto}</span>}
+                  </div>
+                )}
+                {diag.oportunidad_principal && (
+                  <div className="knx-diagnosis-col knx-diagnosis-col--oportunidad">
+                    <small>Oportunidad principal</small>
+                    <b>{diag.oportunidad_principal}</b>
+                  </div>
+                )}
+              </div>
+            )}
+            <h3 className="knx-empresa-subhead">Ejes estratégicos & activadores de acción</h3>
             {diag?.ejes?.length > 0 ? (
               <div className="knx-ejes-grid">
                 {diag.ejes.map((eje, i) => {
-                  const ejeResolved = isResolved(resolvedRefs, 'eje', eje.titulo);
+                  const ejeResolved = isResolved(localResolved, 'eje', eje.titulo);
                   const ejeRef = { type: 'eje', refId: eje.titulo, label: `Eje estratégico "${eje.titulo}" — ${eje.descripcion}` };
                   return (
                     <div className={`knx-eje-card${ejeResolved ? ' knx-eje-card--resolved' : ''}`} key={i}>
@@ -629,6 +766,22 @@ export default function KaiNextEmpresa({
                 </div>
               )
             )}
+          </section>
+
+          <section className="knx-empresa-section">
+            <div className="knx-fuentes-section-head">
+              <h2>Mapa del negocio</h2>
+              <p>Todo lo que el Business Profile ya guarda, agrupado por tipo.</p>
+            </div>
+            <KaiNextEmpresaMapa
+              tenant={tenant}
+              tenantName={tenantName}
+              basePath={basePath}
+              bic={bic}
+              resolvedRefs={localResolved}
+              onMarkResolved={markItemResolved}
+              onReopen={reopenItem}
+            />
           </section>
 
           <section className="knx-align-card">
@@ -759,14 +912,14 @@ export default function KaiNextEmpresa({
 
           <section className="knx-empresa-section">
             <div className="knx-fuentes-section-head">
-              <h2>Hallazgos recientes & decisiones de impacto</h2>
+              <h2>Hallazgos recientes & decisiones de impacto <span>· {learningsCount}</span></h2>
             </div>
             {recentLearnings.length === 0 ? (
               <p className="knx-empresa-card-empty">Todavía no hay aprendizajes registrados.</p>
             ) : (
               <div className="knx-learning-list">
                 {recentLearnings.map((l, i) => {
-                  const learningResolved = isResolved(resolvedRefs, 'learning', l.id);
+                  const learningResolved = isResolved(localResolved, 'learning', l.id);
                   const learningRef = { type: 'learning', refId: l.id, label: `Aprendizaje: "${l.content}"` };
                   return (
                     <div className="knx-learning-row" key={i}>

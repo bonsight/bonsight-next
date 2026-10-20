@@ -19,6 +19,7 @@ import { trackUsage } from '@/lib/kai/usage';
 import { OFFICE_MIMES, extractTextFromBuffer } from '@/lib/fileExtract';
 import { buildBIC, formatBICForPrompt } from '@/lib/kai/bic';
 import { MODEL, TOOLS, DATA_TOOLS, TOOL_LABELS, anthropic, executeTool } from '@/lib/kaiNext/agentShared';
+import { captureBusinessMemory } from '@/lib/kaiNext/memoryCapture';
 import { filterToolsByCapabilities, isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getLatestDraft, createActivityDraft, updateActivityDraft, lockActivity } from '@/lib/kai/activities';
 
@@ -307,6 +308,10 @@ export async function POST(req, { params }) {
           activityStart,
           toolsUsed,
         }));
+
+        // El usuario ya recibió el 'done' de arriba — esto corre después, no suma latencia
+        // percibida (ver lib/kaiNext/memoryCapture.js para el porqué de un pase aparte).
+        await captureBusinessMemory({ tenant, conversationId: convoId, userMessage: message, assistantReply: cleanedText });
       } catch (err) {
         console.error(`kai-next tenant [${tenant}] error:`, err);
         let reply = 'Algo salió mal. Intenta de nuevo en un momento.';
