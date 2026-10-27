@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import KaiNextSidebar from './KaiNextSidebar';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
 import { useSidePanelClose } from '@/lib/kaiNext/useSidePanelClose';
+import { sortByOrder, dropsBefore, computeDropOrder } from '@/lib/kaiNext/dragOrder';
 import { PruebasSection } from './KaiNextProjectExperimental';
 import KaiNextProjectDesarrollo from './KaiNextProjectDesarrollo';
 
@@ -29,6 +30,9 @@ const TASK_STATUSES = [
   { id: 'doing', label: 'Haciendo' },
   { id: 'done', label: 'Terminado' },
 ];
+// Solo para projectKind='seguimiento' (ver taskStatuses en el componente de detalle) — civil
+// comparte el mismo tablero pero con las 3 columnas de siempre.
+const BACKLOG_STATUS = { id: 'backlog', label: 'Backlog' };
 const PRIORITIES = ['Alta', 'Media', 'Baja'];
 
 // Tabs de la lista de tareas — "Activas" (todo+doing) va primero y es el default: una tarea
@@ -387,7 +391,7 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
 // Mismos campos que el panel de detalle (Nombre/Descripción/Mini proyecto/Prioridad/Estado/
 // Inicio/Fin/Estimación/Horas reales/Responsables) — así no hace falta crear la tarea "a
 // medias" y después abrir el detalle para completarla.
-function NewTaskQuickModal({ people, grupos, tipologias, onCreate, onClose }) {
+function NewTaskQuickModal({ people, grupos, tipologias, statuses = TASK_STATUSES, onCreate, onClose }) {
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [fase, setFase] = useState('');
@@ -466,7 +470,7 @@ function NewTaskQuickModal({ people, grupos, tipologias, onCreate, onClose }) {
         <div className="knx-board-field">
           <label>Estado</label>
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            {TASK_STATUSES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            {statuses.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         </div>
         <div className="knx-board-field-row">
@@ -544,7 +548,7 @@ function TaskRow({ task, people, canManage, canToggle, onStatusChange, onDelete,
 
 // Panel de detalle de una tarea de Proyecto de Seguimiento — mismo shell visual
 // (.knx-side-panel) que ya usa DevTaskDetailPanel en Proyecto de Desarrollo.
-function TaskDetailPanel({ task, people, grupos, tipologias, canManage, documents = [], onUploadDocument, onDeleteDocument, onClose, onSave, onStatusChange, onDelete }) {
+function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STATUSES, canManage, documents = [], onUploadDocument, onDeleteDocument, onClose, onSave, onStatusChange, onDelete }) {
   const [closing, handleClose] = useSidePanelClose(onClose);
   const [nombre, setNombre] = useState(task.nombre);
   const [descripcion, setDescripcion] = useState(task.descripcion ?? '');
@@ -645,7 +649,7 @@ function TaskDetailPanel({ task, people, grupos, tipologias, canManage, document
           <div className="knx-board-field">
             <label>Estado</label>
             <select value={task.status} onChange={(e) => onStatusChange(e.target.value)} disabled={!canManage}>
-              {TASK_STATUSES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+              {statuses.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           </div>
         </div>
@@ -728,7 +732,7 @@ function TaskDetailPanel({ task, people, grupos, tipologias, canManage, document
 // cambió en Canvas/Cronograma: botón que abre el modal completo (NewTaskQuickModal), no un
 // campo de texto suelto.
 
-function TaskTableRow({ task, people, tipologias, canManage, canToggle, onStatusChange, onDelete, onOpen }) {
+function TaskTableRow({ task, people, tipologias, statuses = TASK_STATUSES, canManage, canToggle, onStatusChange, onDelete, onOpen }) {
   const done = task.status === 'done';
   const vencida = isVencida(task);
   const venceHoy = isVenceHoy(task);
@@ -763,7 +767,7 @@ function TaskTableRow({ task, people, tipologias, canManage, canToggle, onStatus
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => onStatusChange(e.target.value)}
       >
-        {TASK_STATUSES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+        {statuses.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
       </select>
       <span className="knx-task-table-sub">{task.prioridad ?? '—'}</span>
       <span className="knx-task-table-sub">{task.estimatedHours ?? '—'}/{task.actualHours ?? '—'}</span>
@@ -897,15 +901,17 @@ function KaiNextGantt({ grouped, people, grupos, savingTaskId, canToggleTask, on
 
 // Tarjeta simple del Kanban de tareas — mismo look que .knx-board-card, sin los campos
 // específicos de Notion (tipo/severidad/"fuera de plan") que no existen en este modelo.
-function TaskCanvasCard({ task, people, tipologias, draggable, onDragStart, onDragEnd, dragging, onOpen }) {
+function TaskCanvasCard({ task, people, tipologias, draggable, onDragStart, onDragEnd, dragging, dropIndicator, onDragOverCard, onDrop, onOpen }) {
   const tipologiaName = task.tipologiaId ? tipologias?.find((t) => t.id === task.tipologiaId)?.name : null;
   return (
     <div
-      className={`knx-board-card${dragging ? ' knx-board-card--dragging' : ''}`}
+      className={`knx-board-card${dragging ? ' knx-board-card--dragging' : ''}${dropIndicator ? ` knx-board-card--over-${dropIndicator}` : ''}`}
       onClick={onOpen}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      onDragOver={onDragOverCard}
+      onDrop={onDrop}
     >
       <p className="knx-board-card-title">{task.nombre}</p>
       {task.descripcion && <p className="knx-board-card-desc">{task.descripcion.length > 90 ? `${task.descripcion.slice(0, 90).trim()}…` : task.descripcion}</p>}
@@ -932,33 +938,60 @@ function TaskCanvasCard({ task, people, tipologias, draggable, onDragStart, onDr
   );
 }
 
-// Kanban por estado (Por hacer/Haciendo/Terminado) — alternativa más rápida de escanear que la
-// Lista, y no depende de fechas cargadas como el Cronograma. Drag-and-drop entre columnas
-// cambia el status real de la tarea (mismo setStatus que ya usan Lista/Cronograma).
-function KaiNextTaskCanvas({ tasks, people, tipologias, canManage, onStatusChange, selectedTaskId, onSelectTask }) {
+// Kanban por estado (Por hacer/Haciendo/Terminado, + Backlog en Seguimiento) — alternativa más
+// rápida de escanear que la Lista, y no depende de fechas cargadas como el Cronograma.
+// Drag-and-drop entre columnas cambia el status real de la tarea (mismo setStatus que ya usan
+// Lista/Cronograma); dentro de la misma columna, reordena (onReorder) sin tocar el status.
+function KaiNextTaskCanvas({ tasks, people, tipologias, statuses = TASK_STATUSES, canManage, onStatusChange, onReorder, onBackfill, selectedTaskId, onSelectTask }) {
   const [dragId, setDragId] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState(null);
+  const [dragOverBefore, setDragOverBefore] = useState(true);
 
-  const handleDrop = (status) => {
+  const clearDrag = () => { setDragId(null); setDragOverCol(null); setDragOverTaskId(null); };
+
+  // Soltar sobre una tarjeta puntual: reordena dentro de su columna, y si además cambió de
+  // columna, cambia el status en el mismo gesto (un solo PATCH, ver setStatus con order).
+  const dropOnCard = (e, colId, colTasksSorted, overTask) => {
+    e.preventDefault();
+    e.stopPropagation();
     const taskId = dragId;
-    setDragOverCol(null);
-    setDragId(null);
+    const before = dragOverBefore;
+    clearDrag();
     if (!taskId) return;
     const task = tasks.find((t) => t.id === taskId);
-    if (task && task.status !== status) onStatusChange(taskId, status);
+    if (!task) return;
+    const { order, backfill } = computeDropOrder(colTasksSorted, taskId, overTask.id, before);
+    backfill.forEach((b) => onBackfill(b.id, b.order));
+    if (task.status !== colId) onStatusChange(taskId, colId, order);
+    else if (order !== task.order) onReorder(taskId, order);
+  };
+
+  // Soltar en zona vacía de la columna (no sobre una tarjeta): va al final.
+  const dropOnColumn = (e, colId, colTasksSorted) => {
+    e.preventDefault();
+    const taskId = dragId;
+    clearDrag();
+    if (!taskId) return;
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const { order, backfill } = computeDropOrder(colTasksSorted, taskId, null, false);
+    backfill.forEach((b) => onBackfill(b.id, b.order));
+    if (task.status !== colId) onStatusChange(taskId, colId, order);
+    else if (order !== task.order) onReorder(taskId, order);
   };
 
   return (
-    <div className="knx-board-cols" style={{ gridTemplateColumns: `repeat(${TASK_STATUSES.length}, minmax(200px, 1fr))` }}>
-      {TASK_STATUSES.map((col) => {
-        const colTasks = tasks.filter((t) => t.status === col.id);
+    <div className="knx-board-cols" style={{ gridTemplateColumns: `repeat(${statuses.length}, minmax(200px, 1fr))` }}>
+      {statuses.map((col) => {
+        const colTasks = sortByOrder(tasks.filter((t) => t.status === col.id));
         return (
           <div
             key={col.id}
             className={`knx-board-col${dragOverCol === col.id ? ' knx-board-col--over' : ''}`}
             onDragOver={(e) => { e.preventDefault(); setDragOverCol(col.id); }}
             onDragLeave={() => setDragOverCol((c) => (c === col.id ? null : c))}
-            onDrop={(e) => { e.preventDefault(); handleDrop(col.id); }}
+            onDrop={(e) => dropOnColumn(e, col.id, colTasks)}
           >
             <div className="knx-board-col-head">{col.label} <span className="knx-canvas-group-count">{colTasks.length}</span></div>
             <div className="knx-board-col-cards">
@@ -970,8 +1003,18 @@ function KaiNextTaskCanvas({ tasks, people, tipologias, canManage, onStatusChang
                   tipologias={tipologias}
                   draggable={canManage}
                   onDragStart={() => setDragId(t.id)}
-                  onDragEnd={() => setDragId(null)}
+                  onDragEnd={clearDrag}
                   dragging={dragId === t.id}
+                  dropIndicator={dragOverTaskId === t.id && dragId !== t.id ? (dragOverBefore ? 'top' : 'bottom') : null}
+                  onDragOverCard={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDragOverCol(col.id);
+                    if (dragId === t.id) return;
+                    setDragOverTaskId(t.id);
+                    setDragOverBefore(dropsBefore(e, e.currentTarget));
+                  }}
+                  onDrop={(e) => dropOnCard(e, col.id, colTasks, t)}
                   onOpen={() => onSelectTask(t.id)}
                 />
               ))}
@@ -1598,6 +1641,9 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
   const isCivil = meta.projectKind === 'civil';
   const isExperimental = meta.projectKind === 'experimental';
   const isDesarrollo = meta.projectKind === 'desarrollo';
+  // Backlog solo en Seguimiento (no civil, aunque comparten el mismo tablero/componente) — una
+  // tarea sin planificar todavía tiene más sentido ahí que en una obra con cronograma físico.
+  const taskStatuses = meta.projectKind === 'seguimiento' ? [BACKLOG_STATUS, ...TASK_STATUSES] : TASK_STATUSES;
 
   const addPartidaRow = async (payload) => {
     const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/partidas`, {
@@ -1694,16 +1740,41 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
     if (res.ok) load();
   };
 
-  const setStatus = async (taskId, status) => {
+  const setStatus = async (taskId, status, order) => {
     setSavingTaskId(taskId);
     try {
       const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/tasks/${taskId}/status`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(typeof order === 'number' ? { status, order } : { status }),
       });
       if (res.ok) load();
     } finally {
       setSavingTaskId(null);
     }
+  };
+
+  // Drag vertical dentro de la misma columna (sin cambio de status) — pinta la posición nueva
+  // AL INSTANTE en el cliente (mismo criterio que moveTaskOptimistic en KaiNextSprints.jsx) en
+  // vez de esperar la ida y vuelta al servidor: `load()` también recarga el mirror de Notion del
+  // proyecto (ver syncTaskToNotion), que tarda unos segundos — pedirle los datos de nuevo después
+  // de guardar hacía que la tarjeta "saltara" sola unos segundos después de haberse soltado bien.
+  const reorderTaskLocal = async (taskId, order) => {
+    const prevData = data;
+    setData((prev) => (prev ? { ...prev, tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, order } : t)) } : prev));
+    const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/tasks/${taskId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order }),
+    });
+    if (!res.ok) setData(prevData);
+  };
+
+  // Migra a un order real las vecinas que todavía estaban en null (ver `backfill` en
+  // computeDropOrder) — optimista en lo local, igual que reorderTaskLocal, sin esperar a que
+  // vuelva el PATCH (es una migración silenciosa, no la acción que el usuario está mirando).
+  const backfillOrder = (taskId, order) => {
+    setData((prev) => (prev ? { ...prev, tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, order } : t)) } : prev));
+    fetch(`/api/kai-next/${tenant}/projects/${projectId}/tasks/${taskId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order }),
+    }).catch(() => null);
   };
 
   const toggleTaskDone = (task) => setStatus(task.id, task.progreso >= 100 ? 'todo' : 'done');
@@ -1928,7 +1999,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
               </div>
             );
           })()}
-          {newTaskOpen && <NewTaskQuickModal people={people} grupos={grupos} tipologias={tipologias} onCreate={createTask} onClose={() => setNewTaskOpen(false)} />}
+          {newTaskOpen && <NewTaskQuickModal people={people} grupos={grupos} tipologias={tipologias} statuses={taskStatuses} onCreate={createTask} onClose={() => setNewTaskOpen(false)} />}
           {tipologiasModalOpen && (
             <TipologiasManageModal
               tipologias={tipologias}
@@ -1983,6 +2054,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
                           task={t}
                           people={people}
                           tipologias={tipologias}
+                          statuses={taskStatuses}
                           canManage={level.isSupervisorLevel && !inactive}
                           canToggle={!inactive}
                           onStatusChange={(status) => setStatus(t.id, status)}
@@ -2000,6 +2072,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
                     task={t}
                     people={people}
                     tipologias={tipologias}
+                    statuses={taskStatuses}
                     canManage={level.isSupervisorLevel && !inactive}
                     canToggle={!inactive}
                     onStatusChange={(status) => setStatus(t.id, status)}
@@ -2015,8 +2088,11 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
               people={people}
               grupos={grupos}
               tipologias={tipologias}
+              statuses={taskStatuses}
               canManage={level.isSupervisorLevel && !inactive}
               onStatusChange={setStatus}
+              onReorder={reorderTaskLocal}
+              onBackfill={backfillOrder}
               selectedTaskId={selectedTaskId}
               onSelectTask={setSelectedTaskId}
             />
@@ -2041,6 +2117,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
           people={people}
           grupos={grupos}
           tipologias={tipologias}
+          statuses={taskStatuses}
           canManage={level.isSupervisorLevel && !inactive}
           documents={documents.filter((d) => d.taskId === selectedTaskId)}
           onUploadDocument={(payload) => uploadDocument({ ...payload, taskId: selectedTaskId })}

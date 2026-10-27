@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import KaiNextSidebar from './KaiNextSidebar';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
 import { useSidePanelClose } from '@/lib/kaiNext/useSidePanelClose';
+import { sortByOrder, dropsBefore, computeDropOrder } from '@/lib/kaiNext/dragOrder';
 
 const PRIORITIES = ['Alta', 'Media', 'Baja'];
 const TASK_TYPES = ['Desarrollo', 'Soporte', 'Bug', 'Mejora', 'Reunión'];
@@ -43,16 +44,18 @@ function TrashIcon() {
 }
 
 // ── Tarjeta de tarea ─────────────────────────────────────────────────────────
-function TaskCard({ task, columns, busy, onOpen, onStatusChange, onRemove, onDragStart, onDragEnd, dragging, entering }) {
+function TaskCard({ task, columns, busy, onOpen, onStatusChange, onRemove, onDragStart, onDragEnd, dragging, entering, dropIndicator, onDragOverCard, onDropCard }) {
   const start = task.committedStartDate ?? task.startDate;
   const hasDates = start || task.dueDate;
   return (
     <div
-      className={`knx-board-card${dragging ? ' knx-board-card--dragging' : ''}${entering ? ' knx-board-card--entering' : ''}`}
+      className={`knx-board-card${dragging ? ' knx-board-card--dragging' : ''}${entering ? ' knx-board-card--entering' : ''}${dropIndicator ? ` knx-board-card--over-${dropIndicator}` : ''}`}
       onClick={() => onOpen(task.id)}
       draggable
       onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', task.id); onDragStart(task.id); }}
       onDragEnd={onDragEnd}
+      onDragOver={onDragOverCard}
+      onDrop={onDropCard}
     >
       <div className="knx-board-card-top">
         {task.outOfPlan ? <span className="knx-board-card-flag">Fuera de plan</span> : <span />}
@@ -349,6 +352,113 @@ function NewSprintForm({ busy, onCreate, onClose }) {
   );
 }
 
+// Acción independiente, disponible siempre que haya más de un sprint en el proyecto — no
+// depende de haber creado ni cerrado nada recién. Dos pasos: elegir DE QUÉ sprint traer (any
+// otro sprint del proyecto, cerrado o no) y, recién con eso cargado, elegir cuáles de sus tareas
+// sin terminar traer al sprint que se está viendo ahora mismo. Todas arrancan marcadas (el caso
+// más común es "traer todo lo pendiente"), pero se puede ajustar antes de confirmar.
+function BringTasksModal({ tenant, currentSprintId, sprintOptions, onClose, onMoved }) {
+  const [sourceId, setSourceId] = useState('');
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [sourceTasks, setSourceTasks] = useState(null); // null = todavía no se eligió sprint
+  const [selected, setSelected] = useState(new Set());
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const loadSourceTasks = async (id) => {
+    setSourceId(id);
+    setSourceTasks(null);
+    setErr(null);
+    if (!id) return;
+    setLoadingTasks(true);
+    try {
+      const res = await fetch(`/api/kai-next/${tenant}/board?sprintId=${id}`);
+      const json = await res.json();
+      if (!res.ok) { setErr(json.error || 'No se pudo cargar ese sprint.'); return; }
+      const pending = (json.tasks ?? []).filter((t) => t.status !== 'Done');
+      setSourceTasks(pending);
+      setSelected(new Set(pending.map((t) => t.id)));
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
+  const toggle = (id) => setSelected((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const allSelected = sourceTasks?.length > 0 && sourceTasks.every((t) => selected.has(t.id));
+
+  const confirm = async () => {
+    const pageIds = [...selected];
+    if (!pageIds.length) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/kai-next/${tenant}/board`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'move_tasks_sprint', sprintId: currentSprintId, pageIds, targetSprintId: currentSprintId }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setErr(json.error || 'No se pudieron traer las tareas.'); return; }
+      onMoved(json);
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="knx-confirm-backdrop" onClick={onClose}>
+      <div className="knx-confirm-modal" onClick={(e) => e.stopPropagation()} role="alertdialog" aria-modal="true">
+        <h3>Traer tareas de otro sprint</h3>
+        <div className="knx-board-field" style={{ marginBottom: 12 }}>
+          <label>Desde</label>
+          <select value={sourceId} onChange={(e) => loadSourceTasks(e.target.value)} autoFocus>
+            <option value="">Elegí un sprint…</option>
+            {sprintOptions.map((s) => <option key={s.id} value={s.id}>{s.title} · {s.status}</option>)}
+          </select>
+        </div>
+        {loadingTasks && <p className="knx-knowledge-empty">Cargando…</p>}
+        {sourceTasks && (
+          sourceTasks.length === 0 ? (
+            <p className="knx-knowledge-empty">Ese sprint no tiene tareas sin terminar.</p>
+          ) : (
+            <>
+              <p>Tiene {sourceTasks.length} tarea{sourceTasks.length !== 1 ? 's' : ''} sin terminar. Elegí cuáles traer.</p>
+              <div className="knx-board-popover-actions" style={{ marginBottom: 8 }}>
+                <button type="button" onClick={() => setSelected(allSelected ? new Set() : new Set(sourceTasks.map((t) => t.id)))}>
+                  {allSelected ? 'Ninguna' : 'Todas'}
+                </button>
+              </div>
+              <div className="knx-meeting-attendee-list" style={{ maxHeight: 280, overflowY: 'auto', marginBottom: 12 }}>
+                {sourceTasks.map((t) => (
+                  <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggle(t.id)} />
+                    <span>{t.title}</span>
+                  </label>
+                ))}
+              </div>
+            </>
+          )
+        )}
+        {err && <p className="knx-login-error">{err}</p>}
+        <div className="knx-confirm-actions">
+          <button type="button" className="knx-confirm-cancel" onClick={onClose}>Cancelar</button>
+          <button type="button" className="knx-analisis-sources-save" disabled={busy || !sourceTasks?.length || !selected.size} onClick={confirm}>
+            {busy ? 'Trayendo…' : `Traer ${selected.size} tarea${selected.size !== 1 ? 's' : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Tablero de Sprints propio de Kai Next — mismo backend 100% Notion que Aria (lib/aria/board.js,
 // cero storage nuevo, ver app/api/kai-next/[tenant]/board), pero reconstruido con el estilo
 // visual de Kai Next (.knx-*) en vez de reusar SprintBoardPresentation.jsx de Aria, que depende
@@ -374,6 +484,11 @@ export default function KaiNextSprints({
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
   const [justMovedTaskId, setJustMovedTaskId] = useState(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState(null);
+  const [dragOverBefore, setDragOverBefore] = useState(true);
+  // "Traer tareas de otro sprint" — acción independiente, no atada a crear ni cerrar nada (ver
+  // BringTasksModal).
+  const [bringTasksOpen, setBringTasksOpen] = useState(false);
 
   useEffect(() => {
     fetch(`/api/kai-next/${tenant}`)
@@ -429,32 +544,79 @@ export default function KaiNextSprints({
     }
   };
 
+
   // Cambiar de estado (drag-and-drop, el <select> de la tarjeta, o confirmar horas al marcar
   // Hecho) actualiza la columna AL INSTANTE, sin esperar la ida y vuelta a Notion — antes la
   // tarjeta volvía a su columna original durante esos segundos y recién saltaba a la nueva
   // cuando llegaba la respuesta, lo que se sentía como que el drop "no pegaba". Si el PATCH
   // falla, se revierte al estado previo.
-  const moveTaskOptimistic = async (task, status, actualHours) => {
+  const moveTaskOptimistic = async (task, status, actualHours, order) => {
     const prevData = data;
     setJustMovedTaskId(task.id);
-    setData((prev) => (prev ? { ...prev, tasks: prev.tasks.map((t) => (t.id === task.id ? { ...t, status } : t)) } : prev));
+    setData((prev) => (prev ? { ...prev, tasks: prev.tasks.map((t) => (t.id === task.id ? { ...t, status, ...(order != null ? { order } : {}) } : t)) } : prev));
     setBusy(true);
     setErr(null);
     try {
       const res = await fetch(`/api/kai-next/${tenant}/board`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'move_task', sprintId: prevData?.sprint?.id, pageId: task.id, status, actualHours }),
+        body: JSON.stringify({ action: 'move_task', sprintId: prevData?.sprint?.id, pageId: task.id, status, actualHours, order }),
       });
       const json = await res.json();
       if (!res.ok) { setErr(json.error || 'No se pudo actualizar.'); setData(prevData); return; }
-      setData(json);
+      // Para la tarea que se acaba de mover, nos quedamos con lo que nosotros mismos escribimos
+      // (status y, si el drag también reordenó, order) en vez de lo que esta lectura trajo —
+      // leer Notion justo después de escribirle no siempre refleja el cambio todavía (tarda unos
+      // segundos en quedar consistente), y antes eso hacía que la tarjeta "saltara" sola después
+      // de soltarla bien. El resto de los datos (otras tareas, métricas) sí se refrescan normal.
+      setData({ ...json, tasks: json.tasks.map((t) => (t.id === task.id ? { ...t, status, ...(order != null ? { order } : {}) } : t)) });
     } catch {
       setErr('Error de conexión.');
       setData(prevData);
     } finally {
       setBusy(false);
     }
+  };
+
+  // Drag vertical dentro de la misma columna (sin cambio de status) — mismo patrón optimista
+  // que moveTaskOptimistic, pero a propósito NO pisa `data` con la respuesta cuando sale bien:
+  // leer la base de Notion justo después de escribirle no siempre trae el valor recién guardado
+  // (puede tardar unos segundos en quedar consistente), y reemplazar el order ya correcto por
+  // esa lectura todavía vieja era lo que hacía que la tarjeta "saltara" sola después de soltarla.
+  // El order que se acaba de escribir YA es la verdad; si el PATCH devolvió 200, confiamos en él.
+  const reorderTaskOptimistic = async (task, order) => {
+    const prevData = data;
+    setData((prev) => (prev ? { ...prev, tasks: prev.tasks.map((t) => (t.id === task.id ? { ...t, order } : t)) } : prev));
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/kai-next/${tenant}/board`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reorder_task', sprintId: prevData?.sprint?.id, pageId: task.id, order }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setErr(json.error || 'No se pudo reordenar.');
+        setData(prevData);
+      }
+    } catch {
+      setErr('Error de conexión.');
+      setData(prevData);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Migra a un order real las vecinas que todavía estaban en null (ver `backfill` en
+  // computeDropOrder) — optimista en lo local, sin su propio ciclo de busy/error: la escritura
+  // principal (moveTaskOptimistic/reorderTaskOptimistic) ya refresca `data` después.
+  const backfillOrder = (taskId, order) => {
+    setData((prev) => (prev ? { ...prev, tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, order } : t)) } : prev));
+    fetch(`/api/kai-next/${tenant}/board`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reorder_task', sprintId: data?.sprint?.id, pageId: taskId, order }),
+    }).catch(() => null);
   };
 
   const handleLogout = async () => {
@@ -480,18 +642,19 @@ export default function KaiNextSprints({
     setChats((prev) => prev.filter((c) => c.id !== id));
   };
 
-  const onStatusChange = (task, status) => {
-    if (status === 'Done') { setDoneHoursPrompt({ pageId: task.id }); setDoneHoursInput(task.estimatedHours ?? ''); return; }
-    moveTaskOptimistic(task, status);
+  const onStatusChange = (task, status, order) => {
+    if (status === 'Done') { setDoneHoursPrompt({ pageId: task.id, order }); setDoneHoursInput(task.estimatedHours ?? ''); return; }
+    moveTaskOptimistic(task, status, undefined, order);
   };
 
   const confirmDoneWithHours = () => {
     const pageId = doneHoursPrompt?.pageId;
+    const order = doneHoursPrompt?.order;
     setDoneHoursPrompt(null);
     if (!pageId) return;
     const task = data?.tasks?.find((t) => t.id === pageId);
     if (!task) return;
-    moveTaskOptimistic(task, 'Done', doneHoursInput === '' ? undefined : Number(doneHoursInput));
+    moveTaskOptimistic(task, 'Done', doneHoursInput === '' ? undefined : Number(doneHoursInput), order);
   };
 
   if (loading && !data) {
@@ -546,6 +709,9 @@ export default function KaiNextSprints({
                 </select>
               )}
               <button type="button" className="knx-analisis-compare" onClick={() => setMode(mode === 'new_sprint' ? null : 'new_sprint')}>+ Nuevo sprint</button>
+              {sprint && sprints?.length > 1 && (
+                <button type="button" className="knx-analisis-compare" onClick={() => setBringTasksOpen(true)} disabled={busy}>Traer tareas de otro sprint</button>
+              )}
               {sprint?.status === 'Planificado' && (
                 <button type="button" className="knx-analisis-compare" onClick={() => handleAction('close_planning', {})} disabled={busy}>Cerrar planificación</button>
               )}
@@ -622,7 +788,25 @@ export default function KaiNextSprints({
 
               <div className="knx-board-columns">
                 {columns.map((col) => {
-                  const colTasks = visibleTasks.filter((t) => t.status === col.id);
+                  const colTasks = sortByOrder(visibleTasks.filter((t) => t.status === col.id));
+                  const clearDrag = () => { setDraggedTaskId(null); setDragOverCol(null); setDragOverTaskId(null); };
+                  // Soltar sobre una tarjeta puntual: reordena dentro de la columna y, si además
+                  // cambió de columna, cambia el status en el mismo gesto (ver onStatusChange con
+                  // order — ese 3er argumento viaja hasta moveTaskOptimistic/reorderTaskOptimistic).
+                  const dropOnCard = (e, overTask) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const taskId = draggedTaskId;
+                    const before = dragOverBefore;
+                    clearDrag();
+                    if (!taskId) return;
+                    const task = tasks.find((t) => t.id === taskId);
+                    if (!task) return;
+                    const { order, backfill } = computeDropOrder(colTasks, taskId, overTask.id, before);
+                    backfill.forEach((b) => backfillOrder(b.id, b.order));
+                    if (task.status !== col.id) onStatusChange(task, col.id, order);
+                    else if (order !== task.order) reorderTaskOptimistic(task, order);
+                  };
                   return (
                     <div className="knx-board-column" key={col.id}>
                       <div className="knx-board-column-head">
@@ -636,24 +820,39 @@ export default function KaiNextSprints({
                         onDragLeave={() => setDragOverCol((c) => (c === col.id ? null : c))}
                         onDrop={(e) => {
                           e.preventDefault();
-                          setDragOverCol(null);
                           // Confía en el estado de React, no en dataTransfer.getData() — es la
                           // misma pestaña/árbol de React, no hace falta el payload nativo para
                           // identificar la tarea, y getData() resultó poco confiable entre
                           // navegadores (la animación de arrastre sí funcionaba, el drop no).
                           const taskId = draggedTaskId;
-                          setDraggedTaskId(null);
+                          clearDrag();
+                          if (!taskId) return;
                           const task = tasks.find((t) => t.id === taskId);
-                          if (task && task.status !== col.id) onStatusChange(task, col.id);
+                          if (!task) return;
+                          // Soltar en zona vacía de la columna (no sobre una tarjeta): al final.
+                          const { order, backfill } = computeDropOrder(colTasks, taskId, null, false);
+                          backfill.forEach((b) => backfillOrder(b.id, b.order));
+                          if (task.status !== col.id) onStatusChange(task, col.id, order);
+                          else if (order !== task.order) reorderTaskOptimistic(task, order);
                         }}
                       >
                         {colTasks.map((t) => (
                           <TaskCard
                             key={t.id} task={t} columns={columns} busy={busy}
                             onOpen={setDetailTaskId} onStatusChange={onStatusChange} onRemove={(id) => setRemoveTarget(id)}
-                            onDragStart={setDraggedTaskId} onDragEnd={() => { setDraggedTaskId(null); setDragOverCol(null); }}
+                            onDragStart={setDraggedTaskId} onDragEnd={clearDrag}
                             dragging={draggedTaskId === t.id}
                             entering={justMovedTaskId === t.id}
+                            dropIndicator={dragOverTaskId === t.id && draggedTaskId !== t.id ? (dragOverBefore ? 'top' : 'bottom') : null}
+                            onDragOverCard={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (dragOverCol !== col.id) setDragOverCol(col.id);
+                              if (draggedTaskId === t.id) return;
+                              setDragOverTaskId(t.id);
+                              setDragOverBefore(dropsBefore(e, e.currentTarget));
+                            }}
+                            onDropCard={(e) => dropOnCard(e, t)}
                           />
                         ))}
                         {!colTasks.length && <p className="knx-board-column-empty">Sin tareas</p>}
@@ -709,6 +908,7 @@ export default function KaiNextSprints({
         open={!!closeTarget}
         title="Cerrar sprint"
         message="¿Cerrar este sprint? Se congelan las métricas y no se puede reabrir."
+        confirmLabel="Cerrar sprint"
         onConfirm={() => { setCloseTarget(null); handleAction('close_sprint', {}); }}
         onCancel={() => setCloseTarget(null)}
       />
@@ -719,6 +919,15 @@ export default function KaiNextSprints({
         onConfirm={confirmDeleteChat}
         onCancel={() => setDeleteChatTarget(null)}
       />
+      {bringTasksOpen && (
+        <BringTasksModal
+          tenant={tenant}
+          currentSprintId={data?.sprint?.id}
+          sprintOptions={(sprints ?? []).filter((s) => s.id !== data?.sprint?.id)}
+          onClose={() => setBringTasksOpen(false)}
+          onMoved={(json) => { setData(json); setBringTasksOpen(false); }}
+        />
+      )}
     </div>
   );
 }

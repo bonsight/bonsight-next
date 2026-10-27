@@ -771,7 +771,7 @@ function ProposeTimeModal({ tenant, meeting, roster, onClose, onProposed }) {
   );
 }
 
-function MeetingDetailPanel({ tenant, basePath, meetingId, userName, roster, onClose, onDeleted, onReschedule }) {
+function MeetingDetailPanel({ tenant, basePath, meetingId, userName, userEmail, roster, onClose, onDeleted, onReschedule }) {
   const [closing, handleClose] = useSidePanelClose(onClose);
   const [meeting, setMeeting] = useState(undefined);
   const [removeConfirm, setRemoveConfirm] = useState(false);
@@ -866,7 +866,12 @@ function MeetingDetailPanel({ tenant, basePath, meetingId, userName, roster, onC
   // cambia el evento real al toque (onReschedule → PATCH). Si te invitaron, "Proponer otra hora"
   // solo deja una propuesta pendiente (ProposeTimeModal → POST .../propose) — el organizador es
   // quien decide si se aplica de verdad al abrir el panel y aceptarla.
-  const isOrganizer = !!meeting.createdByName && meeting.createdByName === userName;
+  // Por email, no por nombre (dos personas pueden compartir nombre) — mismo criterio que el
+  // backend (ver isMeetingOwner en dev-meetings/route.js). Solo cae a comparar por nombre si a
+  // la reunión le falta el email de creador (dato de antes de este campo).
+  const isOrganizer = meeting.createdByEmail && userEmail
+    ? meeting.createdByEmail === userEmail
+    : !!meeting.createdByName && meeting.createdByName === userName;
   const proposals = meeting.proposals ?? [];
 
   return (
@@ -975,7 +980,9 @@ function MeetingDetailPanel({ tenant, basePath, meetingId, userName, roster, onC
           </a>
         )}
 
-        <button type="button" className="knx-delete-task-btn" onClick={() => setRemoveConfirm(true)}>Cancelar reunión</button>
+        {isOrganizer && (
+          <button type="button" className="knx-delete-task-btn" onClick={() => setRemoveConfirm(true)}>Cancelar reunión</button>
+        )}
       </div>
 
       <KaiNextConfirmDialog
@@ -998,7 +1005,7 @@ function MeetingDetailPanel({ tenant, basePath, meetingId, userName, roster, onC
   );
 }
 
-export default function KaiNextMeetings({ tenant, tenantName, basePath, userName, userHandle, isTeamUser }) {
+export default function KaiNextMeetings({ tenant, tenantName, basePath, userName, userHandle, userEmail, isTeamUser }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [chats, setChats] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -1137,12 +1144,12 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
           {meetings === null ? (
             <p className="knx-knowledge-empty">Cargando…</p>
           ) : view === 'semana' ? (
-            <WeekCalendarView meetings={meetings} weekStart={weekStart} meOnly={meOnly} userEmail={userHandle} userName={userName} onSelectMeeting={setSelectedMeetingId} onCreateAt={handleCreateAt} />
+            <WeekCalendarView meetings={meetings} weekStart={weekStart} meOnly={meOnly} userEmail={userEmail} userName={userName} onSelectMeeting={setSelectedMeetingId} onCreateAt={handleCreateAt} />
           ) : !meetings.length ? (
             <p className="knx-knowledge-empty">Sin reuniones agendadas todavía.</p>
           ) : (
             <div className="knx-meeting-card-list">
-              {meetings.filter((m) => !meOnly || (m.attendees ?? []).some((a) => a.email === userHandle)).map((m) => (
+              {meetings.filter((m) => !meOnly || (m.attendees ?? []).some((a) => a.email === userEmail)).map((m) => (
                 <MeetingCard key={m.id} meeting={m} onOpen={setSelectedMeetingId} />
               ))}
             </div>
@@ -1161,7 +1168,7 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
 
       {selectedMeetingId && (
         <MeetingDetailPanel
-          tenant={tenant} basePath={basePath} meetingId={selectedMeetingId} userName={userName} roster={roster}
+          tenant={tenant} basePath={basePath} meetingId={selectedMeetingId} userName={userName} userEmail={userEmail} roster={roster}
           onClose={() => setSelectedMeetingId(null)}
           onDeleted={onMeetingDeleted}
           onReschedule={handleReschedule}

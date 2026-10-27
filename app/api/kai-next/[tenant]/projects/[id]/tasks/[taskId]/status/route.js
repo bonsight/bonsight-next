@@ -36,7 +36,7 @@ export async function PATCH(req, { params }) {
   }
 
   try {
-    const task = await setTaskStatus(tenant, id, taskId, body.status, identity.personName ?? 'Alguien');
+    const task = await setTaskStatus(tenant, id, taskId, body.status, identity.personName ?? 'Alguien', body.order);
     return Response.json({ task });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });

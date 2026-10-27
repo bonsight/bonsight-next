@@ -186,6 +186,15 @@ export async function POST(req, { params }) {
         // este tenant tiene habilitado antes de ofrecérselo al modelo, no es solo una sugerencia
         // en el prompt: si una capacidad está apagada, Claude ni puede intentar llamarla.
         const allowedTools = filterToolsByCapabilities(TOOLS, kaiNextAccess);
+        // query_database puede haber varias bases conectadas a la vez (ver dbSources) — el label
+        // genérico de TOOL_LABELS no dice cuál, así que acá se nombra la base real por su db_id.
+        const toolLabel = (name, input) => {
+          if (name === 'query_database') {
+            const label = dbSources.find((s) => s.id === input?.db_id)?.label;
+            if (label) return `Consultando base de datos "${label}"`;
+          }
+          return TOOL_LABELS[name] ?? name;
+        };
         const { finalText, callLogs, usage } = await runAgenticLoop({
           anthropic,
           model: MODEL,
@@ -197,13 +206,13 @@ export async function POST(req, { params }) {
           context: { tenant, intelligenceSources, dbSources, identity, conversationId: convoId },
           executeTool,
           isStopTool: (name) => name === 'present_analysis',
-          onToolStart: (name) => {
-            controller.enqueue(ndjson({ type: 'tool_start', name, label: TOOL_LABELS[name] ?? name }));
+          onToolStart: (name, input) => {
+            controller.enqueue(ndjson({ type: 'tool_start', name, label: toolLabel(name, input) }));
           },
           onToolUse: (name, input, result) => {
             if (DATA_TOOLS.has(name) && !result.error) {
               lastSourceResult = { source: name, ...result };
-              toolTrace.push({ tool: name, label: TOOL_LABELS[name]?.replace(/^Consultando /, '') ?? name, period: result.period ?? null });
+              toolTrace.push({ tool: name, label: toolLabel(name, input).replace(/^Consultando /, ''), period: result.period ?? null });
             } else if (name === 'query_knowledge' && !result.error) {
               // Sin SourceTable para esto (no es tabular) — igual queda en el resumen colapsado
               // ("Consultó X y Y"); las citas específicas por documento van aparte, ver abajo.

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
 import { useSidePanelClose } from '@/lib/kaiNext/useSidePanelClose';
+import { sortByOrder, dropsBefore, computeDropOrder } from '@/lib/kaiNext/dragOrder';
 
 // Proyecto de Desarrollo — a diferencia de los otros 3 kinds, su contenido (Proyecto/
 // Iniciativas/Épicas/Tareas) vive en el Notion interno de Bonsight, el mismo que ya usa
@@ -84,7 +85,7 @@ function TrashIcon() {
 
 // Tarjeta compartida por Tablero y el tab Sprints — misma estructura/clases que TaskCard del
 // tablero real (KaiNextSprints.jsx), para que una tarea se vea igual en los dos lugares.
-function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragStart, onDragEnd, dragging, entering, shake, showStatusSelect = true, allTasks }) {
+function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragStart, onDragEnd, dragging, entering, shake, showStatusSelect = true, allTasks, dropIndicator, onDragOverCard, onDropCard }) {
   const [childrenOpen, setChildrenOpen] = useState(false);
   const hasDates = task.startDate || task.dueDate;
   const vencida = task.status !== 'Done' && !!task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10);
@@ -92,11 +93,13 @@ function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragS
   const childrenDone = children.filter((c) => c.status === 'Done').length;
   return (
     <div
-      className={`knx-board-card${dragging ? ' knx-board-card--dragging' : ''}${entering ? ' knx-board-card--entering' : ''}${shake ? ' knx-board-card--shake' : ''}`}
+      className={`knx-board-card${dragging ? ' knx-board-card--dragging' : ''}${entering ? ' knx-board-card--entering' : ''}${shake ? ' knx-board-card--shake' : ''}${dropIndicator ? ` knx-board-card--over-${dropIndicator}` : ''}`}
       onClick={() => onOpen(task.id)}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      onDragOver={onDragOverCard}
+      onDrop={onDropCard}
     >
       <div className="knx-board-card-top">
         {task.outOfPlan ? <span className="knx-board-card-flag">Fuera de plan</span> : <span />}
@@ -2126,6 +2129,77 @@ function NewProjectSprintForm({ busy, onCreate, onClose }) {
   );
 }
 
+// Mismo concepto que BringTasksModal en KaiNextSprints.jsx, pero sin fetch propio: acá `tasks`
+// ya trae TODAS las tareas del proyecto (todos los sprints a la vez, ver board.tasks en el
+// componente padre), así que filtrar por sprint de origen es local, no un viaje a la red.
+function BringTasksModal({ tasks, sprintOptions, busy, onConfirm, onClose }) {
+  const [sourceId, setSourceId] = useState('');
+  const [selected, setSelected] = useState(new Set());
+
+  const sourceTasks = sourceId ? tasks.filter((t) => t.sprintIds?.includes(sourceId) && t.status !== 'Done') : null;
+
+  const chooseSource = (id) => {
+    setSourceId(id);
+    const pending = id ? tasks.filter((t) => t.sprintIds?.includes(id) && t.status !== 'Done') : [];
+    setSelected(new Set(pending.map((t) => t.id)));
+  };
+
+  const toggle = (id) => setSelected((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const allSelected = sourceTasks?.length > 0 && sourceTasks.every((t) => selected.has(t.id));
+
+  return (
+    <div className="knx-confirm-backdrop" onClick={onClose}>
+      <div className="knx-confirm-modal" onClick={(e) => e.stopPropagation()} role="alertdialog" aria-modal="true">
+        <h3>Traer tareas de otro sprint</h3>
+        <div className="knx-board-field" style={{ marginBottom: 12 }}>
+          <label>Desde</label>
+          <select value={sourceId} onChange={(e) => chooseSource(e.target.value)} autoFocus>
+            <option value="">Elegí un sprint…</option>
+            {sprintOptions.map((s) => <option key={s.id} value={s.id}>{s.title} · {sprintStatusLabel(s.status)}</option>)}
+          </select>
+        </div>
+        {sourceTasks && (
+          sourceTasks.length === 0 ? (
+            <p className="knx-knowledge-empty">Ese sprint no tiene tareas sin terminar.</p>
+          ) : (
+            <>
+              <p>Tiene {sourceTasks.length} tarea{sourceTasks.length !== 1 ? 's' : ''} sin terminar. Elegí cuáles traer.</p>
+              <div className="knx-board-popover-actions" style={{ marginBottom: 8 }}>
+                <button type="button" onClick={() => setSelected(allSelected ? new Set() : new Set(sourceTasks.map((t) => t.id)))}>
+                  {allSelected ? 'Ninguna' : 'Todas'}
+                </button>
+              </div>
+              <div className="knx-meeting-attendee-list" style={{ maxHeight: 280, overflowY: 'auto', marginBottom: 12 }}>
+                {sourceTasks.map((t) => (
+                  <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggle(t.id)} />
+                    <span>{t.title}</span>
+                  </label>
+                ))}
+              </div>
+            </>
+          )
+        )}
+        <div className="knx-confirm-actions">
+          <button type="button" className="knx-confirm-cancel" onClick={onClose}>Cancelar</button>
+          <button
+            type="button"
+            className="knx-analisis-sources-save"
+            disabled={busy || !sourceTasks?.length || !selected.size}
+            onClick={() => onConfirm([...selected])}
+          >
+            {busy ? 'Trayendo…' : `Traer ${selected.size} tarea${selected.size !== 1 ? 's' : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Ciclo de vida del sprint de ESTE proyecto (Planificado → En curso → Cerrado) + carriles por
 // Iniciativa con las tareas de ese sprint — a diferencia del tablero universal, numeración y
 // sprint activo están acotados a este proyecto (ver dev/sprints/route.js y el plan en
@@ -2133,9 +2207,11 @@ function NewProjectSprintForm({ busy, onCreate, onClose }) {
 // tarjeta en el carril de OTRA iniciativa (la Iniciativa de una tarea no cambia acá, solo su
 // Status) — si se permitiera, la tarjeta "volvería" a su carril real al recargar, que confunde
 // más de lo que ayuda.
-function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativas, activeSprint, sprints, onReload, onSprintReload, onOptimisticMove }) {
+function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativas, activeSprint, sprints, onReload, onSprintReload, onOptimisticMove, onOptimisticReorder }) {
   const [dragInfo, setDragInfo] = useState(null); // { taskId, laneId }
   const [dragOverCell, setDragOverCell] = useState(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState(null);
+  const [dragOverBefore, setDragOverBefore] = useState(true);
   const [scheduleFor, setScheduleFor] = useState(null); // { taskId, status }
   const [hoursFor, setHoursFor] = useState(null); // { taskId, status }
   const [selectedTaskId, setSelectedTaskId] = useState(null);
@@ -2150,6 +2226,8 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
   const [collapsedLanes, setCollapsedLanes] = useState(new Set());
   const [err, setErr] = useState(null);
   const [shakeTaskId, setShakeTaskId] = useState(null);
+  const [bringTasksOpen, setBringTasksOpen] = useState(false);
+  const [bringTasksBusy, setBringTasksBusy] = useState(false);
 
   // El selector deja ver cualquier sprint de este proyecto (incluidos los cerrados), igual que
   // el tablero real — por defecto sigue al sprint activo hasta que el usuario elige otro.
@@ -2199,14 +2277,37 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
     if (!res.ok) throw new Error(data.error || 'No se pudo actualizar el sprint.');
   };
 
+  // "Traer tareas de otro sprint" — mueve varias de un saque al sprint que se está viendo ahora
+  // (viewedSprint), sin pasar por los gates de Backlog/Hecho (addExistingTask ya recompromete
+  // fechas al sprint destino, ver lib/aria/board.js).
+  const bringTasks = async (pageIds) => {
+    setBringTasksBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/dev/board`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'move_tasks_sprint', pageIds, sprintId: viewedSprint.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setErr(json.error || 'No se pudieron traer las tareas.'); return; }
+      if (json.moveResult?.failed?.length) setErr(`${json.moveResult.failed.length} tarea(s) no se pudieron traer.`);
+      setBringTasksOpen(false);
+      onReload();
+    } catch {
+      setErr('Error de conexión.');
+    } finally {
+      setBringTasksBusy(false);
+    }
+  };
+
   // Pinta la tarjeta en su columna nueva AL INSTANTE — mismo criterio que ProjectBoard.move.
-  const move = async (pageId, status) => {
+  const move = async (pageId, status, order) => {
     setErr(null);
     const prevStatus = tasks.find((t) => t.id === pageId)?.status;
     setJustMovedTaskId(pageId);
-    onOptimisticMove(pageId, status);
+    onOptimisticMove(pageId, status, order);
     try {
-      await patch({ action: 'move_task', pageId, status });
+      await patch({ action: 'move_task', pageId, status, order });
       onReload();
     } catch (e) {
       setErr(e.message);
@@ -2214,27 +2315,51 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
     }
   };
 
+  // Drag vertical dentro de la misma celda (lane+status), sin cambio de status — no pasa por
+  // los gates de Backlog/Hecho (no cambia nada que esos gates validen).
+  const reorder = async (pageId, order) => {
+    setErr(null);
+    onOptimisticReorder(pageId, order);
+    try {
+      await patch({ action: 'reorder_task', pageId, order });
+    } catch (e) {
+      setErr(e.message);
+      onReload();
+    }
+  };
+
+  // Migra a un order real las vecinas que todavía estaban en null (ver `backfill` en
+  // computeDropOrder) — mismo criterio que reorder pero sin su propio try/catch visible: si
+  // falla, se pierde en silencio y queda en null hasta el próximo drag en esa celda.
+  const backfillOrder = (pageId, order) => {
+    onOptimisticReorder(pageId, order);
+    patch({ action: 'reorder_task', pageId, order }).catch(() => null);
+  };
+
   // Dos gates independientes (ver misma nota en ProjectBoard): salir de Backlog exige fecha
   // inicio/fin/estimación; entrar a Hecho exige horas reales — cada una con su propio modal.
-  const requestStatusChange = (taskId, status) => {
+  const requestStatusChange = (taskId, status, order) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.status === status) return;
     const incompleta = status !== 'Backlog' && (!task.startDate || !task.dueDate || task.estimatedHours == null);
     if (incompleta) {
-      setScheduleFor({ taskId, status });
+      setScheduleFor({ taskId, status, order });
       return;
     }
     if (status === 'Done' && task.actualHours == null) {
-      setHoursFor({ taskId, status });
+      setHoursFor({ taskId, status, order });
       return;
     }
-    move(taskId, status);
+    move(taskId, status, order);
   };
 
-  const handleDrop = (laneId, status) => {
+  // `order` viaja en dragInfo (no en los argumentos de handleDrop) porque se calcula recién al
+  // soltar, con la posición exacta dentro de la celda — ver dropOnCard/dropOnCell más abajo.
+  const handleDrop = (laneId, status, order) => {
     const info = dragInfo;
     setDragOverCell(null);
     setDragInfo(null);
+    setDragOverTaskId(null);
     if (!info || info.laneId !== laneId) return;
     // Bloqueo visual, no solo de servidor: si hay subtareas pendientes, la tarjeta ni siquiera
     // "pega" en Hecho — tiembla en rojo donde estaba y el mensaje aparece al lado, en vez de
@@ -2249,33 +2374,38 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
         return;
       }
     }
-    requestStatusChange(info.taskId, status);
+    const task = tasks.find((t) => t.id === info.taskId);
+    if (task && task.status === status) {
+      if (order !== task.order) reorder(info.taskId, order);
+    } else {
+      requestStatusChange(info.taskId, status, order);
+    }
   };
 
   const confirmSchedule = async ({ startDate, endDate, estimatedHours }) => {
-    const { taskId, status } = scheduleFor;
+    const { taskId, status, order } = scheduleFor;
     setScheduleFor(null);
     setErr(null);
     try {
       await patch({ action: 'update_schedule', pageId: taskId, startDate, endDate, estimatedHours });
       const task = tasks.find((t) => t.id === taskId);
       if (status === 'Done' && task?.actualHours == null) {
-        setHoursFor({ taskId, status });
+        setHoursFor({ taskId, status, order });
         return;
       }
-      await move(taskId, status);
+      await move(taskId, status, order);
     } catch (e) {
       setErr(e.message);
     }
   };
 
   const confirmHours = async ({ actualHours }) => {
-    const { taskId, status } = hoursFor;
+    const { taskId, status, order } = hoursFor;
     setHoursFor(null);
     setErr(null);
     try {
       await patch({ action: 'update_actual_hours', pageId: taskId, actualHours });
-      await move(taskId, status);
+      await move(taskId, status, order);
     } catch (e) {
       setErr(e.message);
     }
@@ -2391,6 +2521,9 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
               {sprints.map((s) => <option key={s.id} value={s.id}>{s.title} · {sprintStatusLabel(s.status)}</option>)}
             </select>
           )}
+          {sprints.length > 1 && (
+            <button type="button" className="knx-analisis-compare" onClick={() => setBringTasksOpen(true)}>Traer tareas de otro sprint</button>
+          )}
           {viewedSprint.status === 'Planificado' && (
             <button type="button" className="knx-analisis-compare" disabled={busy} onClick={closePlanning}>Cerrar planificación</button>
           )}
@@ -2461,14 +2594,21 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
                   <div className="knx-sprintboard-row knx-sprintboard-row--expanded">
                     {sprintColumns.map((col) => {
                       const cellKey = `${lane.id}:${col.id}`;
-                      const cellTasks = lane.tasks.filter((t) => t.status === col.id);
+                      const cellTasks = sortByOrder(lane.tasks.filter((t) => t.status === col.id));
+                      const clearCellDrag = () => { setDragInfo(null); setDragOverCell(null); setDragOverTaskId(null); };
                       return (
                         <div
                           key={col.id}
                           className={`knx-sprintboard-cell${dragOverCell === cellKey ? ' knx-sprintboard-cell--over' : ''}`}
                           onDragOver={(e) => { e.preventDefault(); setDragOverCell(cellKey); }}
                           onDragLeave={() => setDragOverCell((c) => (c === cellKey ? null : c))}
-                          onDrop={(e) => { e.preventDefault(); handleDrop(lane.id, col.id); }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            // Zona vacía de la celda (no sobre una tarjeta puntual): al final.
+                            const { order, backfill } = computeDropOrder(cellTasks, dragInfo?.taskId, null, false);
+                            backfill.forEach((b) => backfillOrder(b.id, b.order));
+                            handleDrop(lane.id, col.id, order);
+                          }}
                         >
                           {cellTasks.length === 0 && <span className="knx-sprintboard-cell-placeholder">Arrastra aquí</span>}
                           {cellTasks.map((t) => (
@@ -2480,11 +2620,27 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
                               onStatusChange={(task, status) => requestStatusChange(task.id, status)}
                               draggable
                               onDragStart={() => setDragInfo({ taskId: t.id, laneId: lane.id })}
-                              onDragEnd={() => setDragInfo(null)}
+                              onDragEnd={clearCellDrag}
                               dragging={dragInfo?.taskId === t.id}
                               entering={justMovedTaskId === t.id}
                               shake={shakeTaskId === t.id}
                               allTasks={tasks}
+                              dropIndicator={dragOverTaskId === t.id && dragInfo?.taskId !== t.id ? (dragOverBefore ? 'top' : 'bottom') : null}
+                              onDragOverCard={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setDragOverCell(cellKey);
+                                if (dragInfo?.taskId === t.id) return;
+                                setDragOverTaskId(t.id);
+                                setDragOverBefore(dropsBefore(e, e.currentTarget));
+                              }}
+                              onDropCard={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const { order, backfill } = computeDropOrder(cellTasks, dragInfo?.taskId, t.id, dragOverBefore);
+                                backfill.forEach((b) => backfillOrder(b.id, b.order));
+                                handleDrop(lane.id, col.id, order);
+                              }}
                             />
                           ))}
                         </div>
@@ -2500,6 +2656,15 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
       )}
       {scheduleFor && <ScheduleModal onCancel={() => setScheduleFor(null)} onConfirm={confirmSchedule} />}
       {hoursFor && <HoursModal onCancel={() => setHoursFor(null)} onConfirm={confirmHours} />}
+      {bringTasksOpen && (
+        <BringTasksModal
+          tasks={tasks}
+          sprintOptions={sprints.filter((s) => s.id !== viewedSprint.id)}
+          busy={bringTasksBusy}
+          onConfirm={bringTasks}
+          onClose={() => setBringTasksOpen(false)}
+        />
+      )}
       {newTareaOpen && (
         <NewTareaModal
           tenant={tenant}
@@ -2539,6 +2704,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
         open={closeTarget === 'sprint'}
         title="Cerrar sprint"
         message={`¿Cerrar ${activeSprint.title}? No se puede deshacer — vas a poder iniciar el siguiente después.`}
+        confirmLabel="Cerrar sprint"
         onConfirm={confirmCloseSprint}
         onCancel={() => setCloseTarget(null)}
       />
@@ -2695,8 +2861,14 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
   // Pinta el nuevo status AL INSTANTE (sin esperar la ida y vuelta a Notion) — mismo criterio
   // que moveTaskOptimistic en KaiNextSprints.jsx, para que el drop "pegue" al toque en vez de
   // que la tarjeta vuelva a su columna un segundo y recién salte cuando llega la respuesta.
-  const setTaskStatusLocally = (taskId, status) => {
-    setBoard((prev) => (prev ? { ...prev, tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, status } : t)) } : prev));
+  const setTaskStatusLocally = (taskId, status, order) => {
+    setBoard((prev) => (prev ? { ...prev, tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, status, ...(order != null ? { order } : {}) } : t)) } : prev));
+  };
+
+  // Drag vertical dentro de la misma columna/celda (sin cambio de status) — mismo criterio que
+  // setTaskStatusLocally, pero solo toca `order`.
+  const setTaskOrderLocally = (taskId, order) => {
+    setBoard((prev) => (prev ? { ...prev, tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, order } : t)) } : prev));
   };
 
   const createIniciativa = async (name) => {
@@ -2798,6 +2970,7 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
             onReload={scheduleBoardReload}
             onSprintReload={loadActiveSprint}
             onOptimisticMove={setTaskStatusLocally}
+            onOptimisticReorder={setTaskOrderLocally}
           />
         ) : <p className="knx-knowledge-empty">Cargando…</p>
       )}

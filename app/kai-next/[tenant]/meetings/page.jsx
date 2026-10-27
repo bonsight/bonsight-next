@@ -44,6 +44,11 @@ export default async function KaiNextMeetingsPage({ params }) {
 
   const userName = teamUser?.name ?? teamUser?.username ?? tenantUser?.name ?? 'Equipo Bonsight';
   const userHandle = teamUser?.username ?? tenantUser?.email ?? '';
+  // Separado de userHandle a propósito: para team users userHandle es el username, no el email
+  // (ver CLAUDE.md / getCurrentKaiNextIdentity) — la comparación de dueño de una reunión necesita
+  // el email real, que es lo único que distingue a una persona del equipo de otra (personId es
+  // null para todo team user).
+  const userEmail = teamUser?.email ?? tenantUser?.email ?? null;
 
   return (
     <KaiNextMeetings
@@ -52,6 +57,7 @@ export default async function KaiNextMeetingsPage({ params }) {
       basePath={basePath}
       userName={userName}
       userHandle={userHandle}
+      userEmail={userEmail}
       isTeamUser={!!teamUser}
     />
   );

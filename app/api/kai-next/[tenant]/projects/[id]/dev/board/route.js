@@ -4,7 +4,7 @@ import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/project
 import { getNotionToken, listTareasDelProyecto } from '@/lib/kaiNext/projectsNotion';
 import {
   STATUS_COLUMNS, loadTalentoMap, moveTask, updateTaskDatesAndHours, updateTaskResponsable, addExistingTask,
-  updateTaskDetails, updateTaskActualHours, deleteTask, createTask,
+  addExistingTasks, updateTaskDetails, updateTaskActualHours, deleteTask, createTask, reorderTask,
 } from '@/lib/aria/board';
 import { getNotionPageRaw, pageToFields } from '@/lib/aria/notion';
 
@@ -66,11 +66,27 @@ export async function PATCH(req, { params }) {
     return Response.json({ error: 'Body inválido.' }, { status: 400 });
   }
   const { action, pageId } = body;
+
+  if (action === 'move_tasks_sprint') {
+    if (!Array.isArray(body.pageIds) || !body.pageIds.length || !body.sprintId) {
+      return Response.json({ error: 'pageIds y sprintId son requeridos.' }, { status: 400 });
+    }
+    try {
+      const result = await addExistingTasks(token, body.sprintId, body.pageIds);
+      return Response.json({ ok: true, moveResult: result });
+    } catch (err) {
+      return Response.json({ error: err.message }, { status: 400 });
+    }
+  }
+
   if (!pageId) return Response.json({ error: 'pageId es requerido.' }, { status: 400 });
 
   try {
     if (action === 'move_task') {
-      await moveTask(token, pageId, body.status, body.actualHours);
+      await moveTask(token, pageId, body.status, body.actualHours, body.order);
+    } else if (action === 'reorder_task') {
+      if (typeof body.order !== 'number') return Response.json({ error: 'order es requerido.' }, { status: 400 });
+      await reorderTask(token, pageId, body.order);
     } else if (action === 'update_schedule') {
       await updateTaskDatesAndHours(token, pageId, { startDate: body.startDate, endDate: body.endDate, estimatedHours: body.estimatedHours });
     } else if (action === 'update_responsable') {

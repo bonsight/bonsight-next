@@ -20,10 +20,12 @@ const DATA_SOURCES = [
   { id: 'ga4', label: 'Google Analytics 4', desc: (s) => s?.config?.propertyId ? `Propiedad ${s.config.propertyId}` : 'Tráfico, conversiones y comportamiento' },
   { id: 'search_console', label: 'Google Search Console', desc: (s) => s?.config?.siteUrl ?? 'Búsqueda orgánica' },
   { id: 'google_ads', label: 'Google Ads', desc: (s) => s?.config?.customerId ? `Cuenta ${s.config.customerId}` : 'Campañas, keywords, costos y conversiones' },
-  // Esta no tiene estado propio en intelligence_sources — refleja la conexión real de bases de
-  // datos que ya vive en el admin de Aria (lib/aria/databases.js), ver prop `dbConnected`.
-  { id: 'database', label: 'Base de datos propia', desc: () => 'PostgreSQL, MySQL, SQL Server o BigQuery' },
 ];
+
+// Fila por defecto cuando no hay ninguna base conectada (ver prop `dbSources`, de
+// lib/aria/databases.js) — en cuanto hay al menos una, cada una se lista por separado en vez de
+// este placeholder genérico.
+const NO_DATABASE_ROW = { id: 'database', label: 'Base de datos propia', desc: () => 'PostgreSQL, MySQL, SQL Server o BigQuery', active: false, isDatabase: true };
 
 // Mismo flujo de conexión que ya existe en el admin de Aria (AriaAdminDetail.jsx) — un solo
 // campo por fuente, reusando los mismos endpoints de validación (ya autorizan sesión de Kai o
@@ -86,12 +88,12 @@ const DATA_ACTION = {
   ga4: { label: '📈 Auditar tráfico reciente', prompt: (name) => `Dame un resumen del tráfico y las conversiones más recientes de ${name} en Google Analytics 4 — qué cambió y qué deberíamos mirar con más atención.` },
   search_console: { label: '🔑 Analizar keywords SEO', prompt: (name) => `Dame un resumen del rendimiento de búsqueda orgánica de ${name} en Search Console — qué keywords están funcionando y dónde hay oportunidad.` },
   google_ads: { label: '💰 Revisar campañas', prompt: (name) => `Dame un resumen del rendimiento de las campañas de Google Ads de ${name} — costo, conversiones y dónde hay oportunidad de optimizar.` },
-  database: { label: '🗄️ Consultar la base', prompt: (name) => `Dame un resumen de lo más relevante que encuentres en la base de datos de ${name} — qué deberíamos mirar con más atención.` },
+  database: { label: '🗄️ Consultar la base', prompt: (label) => `Dame un resumen de lo más relevante que encuentres en la base de datos "${label}" — qué deberíamos mirar con más atención.` },
 };
 
 export default function KaiNextFuentes({
   tenant, tenantName, basePath, userName, userHandle, userEmail, isTeamUser,
-  intelligenceSources, bic, archivedCount, saEmail, dbConnected,
+  intelligenceSources, bic, archivedCount, saEmail, dbSources: dbSourcesProp,
 }) {
   const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -375,11 +377,26 @@ export default function KaiNextFuentes({
   ].filter(Boolean);
   const hasLearnings = (bic?.recent_learnings?.length ?? 0) > 0;
 
-  const dataSources = DATA_SOURCES.map((d) => ({
-    ...d,
-    source: intelSources.find((s) => s.id === d.id),
-    active: d.id === 'database' ? !!dbConnected : intelSources.find((s) => s.id === d.id)?.status === 'active',
-  }));
+  const activeDbSources = (dbSourcesProp ?? []).filter((s) => s.status === 'active');
+  const databaseRows = activeDbSources.length > 0
+    ? activeDbSources.map((s) => ({
+        id: `database:${s.id}`,
+        dbId: s.id,
+        label: s.label,
+        desc: () => [s.type?.toUpperCase(), s.tableCount != null ? `${s.tableCount} tabla${s.tableCount !== 1 ? 's' : ''}` : null].filter(Boolean).join(' · '),
+        active: true,
+        isDatabase: true,
+      }))
+    : [NO_DATABASE_ROW];
+
+  const dataSources = [
+    ...DATA_SOURCES.map((d) => ({
+      ...d,
+      source: intelSources.find((s) => s.id === d.id),
+      active: intelSources.find((s) => s.id === d.id)?.status === 'active',
+    })),
+    ...databaseRows,
+  ];
   const activeDataCount = dataSources.filter((d) => d.active).length;
   const missingSources = dataSources.filter((d) => !d.active).map((d) => ({ id: d.id, label: d.label }));
   const totalCount = 3 + activeDataCount + sources.length; // Memoria (3) + Datos activas + Conocimiento
@@ -527,7 +544,7 @@ export default function KaiNextFuentes({
             </div>
             <div className="knx-knowledge-table">
               {dataSources.map((d) => {
-                const Icon = DATA_ICON[d.id];
+                const Icon = d.isDatabase ? DatabaseIcon : DATA_ICON[d.id];
                 const active = d.active;
                 const cfg = CONNECT_CONFIG[d.id];
                 const isConnecting = connectingId === d.id;
@@ -543,7 +560,10 @@ export default function KaiNextFuentes({
                       </div>
                       <div className="knx-source-row-actions">
                         <span className={`knx-source-row-status${active ? ' knx-source-row-status--active' : ''}`}>● {active ? 'Conectado' : 'Sin conectar'}</span>
-                        {active && DATA_ACTION[d.id] && (
+                        {active && d.isDatabase && (
+                          <a className="knx-pill-action" href={draftChatUrl(basePath, tenant, DATA_ACTION.database.prompt(d.label))}>{DATA_ACTION.database.label}</a>
+                        )}
+                        {active && !d.isDatabase && DATA_ACTION[d.id] && (
                           <a className="knx-pill-action" href={draftChatUrl(basePath, tenant, DATA_ACTION[d.id].prompt(tenantName))}>{DATA_ACTION[d.id].label}</a>
                         )}
                         {active && cfg && isTeamUser && (

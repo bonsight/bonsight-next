@@ -17,6 +17,16 @@ function withoutKai(attendees) {
   return (attendees ?? []).filter((a) => a.email !== KAI_EMAIL);
 }
 
+// Dueño de la reunión = por email, no por personId: los team users de Bonsight SIEMPRE tienen
+// personId null (ver getCurrentKaiNextIdentity), así que comparar por personId no distingue a
+// una persona del equipo de otra — todas "matchearían" entre sí. El email sí es único por
+// persona en ambos casos (team user o tenant user), así que es la única llave confiable acá.
+// Solo quien organizó la reunión puede editarla/borrarla — sin excepción para Director-level
+// (team Bonsight incluido): así lo pidió el negocio, sin override de admin.
+function isMeetingOwner(meeting, identity) {
+  return !!meeting.createdByEmail && !!identity.personEmail && meeting.createdByEmail === identity.personEmail;
+}
+
 // Quien crea la reunión queda como coanfitrión (ver addCohost más abajo), pero eso es un permiso
 // de la LLAMADA, no lo hace invitado del evento — el picker de invitados arranca vacío y nada
 // la agrega sola. Sin esto, la persona que agendó termina con control de la sala de espera pero
@@ -151,7 +161,7 @@ export async function PATCH(req, { params }) {
   const { meetingId, title, description, startDateTime, endDateTime, timeZone, attendees, projectId, tipo, repeat } = body;
   if (!meetingId) return Response.json({ error: 'meetingId es requerido.' }, { status: 400 });
 
-  const { error, projectName } = await gate(tenant, projectId || null);
+  const { error, identity, projectName } = await gate(tenant, projectId || null);
   if (error) return error;
 
   if (!title?.trim()) return Response.json({ error: 'El título es requerido.' }, { status: 400 });
@@ -160,6 +170,9 @@ export async function PATCH(req, { params }) {
 
   const existing = await getDevMeeting(tenant, meetingId);
   if (!existing) return Response.json({ error: 'Reunión no encontrada.' }, { status: 404 });
+  if (!isMeetingOwner(existing, identity)) {
+    return Response.json({ error: 'Solo quien organizó esta reunión puede modificarla.' }, { status: 403 });
+  }
 
   const recurrence = RECURRENCE[repeat] ?? null;
 
@@ -190,8 +203,14 @@ export async function DELETE(req, { params }) {
   // No sabemos a qué proyecto pertenece (si pertenece a alguno) hasta leerla — el gate acá es
   // deliberadamente general (Supervisor-level alcanza); si en el futuro hace falta acotar borrar
   // reuniones de un proyecto puntual a SU supervisor nada más, hay que leer la reunión primero.
-  const { error } = await gate(tenant, null);
+  const { error, identity } = await gate(tenant, null);
   if (error) return error;
+
+  const existing = await getDevMeeting(tenant, meetingId);
+  if (!existing) return Response.json({ error: 'Reunión no encontrada.' }, { status: 404 });
+  if (!isMeetingOwner(existing, identity)) {
+    return Response.json({ error: 'Solo quien organizó esta reunión puede cancelarla.' }, { status: 403 });
+  }
 
   try {
     const meeting = await removeDevMeeting(tenant, meetingId);

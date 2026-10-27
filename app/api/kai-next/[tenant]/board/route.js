@@ -2,8 +2,8 @@ import { isAuthorizedForTenant, getCurrentKaiNextAccess } from '@/lib/kaiNext/au
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getIntelligenceSources } from '@/lib/kai/intelligenceSources';
 import {
-  getBoardData, searchTareas, moveTask, createTask, addExistingTask, removeTask,
-  updateTaskResponsable, updateTaskSchedule, updateTaskDetails, updateTaskActualHours,
+  getBoardData, searchTareas, moveTask, createTask, addExistingTask, addExistingTasks, removeTask,
+  updateTaskResponsable, updateTaskSchedule, updateTaskDetails, updateTaskActualHours, reorderTask,
   createSprint, closeSprintPlanning, closeSprint, updateSprintDates, computeSprintMetrics,
 } from '@/lib/aria/board';
 import { saveSprintMetrics, getSprintMetrics } from '@/lib/aria/sprintMetrics';
@@ -78,6 +78,7 @@ export async function PATCH(req, { params }) {
 
   const { action, sprintId, ...p } = await req.json();
   let viewedSprintId = sprintId;
+  let moveResult = null;
 
   try {
     if (action === 'create_sprint') {
@@ -95,8 +96,11 @@ export async function PATCH(req, { params }) {
       await closeSprint(token, sprintId);
     } else if (action === 'move_task') {
       if (!p.pageId || !p.status) throw new Error('pageId y status son requeridos.');
-      await moveTask(token, p.pageId, p.status, p.actualHours);
+      await moveTask(token, p.pageId, p.status, p.actualHours, p.order);
       if (p.status === 'Done') await markDoneAt(tenant, p.pageId);
+    } else if (action === 'reorder_task') {
+      if (!p.pageId || typeof p.order !== 'number') throw new Error('pageId y order son requeridos.');
+      await reorderTask(token, p.pageId, p.order);
     } else if (action === 'create_task') {
       if (!sprintId) throw new Error('sprintId es requerido.');
       await createTask(token, sprintId, p);
@@ -106,6 +110,12 @@ export async function PATCH(req, { params }) {
     } else if (action === 'move_task_sprint') {
       if (!p.pageId || !p.targetSprintId) throw new Error('pageId y targetSprintId son requeridos.');
       await addExistingTask(token, p.targetSprintId, p.pageId);
+    } else if (action === 'move_tasks_sprint') {
+      if (!Array.isArray(p.pageIds) || !p.pageIds.length || !p.targetSprintId) {
+        throw new Error('pageIds y targetSprintId son requeridos.');
+      }
+      moveResult = await addExistingTasks(token, p.targetSprintId, p.pageIds);
+      viewedSprintId = p.targetSprintId;
     } else if (action === 'remove_task') {
       if (!p.pageId) throw new Error('pageId es requerido.');
       await removeTask(token, p.pageId);
@@ -132,7 +142,7 @@ export async function PATCH(req, { params }) {
     if (data.sprint?.status === 'Cerrado') {
       data.metrics = await getSprintMetrics(tenant, data.sprint.id);
     }
-    return Response.json(await attachDoneAt(tenant, data));
+    return Response.json({ ...(await attachDoneAt(tenant, data)), ...(moveResult ? { moveResult } : {}) });
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo actualizar el tablero.' }, { status: 400 });
   }

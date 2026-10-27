@@ -68,7 +68,7 @@ export async function POST(req, { params }) {
 // El organizador acepta (reprograma de verdad el evento real) o rechaza (solo la descarta).
 export async function PATCH(req, { params }) {
   const { tenant, meetingId } = await params;
-  const { error } = await gate(tenant);
+  const { error, identity } = await gate(tenant);
   if (error) return error;
 
   let body;
@@ -82,6 +82,11 @@ export async function PATCH(req, { params }) {
 
   const meeting = await getDevMeeting(tenant, meetingId);
   if (!meeting) return Response.json({ error: 'Reunión no encontrada.' }, { status: 404 });
+  // Mismo criterio de dueño que dev-meetings/route.js (por email, no por personId — ver ahí el
+  // porqué): solo quien organizó decide si acepta o rechaza una propuesta de horario.
+  if (!meeting.createdByEmail || !identity.personEmail || meeting.createdByEmail !== identity.personEmail) {
+    return Response.json({ error: 'Solo quien organizó esta reunión puede aceptar o rechazar propuestas.' }, { status: 403 });
+  }
   const proposal = (meeting.proposals ?? []).find((p) => p.id === proposalId);
   if (!proposal) return Response.json({ error: 'Propuesta no encontrada.' }, { status: 404 });
 

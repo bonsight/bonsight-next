@@ -66,7 +66,13 @@ export default async function KaiNextFuentesPage({ params }) {
       bic={bic}
       archivedCount={archivedCount}
       saEmail={process.env.GOOGLE_SA_EMAIL ?? null}
-      dbConnected={dbSources.length > 0}
+      dbSources={dbSources.map((s) => ({
+        id: s.id,
+        type: s.type,
+        label: s.label,
+        status: s.status,
+        tableCount: s.schema?.tables?.length ?? null,
+      }))}
     />
   );
 }

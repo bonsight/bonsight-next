@@ -6440,6 +6440,15 @@
   box-shadow: 0 6px 16px rgba(11, 16, 32, 0.12);
 }
 
+/* Línea de inserción al arrastrar una tarjeta verticalmente dentro de la misma columna — arriba
+   o abajo de la tarjeta sobrevolada, según en qué mitad cayó el cursor (ver dropsBefore). */
+.knx-board-card--over-top {
+  box-shadow: inset 0 2px 0 0 var(--knx-primary);
+}
+.knx-board-card--over-bottom {
+  box-shadow: inset 0 -2px 0 0 var(--knx-primary);
+}
+
 .knx-board-column-body {
   min-height: 40px;
   border-radius: 10px;
