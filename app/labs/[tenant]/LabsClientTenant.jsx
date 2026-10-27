@@ -4217,7 +4217,7 @@ function ReportDocShell({ tenant, experiment, identity, latest, canApprove, canG
       <div className="report-meta-strip">
         <span className="eyebrow-mini">{latest.generatedBy ? `Generado por ${latest.generatedBy}` : 'Generado por IA'} · {formatDate(latest.createdAt)}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {latest.driveUrl && <a href={latest.driveUrl} target="_blank" rel="noreferrer" className="tag tag-living on-paper" style={{ textDecoration: 'none' }}>📁 Ver en Drive ↗</a>}
+          <a href={`/api/labs/${tenant}/experiments/${latest.experimentId}/reports/${latest.id}/pdf`} className="tag tag-living on-paper" style={{ textDecoration: 'none' }}>⬇ Descargar PDF</a>
           <ReportStatusTag status={latest.status} />
         </div>
       </div>
