@@ -2177,7 +2177,8 @@ function BringTasksModal({ tasks, sprintOptions, busy, onConfirm, onClose }) {
                 {sourceTasks.map((t) => (
                   <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer' }}>
                     <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggle(t.id)} />
-                    <span>{t.title}</span>
+                    <span style={{ flex: 1 }}>{t.title}</span>
+                    <span style={{ fontSize: 12, color: 'var(--knx-text-muted)', flexShrink: 0 }}>{t.responsableName ?? 'Sin asignar'}</span>
                   </label>
                 ))}
               </div>
