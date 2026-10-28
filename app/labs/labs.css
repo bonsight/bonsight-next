@@ -801,10 +801,8 @@
 
 .labs-root .labs-project-card{
   background:var(--labs-dark-2); border:1px solid var(--labs-line-dark); border-radius:14px; padding:18px;
-  display:flex; flex-direction:column; gap:10px; cursor:pointer; transition:transform .15s var(--labs-ease), border-color .15s var(--labs-ease);
+  display:flex; flex-direction:column; gap:10px; transition:border-color .15s var(--labs-ease);
 }
-.labs-root .labs-project-card:hover{ transform:translateY(-2px); border-color:var(--labs-living); }
-.labs-root .labs-project-card:focus-visible{ outline:2px solid var(--labs-living); outline-offset:2px; }
 .labs-root .labs-project-card-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
 .labs-root .labs-project-card-name{ font-family:var(--labs-serif); font-weight:600; font-size:15.5px; line-height:1.3; }
 .labs-root .labs-project-card-meta{ font-family:var(--labs-mono); font-size:11px; color:var(--labs-cream-faint); }

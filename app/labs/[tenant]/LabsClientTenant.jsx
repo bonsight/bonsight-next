@@ -477,6 +477,9 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
 
 const PROJECT_STATUS_TAG_CLASS = { activo: 'tag-living', pausado: 'tag-ember', completado: 'tag-neutral' };
 
+// Entrar al proyecto es SOLO el botón "Entrar →" — la tarjeta entera no es clickable, porque
+// las novedades de adentro (cada línea, "Ver N novedades") también reaccionan a un click y
+// competían con el click de la tarjeta.
 function ProjectCard({ exp, nameOf, onSelect, onSelectEvent, onOpenNovedades }) {
   const status = exp.status || 'activo';
   const team = (exp.teamIds || []).slice(0, 4);
@@ -484,7 +487,7 @@ function ProjectCard({ exp, nameOf, onSelect, onSelectEvent, onOpenNovedades }) 
   const unseen = exp.unseenCount || 0;
   const preview = exp.recentEvents || [];
   return (
-    <div className="labs-project-card" onClick={onSelect} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onSelect()}>
+    <div className="labs-project-card">
       <div className="labs-project-card-top">
         <div className="labs-project-card-name">{exp.name}</div>
         <span className={`tag ${PROJECT_STATUS_TAG_CLASS[status]}`}>{PROJECT_STATUS_LABEL[status]}</span>
@@ -504,13 +507,18 @@ function ProjectCard({ exp, nameOf, onSelect, onSelectEvent, onOpenNovedades }) 
         </div>
       )}
 
+      <div className="labs-avatar-stack">
+        {team.map((id) => <span key={id} className="labs-avatar-sm" title={nameOf(id)}>{initials(nameOf(id))}</span>)}
+        {moreCount > 0 && <span className="labs-avatar-sm labs-avatar-more">+{moreCount}</span>}
+      </div>
+
       <div className="labs-project-card-novedades">
         {preview.length > 0 ? (
           <>
             <div className="labs-project-card-novedades-head"><span>Novedades</span><em>{unseen} nueva{unseen === 1 ? '' : 's'}</em></div>
             <ul>
               {preview.slice(0, 2).map((ev) => (
-                <li key={ev.id} className={`type-${ev.type}`} onClick={(e) => { e.stopPropagation(); onSelectEvent(exp.id, ev.id); }}>
+                <li key={ev.id} className={`type-${ev.type}`} onClick={() => onSelectEvent(exp.id, ev.id)}>
                   <span className="labs-novedad-dot" /><span className="labs-project-card-novedad-title">{ev.title}</span>
                 </li>
               ))}
@@ -522,15 +530,10 @@ function ProjectCard({ exp, nameOf, onSelect, onSelectEvent, onOpenNovedades }) 
       </div>
 
       <div className="labs-project-card-foot">
-        <div className="labs-avatar-stack">
-          {team.map((id) => <span key={id} className="labs-avatar-sm" title={nameOf(id)}>{initials(nameOf(id))}</span>)}
-          {moreCount > 0 && <span className="labs-avatar-sm labs-avatar-more">+{moreCount}</span>}
-        </div>
-        {unseen > 2 ? (
-          <button type="button" className="lk" onClick={(e) => { e.stopPropagation(); onOpenNovedades(); }}>Ver {unseen} novedades</button>
-        ) : (
-          <span data-kai-anchor="enter-experiment" className="chip-btn">Entrar →</span>
-        )}
+        {unseen > 0 ? (
+          <button type="button" className="lk" onClick={onOpenNovedades}>Ver {unseen} novedad{unseen === 1 ? '' : 'es'}</button>
+        ) : <span />}
+        <button type="button" data-kai-anchor="enter-experiment" className="chip-btn" onClick={onSelect}>Entrar →</button>
       </div>
     </div>
   );
@@ -569,19 +572,24 @@ function NovedadesDrawer({ exp, onClose, onSelectEvent, onSelectView }) {
           </div>
           <button type="button" className="modal-x" onClick={handleClose} aria-label="Cerrar">✕</button>
         </div>
-        <div className="labs-drawer-body timeline">
-          {(exp.recentEvents || []).map((ev) => (
-            <button
-              type="button"
-              key={ev.id}
-              className={`tl-item type-${ev.type}`}
-              onClick={() => { onSelectEvent(exp.id, ev.id); handleClose(); }}
-            >
-              <div className="tl-dot"></div>
-              <div className="tl-date">{formatDateTime(ev.date)}</div>
-              <div className="tl-title">{ev.title}</div>
-            </button>
-          ))}
+        <div className="labs-drawer-body">
+          {/* timeline en un div propio, no combinado con labs-drawer-body — ambas clases
+              tenían la misma especificidad y el padding-left:26px del gutter de puntos
+              perdía contra el padding en shorthand del body, pegando el texto a la línea. */}
+          <div className="timeline">
+            {(exp.recentEvents || []).map((ev) => (
+              <button
+                type="button"
+                key={ev.id}
+                className={`tl-item type-${ev.type}`}
+                onClick={() => { onSelectEvent(exp.id, ev.id); handleClose(); }}
+              >
+                <div className="tl-dot"></div>
+                <div className="tl-date">{formatDateTime(ev.date)}</div>
+                <div className="tl-title">{ev.title}</div>
+              </button>
+            ))}
+          </div>
         </div>
         <div className="labs-drawer-foot">
           <span className="empty-note" style={{ padding: 0 }}>Desde tu última visita</span>
