@@ -540,24 +540,42 @@ function ProjectCard({ exp, nameOf, onSelect, onSelectEvent, onOpenNovedades }) 
 // ViewHistoria (seenBy), solo que accesible sin entrar al proyecto. Clickear una novedad
 // puntual marca-visto y lleva directo a ella (mismo resolveEventDestination del link de
 // email); "Historia completa" entra al proyecto directo en esa pestaña.
-function NovedadesModal({ exp, onClose, onSelectEvent, onSelectView }) {
+// Panel lateral (no modal centrado) — mismo patrón que el mockup: entra deslizando desde la
+// derecha. `entered` arranca en false y pasa a true un frame después de montar, para que el
+// transform tenga un estado "cerrado" del que partir y se vea la animación de entrada; al
+// cerrar se hace el camino inverso antes de desmontar (ver handleClose).
+function NovedadesDrawer({ exp, onClose, onSelectEvent, onSelectView }) {
+  const [entered, setEntered] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') handleClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleClose = () => { setEntered(false); setTimeout(onClose, 220); };
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
-        <div className="modal-top">
+    <>
+      <div className={`labs-drawer-scrim${entered ? ' on' : ''}`} onClick={handleClose} />
+      <aside className={`labs-drawer${entered ? ' on' : ''}`} role="dialog" aria-modal="true" aria-label={`Novedades de ${exp.name}`}>
+        <div className="labs-drawer-head">
           <div>
             <p className="view-eyebrow" style={{ margin: 0 }}>Novedades del proyecto</p>
-            <h3 style={{ margin: '4px 0 0' }}>{exp.name}</h3>
+            <h3>{exp.name}</h3>
           </div>
-          <button type="button" className="modal-x" onClick={onClose} aria-label="Cerrar">✕</button>
+          <button type="button" className="modal-x" onClick={handleClose} aria-label="Cerrar">✕</button>
         </div>
-        <div className="timeline" style={{ marginTop: 18, maxHeight: '55vh', overflowY: 'auto' }}>
+        <div className="labs-drawer-body timeline">
           {(exp.recentEvents || []).map((ev) => (
             <button
               type="button"
               key={ev.id}
               className={`tl-item type-${ev.type}`}
-              onClick={() => { onClose(); onSelectEvent(exp.id, ev.id); }}
+              onClick={() => { onSelectEvent(exp.id, ev.id); handleClose(); }}
             >
               <div className="tl-dot"></div>
               <div className="tl-date">{formatDateTime(ev.date)}</div>
@@ -565,12 +583,12 @@ function NovedadesModal({ exp, onClose, onSelectEvent, onSelectView }) {
             </button>
           ))}
         </div>
-        <div className="modal-footer">
+        <div className="labs-drawer-foot">
           <span className="empty-note" style={{ padding: 0 }}>Desde tu última visita</span>
-          <button type="button" className="btn btn-primary" onClick={() => { onClose(); onSelectView(exp.id, 'historia'); }}>Historia completa →</button>
+          <button type="button" className="btn btn-primary" onClick={() => { onSelectView(exp.id, 'historia'); handleClose(); }}>Historia completa →</button>
         </div>
-      </div>
-    </div>
+      </aside>
+    </>
   );
 }
 
@@ -668,7 +686,7 @@ function ExperimentPicker({ tenant, tenantMeta, identity, onIdentityUpdate, expe
 
       {open && <CreateExperimentModal tenant={tenant} allowedProjectKinds={tenantMeta.allowedProjectKinds} onClose={() => setOpen(false)} onCreated={(id) => { setOpen(false); onCreated(id); }} />}
       {novedadesFor && (
-        <NovedadesModal
+        <NovedadesDrawer
           exp={list.find((e) => e.id === novedadesFor)}
           onClose={() => setNovedadesFor(null)}
           onSelectEvent={onSelectEvent}
