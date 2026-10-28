@@ -410,7 +410,7 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
           )}
         </div>
         <div className="topbar-actions">
-          <button className="btn-ghost-top" onClick={() => { setExperimentId(null); setExperiment(null); }}>Otros proyectos</button>
+          <button className="btn-ghost-top" onClick={() => { setExperimentId(null); setExperiment(null); loadExperiments(); }}>Otros proyectos</button>
           <UserMenu identity={identity} onChangePassword={() => setChangePasswordOpen(true)} onLogout={handleLogout} tenant={tenant} onIdentityUpdate={setIdentity} />
         </div>
       </header>

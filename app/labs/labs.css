@@ -819,7 +819,7 @@
 .labs-root .labs-project-card-novedades-head{ display:flex; justify-content:space-between; align-items:center; font-family:var(--labs-mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--labs-cream-faint); margin-bottom:6px; }
 .labs-root .labs-project-card-novedades-head em{ font-style:normal; color:var(--labs-living); }
 .labs-root .labs-project-card-novedades ul{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
-.labs-root .labs-project-card-novedades li{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--labs-cream-dim); }
+.labs-root .labs-project-card-novedades li{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--labs-cream-dim); cursor:pointer; }
 .labs-root .labs-project-card-novedades li:hover{ color:var(--labs-cream); }
 .labs-root .labs-project-card-novedades li .labs-novedad-dot{ width:6px; height:6px; border-radius:50%; background:var(--labs-living); flex:none; }
 .labs-root .labs-project-card-novedades li.type-feedback .labs-novedad-dot{ background:var(--labs-ember); }
