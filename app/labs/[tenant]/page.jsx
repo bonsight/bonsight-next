@@ -73,18 +73,27 @@ export default async function LabsTenantPage({ params, searchParams }) {
     const forgotUser = step === 'forgot' && sp?.username ? await getUserByUsername(tenant, sp.username) : null;
     const maskedEmail = maskEmail(forgotUser?.email);
 
+    // exp/event viajan como hidden inputs del form (ver abajo) — vienen de un link de
+    // notificación por correo (?exp=...&event=...) y si no se re-agregan a mano en cada
+    // redirect de este server action, el form de login los pierde apenas se manda (formData
+    // no trae los query params de la URL original) y la persona termina en el home en vez de
+    // donde la llevaba el correo.
     async function doLogin(formData) {
       'use server';
       const username = String(formData.get('username') ?? '');
       const password = String(formData.get('password') ?? '');
+      const exp = String(formData.get('exp') ?? '');
+      const event = String(formData.get('event') ?? '');
+      const deepLinkQs = exp || event ? `?${exp ? `exp=${encodeURIComponent(exp)}` : ''}${exp && event ? '&' : ''}${event ? `event=${encodeURIComponent(event)}` : ''}` : '';
 
       const user = await getUserByUsername(tenant, username);
       if (!user || !checkUserPassword(user, password)) {
-        redirect(`/${tenant}?username=${encodeURIComponent(username)}&err=${encodeURIComponent('Usuario o contraseña incorrectos.')}`);
+        const sep = deepLinkQs ? '&' : '?';
+        redirect(`/${tenant}${deepLinkQs}${sep}username=${encodeURIComponent(username)}&err=${encodeURIComponent('Usuario o contraseña incorrectos.')}`);
       }
 
       (await cookies()).set(`labs_user_${tenant}`, signLabsUser(tenant, user.id), cookieOpts);
-      redirect(`/${tenant}`);
+      redirect(`/${tenant}${deepLinkQs}`);
     }
 
     // Cuando ya sabemos el usuario (vino del paso de contraseña) no hace falta volver a
@@ -119,6 +128,8 @@ export default async function LabsTenantPage({ params, searchParams }) {
                 <p className="labs-entry-subtitle">Usuario y contraseña</p>
                 {errMsg && <p className="labs-login-error">{errMsg}</p>}
                 <form action={doLogin}>
+                  {sp?.exp && <input type="hidden" name="exp" value={sp.exp} />}
+                  {sp?.event && <input type="hidden" name="event" value={sp.event} />}
                   <input type="text" name="username" placeholder="Usuario" defaultValue={sp?.username ?? ''} className="labs-entry-input" autoFocus required />
                   <input type="password" name="password" placeholder="Contraseña" className="labs-entry-input" required />
                   <button type="submit" className="labs-entry-button">Entrar</button>

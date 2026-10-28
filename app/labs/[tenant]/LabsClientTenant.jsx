@@ -82,6 +82,27 @@ const NAV = {
   },
 };
 
+// Mapa evento → a dónde ir, a nivel de módulo (no del componente) porque lo necesitan dos
+// lugares: el click en Historia (goToEvent) y el deep-link por URL que llega desde un email de
+// notificación (?exp=...&event=...) — ese segundo caso resuelve el destino antes de que el
+// `experiment` completo esté en estado, así que no puede depender de closures del componente.
+// 'feedback' se resuelve por el target real del feedback (una tarea, una partida, una
+// prueba/aporte, un reporte, o el proyecto en general); el resto de los tipos tiene un destino
+// fijo.
+const FEEDBACK_TARGET_VIEW = { tarea: 'cronograma', partida: 'presupuesto', prueba: 'pruebas', aporte: 'pruebas', reporte: 'reportes', proyecto: 'feedback' };
+function resolveEventDestination(ev) {
+  if (ev.type === 'documento') return { view: 'documentacion', focus: { scrollToId: `doc-${ev.documentId}` } };
+  if (ev.type === 'aporte' || ev.type === 'validacion') return { view: 'pruebas', focus: { openTest: ev.testId, scrollToId: ev.executionId ? `exec-${ev.executionId}` : null } };
+  if (ev.type === 'tarea') return { view: 'cronograma', focus: { scrollToId: `task-${ev.taskId}` } };
+  if (ev.type === 'gasto') return { view: 'presupuesto', focus: { scrollToId: `partida-${ev.partidaId}` } };
+  if (ev.type === 'reporte') return { view: 'reportes', focus: { scrollToId: `report-${ev.reportId}` } };
+  if (ev.type === 'feedback') {
+    const targetView = FEEDBACK_TARGET_VIEW[ev.targetType] ?? 'feedback';
+    return { view: targetView, focus: ev.targetType === 'proyecto' || !ev.targetId ? null : { commentsFor: { type: ev.targetType, id: ev.targetId } } };
+  }
+  return { view: 'historia', focus: null };
+}
+
 function getNav(role, projectKind) {
   const key = projectKind === 'civil' ? 'civil' : projectKind === 'seguimiento' ? 'seguimiento' : 'experimental';
   return NAV[key][role];
@@ -274,6 +295,36 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
     if (experimentId) loadExperiment(experimentId);
   }, [experimentId, loadExperiment]);
 
+  // Deep-link desde el botón "Ver y responder" de un email de notificación — llega como
+  // ?exp=...&event=... (ver lib/labs/notifications.js#eventUrl). Se lee una sola vez de
+  // window.location (no useSearchParams, para no forzar un <Suspense> de Next.js en este
+  // componente ya enteramente client-side) y se limpia la URL enseguida para no reabrir el
+  // mismo evento si la persona refresca la página después.
+  const [pendingEventId, setPendingEventId] = useState(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const exp = params.get('exp');
+    const eventId = params.get('event');
+    if (!exp && !eventId) return;
+    if (exp) setExperimentId(exp);
+    if (eventId) setPendingEventId(eventId);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('exp');
+    url.searchParams.delete('event');
+    window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingEventId || !experiment?.events) return;
+    const ev = experiment.events.find((e) => e.id === pendingEventId);
+    setPendingEventId(null);
+    if (!ev) return;
+    fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/events/${ev.id}`, { method: 'PATCH' }).catch(() => {});
+    const { view: destView, focus: destFocus } = resolveEventDestination(ev);
+    setView(destView);
+    setFocus(destFocus);
+  }, [pendingEventId, experiment, tenant]);
+
   if (experiments === null) {
     return <div className="labs-entry-wrap"><p style={{ color: 'var(--labs-cream-dim)' }}>Cargando…</p></div>;
   }
@@ -304,23 +355,13 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
   const nav = getNav(effectiveIdentity.role, experiment.meta.projectKind);
   const refresh = () => loadExperiment(experimentId);
 
-  // Mapa evento → a dónde ir. 'feedback' se resuelve por el target real del feedback (una
-  // tarea, una partida, una prueba/aporte, un reporte, o el proyecto en general); el resto de
-  // los tipos tiene un destino fijo. Marcar como visto es best-effort — si falla, el punto
-  // sigue lleno hasta el próximo click, no bloquea la navegación.
-  const FEEDBACK_TARGET_VIEW = { tarea: 'cronograma', partida: 'presupuesto', prueba: 'pruebas', aporte: 'pruebas', reporte: 'reportes', proyecto: 'feedback' };
+  // Marcar como visto es best-effort — si falla, el punto sigue lleno hasta el próximo click,
+  // no bloquea la navegación.
   const goToEvent = (ev) => {
     fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/events/${ev.id}`, { method: 'PATCH' }).then(refresh).catch(() => {});
-    if (ev.type === 'documento') { setView('documentacion'); setFocus({ scrollToId: `doc-${ev.documentId}` }); return; }
-    if (ev.type === 'aporte' || ev.type === 'validacion') { setView('pruebas'); setFocus({ openTest: ev.testId, scrollToId: ev.executionId ? `exec-${ev.executionId}` : null }); return; }
-    if (ev.type === 'tarea') { setView('cronograma'); setFocus({ scrollToId: `task-${ev.taskId}` }); return; }
-    if (ev.type === 'gasto') { setView('presupuesto'); setFocus({ scrollToId: `partida-${ev.partidaId}` }); return; }
-    if (ev.type === 'reporte') { setView('reportes'); setFocus({ scrollToId: `report-${ev.reportId}` }); return; }
-    if (ev.type === 'feedback') {
-      const targetView = FEEDBACK_TARGET_VIEW[ev.targetType] ?? 'feedback';
-      setView(targetView);
-      setFocus(ev.targetType === 'proyecto' || !ev.targetId ? null : { commentsFor: { type: ev.targetType, id: ev.targetId } });
-    }
+    const { view: destView, focus: destFocus } = resolveEventDestination(ev);
+    setView(destView);
+    setFocus(destFocus);
   };
   const clearFocus = () => setFocus(null);
 
