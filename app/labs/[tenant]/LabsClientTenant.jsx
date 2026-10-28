@@ -314,16 +314,30 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
     window.history.replaceState({}, '', `${url.pathname}${url.search}`);
   }, []);
 
+  // Mismo mecanismo que usa el link de email, reusado para el click en una novedad desde el
+  // picker de proyectos (tarjeta o modal "Novedades") — seleccionar el proyecto y, apenas
+  // carga, resolver a dónde ir dentro de él.
+  const [pendingView, setPendingView] = useState(null);
+  const onSelectEvent = (expId, eventId) => { setExperimentId(expId); setPendingEventId(eventId); };
+  const onSelectView = (expId, targetView) => { setExperimentId(expId); setPendingView(targetView); };
+
   useEffect(() => {
-    if (!pendingEventId || !experiment?.events) return;
-    const ev = experiment.events.find((e) => e.id === pendingEventId);
-    setPendingEventId(null);
-    if (!ev) return;
-    fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/events/${ev.id}`, { method: 'PATCH' }).catch(() => {});
-    const { view: destView, focus: destFocus } = resolveEventDestination(ev);
-    setView(destView);
-    setFocus(destFocus);
-  }, [pendingEventId, experiment, tenant]);
+    if (!experiment?.events) return;
+    if (pendingEventId) {
+      const ev = experiment.events.find((e) => e.id === pendingEventId);
+      setPendingEventId(null);
+      if (!ev) return;
+      fetch(`/api/labs/${tenant}/experiments/${experiment.meta.id}/events/${ev.id}`, { method: 'PATCH' }).catch(() => {});
+      const { view: destView, focus: destFocus } = resolveEventDestination(ev);
+      setView(destView);
+      setFocus(destFocus);
+      return;
+    }
+    if (pendingView) {
+      setView(pendingView);
+      setPendingView(null);
+    }
+  }, [pendingEventId, pendingView, experiment, tenant]);
 
   if (experiments === null) {
     return <div className="labs-entry-wrap"><p style={{ color: 'var(--labs-cream-dim)' }}>Cargando…</p></div>;
@@ -344,6 +358,8 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
           onIdentityUpdate={setIdentity}
           experiments={experiments}
           onSelect={setExperimentId}
+          onSelectEvent={onSelectEvent}
+          onSelectView={onSelectView}
           onCreated={(id) => { loadExperiments(); setExperimentId(id); }}
           onLogout={handleLogout}
         />
@@ -461,10 +477,12 @@ export default function LabsClientTenant({ tenant, tenantMeta, identity: initial
 
 const PROJECT_STATUS_TAG_CLASS = { activo: 'tag-living', pausado: 'tag-ember', completado: 'tag-neutral' };
 
-function ProjectCard({ exp, nameOf, onSelect }) {
+function ProjectCard({ exp, nameOf, onSelect, onSelectEvent, onOpenNovedades }) {
   const status = exp.status || 'activo';
   const team = (exp.teamIds || []).slice(0, 4);
   const moreCount = (exp.teamIds || []).length - team.length;
+  const unseen = exp.unseenCount || 0;
+  const preview = exp.recentEvents || [];
   return (
     <div className="labs-project-card" onClick={onSelect} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onSelect()}>
       <div className="labs-project-card-top">
@@ -486,23 +504,84 @@ function ProjectCard({ exp, nameOf, onSelect }) {
         </div>
       )}
 
+      <div className="labs-project-card-novedades">
+        {preview.length > 0 ? (
+          <>
+            <div className="labs-project-card-novedades-head"><span>Novedades</span><em>{unseen} nueva{unseen === 1 ? '' : 's'}</em></div>
+            <ul>
+              {preview.slice(0, 2).map((ev) => (
+                <li key={ev.id} className={`type-${ev.type}`} onClick={(e) => { e.stopPropagation(); onSelectEvent(exp.id, ev.id); }}>
+                  <span className="labs-novedad-dot" /><span className="labs-project-card-novedad-title">{ev.title}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p className="labs-project-card-novedades-empty">Sin novedades desde tu última visita</p>
+        )}
+      </div>
+
       <div className="labs-project-card-foot">
         <div className="labs-avatar-stack">
           {team.map((id) => <span key={id} className="labs-avatar-sm" title={nameOf(id)}>{initials(nameOf(id))}</span>)}
           {moreCount > 0 && <span className="labs-avatar-sm labs-avatar-more">+{moreCount}</span>}
         </div>
-        <span data-kai-anchor="enter-experiment" className="chip-btn">Entrar →</span>
+        {unseen > 2 ? (
+          <button type="button" className="lk" onClick={(e) => { e.stopPropagation(); onOpenNovedades(); }}>Ver {unseen} novedades</button>
+        ) : (
+          <span data-kai-anchor="enter-experiment" className="chip-btn">Entrar →</span>
+        )}
       </div>
     </div>
   );
 }
 
-function ExperimentPicker({ tenant, tenantMeta, identity, onIdentityUpdate, experiments, onSelect, onCreated, onLogout }) {
+// Modal con todas las novedades sin ver de un proyecto — mismo criterio de "visto" que
+// ViewHistoria (seenBy), solo que accesible sin entrar al proyecto. Clickear una novedad
+// puntual marca-visto y lleva directo a ella (mismo resolveEventDestination del link de
+// email); "Historia completa" entra al proyecto directo en esa pestaña.
+function NovedadesModal({ exp, onClose, onSelectEvent, onSelectView }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+        <div className="modal-top">
+          <div>
+            <p className="view-eyebrow" style={{ margin: 0 }}>Novedades del proyecto</p>
+            <h3 style={{ margin: '4px 0 0' }}>{exp.name}</h3>
+          </div>
+          <button type="button" className="modal-x" onClick={onClose} aria-label="Cerrar">✕</button>
+        </div>
+        <div className="timeline" style={{ marginTop: 18, maxHeight: '55vh', overflowY: 'auto' }}>
+          {(exp.recentEvents || []).map((ev) => (
+            <button
+              type="button"
+              key={ev.id}
+              className={`tl-item type-${ev.type}`}
+              onClick={() => { onClose(); onSelectEvent(exp.id, ev.id); }}
+            >
+              <div className="tl-dot"></div>
+              <div className="tl-date">{formatDateTime(ev.date)}</div>
+              <div className="tl-title">{ev.title}</div>
+            </button>
+          ))}
+        </div>
+        <div className="modal-footer">
+          <span className="empty-note" style={{ padding: 0 }}>Desde tu última visita</span>
+          <button type="button" className="btn btn-primary" onClick={() => { onClose(); onSelectView(exp.id, 'historia'); }}>Historia completa →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExperimentPicker({ tenant, tenantMeta, identity, onIdentityUpdate, experiments, onSelect, onSelectEvent, onSelectView, onCreated, onLogout }) {
   const [open, setOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [novedadesFor, setNovedadesFor] = useState(null);
   const [users, setUsers] = useState([]);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('todos');
+  const [kindFilter, setKindFilter] = useState('todos');
   const [sortBy, setSortBy] = useState('recientes');
   const canCreate = identity.role === 'Director' || identity.role === 'Supervisor';
 
@@ -518,7 +597,10 @@ function ExperimentPicker({ tenant, tenantMeta, identity, onIdentityUpdate, expe
   let list = experiments.filter((e) => {
     const matchQ = e.name.toLowerCase().includes(query.trim().toLowerCase());
     const matchS = statusFilter === 'todos' || (e.status || 'activo') === statusFilter;
-    return matchQ && matchS;
+    // Legacy: proyectos creados antes de que existiera projectKind quedan sin ese campo —
+    // mismo fallback que getNav(), para que no desaparezcan del filtro "Experimental".
+    const matchK = kindFilter === 'todos' || (e.projectKind || 'experimental') === kindFilter;
+    return matchQ && matchS && matchK;
   });
   if (sortBy === 'avance') list = [...list].sort((a, b) => (b.progressPct ?? -1) - (a.progressPct ?? -1));
   else if (sortBy === 'nombre') list = [...list].sort((a, b) => a.name.localeCompare(b.name, 'es'));
@@ -557,6 +639,10 @@ function ExperimentPicker({ tenant, tenantMeta, identity, onIdentityUpdate, expe
             <option value="todos">Todos los estados</option>
             {Object.entries(PROJECT_STATUS_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
           </select>
+          <select value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}>
+            <option value="todos">Todos los tipos</option>
+            {ALL_PROJECT_KIND_OPTIONS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+          </select>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
             <option value="recientes">Ordenar: más recientes</option>
             <option value="avance">Ordenar: mayor avance</option>
@@ -568,10 +654,27 @@ function ExperimentPicker({ tenant, tenantMeta, identity, onIdentityUpdate, expe
       {experiments.length > 0 && list.length === 0 && <p className="empty-note">No hay proyectos que coincidan con el filtro.</p>}
 
       <div className="labs-project-grid">
-        {list.map((e) => <ProjectCard key={e.id} exp={e} nameOf={nameOf} onSelect={() => onSelect(e.id)} />)}
+        {list.map((e) => (
+          <ProjectCard
+            key={e.id}
+            exp={e}
+            nameOf={nameOf}
+            onSelect={() => onSelect(e.id)}
+            onSelectEvent={onSelectEvent}
+            onOpenNovedades={() => setNovedadesFor(e.id)}
+          />
+        ))}
       </div>
 
       {open && <CreateExperimentModal tenant={tenant} allowedProjectKinds={tenantMeta.allowedProjectKinds} onClose={() => setOpen(false)} onCreated={(id) => { setOpen(false); onCreated(id); }} />}
+      {novedadesFor && (
+        <NovedadesModal
+          exp={list.find((e) => e.id === novedadesFor)}
+          onClose={() => setNovedadesFor(null)}
+          onSelectEvent={onSelectEvent}
+          onSelectView={onSelectView}
+        />
+      )}
     </div>
 
       <div className="labs-powered-by">

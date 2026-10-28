@@ -10,7 +10,7 @@ export async function GET(req, { params }) {
   const user = await getCurrentLabsUser(tenant);
   if (!user) return Response.json({ error: 'No autorizado.' }, { status: 401 });
   const experiments = await listExperimentsForUser(tenant, user);
-  const enriched = await Promise.all(experiments.map((m) => summarizeExperiment(tenant, m)));
+  const enriched = await Promise.all(experiments.map((m) => summarizeExperiment(tenant, m, user.id)));
   return Response.json({ experiments: enriched });
 }
 
