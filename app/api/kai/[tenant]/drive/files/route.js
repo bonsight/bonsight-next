@@ -9,11 +9,18 @@ export async function GET(req, { params }) {
   const { tenant } = await params;
   if (!(await isAuthorizedForTenant(tenant))) return Response.json({ error: 'No autorizado.' }, { status: 401 });
 
-  const config = await kv.get(configKey(tenant));
-  if (!config?.folderId) return Response.json({ error: 'Carpeta de Drive no configurada.' }, { status: 400 });
+  // folderId explícito — soporta más de una carpeta de lectura conectada (ver
+  // lib/kai/driveConnections.js). Sin eso, cae al config viejo (single-folder) por compatibilidad.
+  const { searchParams } = new URL(req.url);
+  let folderId = searchParams.get('folderId');
+  if (!folderId) {
+    const config = await kv.get(configKey(tenant));
+    folderId = config?.folderId;
+  }
+  if (!folderId) return Response.json({ error: 'Carpeta de Drive no configurada.' }, { status: 400 });
 
   try {
-    const files = await listDriveFiles(config.folderId);
+    const files = await listDriveFiles(folderId);
     return Response.json({ files });
   } catch (err) {
     return Response.json({ error: `Error al listar archivos: ${err.message}` }, { status: 500 });

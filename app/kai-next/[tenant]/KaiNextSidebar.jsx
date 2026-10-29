@@ -25,7 +25,7 @@ function groupChatsByDate(chats) {
 // y lo que venga después) — mismo sidebar, mismo historial, solo cambia qué link del nav
 // está activo y qué pasa al tocar "Nuevo chat"/un chat de la lista.
 export default function KaiNextSidebar({
-  tenant, tenantName, userName, userHandle, isTeamUser, basePath,
+  tenant, tenantName, userName, userHandle, isTeamUser, isAdmin, basePath,
   chats = [], activeChatId = null, onNewChat, onOpenChat, onDeleteChat, onLogout, loggingOut,
   active = 'chat',
 }) {
@@ -180,8 +180,8 @@ export default function KaiNextSidebar({
       </div>
 
       <div className="knx-sidebar-footer">
-        {isTeamUser && (
-          <a className="knx-admin-link" href={`${basePath}/${tenant}/admin`}>
+        {(isTeamUser || isAdmin) && (
+          <a className={`knx-admin-link${active === 'admin' ? ' knx-admin-link--active' : ''}`} href={`${basePath}/${tenant}/admin`}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" /></svg>
             Admin
           </a>

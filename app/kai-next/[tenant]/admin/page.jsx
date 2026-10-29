@@ -1,11 +1,12 @@
 import { notFound, redirect } from 'next/navigation';
 import { headers } from 'next/headers';
-import { isAuthorizedForTenant } from '@/lib/kaiNext/auth';
+import { isKaiNextAdmin } from '@/lib/kaiNext/auth';
 import { getTenantMeta } from '@/lib/kai/tenants';
-import { getIntelligenceSources } from '@/lib/kai/intelligenceSources';
-import { getDbSources } from '@/lib/aria/databases';
-import { listSources } from '@/lib/kai/knowledgeSources';
+import { getCurrentTeamUser } from '@/lib/team/auth';
+import { getCurrentTenantUser } from '@/lib/kai/tenantAuth';
+import { getTenantMonthlyUsage, getRecentEvents, getTenantDailyUsage, currentMonth } from '@/lib/kai/usage';
 import { kaiNextBasePath } from '@/lib/kaiNext/paths';
+import KaiNextAdminShell from './KaiNextAdminShell';
 
 export async function generateMetadata({ params }) {
   const { tenant } = await params;
@@ -20,71 +21,45 @@ export default async function KaiNextAdminPage({ params }) {
   const { tenant } = await params;
   const meta = await getTenantMeta(tenant);
   if (!meta) notFound();
-  if (!(await isAuthorizedForTenant(tenant))) redirect('/team');
 
   const host = (await headers()).get('host') ?? '';
   const basePath = kaiNextBasePath(host);
 
-  const [sources, dbSources, knowledgeSources] = await Promise.all([
-    getIntelligenceSources(tenant),
-    getDbSources(tenant),
-    listSources(tenant),
+  if (!(await isKaiNextAdmin(tenant))) redirect(`${basePath}/${tenant}`);
+
+  // Mismo criterio que las otras páginas de Kai Next (ver fuentes/page.jsx): una sesión de
+  // tenant activa (alguien de equipo logueado explícito como ese usuario) manda sobre la
+  // sesión global de equipo.
+  const [rawTeamUser, tenantUser] = await Promise.all([getCurrentTeamUser(), getCurrentTenantUser(tenant)]);
+  const teamUser = tenantUser ? null : rawTeamUser;
+  const userName = teamUser?.name ?? teamUser?.username ?? tenantUser?.name ?? 'Equipo Bonsight';
+  const userHandle = teamUser?.username ?? tenantUser?.email ?? '';
+  const isTeamUser = !!teamUser;
+
+  const ninetyDaysAgo = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 89);
+    return d.toISOString().slice(0, 10);
+  })();
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const [tenantUsage, usageEvents, dailyUsage] = await Promise.all([
+    getTenantMonthlyUsage(tenant, currentMonth()),
+    getRecentEvents(tenant, 1000),
+    getTenantDailyUsage(tenant, ninetyDaysAgo, todayStr),
   ]);
-  const readyKnowledge = knowledgeSources.filter((s) => s.status === 'ready');
-  const tracked = [
-    { id: 'ga4', label: 'Google Analytics 4' },
-    { id: 'search_console', label: 'Search Console' },
-    { id: 'google_ads', label: 'Google Ads' },
-  ].map((t) => ({ ...t, active: sources.find((s) => s.id === t.id)?.status === 'active' }));
-  const anyMissing = tracked.some((t) => !t.active);
-  const activeDbs = dbSources.filter((s) => s.status === 'active');
 
   return (
-    <div className="knx-admin">
-      <h1>Admin · {meta.name}</h1>
-      <h2>Sources</h2>
-      {tracked.map((t) => (
-        <div className="knx-admin-row" key={t.id}>
-          <span className={`knx-badge ${t.active ? 'knx-badge--active' : 'knx-badge--off'}`}>
-            {t.active ? 'Activo' : 'No configurado'}
-          </span>
-          <span>{t.label}</span>
-        </div>
-      ))}
-      {anyMissing && (
-        <p>
-          Configúralo desde el <a href={`/admin/${tenant}`}>admin existente de Kai</a> — Kai Next
-          reutiliza la misma configuración de Intelligence Sources del tenant.
-        </p>
-      )}
-
-      <h2>Bases de datos</h2>
-      {activeDbs.length === 0 && <p>Ninguna conectada.</p>}
-      {activeDbs.map((db) => (
-        <div className="knx-admin-row" key={db.id}>
-          <span className="knx-badge knx-badge--active">Activa</span>
-          <span>{db.label} ({db.type})</span>
-        </div>
-      ))}
-      {activeDbs.length > 0 && (
-        <p>
-          Consultables desde el chat vía query_database — misma configuración que{' '}
-          <a href={`https://aria.bonsight.co/admin/${tenant}`} target="_blank" rel="noopener noreferrer">Aria admin</a>.
-        </p>
-      )}
-
-      <h2>Knowledge</h2>
-      <div className="knx-admin-row">
-        <span className={`knx-badge ${readyKnowledge.length ? 'knx-badge--active' : 'knx-badge--off'}`}>
-          {readyKnowledge.length ? `${readyKnowledge.length} fuente${readyKnowledge.length > 1 ? 's' : ''}` : 'Vacío'}
-        </span>
-        <span>Documentos y notas consultables vía query_knowledge</span>
-      </div>
-      <p>
-        Se carga desde el <a href={`/admin/${tenant}`}>admin existente de Kai</a>, pestaña Knowledge — mismo digest que ya usa Kai.
-      </p>
-
-      <p><a href={`${basePath}/${tenant}`}>← Volver al chat</a></p>
-    </div>
+    <KaiNextAdminShell
+      tenant={tenant}
+      tenantName={meta.name}
+      basePath={basePath}
+      userName={userName}
+      userHandle={userHandle}
+      isTeamUser={isTeamUser}
+      tenantUsage={tenantUsage}
+      usageEvents={usageEvents}
+      dailyUsage={dailyUsage}
+    />
   );
 }

@@ -215,7 +215,7 @@ function Composer({
   );
 }
 
-export default function KaiNextClientChat({ tenant, tenantName, userName, userHandle, isTeamUser, basePath, initialChatId, initialDraft, initialRef }) {
+export default function KaiNextClientChat({ tenant, tenantName, userName, userHandle, isTeamUser, isAdmin, basePath, initialChatId, initialDraft, initialRef }) {
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -519,6 +519,7 @@ export default function KaiNextClientChat({ tenant, tenantName, userName, userHa
         userName={userName}
         userHandle={userHandle}
         isTeamUser={isTeamUser}
+        isAdmin={isAdmin}
         basePath={basePath}
         chats={chats}
         activeChatId={activeChatId}

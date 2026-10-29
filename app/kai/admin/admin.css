@@ -1608,6 +1608,7 @@
   letter-spacing: -0.02em;
 }
 .cost-tab-stat-value--tok { color: #1D9E75; font-size: 16px; }
+.cost-tab-stat-sub { font-size: 11px; color: #aaa; margin-top: 3px; }
 
 .cost-tab-section { }
 
@@ -1620,15 +1621,34 @@
   margin-bottom: 10px;
 }
 
+.cost-feature-head {
+  display: grid;
+  grid-template-columns: 160px 1fr 60px 80px 160px;
+  gap: 10px;
+  padding: 0 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.cost-feature-head .r { text-align: right; }
+
 .cost-feature-row {
   display: grid;
-  grid-template-columns: 160px 1fr 80px 70px;
+  grid-template-columns: 160px 1fr 60px 80px 160px;
   align-items: center;
   gap: 10px;
   padding: 8px 0;
   border-bottom: 0.5px solid #f5f5f3;
 }
 .cost-feature-row:last-child { border-bottom: none; }
+
+.cost-feature-calls {
+  font-size: 12px;
+  color: #888;
+  text-align: right;
+}
 
 .cost-feature-label {
   font-size: 12px;
@@ -1657,10 +1677,16 @@
 }
 
 .cost-feature-tokens {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
   font-size: 11px;
   color: #888;
   text-align: right;
 }
+.cost-feature-tokens .cost-token-bar { width: 100%; margin-top: 2px; }
+.cost-feature-tokens-split { font-size: 10px; color: #aaa; }
 
 .cost-event-group { margin-bottom: 14px; }
 
@@ -1724,8 +1750,9 @@
 .eq-input:focus { border-color: #1D9E75; }
 .eq-label { font-size: 10.5px; color: #999; margin-bottom: 3px; }
 
-.eq-row-head { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1.5fr) 150px 100px 90px 64px; gap: 12px; padding: 8px 16px; font-size: 11px; color: #aaa; border-top: 0.5px solid #eee; }
-.eq-row { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1.5fr) 150px 100px 90px 64px; align-items: center; gap: 12px; padding: 12px 16px; border-top: 0.5px solid #eee; position: relative; }
+.eq-row-head { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1.5fr) 56px 56px 84px 56px 100px 64px; gap: 12px; padding: 8px 16px; font-size: 11px; color: #aaa; border-top: 0.5px solid #eee; text-align: center; }
+.eq-row-head span:first-child, .eq-row-head span:nth-child(2) { text-align: left; }
+.eq-row { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1.5fr) 56px 56px 84px 56px 100px 64px; align-items: center; gap: 12px; padding: 12px 16px; border-top: 0.5px solid #eee; position: relative; }
 .eq-last-login { font-size: 11.5px; color: #999; }
 .eq-person { display: flex; gap: 10px; align-items: center; min-width: 0; }
 .eq-avatar { width: 32px; height: 32px; border-radius: 50%; background: #f0faf6; color: #085041; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 600; flex-shrink: 0; }
@@ -1743,6 +1770,21 @@
 .eq-status--active { color: #1D9E75; }
 .eq-status--pending { color: #b7791f; }
 .eq-status--inactive { color: #c0392b; }
+
+/* Interruptor por producto (Kai/Aria/Kai Next), una columna del grid por producto —
+   reemplaza las pills bunched en una sola celda "Productos". */
+.eq-switch {
+  position: relative; width: 38px; height: 22px; border-radius: 999px; border: 0; background: #D7DEDA;
+  justify-self: center; flex-shrink: 0; transition: background .15s; padding: 0;
+}
+.eq-switch::after {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .15s;
+}
+.eq-switch[aria-checked="true"] { background: #1D9E75; }
+.eq-switch[aria-checked="true"]::after { transform: translateX(16px); }
+.eq-switch:disabled { opacity: .5; cursor: default; }
+.eq-switch-cell { display: flex; align-items: center; justify-content: center; gap: 4px; }
 .eq-row-actions { display: flex; gap: 2px; justify-self: end; position: relative; }
 .eq-icon-btn { width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; border-radius: 7px; color: #999; cursor: pointer; }
 .eq-icon-btn:hover { background: #f5f5f3; color: #111; }

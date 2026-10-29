@@ -278,6 +278,8 @@ export async function POST(req, { params }) {
           model: MODEL,
           inputTokens: usage.inputTokens,
           outputTokens: usage.outputTokens,
+          actorId: identity.chatOwnerId,
+          actorName: identity.personName,
         }).catch(() => null);
 
         const attachmentMeta = attachments?.length

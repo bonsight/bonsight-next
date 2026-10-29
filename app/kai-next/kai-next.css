@@ -352,6 +352,12 @@
   border-radius: 7px;
 }
 
+.knx-admin-link--active {
+  color: var(--knx-deep);
+  background: var(--knx-soft-bg);
+  font-weight: 600;
+}
+
 .knx-admin-link:hover {
   color: var(--knx-text);
   background: #EAEEEC;
@@ -1013,11 +1019,18 @@
   50% { box-shadow: 0 0 0 5px rgba(192, 57, 43, 0.12); }
 }
 
+/* .knx-root (layout.jsx) fija height:100dvh + overflow:hidden para que el chat scrollee solo
+   adentro de .knx-messages — una página normal como esta, metida sin querer en ese mismo
+   contenedor, se queda sin scroll propio en cuanto el contenido no entra en una pantalla.
+   Por eso el admin necesita su propio overflow-y, no heredar el del shell del chat. */
 .knx-admin {
   padding: 36px;
   color: var(--knx-text);
   font-size: 13.5px;
-  max-width: 640px;
+  width: 100%;
+  height: 100dvh;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .knx-admin h1 {
@@ -1070,6 +1083,240 @@
   background: #DCEAFB;
   color: #2563A8;
 }
+
+/* ============ admin: shell de tabs (Bases de datos / Equipo / Costos IA) ============ */
+.knx-admin-shell {
+  margin: 22px 0 28px;
+  border-top: 1px solid var(--knx-border);
+  padding-top: 18px;
+}
+
+.knx-admin-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--knx-border);
+  margin-bottom: 20px;
+}
+
+.knx-admin-tab {
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  color: var(--knx-text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.knx-admin-tab:hover { color: var(--knx-text); }
+.knx-admin-tab--active { color: var(--knx-deep); border-bottom-color: var(--knx-primary); }
+
+.knx-admin-back {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--knx-border);
+}
+
+.knx-admin-subsection-title {
+  font-size: 11.5px;
+  color: var(--knx-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  margin: 26px 0 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--knx-border);
+}
+
+/* ============ admin: secciones con gestión propia (Bases de datos, etc.) ============ */
+.knx-admin-loading,
+.knx-admin-empty {
+  font-size: 12.5px;
+  color: var(--knx-text-muted);
+  padding: 10px 0;
+}
+
+.knx-admin-section {
+  margin-top: 8px;
+}
+
+.knx-admin-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.knx-admin-section-head h2 {
+  margin: 0;
+}
+
+.knx-admin-section-sub {
+  font-size: 12px;
+  color: var(--knx-text-muted);
+  margin: 0 0 12px;
+}
+
+.knx-admin-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: none;
+  background: var(--knx-primary);
+  color: #fff;
+  cursor: pointer;
+  font-family: inherit;
+}
+.knx-admin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.knx-admin-btn:not(:disabled):hover { background: var(--knx-deep); }
+
+.knx-admin-chip-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--knx-border);
+  background: #fff;
+  color: var(--knx-text-muted);
+  cursor: pointer;
+  font-family: inherit;
+}
+.knx-admin-chip-btn--sm { font-size: 11px; padding: 3px 10px; }
+.knx-admin-chip-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.knx-admin-chip-btn:not(:disabled):hover { border-color: var(--knx-primary); color: var(--knx-deep); }
+
+.knx-admin-icon-btn {
+  font-size: 13px;
+  color: var(--knx-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  font-family: inherit;
+}
+.knx-admin-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.knx-admin-icon-btn:not(:disabled):hover { color: var(--knx-primary); }
+.knx-admin-icon-btn--danger:not(:disabled):hover { color: #C0392B; }
+
+.knx-admin-db-form {
+  background: var(--knx-soft-bg);
+  border: 1px solid var(--knx-soft);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.knx-admin-db-form-title { font-size: 13px; font-weight: 600; color: var(--knx-text); }
+.knx-admin-db-form-row { display: flex; gap: 8px; }
+.knx-admin-db-form select,
+.knx-admin-db-form input,
+.knx-admin-db-form textarea {
+  font-size: 12.5px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--knx-border);
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  background: #fff;
+  width: 100%;
+}
+.knx-admin-db-form-row select { flex: 0 0 140px; cursor: pointer; }
+.knx-admin-db-form-row input { flex: 1; }
+.knx-admin-db-form-conn { font-family: monospace; font-size: 11.5px; resize: vertical; }
+.knx-admin-db-form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
+
+.knx-admin-test-result {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+.knx-admin-test-result--ok { background: var(--knx-soft-bg); color: var(--knx-deep); border: 1px solid var(--knx-soft); }
+.knx-admin-test-result--error { background: #FDECEA; color: #943126; border: 1px solid #F5B7B1; }
+
+.knx-admin-db-card {
+  border: 1px solid var(--knx-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  background: #fff;
+}
+.knx-admin-db-card--active { background: var(--knx-soft-bg); border-color: var(--knx-soft); }
+
+.knx-admin-db-row { display: flex; align-items: center; gap: 8px; }
+.knx-admin-db-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: #D1D5DB; }
+.knx-admin-db-dot--active { background: var(--knx-primary); }
+.knx-admin-db-dot--error { background: #C0392B; }
+.knx-admin-db-label { font-size: 13.5px; font-weight: 600; color: var(--knx-text); flex: 1; }
+.knx-admin-db-type {
+  font-size: 10.5px; color: var(--knx-text-muted); background: var(--knx-sidebar-bg);
+  border-radius: 4px; padding: 1px 6px;
+}
+.knx-admin-db-meta { font-size: 10.5px; color: var(--knx-text-muted); }
+
+.knx-admin-db-notes-toggle {
+  display: block;
+  margin-top: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--knx-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+}
+.knx-admin-db-notes-toggle:hover { color: var(--knx-deep); }
+
+.knx-admin-db-notes-edit { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.knx-admin-db-notes-edit textarea {
+  width: 100%;
+  font-size: 12.5px;
+  font-family: monospace;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--knx-border);
+  outline: none;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+/* ============ admin: Sources (GA4 / Search Console / Google Ads / Notion) ============ */
+.knx-admin-source-card--soon { opacity: 0.6; }
+
+.knx-admin-source-meta { display: flex; flex-direction: column; gap: 2px; margin: 6px 0 8px; font-size: 12px; color: var(--knx-text); }
+.knx-admin-source-mono { font-family: monospace; }
+.knx-admin-source-meta-dim { color: var(--knx-text-muted); }
+.knx-admin-source-error { color: #C0392B; font-size: 11.5px; margin-top: 2px; }
+
+.knx-admin-source-caps { display: flex; flex-wrap: wrap; gap: 5px; }
+.knx-admin-source-caps span {
+  font-size: 11px; border-radius: 4px; padding: 2px 7px;
+  background: var(--knx-sidebar-bg); color: var(--knx-text-muted);
+}
+
+.knx-admin-source-form {
+  margin-top: 12px; padding: 14px 16px; background: var(--knx-soft-bg);
+  border: 1px solid var(--knx-soft); border-radius: 8px;
+}
+.knx-admin-source-form-step { margin-bottom: 14px; }
+.knx-admin-source-form-step:last-of-type { margin-bottom: 10px; }
+.knx-admin-source-form-step-label { display: block; font-size: 11.5px; font-weight: 600; color: var(--knx-text-muted); margin-bottom: 5px; }
+.knx-admin-source-form-step input {
+  width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 6px; font-size: 13px;
+  border: 1px solid var(--knx-soft); outline: none; font-family: inherit; color: var(--knx-text); background: #fff;
+}
+.knx-admin-source-form-sa {
+  display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--knx-soft);
+  border-radius: 6px; padding: 8px 10px;
+}
+.knx-admin-source-form-sa span { font-size: 12px; color: var(--knx-deep); font-family: monospace; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 @media (max-width: 768px) {
   .knx-shell {
@@ -9626,3 +9873,121 @@
   .knxl-item { padding: 24px 20px; }
   .knxl-panel { padding: 30px 24px; }
 }
+
+/* ============ admin: rediseño Fuentes (resumen, filas compactas, kebab, Drive) ============ */
+.knx-src-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+.knx-src-summary button {
+  display: block;
+  text-align: left;
+  border: 1px solid var(--knx-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #fff;
+  font-family: inherit;
+  cursor: pointer;
+}
+.knx-src-summary button:hover { border-color: var(--knx-soft); }
+.knx-src-summary b { display: block; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; color: var(--knx-text); }
+.knx-src-summary span { font-size: 12.5px; color: var(--knx-text-muted); }
+.knx-src-summary small { display: block; font-size: 12px; color: #9A6412; margin-top: 2px; }
+
+.knx-src-list { border: 1px solid var(--knx-border); border-radius: 12px; overflow: hidden; }
+.knx-src-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-top: 1px solid var(--knx-border);
+}
+.knx-src-list > div:first-child > .knx-src-row,
+.knx-src-list > .knx-src-row:first-child { border-top: none; }
+.knx-src-row:hover { background: var(--knx-sidebar-bg); }
+.knx-src-dot { width: 7px; height: 7px; border-radius: 50%; background: #C8D0CC; flex: none; }
+.knx-src-dot--on { background: var(--knx-primary); }
+.knx-src-dot--soon { background: #C9A15A; }
+.knx-src-main { flex: 1; min-width: 0; }
+.knx-src-nm { font-weight: 600; font-size: 13.5px; color: var(--knx-text); }
+.knx-src-mt { font-size: 12px; color: var(--knx-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.knx-src-chip {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px;
+  background: var(--knx-sidebar-bg); border: 1px solid var(--knx-border); font-size: 11.5px; color: var(--knx-text-muted);
+  white-space: nowrap;
+}
+.knx-src-chip--ok { background: var(--knx-soft-bg); border-color: var(--knx-soft); color: var(--knx-deep); }
+.knx-src-soon { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 11px 14px; border-top: 1px dashed var(--knx-border); background: var(--knx-sidebar-bg); font-size: 12.5px; color: var(--knx-text-muted); }
+
+@media (max-width: 760px) {
+  .knx-src-summary { grid-template-columns: 1fr 1fr; }
+  .knx-src-chip--hm, .knx-src-mt--hm { display: none; }
+}
+
+/* Kebab menu */
+.knx-admin-kebab { position: relative; flex: none; }
+.knx-admin-menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 30;
+  background: #fff; border: 1px solid var(--knx-border); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(11,16,32,.12); padding: 6px; min-width: 170px;
+}
+.knx-admin-menu-item {
+  display: block; width: 100%; text-align: left; border: 0; background: none;
+  padding: 8px 10px; border-radius: 7px; font-size: 13px; font-family: inherit; color: var(--knx-text); cursor: pointer;
+}
+.knx-admin-menu-item:hover { background: var(--knx-sidebar-bg); }
+.knx-admin-menu-item--danger { color: #B4382F; }
+
+/* Drive unificado */
+.knx-drive { border: 1px solid var(--knx-border); border-radius: 12px; overflow: hidden; }
+.knx-drive-top { display: flex; gap: 14px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--knx-border); flex-wrap: wrap; }
+.knx-drive-top-title { font-weight: 600; font-size: 14px; color: var(--knx-text); }
+.knx-drive-sa { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: 12.5px; min-width: 0; }
+.knx-drive-sa code {
+  font-family: monospace; font-size: 12px; background: var(--knx-sidebar-bg); border: 1px solid var(--knx-border);
+  border-radius: 6px; padding: 3px 8px; color: var(--knx-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px;
+}
+.knx-drive-roles { display: grid; grid-template-columns: 1fr 1fr; }
+.knx-drive-role { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.knx-drive-role + .knx-drive-role { border-left: 1px solid var(--knx-border); }
+.knx-drive-role-label { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--knx-text-muted); }
+.knx-drive-role-folder { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13.5px; color: var(--knx-text); }
+.knx-drive-role p { margin: 0; font-size: 13px; color: var(--knx-text-muted); }
+.knx-drive-role-acts { display: flex; gap: 8px; margin-top: auto; padding-top: 4px; }
+@media (max-width: 760px) {
+  .knx-drive-roles { grid-template-columns: 1fr; }
+  .knx-drive-role + .knx-drive-role { border-left: 0; border-top: 1px solid var(--knx-border); }
+  .knx-drive-sa { margin-left: 0; width: 100%; }
+}
+
+/* Explorador de archivos de una conexión de lectura (dentro de Fuentes → Google Drive) */
+.knx-drive-explorer {
+  margin-top: 8px;
+  border: 1px solid var(--knx-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--knx-sidebar-bg);
+  max-height: 220px;
+  overflow-y: auto;
+}
+.knx-drive-explorer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--knx-text);
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+/* Toggle de rol (Solo lectura / Lectura y escritura) al conectar una carpeta de Drive — par de
+   botones en vez de un <select> nativo, cuyo popup abierto no se puede restylear. */
+.knx-drive-role-toggle { display: flex; gap: 8px; flex-wrap: wrap; }
+.knx-admin-chip-btn--active {
+  background: var(--knx-primary);
+  border-color: var(--knx-primary);
+  color: #fff;
+}
+.knx-admin-chip-btn--active:hover { background: var(--knx-deep); border-color: var(--knx-deep); color: #fff; }

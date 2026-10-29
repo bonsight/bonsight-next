@@ -90,6 +90,7 @@ export default async function KaiNextTenantPage({ params, searchParams }) {
       userName={userName}
       userHandle={userHandle}
       isTeamUser={!!teamUser}
+      isAdmin={!!tenantUser?.access?.isAdmin}
       basePath={basePath}
       initialChatId={typeof sp?.c === 'string' ? sp.c : null}
       initialDraft={typeof sp?.draft === 'string' ? sp.draft : null}

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { calcAreaScore, calcOverallScore } from '@/lib/kai/scoring';
 import { KAI_NEXT_SECTIONS } from '@/lib/kaiNext/capabilities';
+import { FEATURE_LABELS } from '@/lib/kai/usageFeatureLabels';
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -1431,7 +1432,8 @@ function DriveConnectPanel({ slug, driveConfig, setDriveConfig, onImported, sour
   );
 }
 
-function KnowledgeSourcesTab({ slug }) {
+// Exportada — reusada tal cual por el admin de Kai Next, mismo criterio que EquipoTab/CostsTab.
+export function KnowledgeSourcesTab({ slug, hideDrivePanel }) {
   const [sources, setSources]       = useState([]);
   const [digest, setDigest]         = useState(null);
   const [loading, setLoading]       = useState(true);
@@ -1513,7 +1515,7 @@ function KnowledgeSourcesTab({ slug }) {
 
   return (
     <div>
-      <DriveConnectPanel slug={slug} driveConfig={driveConfig} setDriveConfig={setDriveConfig} onImported={reloadSources} sources={sources} />
+      {!hideDrivePanel && <DriveConnectPanel slug={slug} driveConfig={driveConfig} setDriveConfig={setDriveConfig} onImported={reloadSources} sources={sources} />}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
@@ -2174,7 +2176,7 @@ function EquipoRow({ tenant, user: u, onSaved }) {
 
   const toggleAccess = (product) => {
     if (inactive) return;
-    patch({ access: { kai: u.access?.kai, aria: u.access?.aria, kaiNext: u.access?.kaiNext, [product]: !u.access?.[product] } });
+    patch({ access: { kai: u.access?.kai, aria: u.access?.aria, kaiNext: u.access?.kaiNext, isAdmin: u.access?.isAdmin, [product]: !u.access?.[product] } });
   };
 
   const resetCredentials = () => {
@@ -2193,12 +2195,6 @@ function EquipoRow({ tenant, user: u, onSaved }) {
     if (!confirm('¿Eliminar a esta persona del equipo? Es permanente — si solo quieres bloquearle el acceso, mejor usa "Desactivar".')) return;
     fetch(`/api/kai/${tenant}/tenant-users/${u.id}`, { method: 'DELETE' }).then(onSaved);
   };
-
-  const status = inactive
-    ? { label: 'Inactivo', cls: 'eq-status--inactive' }
-    : !u.username
-    ? { label: 'Sin acceso', cls: 'eq-status--pending' }
-    : { label: 'Activo', cls: 'eq-status--active' };
 
   return (
     <div className={inactive ? 'eq-inactive-row' : ''}>
@@ -2222,25 +2218,20 @@ function EquipoRow({ tenant, user: u, onSaved }) {
             <p className="eq-email">Sin usuario asignado</p>
           )}
         </div>
-        <div className="eq-pills">
-          <button type="button" className={`eq-pill${u.access?.kai ? ' eq-pill--on' : ''}${inactive ? ' eq-pill--disabled' : ''}`} onClick={() => toggleAccess('kai')} disabled={inactive}>Kai</button>
-          <button type="button" className={`eq-pill${u.access?.aria ? ' eq-pill--on' : ''}${inactive ? ' eq-pill--disabled' : ''}`} onClick={() => toggleAccess('aria')} disabled={inactive}>Aria</button>
-          <button type="button" className={`eq-pill${u.access?.kaiNext ? ' eq-pill--on' : ''}${inactive ? ' eq-pill--disabled' : ''}`} onClick={() => toggleAccess('kaiNext')} disabled={inactive}>Kai Next</button>
+        <button type="button" className="eq-switch" role="switch" aria-checked={!!u.access?.kai} aria-label={`Kai para ${u.name}`} disabled={inactive} onClick={() => toggleAccess('kai')} />
+        <button type="button" className="eq-switch" role="switch" aria-checked={!!u.access?.aria} aria-label={`Aria para ${u.name}`} disabled={inactive} onClick={() => toggleAccess('aria')} />
+        <div className="eq-switch-cell">
+          <button type="button" className="eq-switch" role="switch" aria-checked={!!u.access?.kaiNext} aria-label={`Kai Next para ${u.name}`} disabled={inactive} onClick={() => toggleAccess('kaiNext')} />
           {u.access?.kaiNext && !inactive && (
-            <button
-              type="button"
-              className="eq-icon-btn"
-              title="Qué puede ver y hacer en Kai Next"
-              onClick={() => setMode(mode === 'kaiNextConfig' ? null : 'kaiNextConfig')}
-            >
+            <button type="button" className="eq-icon-btn" title="Qué puede ver y hacer en Kai Next" onClick={() => setMode(mode === 'kaiNextConfig' ? null : 'kaiNextConfig')}>
               <EqIconEdit />
             </button>
           )}
         </div>
+        <button type="button" className="eq-switch" role="switch" aria-checked={!!u.access?.isAdmin} aria-label={`Admin para ${u.name}`} disabled={inactive} onClick={() => toggleAccess('isAdmin')} title="Acceso al admin de Kai Next" />
         <span className="eq-last-login">
           {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
         </span>
-        <span className={`eq-status ${status.cls}`}>{status.label}</span>
         <div className="eq-row-actions">
           {!inactive && (
             <button type="button" className="eq-icon-btn" title="Editar" onClick={() => (mode === 'edit' ? setMode(null) : openEdit())}><EqIconEdit /></button>
@@ -2455,7 +2446,10 @@ function KaiNextProjectsDrivePanel({ tenant }) {
   );
 }
 
-function EquipoTab({ slug }) {
+// Exportada — reusada tal cual por el admin de Kai Next (ver app/kai-next/[tenant]/admin), que
+// no tiene su propia gestión de equipo. Mismo criterio que CostsTab más abajo: una sola fuente
+// de verdad para esta pieza, en vez de mantener una copia en cada admin.
+export function EquipoTab({ slug, hideProjectsDrive }) {
   const [users, setUsers] = useState(undefined);
   const [addOpen, setAddOpen] = useState(false);
 
@@ -2469,11 +2463,11 @@ function EquipoTab({ slug }) {
 
   return (
     <>
-      <KaiNextProjectsDrivePanel tenant={slug} />
+      {!hideProjectsDrive && <KaiNextProjectsDrivePanel tenant={slug} />}
       <div className="admin-detail-card" style={{ padding: 0, overflow: 'hidden' }}>
         <div className="eq-header">
           <div>
-            <p className="eq-header-title">Equipo del cliente{users?.length ? <span className="eq-header-count"> · {users.length} persona{users.length !== 1 ? 's' : ''}</span> : null}</p>
+            <p className="eq-header-title">Equipo{users?.length ? <span className="eq-header-count"> · {users.length} persona{users.length !== 1 ? 's' : ''}</span> : null}</p>
             <p className="eq-header-sub">Cada persona entra con su usuario. El acceso a Kai y Aria se habilita por persona.</p>
           </div>
           <button type="button" className="eq-add-btn" onClick={() => setAddOpen((v) => !v)}>+ Agregar persona</button>
@@ -2483,7 +2477,7 @@ function EquipoTab({ slug }) {
 
         {users?.length > 0 && (
           <div className="eq-row-head">
-            <span>Persona</span><span>Usuario / email</span><span>Productos</span><span>Último acceso</span><span>Estado</span><span></span>
+            <span>Persona</span><span>Usuario / email</span><span>Kai</span><span>Aria</span><span>Kai Next</span><span>Admin</span><span>Último acceso</span><span></span>
           </div>
         )}
 
@@ -2563,10 +2557,9 @@ function TokenBar({ input, output }) {
   );
 }
 
-const FEAT_LABELS = {
-  chat: 'Discovery Chat', executive_summary: 'Executive Summary', diagnosis: 'Diagnóstico', summary: 'Resumen', insights: 'Insights', transversals: 'Patrones Transversales',
-  supervisor_summary: 'Resumen Supervisor', director_brief: 'Brief Director', contribution_interpret: 'Interpretar Aporte', report_draft: 'Borrador de Reporte', civil_report_draft: 'Borrador de Reporte (Civil/Seguimiento)', feedback_conversion_suggestion: 'Sugerencia de Conversión',
-};
+// Antes era un objeto duplicado acá mismo, desincronizado del real (le faltaban los 8 features
+// de Kai Next — ver lib/kai/usage.js) — ahora una sola fuente de verdad.
+const FEAT_LABELS = FEATURE_LABELS;
 
 function isoToday() {
   return new Date().toISOString().slice(0, 10);
@@ -2577,13 +2570,69 @@ function isoOffset(days) {
   return d.toISOString().slice(0, 10);
 }
 
-function CostsTab({ usage, events, dailyUsage = [] }) {
+// Exportada — reusada tal cual por el admin de Kai Next, mismo criterio que EquipoTab arriba.
+export function CostsTab({ slug, usage, events, dailyUsage = [] }) {
   const [fromDate, setFromDate] = useState(() => isoOffset(13));
   const [toDate, setToDate] = useState(() => isoToday());
   const [selectedDay, setSelectedDay] = useState(null);
+  const [teamCount, setTeamCount] = useState(null);
+
+  useEffect(() => {
+    if (!slug) return;
+    fetch(`/api/kai/${slug}/tenant-users`)
+      .then((r) => r.json())
+      .then((d) => setTeamCount((d.users ?? []).filter((u) => u.active !== false).length))
+      .catch(() => {});
+  }, [slug]);
 
   const { total = {}, byFeature = [] } = usage ?? {};
   const maxCost = byFeature[0]?.cost ?? 1;
+
+  // "En qué se gasta": byFeature llega partido por (producto, feature) — ej. 'chat' de Kai y de
+  // Kai Next son dos filas separadas, pero el label (FEAT_LABELS) solo depende de feature, así
+  // que se veían como "Discovery Chat" duplicado con montos distintos. Acá se fusiona por
+  // feature antes de mostrarlo (el desglose por producto sigue entero en `usage.byProduct`).
+  const byFeatureMerged = (() => {
+    const map = {};
+    for (const f of byFeature) {
+      if (!map[f.feature]) map[f.feature] = { feature: f.feature, cost: 0, input_tokens: 0, output_tokens: 0, calls: 0 };
+      map[f.feature].cost += f.cost;
+      map[f.feature].input_tokens += f.input_tokens;
+      map[f.feature].output_tokens += f.output_tokens;
+      map[f.feature].calls += f.calls;
+    }
+    return Object.values(map).sort((a, b) => b.cost - a.cost);
+  })();
+  const maxFeatureCost = byFeatureMerged[0]?.cost ?? 1;
+
+  // "Quién lo usa más" — solo el chat de Kai Next manda actorId/actorName a trackUsage (ver
+  // lib/kai/usage.js), así que se arma de los últimos eventos crudos (`events`, hasta 1000, no
+  // es el total exacto del mes) en vez de un agregado del servidor como byFeature. Si no hay
+  // ningún evento con autor, la sección entera no se muestra.
+  const byActor = (() => {
+    const map = {};
+    for (const e of (events ?? [])) {
+      if (!e.actorId) continue;
+      if (!map[e.actorId]) map[e.actorId] = { actorId: e.actorId, name: e.actorName || 'Sin nombre', cost: 0, calls: 0, input_tokens: 0, output_tokens: 0 };
+      map[e.actorId].cost += e.cost ?? 0;
+      map[e.actorId].calls++;
+      map[e.actorId].input_tokens += e.inputTokens ?? 0;
+      map[e.actorId].output_tokens += e.outputTokens ?? 0;
+    }
+    return Object.values(map).sort((a, b) => b.cost - a.cost);
+  })();
+  const maxActorCost = byActor[0]?.cost ?? 1;
+
+  // Proyección a fin de mes: ritmo de los últimos 7 días (dailyUsage, no filtrado por rango de
+  // fechas elegido en el gráfico) extendido a los días que faltan del mes.
+  const monthProjection = (() => {
+    const now = new Date();
+    const daysInMonth = new Date(now.getUTCFullYear(), now.getUTCMonth() + 1, 0).getUTCDate();
+    const daysRemaining = daysInMonth - now.getUTCDate();
+    const last7 = [...dailyUsage].sort((a, b) => a.date.localeCompare(b.date)).slice(-7);
+    const avgDaily = last7.length ? last7.reduce((s, d) => s + (d.cost ?? 0), 0) / last7.length : 0;
+    return (total.cost ?? 0) + avgDaily * daysRemaining;
+  })();
 
   // ── Build daily chart data from pre-aggregated daily stats ──
   const dailyAggMap = {};
@@ -2614,12 +2663,30 @@ function CostsTab({ usage, events, dailyUsage = [] }) {
     }
     return days;
   })();
+  const rangeTotal = dailyData.reduce((s, d) => s + (d.cost ?? 0), 0);
 
   function applyPreset(days) {
     setFromDate(isoOffset(days - 1));
     setToDate(isoToday());
     setSelectedDay(null);
   }
+
+  // "Costo del mes" es el mes calendario (currentMonth(), igual que el total de arriba); los
+  // presets 7d/14d/30d son ventanas móviles que terminan hoy, así que casi nunca coinciden con
+  // eso — no es un bug, son dos cosas distintas. Este preset sí arma exactamente el mismo rango
+  // que "Costo del mes", para poder verificarlo contra el gráfico con un solo click.
+  function applyCurrentMonthPreset() {
+    const now = new Date();
+    const firstOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
+    setFromDate(firstOfMonth);
+    setToDate(isoToday());
+    setSelectedDay(null);
+  }
+  const isCurrentMonthActive = (() => {
+    const now = new Date();
+    const firstOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
+    return fromDate === firstOfMonth && toDate === isoToday();
+  })();
 
   // ── Build hourly chart data for selected day ──
   const hourlyData = selectedDay
@@ -2646,61 +2713,28 @@ function CostsTab({ usage, events, dailyUsage = [] }) {
     return i % 6 === 0 ? d.label : '';
   }
 
-  // ── Recent activity grouping ──
-  const now = Date.now();
-  const DAY = 86400000;
-  const todayEvents = (events ?? []).filter((e) => now - new Date(e.createdAt).getTime() < DAY);
-  const weekEvents  = (events ?? []).filter((e) => { const age = now - new Date(e.createdAt).getTime(); return age >= DAY && age < 7 * DAY; });
-
-  function groupByFeature(evts) {
-    const map = {};
-    for (const e of evts) {
-      const k = `${e.product}:${e.feature}`;
-      if (!map[k]) map[k] = { label: e.feature, calls: 0, cost: 0, tokens: 0 };
-      map[k].calls++;
-      map[k].cost   += e.cost ?? 0;
-      map[k].tokens += (e.inputTokens ?? 0) + (e.outputTokens ?? 0);
-    }
-    return Object.values(map).sort((a, b) => b.cost - a.cost);
-  }
-
-  function EventGroup({ title, evts }) {
-    if (!evts.length) return null;
-    return (
-      <div className="cost-event-group">
-        <div className="cost-event-period">{title}</div>
-        {groupByFeature(evts).map((g) => (
-          <div key={`${g.label}`} className="cost-event-row">
-            <span className="cost-event-feature">{FEAT_LABELS[g.label] ?? g.label}</span>
-            <span className="cost-event-calls">{g.calls} llamada{g.calls !== 1 ? 's' : ''}</span>
-            <span className="cost-event-cost">{fmtC(g.cost)}</span>
-            <span className="cost-event-tokens">{fmtT(g.tokens)} tokens</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
   return (
     <div className="cost-tab">
       {/* Stat cards */}
       <div className="cost-tab-stats">
         <div className="cost-tab-stat">
-          <div className="cost-tab-stat-label">Costo este mes</div>
+          <div className="cost-tab-stat-label">Costo del mes</div>
           <div className="cost-tab-stat-value">{fmtC(total.cost)}</div>
         </div>
         <div className="cost-tab-stat">
-          <div className="cost-tab-stat-label">Input tokens</div>
-          <div className="cost-tab-stat-value cost-tab-stat-value--tok">{fmtT(total.input_tokens)}</div>
+          <div className="cost-tab-stat-label">Proyección a fin de mes</div>
+          <div className="cost-tab-stat-value">{fmtC(monthProjection)}</div>
+          <div className="cost-tab-stat-sub">al ritmo de los últimos 7 días</div>
         </div>
         <div className="cost-tab-stat">
-          <div className="cost-tab-stat-label">Output tokens</div>
-          <div className="cost-tab-stat-value cost-tab-stat-value--tok">{fmtT(total.output_tokens)}</div>
+          <div className="cost-tab-stat-label">Costo por persona activa</div>
+          <div className="cost-tab-stat-value">{teamCount ? fmtC(total.cost / teamCount) : '—'}</div>
+          {teamCount != null && <div className="cost-tab-stat-sub">{teamCount} persona{teamCount !== 1 ? 's' : ''}</div>}
         </div>
         <div className="cost-tab-stat">
-          <div className="cost-tab-stat-label">Total tokens</div>
-          <div className="cost-tab-stat-value cost-tab-stat-value--tok">{fmtT((total.input_tokens ?? 0) + (total.output_tokens ?? 0))}</div>
-          <TokenBar input={total.input_tokens} output={total.output_tokens} />
+          <div className="cost-tab-stat-label">Llamadas a la IA</div>
+          <div className="cost-tab-stat-value">{fmtT(total.calls)}</div>
+          <div className="cost-tab-stat-sub">{fmtT((total.input_tokens ?? 0) + (total.output_tokens ?? 0))} tokens</div>
         </div>
       </div>
 
@@ -2713,6 +2747,9 @@ function CostsTab({ usage, events, dailyUsage = [] }) {
                 Gasto por día{selectedDay ? '' : ' — click en una barra para ver por hora'}
               </div>
               <div style={{ display: 'flex', gap: 5 }}>
+                <button onClick={applyCurrentMonthPreset} style={{ padding: '3px 11px', borderRadius: 6, fontSize: 11, fontWeight: 600, border: '1px solid', borderColor: isCurrentMonthActive ? '#20C997' : '#374151', background: isCurrentMonthActive ? 'rgba(32,201,151,0.1)' : 'transparent', color: isCurrentMonthActive ? '#20C997' : '#6B7280', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  Este mes
+                </button>
                 {[7, 14, 30].map((d) => {
                   const active = fromDate === isoOffset(d - 1) && toDate === isoToday();
                   return (
@@ -2723,11 +2760,14 @@ function CostsTab({ usage, events, dailyUsage = [] }) {
                 })}
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: '#6B7280' }}>Desde</span>
               <input type="date" value={fromDate} max={toDate} onChange={(e) => { setFromDate(e.target.value); setSelectedDay(null); }} style={{ fontSize: 11, background: '#1F2937', border: '1px solid #374151', borderRadius: 6, color: '#E5E7EB', padding: '4px 8px', fontFamily: 'inherit', cursor: 'pointer', colorScheme: 'dark' }} />
               <span style={{ fontSize: 11, color: '#6B7280' }}>Hasta</span>
               <input type="date" value={toDate} min={fromDate} max={isoToday()} onChange={(e) => { setToDate(e.target.value); setSelectedDay(null); }} style={{ fontSize: 11, background: '#1F2937', border: '1px solid #374151', borderRadius: 6, color: '#E5E7EB', padding: '4px 8px', fontFamily: 'inherit', cursor: 'pointer', colorScheme: 'dark' }} />
+              <span style={{ fontSize: 12, color: '#6B7280', marginLeft: 6 }}>
+                Total del rango: <b style={{ color: '#111', fontWeight: 700 }}>{fmtC(rangeTotal)}</b>
+              </span>
             </div>
           </div>
           <SpendChart data={dailyData} xLabel={dailyXLabel} selectedKey={selectedDay} onBarClick={(d) => setSelectedDay(selectedDay === d.key ? null : d.key)} />
@@ -2751,28 +2791,53 @@ function CostsTab({ usage, events, dailyUsage = [] }) {
       )}
 
       {/* By feature */}
-      {byFeature.length > 0 && (
+      {byFeatureMerged.length > 0 && (
         <div className="cost-tab-section">
           <div className="cost-tab-section-title">Por funcionalidad</div>
-          {byFeature.map((f) => (
-            <div key={`${f.product}:${f.feature}`} className="cost-feature-row">
+          <div className="cost-feature-head">
+            <span></span><span></span><span className="r">Llamadas</span><span className="r">Costo</span><span className="r">Tokens (entrada / salida)</span>
+          </div>
+          {byFeatureMerged.map((f) => (
+            <div key={f.feature} className="cost-feature-row">
               <span className="cost-feature-label">{FEAT_LABELS[f.feature] ?? f.feature}</span>
               <div className="cost-feature-bar-wrap">
-                <div className="cost-feature-bar" style={{ width: `${Math.round((f.cost / maxCost) * 100)}%` }} />
+                <div className="cost-feature-bar" style={{ width: `${Math.round((f.cost / maxFeatureCost) * 100)}%` }} />
               </div>
+              <span className="cost-feature-calls">{fmtT(f.calls)}</span>
               <span className="cost-feature-cost">{fmtC(f.cost)}</span>
-              <span className="cost-feature-tokens">{fmtT(f.input_tokens + f.output_tokens)} tok</span>
+              <span className="cost-feature-tokens">
+                {fmtT(f.input_tokens + f.output_tokens)} tok
+                <TokenBar input={f.input_tokens} output={f.output_tokens} />
+                <span className="cost-feature-tokens-split">{fmtT(f.input_tokens)} / {fmtT(f.output_tokens)}</span>
+              </span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Recent activity */}
-      {(todayEvents.length > 0 || weekEvents.length > 0) && (
+      {/* Por persona — solo chat de Kai Next, ver nota en byActor */}
+      {byActor.length > 0 && (
         <div className="cost-tab-section">
-          <div className="cost-tab-section-title">Actividad reciente</div>
-          <EventGroup title="Hoy" evts={todayEvents} />
-          <EventGroup title="Últimos 7 días" evts={weekEvents} />
+          <div className="cost-tab-section-title">Quién más usa el chat de Kai Next</div>
+          <div className="cost-feature-head">
+            <span></span><span></span><span className="r">Llamadas</span><span className="r">Costo</span><span className="r">Tokens (entrada / salida)</span>
+          </div>
+          {byActor.map((a) => (
+            <div key={a.actorId} className="cost-feature-row">
+              <span className="cost-feature-label">{a.name}</span>
+              <div className="cost-feature-bar-wrap">
+                <div className="cost-feature-bar" style={{ width: `${Math.round((a.cost / maxActorCost) * 100)}%` }} />
+              </div>
+              <span className="cost-feature-calls">{fmtT(a.calls)}</span>
+              <span className="cost-feature-cost">{fmtC(a.cost)}</span>
+              <span className="cost-feature-tokens">
+                {fmtT(a.input_tokens + a.output_tokens)} tok
+                <TokenBar input={a.input_tokens} output={a.output_tokens} />
+                <span className="cost-feature-tokens-split">{fmtT(a.input_tokens)} / {fmtT(a.output_tokens)}</span>
+              </span>
+            </div>
+          ))}
+          <p style={{ fontSize: 11, color: '#bbb', marginTop: 8 }}>Solo cubre el chat de Kai Next, y hasta los últimos 1000 eventos del tenant (no un total exacto del mes si hay mucho volumen).</p>
         </div>
       )}
 
@@ -2959,7 +3024,7 @@ export default function TenantDetail({ meta, profile, conversations, allLearning
         {activeTab === 6 && <SummaryTab slug={meta.slug} />}
 
         {/* Costos IA Tab */}
-        {activeTab === 7 && <CostsTab usage={tenantUsage} events={usageEvents} dailyUsage={dailyUsage} />}
+        {activeTab === 7 && <CostsTab slug={meta.slug} usage={tenantUsage} events={usageEvents} dailyUsage={dailyUsage} />}
 
         {/* Equipo Tab */}
         {activeTab === 8 && <EquipoTab slug={meta.slug} />}

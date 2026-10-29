@@ -70,6 +70,15 @@ export async function POST(req, { params }) {
     }
   }
 
+  if (action === 'notes') {
+    const { id, businessContext } = source ?? {};
+    const sources = await getDbSources(tenant);
+    if (!sources.some((s) => s.id === id)) return Response.json({ error: 'No encontrado.' }, { status: 404 });
+    const updated = sources.map((s) => s.id === id ? { ...s, businessContext: businessContext ?? '' } : s);
+    await saveDbSources(tenant, updated);
+    return Response.json({ ok: true });
+  }
+
   if (action === 'toggle') {
     const { id } = source ?? {};
     const sources = await getDbSources(tenant);
