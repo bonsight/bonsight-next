@@ -5980,7 +5980,7 @@
 .knx-week-header {
   border-radius: 14px 14px 0 0;
   display: grid;
-  grid-template-columns: 48px repeat(5, minmax(0, 1fr));
+  grid-template-columns: 48px repeat(7, minmax(0, 1fr));
   border-bottom: 1px solid var(--knx-border);
 }
 
@@ -6017,7 +6017,7 @@
 
 .knx-week-body {
   display: grid;
-  grid-template-columns: 48px repeat(5, minmax(0, 1fr));
+  grid-template-columns: 48px repeat(7, minmax(0, 1fr));
   position: relative;
   overflow-y: auto;
   max-height: calc(100vh - 320px);

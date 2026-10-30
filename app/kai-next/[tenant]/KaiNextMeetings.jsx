@@ -526,7 +526,7 @@ function snapMinutes(offsetY) {
 
 function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, onSelectMeeting, onCreateAt }) {
   const now = new Date();
-  const days = [0, 1, 2, 3, 4].map((i) => addDays(weekStart, i));
+  const days = [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(weekStart, i));
   // Al abrir, el scroll arranca en horario laboral (8 AM) fijo — nunca en medianoche, pero
   // tampoco atado a la hora real de quien lo abre (si alguien entra de madrugada o a las 11pm,
   // anclarlo a "ahora" lo deja en un lugar incómodo; 8 AM es un default razonable siempre).
@@ -1120,7 +1120,7 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
                 <button type="button" className="knx-canvas-mini" onClick={() => setWeekStart(startOfWeek(new Date()))}>Hoy</button>
                 <button type="button" aria-label="Semana siguiente" onClick={() => setWeekStart((w) => addDays(w, 7))}>›</button>
                 <span className="knx-meetings-week-range">
-                  {weekStart.toLocaleDateString('es', { day: 'numeric', month: 'short' })} – {addDays(weekStart, 4).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  {weekStart.toLocaleDateString('es', { day: 'numeric', month: 'short' })} – {addDays(weekStart, 6).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </span>
               </div>
             )}
