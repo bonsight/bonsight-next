@@ -39,9 +39,13 @@ export async function GET(req, { params }) {
   ]);
   const knownIds = new Set(known.map((m) => m.calendarEventId).filter(Boolean));
   const dismissedIds = new Set(dismissed);
+  // Una ocurrencia de recurrencia nunca matchea por `id` sola (ver recurringEventId en
+  // lib/kai/calendar.js) — si el evento maestro ya está en Kai, esta ocurrencia no es candidata.
+  const isKnown = (e) => knownIds.has(e.id) || (e.recurringEventId && knownIds.has(e.recurringEventId));
+  const isDismissed = (e) => dismissedIds.has(e.id) || (e.recurringEventId && dismissedIds.has(e.recurringEventId));
 
   const candidates = upcoming
-    .filter((e) => !knownIds.has(e.id) && !dismissedIds.has(e.id))
+    .filter((e) => !isKnown(e) && !isDismissed(e))
     .map((e) => ({
       calendarEventId: e.id,
       title: e.title,

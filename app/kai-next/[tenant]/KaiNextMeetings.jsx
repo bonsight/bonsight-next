@@ -67,6 +67,41 @@ function relTime(iso) {
 function sameDay(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
+
+// Asigna columna lado a lado a cada evento que se solapa con otro, como Google Calendar — sin
+// esto, dos reuniones a la misma hora se dibujaban una encima de la otra (misma posición/ancho)
+// y la de abajo quedaba tapada e inclickeable. `items` debe traer `start`/`end` (Date) en cada
+// elemento; devuelve los mismos elementos con `col`/`cols` agregados.
+function layoutDayOverlaps(items) {
+  const sorted = [...items].sort((a, b) => a.start - b.start || a.end - b.end);
+  const clusters = [];
+  let current = [];
+  let currentEnd = null;
+  for (const it of sorted) {
+    if (current.length && it.start < currentEnd) {
+      current.push(it);
+      if (it.end > currentEnd) currentEnd = it.end;
+    } else {
+      if (current.length) clusters.push(current);
+      current = [it];
+      currentEnd = it.end;
+    }
+  }
+  if (current.length) clusters.push(current);
+
+  const result = [];
+  for (const cluster of clusters) {
+    const colEnds = []; // fin del último evento puesto en cada columna
+    const withCol = cluster.map((it) => {
+      let col = colEnds.findIndex((end) => it.start >= end);
+      if (col === -1) { col = colEnds.length; colEnds.push(it.end); } else colEnds[col] = it.end;
+      return { ...it, col };
+    });
+    const cols = colEnds.length;
+    for (const it of withCol) result.push({ ...it, cols });
+  }
+  return result;
+}
 function startOfWeek(d) {
   const date = new Date(d);
   const day = date.getDay(); // 0=domingo
@@ -624,9 +659,12 @@ function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, on
           ))}
         </div>
         {days.map((d) => {
-          const dayOccurrences = visible
-            .map((m) => ({ m, occ: m.start ? occurrenceOn(m, d) : null }))
-            .filter((x) => x.occ);
+          const dayOccurrences = layoutDayOverlaps(
+            visible
+              .map((m) => ({ m, occ: m.start ? occurrenceOn(m, d) : null }))
+              .filter((x) => x.occ)
+              .map((x) => ({ ...x, start: x.occ.start, end: x.occ.end })),
+          );
           const isToday = sameDay(d, now);
           const nowTop = ((now.getHours() + now.getMinutes() / 60) - HOUR_START) * PX_PER_HOUR;
           const daySelecting = drag && sameDay(drag.day, d) ? drag : null;
@@ -651,17 +689,26 @@ function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, on
                   }}
                 />
               )}
-              {dayOccurrences.map(({ m, occ }) => {
-                const { start, end } = occ;
+              {dayOccurrences.map(({ m, start, end, col, cols }) => {
                 const top = Math.max(0, ((start.getHours() + start.getMinutes() / 60) - HOUR_START) * PX_PER_HOUR);
                 const height = Math.max(20, ((end - start) / 3600000) * PX_PER_HOUR);
                 const info = tipoInfo(m.tipo);
                 const extra = (m.attendees?.length ?? 1) - 1;
+                // Mismo margen de 3px a los costados que antes (CSS: left/right: 3px), más 2px
+                // de separación entre columnas cuando hay más de una reunión a la misma hora.
+                const MARGIN = 3, GAP = 2;
+                const usablePx = 2 * MARGIN + (cols - 1) * GAP; // px a restar del 100% antes de repartir en columnas
                 return (
                   <button
                     type="button" key={`${m.id}-${toDateInput(d)}`}
                     className="knx-week-event"
-                    style={{ top, height, background: info.chipBg, borderLeftColor: info.border, color: info.color }}
+                    style={{
+                      top, height, background: info.chipBg, borderLeftColor: info.border, color: info.color,
+                      left: `calc(${MARGIN + col * GAP}px + (100% - ${usablePx}px) * ${col} / ${cols})`,
+                      width: `calc((100% - ${usablePx}px) / ${cols})`,
+                      right: 'auto',
+                      zIndex: col + 1,
+                    }}
                     onClick={() => onSelectMeeting(m.id)}
                   >
                     <span className="knx-week-event-title">{m.title}{m.recurrence && ' ↻'}</span>
