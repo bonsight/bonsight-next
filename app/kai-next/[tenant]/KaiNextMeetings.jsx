@@ -100,6 +100,18 @@ function occurrenceOn(meeting, day) {
     matches = diffDays >= 0 && diffDays % (7 * (meeting.recurrence.interval || 1)) === 0;
   } else if (meeting.recurrence.freq === 'MONTHLY') {
     matches = diffDays >= 0 && day.getDate() === start.getDate();
+  } else if (meeting.recurrence.freq === 'MONTHLY_WEEKDAY') {
+    // "Último sábado del mes", etc. — mismo cálculo que monthlyWeekdayRecurrence() en
+    // app/api/kai-next/[tenant]/dev-meetings/route.js (tiene que coincidir con lo que se
+    // guardó al crear/editar: ordinal -1 = última aparición de ese día de semana en el mes).
+    if (diffDays < 0 || day.getDay() !== meeting.recurrence.weekday) {
+      matches = false;
+    } else {
+      const dom = day.getDate();
+      const daysInMonth = new Date(day.getFullYear(), day.getMonth() + 1, 0).getDate();
+      const ordinal = dom + 7 > daysInMonth ? -1 : Math.ceil(dom / 7);
+      matches = ordinal === meeting.recurrence.ordinal;
+    }
   } else {
     matches = diffDays === 0;
   }
@@ -130,7 +142,25 @@ const REPEAT_OPTIONS = [
   { id: 'weekly', label: 'Cada semana' },
   { id: 'biweekly', label: 'Cada 2 semanas' },
   { id: 'monthly', label: 'Cada mes' },
+  { id: 'monthly_weekday', label: 'Cada mes (mismo día de semana)' },
 ];
+
+const WEEKDAY_NAMES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const ORDINAL_NAMES = ['1er', '2do', '3er', '4to'];
+
+// "Cada mes (último sábado)" en vez del label genérico — mismo cálculo que
+// monthlyWeekdayRecurrence() en la ruta API, para que el selector diga exactamente lo que se va
+// a guardar. Sin fecha elegida todavía, se queda con el label genérico.
+function repeatOptionLabel(id, dateStr) {
+  if (id !== 'monthly_weekday') return REPEAT_OPTIONS.find((r) => r.id === id)?.label ?? id;
+  if (!dateStr) return 'Cada mes (mismo día de semana)';
+  const d = new Date(`${dateStr}T00:00:00`);
+  const dom = d.getDate();
+  const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  const isLast = dom + 7 > daysInMonth;
+  const ordinalLabel = isLast ? 'último' : ORDINAL_NAMES[Math.ceil(dom / 7) - 1];
+  return `Cada mes (${ordinalLabel} ${WEEKDAY_NAMES[d.getDay()]})`;
+}
 
 // Reemplaza el <input type="time"> nativo (el picker de columnas del navegador queda feo e
 // inconsistente entre navegadores) por dos <select> simples, mismo look que el resto del form.
@@ -174,6 +204,10 @@ function recurrenceLabel(recurrence) {
   if (!recurrence) return null;
   if (recurrence.freq === 'WEEKLY') return recurrence.interval > 1 ? `Cada ${recurrence.interval} semanas` : 'Cada semana';
   if (recurrence.freq === 'MONTHLY') return 'Cada mes';
+  if (recurrence.freq === 'MONTHLY_WEEKDAY') {
+    const ordinalLabel = recurrence.ordinal === -1 ? 'último' : ORDINAL_NAMES[recurrence.ordinal - 1];
+    return `Cada mes (${ordinalLabel} ${WEEKDAY_NAMES[recurrence.weekday]})`;
+  }
   return null;
 }
 
@@ -481,7 +515,7 @@ function ScheduleMeetingModal({ tenant, roster, externalContacts, projects, orga
             <div className="knx-board-field">
               <label>Repetir</label>
               <select value={repeat} onChange={(e) => setRepeat(e.target.value)}>
-                {REPEAT_OPTIONS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+                {REPEAT_OPTIONS.map((r) => <option key={r.id} value={r.id}>{repeatOptionLabel(r.id, date)}</option>)}
               </select>
             </div>
           </div>
@@ -494,7 +528,7 @@ function ScheduleMeetingModal({ tenant, roster, externalContacts, projects, orga
             {date && startTime && (
               <span className="knx-meetings-modal-footer-time">
                 {withMeet ? 'Google Meet' : 'Sin Meet'} · {date} {startTime}–{endTime}
-                {repeat !== 'none' && ` · ${REPEAT_OPTIONS.find((r) => r.id === repeat)?.label.toLowerCase()}`}
+                {repeat !== 'none' && ` · ${repeatOptionLabel(repeat, date).toLowerCase()}`}
               </span>
             )}
             <span style={{ flexGrow: 1 }} />
@@ -1076,7 +1110,9 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
       projectId: meeting.projectId ?? '',
       date: toDateInput(startDate), startTime: `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`,
       duration: Math.round((endDate - startDate) / 60000),
-      repeat: meeting.recurrence ? (REPEAT_BY_RECURRENCE[`${meeting.recurrence.freq}-${meeting.recurrence.interval}`] ?? 'weekly') : 'none',
+      repeat: meeting.recurrence
+        ? (meeting.recurrence.freq === 'MONTHLY_WEEKDAY' ? 'monthly_weekday' : (REPEAT_BY_RECURRENCE[`${meeting.recurrence.freq}-${meeting.recurrence.interval}`] ?? 'weekly'))
+        : 'none',
     });
     setSelectedMeetingId(null);
   };

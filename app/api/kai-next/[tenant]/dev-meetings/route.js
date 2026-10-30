@@ -57,6 +57,29 @@ const RECURRENCE = {
   monthly: { rrule: 'RRULE:FREQ=MONTHLY', meta: { freq: 'MONTHLY', interval: 1 } },
 };
 
+const RRULE_WEEKDAY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+
+// "Cada mes, mismo día de semana" (ej. último sábado) — a diferencia de los otros 3 repeat, el
+// BYDAY real depende de en qué día cae `startDateTime` (no hay una sola RRULE fija por opción).
+// Se calcula si ESE día es la última aparición de su día de semana en el mes (ordinal -1,
+// robusto para meses de 4 o 5 semanas) o una posición fija (1er/2do/3er/4to) si no lo es.
+function monthlyWeekdayRecurrence(startDateTime) {
+  const d = new Date(startDateTime);
+  const weekday = d.getDay();
+  const dom = d.getDate();
+  const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  const ordinal = dom + 7 > daysInMonth ? -1 : Math.ceil(dom / 7);
+  return {
+    rrule: `RRULE:FREQ=MONTHLY;BYDAY=${ordinal}${RRULE_WEEKDAY[weekday]}`,
+    meta: { freq: 'MONTHLY_WEEKDAY', weekday, ordinal },
+  };
+}
+
+function resolveRecurrence(repeat, startDateTime) {
+  if (repeat === 'monthly_weekday') return monthlyWeekdayRecurrence(startDateTime);
+  return RECURRENCE[repeat] ?? null;
+}
+
 // A diferencia de la versión anterior (project-scoped), esta pantalla vive en el sidebar y el
 // proyecto es OPCIONAL — por eso el gate no exige un projectId en la URL. Si viene uno (en el
 // body del POST o como ?projectId= en el GET), se revalida que el Supervisor esté asignado a
@@ -113,7 +136,7 @@ export async function POST(req, { params }) {
   if (!startDateTime || !endDateTime) return Response.json({ error: 'Fecha/hora de inicio y fin son requeridas.' }, { status: 400 });
   if (!Array.isArray(attendees) || !attendees.length) return Response.json({ error: 'Agrega al menos un invitado.' }, { status: 400 });
 
-  const recurrence = RECURRENCE[repeat] ?? null;
+  const recurrence = resolveRecurrence(repeat, startDateTime);
 
   try {
     const event = await createCalendarEvent({
@@ -174,7 +197,7 @@ export async function PATCH(req, { params }) {
     return Response.json({ error: 'Solo quien organizó esta reunión puede modificarla.' }, { status: 403 });
   }
 
-  const recurrence = RECURRENCE[repeat] ?? null;
+  const recurrence = resolveRecurrence(repeat, startDateTime);
 
   try {
     const event = await updateCalendarEvent(existing.calendarEventId, {
