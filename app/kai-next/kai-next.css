@@ -5643,6 +5643,26 @@
   display: inline-block;
 }
 
+.knx-meetings-import-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #EAF0F8;
+  border: 1px solid #4A6FA5;
+  border-radius: 10px;
+  padding: 10px 16px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--knx-text);
+}
+
+.knx-meetings-import-banner-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 /* Modal de agendar */
 
 .knx-meetings-modal-backdrop {

@@ -1052,6 +1052,35 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
   const [modalOpen, setModalOpen] = useState(false);
   const [modalInitial, setModalInitial] = useState(null);
   const [selectedMeetingId, setSelectedMeetingId] = useState(null);
+  const [unimported, setUnimported] = useState([]);
+  const [unimportedBusyId, setUnimportedBusyId] = useState(null);
+
+  const loadUnimported = () => {
+    fetch(`/api/kai-next/${tenant}/dev-meetings/unimported`).then((r) => r.json()).then((d) => setUnimported(d.candidates ?? [])).catch(() => null);
+  };
+  useEffect(() => { loadUnimported(); }, [tenant]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleImportCandidate = async (calendarEventId) => {
+    setUnimportedBusyId(calendarEventId);
+    try {
+      const res = await fetch(`/api/kai-next/${tenant}/dev-meetings/unimported`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendarEventId, action: 'import' }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setMeetings((prev) => [d.meeting, ...(prev ?? [])]);
+        setUnimported((prev) => prev.filter((c) => c.calendarEventId !== calendarEventId));
+      }
+    } finally {
+      setUnimportedBusyId(null);
+    }
+  };
+  const handleDismissCandidate = async (calendarEventId) => {
+    setUnimported((prev) => prev.filter((c) => c.calendarEventId !== calendarEventId));
+    await fetch(`/api/kai-next/${tenant}/dev-meetings/unimported`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calendarEventId, action: 'dismiss' }),
+    }).catch(() => null);
+  };
 
   useEffect(() => {
     fetch(`/api/kai-next/${tenant}`).then((r) => r.json()).then((d) => setChats(d.conversations ?? [])).catch(() => null);
@@ -1149,6 +1178,20 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
             <button type="button" className="knx-new-chat" onClick={() => openSchedule(null)}>+ Agendar reunión</button>
           </div>
 
+          {unimported.map((c) => (
+            <div key={c.calendarEventId} className="knx-meetings-import-banner">
+              <span>
+                Encontramos <strong>&ldquo;{c.title}&rdquo;</strong> en Google Calendar, creada por fuera de Kai — {fmtDateTime(c.start)} → {fmtTime(c.end)}. ¿La importamos?
+              </span>
+              <div className="knx-meetings-import-banner-actions">
+                <button type="button" className="knx-canvas-mini" disabled={unimportedBusyId === c.calendarEventId} onClick={() => handleDismissCandidate(c.calendarEventId)}>Ignorar</button>
+                <button type="button" className="knx-analisis-sources-save" disabled={unimportedBusyId === c.calendarEventId} onClick={() => handleImportCandidate(c.calendarEventId)}>
+                  {unimportedBusyId === c.calendarEventId ? 'Importando…' : 'Importar'}
+                </button>
+              </div>
+            </div>
+          ))}
+
           <div className="knx-meetings-toolbar">
             {view === 'semana' && (
               <div className="knx-meetings-week-nav">
@@ -1204,6 +1247,7 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
 
       {selectedMeetingId && (
         <MeetingDetailPanel
+          key={selectedMeetingId}
           tenant={tenant} basePath={basePath} meetingId={selectedMeetingId} userName={userName} userEmail={userEmail} roster={roster}
           onClose={() => setSelectedMeetingId(null)}
           onDeleted={onMeetingDeleted}

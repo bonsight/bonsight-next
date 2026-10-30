@@ -2978,6 +2978,7 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
 
       {selectedEpica && (
         <EpicaDetailPanel
+          key={selectedEpica.id}
           tenant={tenant}
           projectId={projectId}
           epica={selectedEpica}

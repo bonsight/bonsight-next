@@ -869,6 +869,7 @@ export default function KaiNextSprints({
 
       {detailTask && (
         <TaskDetailPanel
+          key={detailTask.id}
           task={detailTask}
           data={data}
           busy={busy}

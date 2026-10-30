@@ -789,30 +789,36 @@ function KaiNextGantt({ grouped, people, grupos, savingTaskId, canToggleTask, on
   const scrollRef = useRef(null);
   const allTasks = grouped.flatMap((g) => g.tasks);
   const withDates = allTasks.filter((t) => t.fechaInicio && t.fechaFin);
-  if (!withDates.length) {
-    return <p className="knx-knowledge-empty">Ninguna tarea tiene fecha de inicio y fin cargadas todavía — usa la vista Lista o editalas para ver el cronograma.</p>;
-  }
+  const hasAnyDates = withDates.length > 0;
 
-  const starts = withDates.map((t) => t.fechaInicio).sort();
-  const ends = withDates.map((t) => t.fechaFin).sort();
-  const domainStart = starts[0];
-  const domainEnd = ends[ends.length - 1];
-  const totalDays = Math.max(1, daysBetween(domainStart, domainEnd)) + 1;
-  const trackWidth = Math.max(GANTT_MIN_TRACK, totalDays * GANTT_PX_PER_DAY);
+  const starts = hasAnyDates ? withDates.map((t) => t.fechaInicio).sort() : [];
+  const ends = hasAnyDates ? withDates.map((t) => t.fechaFin).sort() : [];
+  const domainStart = hasAnyDates ? starts[0] : null;
+  const domainEnd = hasAnyDates ? ends[ends.length - 1] : null;
+  const totalDays = hasAnyDates ? Math.max(1, daysBetween(domainStart, domainEnd)) + 1 : 0;
+  const trackWidth = hasAnyDates ? Math.max(GANTT_MIN_TRACK, totalDays * GANTT_PX_PER_DAY) : 0;
   const todayIso = new Date().toISOString().slice(0, 10);
-  const showToday = todayIso >= domainStart && todayIso <= domainEnd;
-  const todayLeft = GANTT_INFO_WIDTH + daysBetween(domainStart, todayIso) * GANTT_PX_PER_DAY;
+  const showToday = hasAnyDates && todayIso >= domainStart && todayIso <= domainEnd;
+  const todayLeft = hasAnyDates ? GANTT_INFO_WIDTH + daysBetween(domainStart, todayIso) * GANTT_PX_PER_DAY : 0;
 
   // Al entrar, el cronograma arranca centrado en "hoy" (o lo más cerca posible) — antes siempre
   // abría desde el inicio del rango, así que un proyecto largo escondía la fecha actual varios
   // scrolls a la derecha. Si el proyecto ya terminó, muestra el final; si todavía no arrancó,
   // el inicio (que ya es el default natural, sin nada que hacer).
+  // El hook se llama siempre, aunque no haya fechas todavía (abajo retornamos temprano en ese
+  // caso) — un return antes de un hook hace que la cantidad de hooks cambie entre renders del
+  // mismo componente (ej. al filtrar por un mini proyecto sin fechas) y React explota la página.
   useEffect(() => {
+    if (!hasAnyDates) return;
     const el = scrollRef.current;
     if (!el) return;
     const target = todayIso > domainEnd ? GANTT_INFO_WIDTH + trackWidth : todayLeft;
     el.scrollLeft = Math.max(0, target - el.clientWidth / 2);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!hasAnyDates) {
+    return <p className="knx-knowledge-empty">Ninguna tarea tiene fecha de inicio y fin cargadas todavía — usa la vista Lista o editalas para ver el cronograma.</p>;
+  }
 
   const tickEvery = totalDays <= 14 ? 1 : totalDays <= 45 ? 3 : totalDays <= 120 ? 7 : 14;
   const ticks = [];
@@ -2113,6 +2119,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
 
       {selectedTaskId && tasks.find((t) => t.id === selectedTaskId) && (
         <TaskDetailPanel
+          key={selectedTaskId}
           task={tasks.find((t) => t.id === selectedTaskId)}
           people={people}
           grupos={grupos}
