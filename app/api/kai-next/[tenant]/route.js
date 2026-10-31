@@ -195,7 +195,7 @@ export async function POST(req, { params }) {
           }
           return TOOL_LABELS[name] ?? name;
         };
-        const { finalText, callLogs, usage } = await runAgenticLoop({
+        const loopArgs = {
           anthropic,
           model: MODEL,
           maxTokens: MAX_TOKENS,
@@ -228,7 +228,38 @@ export async function POST(req, { params }) {
               documents.push({ format: 'excel', ...input });
             }
           },
-        });
+        };
+        let { finalText, callLogs, usage } = await runAgenticLoop(loopArgs);
+
+        // Red de seguridad contra el "prometo el documento pero nunca llamo la tool" — el
+        // prompt ya se lo prohíbe explícitamente, pero un chat largo puede arrastrar el mismo
+        // patrón fallido de sus propios turnos anteriores (Kai imitando su propia respuesta
+        // previa) y repetirlo igual. Si el texto final suena a "ya está/lo genero" pero
+        // documents sigue vacío, se fuerza UNA repregunta explícita en vez de dejar pasar la
+        // promesa vacía — cuesta una llamada extra a Claude, pero solo en el caso raro donde ya
+        // se detectó el problema.
+        const soundsLikeDocPromise = /(gener[oóaá]|generando|list[oa]\s+(el|la|para)|ya\s+(lo\s+)?gener[ée]|descargable\s+ya)/i.test(finalText)
+          && /\b(pdf|excel|documento|archivo)\b/i.test(finalText);
+        if (soundsLikeDocPromise && documents.length === 0) {
+          const retry = await runAgenticLoop({
+            ...loopArgs,
+            maxIterations: 2,
+            messages: [
+              ...conversation,
+              { role: 'assistant', content: finalText },
+              {
+                role: 'user',
+                content: 'No llamaste a generate_pdf_report ni generate_excel_report, pero tu respuesta da a entender que el documento ya está generado o lo estás generando. Llamá la tool ahora mismo, en este turno, con el contenido completo armado con datos reales de la conversación. Si de verdad te falta un dato puntual para armarlo, preguntámelo directo en vez de repetir que ya está listo.',
+              },
+            ],
+          });
+          if (documents.length > 0 || retry.finalText) {
+            finalText = retry.finalText || finalText;
+            callLogs.push(...retry.callLogs);
+            usage.inputTokens += retry.usage.inputTokens;
+            usage.outputTokens += retry.usage.outputTokens;
+          }
+        }
 
         // El bloque [KAI_SOURCES] (si el modelo lo agregó) sirve para ACOTAR cuáles de los
         // documentos devueltos realmente sostienen la respuesta — pero si no aparece, o cita
