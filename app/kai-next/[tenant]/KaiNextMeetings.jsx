@@ -578,6 +578,94 @@ function ScheduleMeetingModal({ tenant, roster, externalContacts, projects, orga
   );
 }
 
+// ── Modal de Tarea ────────────────────────────────────────────────────────────────────────
+// Más chico que ScheduleMeetingModal a propósito: una tarea no tiene invitados ni Meet, solo
+// a quién le pertenece. El intento de sincronizarla al Google Tasks real de esa persona pasa
+// server-side (ver .../dev-meetings/tasks POST) — acá no hace falta saber si funcionó o no.
+function TaskModal({ tenant, roster, organizerName, organizerEmail, initialDate, onClose, onCreated }) {
+  const [title, setTitle] = useState('');
+  const [responsableEmail, setResponsableEmail] = useState(organizerEmail);
+  const [date, setDate] = useState(initialDate || toDateInput(new Date()));
+  const [time, setTime] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [description, setDescription] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const options = [
+    { email: organizerEmail, name: `${organizerName} (yo)` },
+    ...roster.filter((p) => p.email !== organizerEmail).map((p) => ({ email: p.email, name: p.name })),
+  ];
+
+  const submit = async () => {
+    setErr(null);
+    if (!title.trim()) { setErr('Ponele un título a la tarea.'); return; }
+    if (!date) { setErr('Elige una fecha.'); return; }
+    setSaving(true);
+    try {
+      const chosen = options.find((p) => p.email === responsableEmail) ?? options[0];
+      const res = await fetch(`/api/kai-next/${tenant}/dev-meetings/tasks`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim(), date, time: time || null, deadline: deadline || null, description,
+          responsableName: chosen.name.replace(' (yo)', ''), responsableEmail: chosen.email,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo crear la tarea.');
+      onCreated(data.task);
+    } catch (e) {
+      setErr(e.message || 'No se pudo crear la tarea.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="knx-meetings-modal-backdrop" onClick={onClose}>
+      <div className="knx-meetings-modal knx-meetings-modal--small" onClick={(e) => e.stopPropagation()}>
+        <div className="knx-meetings-modal-left" style={{ borderRight: 0 }}>
+          <h2>Nueva tarea</h2>
+          {err && <p className="knx-canvas-error">{err}</p>}
+          <div className="knx-board-field">
+            <label>Título</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Título de la tarea…" autoFocus />
+          </div>
+          <div className="knx-board-field">
+            <label>Responsable</label>
+            <select value={responsableEmail} onChange={(e) => setResponsableEmail(e.target.value)}>
+              {options.map((p) => <option key={p.email} value={p.email}>{p.name}</option>)}
+            </select>
+          </div>
+          <div className="knx-board-field-row">
+            <div className="knx-board-field">
+              <label>Fecha</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+            <div className="knx-board-field">
+              <label>Hora (opcional)</label>
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+            </div>
+            <div className="knx-board-field">
+              <label>Fecha límite (opcional)</label>
+              <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+            </div>
+          </div>
+          <div className="knx-board-field">
+            <label>Descripción</label>
+            <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Notas de la tarea…" />
+          </div>
+          <div className="knx-meetings-modal-footer">
+            <span style={{ flexGrow: 1 }} />
+            <button type="button" className="knx-canvas-mini" onClick={onClose}>Cancelar</button>
+            <button type="button" className="knx-new-chat" disabled={saving} onClick={submit}>{saving ? 'Guardando…' : 'Crear tarea'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Vista calendario semanal ──────────────────────────────────────────────────────────────
 // Día completo (00:00–24:00), scrolleable, como Google Calendar — el body ya es overflow-y:auto
 // (ver .knx-week-body), así que mostrar las 24 horas solo lo hace más alto, no rompe nada.
@@ -593,7 +681,7 @@ function snapMinutes(offsetY) {
   return Math.round(raw / 30) * 30;
 }
 
-function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, onSelectMeeting, onCreateAt }) {
+function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, onSelectMeeting, onCreateAt, tasks, onToggleTask, onDeleteTask, onOpenTaskModal }) {
   const now = new Date();
   const days = [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(weekStart, i));
   // Al abrir, el scroll arranca en horario laboral (8 AM) fijo — nunca en medianoche, pero
@@ -645,6 +733,25 @@ function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, on
                 {d.toLocaleDateString('es', { weekday: 'short' }).replace('.', '')}
               </span>
               <span className={`knx-week-header-num${isToday ? ' knx-week-header-num--today' : ''}`}>{d.getDate()}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="knx-week-tasksrow">
+        <div />
+        {days.map((d) => {
+          const dateStr = toDateInput(d);
+          const dayTasks = tasks.filter((t) => t.date === dateStr);
+          return (
+            <div key={dateStr} className="knx-week-tasksrow-col">
+              {dayTasks.map((t) => (
+                <div key={t.id} className={`knx-week-task${t.done ? ' knx-week-task--done' : ''}`} title={t.description || t.title}>
+                  <input type="checkbox" checked={t.done} onChange={() => onToggleTask(t)} aria-label={`Tarea: ${t.title}`} />
+                  <span>{t.time ? `${t.time} · ` : ''}{t.title}{t.deadline && t.deadline !== t.date ? ` (vence ${new Date(`${t.deadline}T00:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short' })})` : ''}</span>
+                  <button type="button" className="knx-week-task-del" onClick={() => onDeleteTask(t)} aria-label="Eliminar tarea">×</button>
+                </div>
+              ))}
+              <button type="button" className="knx-week-task-add" onClick={() => onOpenTaskModal(dateStr)}>+ Tarea</button>
             </div>
           );
         })}
@@ -852,7 +959,7 @@ function ProposeTimeModal({ tenant, meeting, roster, onClose, onProposed }) {
   );
 }
 
-function MeetingDetailPanel({ tenant, basePath, meetingId, userName, userEmail, roster, onClose, onDeleted, onReschedule }) {
+function MeetingDetailPanel({ tenant, basePath, meetingId, userName, userEmail, roster, onClose, onDeleted, onReschedule, onDuplicate }) {
   const [closing, handleClose] = useSidePanelClose(onClose);
   const [meeting, setMeeting] = useState(undefined);
   const [removeConfirm, setRemoveConfirm] = useState(false);
@@ -1024,6 +1131,7 @@ function MeetingDetailPanel({ tenant, basePath, meetingId, userName, userEmail, 
           <button type="button" className="knx-canvas-mini" onClick={() => (isOrganizer ? onReschedule(meeting) : setProposeOpen(true))}>
             {isOrganizer ? 'Editar' : 'Proponer otra hora'}
           </button>
+          <button type="button" className="knx-canvas-mini" onClick={() => onDuplicate(meeting)}>Duplicar</button>
         </div>
 
         <div className="knx-board-field">
@@ -1129,6 +1237,31 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
     }).catch(() => null);
   };
 
+  // Tareas tipo Google Tasks (fila arriba de la grilla semanal) — intenta sincronizar de verdad
+  // al Google Tasks de quien la crea; si esa cuenta no es una identidad real de Workspace, el
+  // backend la guarda igual, solo que sin espejo (ver lib/kai/tasks.js).
+  const [tasks, setTasks] = useState([]);
+  const loadTasks = () => {
+    fetch(`/api/kai-next/${tenant}/dev-meetings/tasks`).then((r) => r.json()).then((d) => setTasks(d.tasks ?? [])).catch(() => null);
+  };
+  useEffect(() => { loadTasks(); }, [tenant]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleToggleTask = async (task) => {
+    const done = !task.done;
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, done } : t)));
+    await fetch(`/api/kai-next/${tenant}/dev-meetings/tasks`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId: task.id, done }),
+    }).catch(() => null);
+  };
+  const handleDeleteTask = async (task) => {
+    setTasks((prev) => prev.filter((t) => t.id !== task.id));
+    await fetch(`/api/kai-next/${tenant}/dev-meetings/tasks?taskId=${task.id}`, { method: 'DELETE' }).catch(() => null);
+  };
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [taskModalDate, setTaskModalDate] = useState(null); // string YYYY-MM-DD, o null = cerrado
+  const openTaskModal = (dateStr) => setTaskModalDate(dateStr);
+  const onTaskCreated = (task) => { setTasks((prev) => [...prev, task]); setTaskModalDate(null); };
+
   useEffect(() => {
     fetch(`/api/kai-next/${tenant}`).then((r) => r.json()).then((d) => setChats(d.conversations ?? [])).catch(() => null);
     fetch(`/api/kai/${tenant}/team-roster`).then((r) => r.json()).then((d) => setRoster(d.roster ?? [])).catch(() => null);
@@ -1192,6 +1325,23 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
     });
     setSelectedMeetingId(null);
   };
+  // Mismo pre-llenado que "Editar" (título, tipo, invitados, proyecto, recurrencia) pero SIN
+  // meetingId — el modal lo detecta (isEditing = !!meetingId) y hace POST en vez de PATCH, así
+  // que al guardar queda una reunión nueva y separada, no se toca la original. Fecha/hora se
+  // dejan vacías a propósito: no tiene sentido duplicar al mismo horario exacto, quien duplica
+  // elige cuándo va la nueva.
+  const handleDuplicate = (meeting) => {
+    openSchedule({
+      title: meeting.title, tipo: meeting.tipo, description: meeting.description,
+      attendees: (meeting.attendees ?? []).map((a) => ({ email: a.email, name: a.name || a.email, external: !roster.some((p) => p.email === a.email), optional: !!a.optional })),
+      projectId: meeting.projectId ?? '',
+      duration: Math.round((new Date(meeting.end) - new Date(meeting.start)) / 60000),
+      repeat: meeting.recurrence
+        ? (meeting.recurrence.freq === 'MONTHLY_WEEKDAY' ? 'monthly_weekday' : (REPEAT_BY_RECURRENCE[`${meeting.recurrence.freq}-${meeting.recurrence.interval}`] ?? 'weekly'))
+        : 'none',
+    });
+    setSelectedMeetingId(null);
+  };
   // Click (o arrastre, como Google Calendar) en un hueco vacío de la grilla semanal — abre el
   // modal de agendar con esa fecha/hora/duración ya cargadas, nada más (sin asistentes/tipo
   // precargados, eso lo completa quien agenda). Un click simple (sin arrastrar) manda 30min.
@@ -1222,7 +1372,18 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
                   : 'Sin reuniones hoy.'}
               </p>
             </div>
-            <button type="button" className="knx-new-chat" onClick={() => openSchedule(null)}>+ Agendar reunión</button>
+            <div className="knx-menu-wrap">
+              <button type="button" className="knx-new-chat" onClick={() => setCreateMenuOpen((v) => !v)}>+ Crear ▾</button>
+              {createMenuOpen && (
+                <>
+                  <div className="knx-menu-backdrop" onClick={() => setCreateMenuOpen(false)} />
+                  <div className="knx-menu">
+                    <button type="button" onClick={() => { setCreateMenuOpen(false); openSchedule(null); }}>📅 Reunión</button>
+                    <button type="button" onClick={() => { setCreateMenuOpen(false); openTaskModal(toDateInput(new Date())); }}>☑️ Tarea</button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {unimported.map((c) => (
@@ -1270,7 +1431,11 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
           {meetings === null ? (
             <p className="knx-knowledge-empty">Cargando…</p>
           ) : view === 'semana' ? (
-            <WeekCalendarView meetings={meetings} weekStart={weekStart} meOnly={meOnly} userEmail={userEmail} userName={userName} onSelectMeeting={setSelectedMeetingId} onCreateAt={handleCreateAt} />
+            <WeekCalendarView
+              meetings={meetings} weekStart={weekStart} meOnly={meOnly} userEmail={userEmail} userName={userName}
+              onSelectMeeting={setSelectedMeetingId} onCreateAt={handleCreateAt}
+              tasks={tasks} onToggleTask={handleToggleTask} onDeleteTask={handleDeleteTask} onOpenTaskModal={openTaskModal}
+            />
           ) : !meetings.length ? (
             <p className="knx-knowledge-empty">Sin reuniones agendadas todavía.</p>
           ) : (
@@ -1292,6 +1457,15 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
         />
       )}
 
+      {taskModalDate && (
+        <TaskModal
+          tenant={tenant} roster={roster} organizerName={userName} organizerEmail={userEmail}
+          initialDate={taskModalDate}
+          onClose={() => setTaskModalDate(null)}
+          onCreated={onTaskCreated}
+        />
+      )}
+
       {selectedMeetingId && (
         <MeetingDetailPanel
           key={selectedMeetingId}
@@ -1299,6 +1473,7 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
           onClose={() => setSelectedMeetingId(null)}
           onDeleted={onMeetingDeleted}
           onReschedule={handleReschedule}
+          onDuplicate={handleDuplicate}
         />
       )}
     </div>

@@ -6035,6 +6035,87 @@
   font-size: 14px;
 }
 
+.knx-week-tasksrow {
+  display: grid;
+  grid-template-columns: 48px repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--knx-border);
+  background: var(--knx-sidebar-bg);
+}
+
+.knx-week-tasksrow-col {
+  padding: 6px 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-left: 1px solid var(--knx-border);
+  min-height: 8px;
+}
+
+.knx-week-tasksrow-col:first-child {
+  border-left: 0;
+}
+
+.knx-week-task {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  background: var(--knx-soft-bg);
+  border-radius: 6px;
+  padding: 3px 7px;
+}
+
+.knx-week-task input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--knx-deep);
+  flex-shrink: 0;
+}
+
+.knx-week-task span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knx-week-task--done span {
+  text-decoration: line-through;
+  color: var(--knx-text-muted);
+}
+
+.knx-week-task-del {
+  border: 0;
+  background: none;
+  color: var(--knx-text-muted);
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.knx-week-task-add {
+  border: 1px dashed var(--knx-border);
+  background: none;
+  border-radius: 6px;
+  font-size: 11.5px;
+  color: var(--knx-text-muted);
+  padding: 3px 7px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.knx-week-task-input {
+  width: 100%;
+  border: 1px solid var(--knx-deep);
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 3px 7px;
+  outline: none;
+  font-family: inherit;
+}
+
 .knx-week-body {
   display: grid;
   grid-template-columns: 48px repeat(7, minmax(0, 1fr));
