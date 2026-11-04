@@ -582,13 +582,14 @@ function ScheduleMeetingModal({ tenant, roster, externalContacts, projects, orga
 // Más chico que ScheduleMeetingModal a propósito: una tarea no tiene invitados ni Meet, solo
 // a quién le pertenece. El intento de sincronizarla al Google Tasks real de esa persona pasa
 // server-side (ver .../dev-meetings/tasks POST) — acá no hace falta saber si funcionó o no.
-function TaskModal({ tenant, roster, organizerName, organizerEmail, initialDate, onClose, onCreated }) {
+function TaskModal({ tenant, roster, projects, organizerName, organizerEmail, initialDate, onClose, onCreated }) {
   const [title, setTitle] = useState('');
   const [responsableEmail, setResponsableEmail] = useState(organizerEmail);
   const [date, setDate] = useState(initialDate || toDateInput(new Date()));
   const [time, setTime] = useState('');
   const [deadline, setDeadline] = useState('');
   const [description, setDescription] = useState('');
+  const [projectId, setProjectId] = useState('');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -609,6 +610,7 @@ function TaskModal({ tenant, roster, organizerName, organizerEmail, initialDate,
         body: JSON.stringify({
           title: title.trim(), date, time: time || null, deadline: deadline || null, description,
           responsableName: chosen.name.replace(' (yo)', ''), responsableEmail: chosen.email,
+          projectId: projectId || null,
         }),
       });
       const data = await res.json();
@@ -625,7 +627,11 @@ function TaskModal({ tenant, roster, organizerName, organizerEmail, initialDate,
     <div className="knx-meetings-modal-backdrop" onClick={onClose}>
       <div className="knx-meetings-modal knx-meetings-modal--small" onClick={(e) => e.stopPropagation()}>
         <div className="knx-meetings-modal-left" style={{ borderRight: 0 }}>
-          <h2>Nueva tarea</h2>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <h2>Nueva tarea</h2>
+            <span style={{ flexGrow: 1 }} />
+            <button type="button" className="knx-side-panel-close" aria-label="Cerrar" onClick={onClose}>×</button>
+          </div>
           {err && <p className="knx-canvas-error">{err}</p>}
           <div className="knx-board-field">
             <label>Título</label>
@@ -650,6 +656,13 @@ function TaskModal({ tenant, roster, organizerName, organizerEmail, initialDate,
               <label>Fecha límite (opcional)</label>
               <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
             </div>
+          </div>
+          <div className="knx-board-field">
+            <label>Proyecto (opcional)</label>
+            <select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+              <option value="">Sin proyecto</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
           </div>
           <div className="knx-board-field">
             <label>Descripción</label>
@@ -681,16 +694,108 @@ function snapMinutes(offsetY) {
   return Math.round(raw / 30) * 30;
 }
 
-function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, onSelectMeeting, onCreateAt, tasks, onToggleTask, onDeleteTask, onOpenTaskModal }) {
+// Máximo de tareas visibles por día antes de colapsar en "+N más" — sin este tope, un día
+// cargado estira la altura de TODA la fila (misma para los 7 días, por ser una sola grilla),
+// dejando el carril de tareas descuadrado día a día según cuánto tenga cada uno.
+const TASKS_PER_DAY_VISIBLE = 2;
+
+function daysBetween(aIso, bIso) {
+  return Math.round((new Date(`${bIso}T00:00:00`) - new Date(`${aIso}T00:00:00`)) / 86400000);
+}
+
+// null = sin apuro, 'due' = vence hoy/mañana, 'over' = ya vencida (y no está hecha).
+function taskUrgency(t, todayIso) {
+  if (t.done || !t.deadline) return null;
+  const diff = daysBetween(todayIso, t.deadline);
+  if (diff < 0) return 'over';
+  if (diff <= 1) return 'due';
+  return null;
+}
+
+function deadlineLabel(t, todayIso) {
+  if (!t.deadline) return null;
+  const urgency = taskUrgency(t, todayIso);
+  const diff = daysBetween(todayIso, t.deadline);
+  const shortDate = new Date(`${t.deadline}T00:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short' });
+  if (urgency === 'over') return { text: `Vencida · ${shortDate}`, urgency };
+  if (diff === 0) return { text: 'Vence hoy', urgency };
+  return { text: `Vence ${shortDate}`, urgency };
+}
+
+// Popover anclado (no un modal con fondo oscuro completo) — una tarea es una consulta rápida,
+// no amerita tapar toda la pantalla. Se cierra con click afuera, Escape, o al completar/borrar.
+function TaskPopover({ task, rect, basePath, tenant, todayIso, onClose, onToggle, onDelete }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const onDocMouseDown = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    const onKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('mousedown', onDocMouseDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onDocMouseDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [onClose]);
+
+  const left = Math.min(window.innerWidth - 312, Math.max(12, rect.left));
+  const top = Math.min(window.innerHeight - 260, rect.bottom + 6);
+  const dl = deadlineLabel(task, todayIso);
+
+  return (
+    <div className="knx-week-task-popover" ref={ref} style={{ left, top }} role="dialog" aria-label={task.title}>
+      <h3>{task.title}</h3>
+      <dl>
+        <dt>Responsable</dt><dd>{task.responsableName ?? '—'}</dd>
+        <dt>Planificada</dt><dd>{new Date(`${task.date}T00:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short' })}{task.time ? ` · ${task.time}` : ''}</dd>
+        <dt>Fecha límite</dt>
+        <dd style={dl?.urgency ? { color: dl.urgency === 'over' ? '#B4382F' : '#9A6412', fontWeight: 600 } : undefined}>
+          {dl ? dl.text : 'Sin fecha límite'}
+        </dd>
+        <dt>Proyecto</dt>
+        <dd>{task.projectId ? <a href={`${basePath}/${tenant}/proyectos?p=${task.projectId}`}>{task.projectName}</a> : 'Sin proyecto'}</dd>
+        <dt>Estado</dt><dd>{task.done ? 'Hecha' : 'Pendiente'}</dd>
+      </dl>
+      {task.description && <p className="knx-week-task-popover-desc">{task.description}</p>}
+      <div className="knx-week-task-popover-actions">
+        <button type="button" className="knx-new-chat" onClick={() => { onToggle(task); onClose(); }}>{task.done ? 'Reabrir' : 'Marcar hecha'}</button>
+        <button type="button" className="knx-canvas-mini" onClick={onClose}>Cerrar</button>
+        <span style={{ flexGrow: 1 }} />
+        <button type="button" className="knx-week-task-popover-del" aria-label="Eliminar tarea" onClick={() => { onDelete(task); onClose(); }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z" />
+            <path d="M10 11v6M14 11v6" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, onSelectMeeting, onCreateAt, tasks, onToggleTask, onDeleteTask, onOpenTaskModal, basePath, tenant }) {
   const now = new Date();
+  const todayIso = toDateInput(now);
   const days = [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(weekStart, i));
+  // Carril de tareas: colapsable entero (laneOpen) y, dentro de cada día, expandible por
+  // separado más allá de TASKS_PER_DAY_VISIBLE (expandedDays, un Set de fechas YYYY-MM-DD).
+  const [laneOpen, setLaneOpen] = useState(true);
+  const [expandedDays, setExpandedDays] = useState(new Set());
+  const [taskPopover, setTaskPopover] = useState(null); // { task, rect } | null
+  const toggleExpanded = (dateStr) => setExpandedDays((prev) => {
+    const next = new Set(prev);
+    next.has(dateStr) ? next.delete(dateStr) : next.add(dateStr);
+    return next;
+  });
   // Al abrir, el scroll arranca en horario laboral (8 AM) fijo — nunca en medianoche, pero
   // tampoco atado a la hora real de quien lo abre (si alguien entra de madrugada o a las 11pm,
   // anclarlo a "ahora" lo deja en un lugar incómodo; 8 AM es un default razonable siempre).
-  const bodyRef = useRef(null);
+  // El contenedor que scrollea ahora incluye el header y el carril de tareas (ambos sticky) —
+  // por eso el offset se mide en vivo contra dónde arranca de verdad la grilla de horas
+  // (`hourGridRef.offsetTop`) en vez de asumir que scrollTop=0 es la medianoche.
+  const scrollRef = useRef(null);
+  const hourGridRef = useRef(null);
   useEffect(() => {
-    if (!bodyRef.current) return;
-    bodyRef.current.scrollTop = 7 * PX_PER_HOUR;
+    if (!scrollRef.current || !hourGridRef.current) return;
+    scrollRef.current.scrollTop = hourGridRef.current.offsetTop + 7 * PX_PER_HOUR;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Arrastrar selecciona un rango (como Google Calendar) en vez de solo un bloque fijo de 30min
   // — el rect de la columna se captura una sola vez al apretar el mouse (no reactivo a `drag`,
@@ -723,6 +828,7 @@ function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, on
 
   return (
     <div className="knx-week">
+      <div className="knx-week-scroll" ref={scrollRef}>
       <div className="knx-week-header">
         <div />
         {days.map((d) => {
@@ -737,26 +843,55 @@ function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, on
           );
         })}
       </div>
-      <div className="knx-week-tasksrow">
-        <div />
+      <div className={`knx-week-lane${laneOpen ? '' : ' knx-week-lane--closed'}`}>
+        <div className="knx-week-lane-label">
+          <button type="button" className="knx-week-lane-toggle" aria-expanded={laneOpen} onClick={() => setLaneOpen((v) => !v)}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+            Tareas
+          </button>
+        </div>
         {days.map((d) => {
           const dateStr = toDateInput(d);
-          const dayTasks = tasks.filter((t) => t.date === dateStr);
+          const dayTasks = tasks.filter((t) => t.date === dateStr).sort((a, b) => Number(a.done) - Number(b.done));
+          const pending = dayTasks.filter((t) => !t.done).length;
+          const expanded = expandedDays.has(dateStr);
+          const shown = expanded ? dayTasks : dayTasks.slice(0, TASKS_PER_DAY_VISIBLE);
           return (
-            <div key={dateStr} className="knx-week-tasksrow-col">
-              {dayTasks.map((t) => (
-                <div key={t.id} className={`knx-week-task${t.done ? ' knx-week-task--done' : ''}`} title={t.description || t.title}>
-                  <input type="checkbox" checked={t.done} onChange={() => onToggleTask(t)} aria-label={`Tarea: ${t.title}`} />
-                  <span>{t.time ? `${t.time} · ` : ''}{t.title}{t.deadline && t.deadline !== t.date ? ` (vence ${new Date(`${t.deadline}T00:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short' })})` : ''}</span>
-                  <button type="button" className="knx-week-task-del" onClick={() => onDeleteTask(t)} aria-label="Eliminar tarea">×</button>
-                </div>
-              ))}
-              <button type="button" className="knx-week-task-add" onClick={() => onOpenTaskModal(dateStr)}>+ Tarea</button>
+            <div key={dateStr} className="knx-week-lane-col">
+              {!laneOpen ? (
+                pending > 0 && <span className="knx-week-lane-summary">{pending} pendiente{pending !== 1 ? 's' : ''}</span>
+              ) : (
+                <>
+                  {shown.map((t) => {
+                    const urgency = taskUrgency(t, todayIso);
+                    const dl = deadlineLabel(t, todayIso);
+                    return (
+                      <div key={t.id} className={`knx-week-task${t.done ? ' knx-week-task--done' : ''}${urgency === 'over' ? ' knx-week-task--over' : ''}`}>
+                        <input type="checkbox" checked={t.done} onChange={(e) => { e.stopPropagation(); onToggleTask(t); }} aria-label={`Tarea: ${t.title}`} />
+                        <button
+                          type="button" className="knx-week-task-main"
+                          onClick={(e) => setTaskPopover({ task: t, rect: e.currentTarget.getBoundingClientRect() })}
+                        >
+                          <span className="knx-week-task-title">{t.time ? `${t.time} · ` : ''}{t.title}</span>
+                          {dl && <span className={`knx-week-task-deadline${dl.urgency ? ` knx-week-task-deadline--${dl.urgency}` : ''}`}>⚑ {dl.text}</span>}
+                        </button>
+                        {t.responsableName && <Avatar name={t.responsableName} size={24} />}
+                      </div>
+                    );
+                  })}
+                  {dayTasks.length > TASKS_PER_DAY_VISIBLE && (
+                    <button type="button" className="knx-week-lane-more" onClick={() => toggleExpanded(dateStr)}>
+                      {expanded ? 'Ver menos' : `+${dayTasks.length - TASKS_PER_DAY_VISIBLE} más`}
+                    </button>
+                  )}
+                  <button type="button" className="knx-week-task-add" onClick={() => onOpenTaskModal(dateStr)}>+ Tarea</button>
+                </>
+              )}
             </div>
           );
         })}
       </div>
-      <div className="knx-week-body" ref={bodyRef} style={{ height: (HOUR_END - HOUR_START) * PX_PER_HOUR }}>
+      <div className="knx-week-body" ref={hourGridRef} style={{ height: (HOUR_END - HOUR_START) * PX_PER_HOUR }}>
         <div className="knx-week-hours">
           {/* Sin label en el borde de arriba (medianoche) ni el de abajo (medianoche del día
               siguiente) — mismo criterio que Google Calendar, el cuadro de la hora existe pero
@@ -853,6 +988,15 @@ function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, on
           );
         })}
       </div>
+      </div>
+      {taskPopover && (
+        <TaskPopover
+          task={taskPopover.task} rect={taskPopover.rect} basePath={basePath} tenant={tenant} todayIso={todayIso}
+          onClose={() => setTaskPopover(null)}
+          onToggle={onToggleTask}
+          onDelete={onDeleteTask}
+        />
+      )}
     </div>
   );
 }
@@ -1198,6 +1342,7 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
   const [loggingOut, setLoggingOut] = useState(false);
   const [chats, setChats] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [allProjects, setAllProjects] = useState([]);
   const [roster, setRoster] = useState([]);
   const [externalContacts, setExternalContacts] = useState([]);
   const [meetings, setMeetings] = useState(null);
@@ -1267,7 +1412,12 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
     fetch(`/api/kai/${tenant}/team-roster`).then((r) => r.json()).then((d) => setRoster(d.roster ?? [])).catch(() => null);
     fetch(`/api/kai-next/${tenant}/dev-meetings/external-contacts`).then((r) => r.json()).then((d) => setExternalContacts(d.contacts ?? [])).catch(() => null);
     fetch(`/api/kai-next/${tenant}/projects`).then((r) => r.json())
-      .then((d) => setProjects((d.projects ?? []).filter((p) => p.projectKind === 'desarrollo')))
+      .then((d) => {
+        setProjects((d.projects ?? []).filter((p) => p.projectKind === 'desarrollo'));
+        // Las tareas (a diferencia de las reuniones) pueden colgar de cualquier tipo de
+        // proyecto, no solo 'desarrollo' — por eso van con la lista completa, sin filtrar.
+        setAllProjects(d.projects ?? []);
+      })
       .catch(() => null);
   }, [tenant]);
 
@@ -1435,6 +1585,7 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
               meetings={meetings} weekStart={weekStart} meOnly={meOnly} userEmail={userEmail} userName={userName}
               onSelectMeeting={setSelectedMeetingId} onCreateAt={handleCreateAt}
               tasks={tasks} onToggleTask={handleToggleTask} onDeleteTask={handleDeleteTask} onOpenTaskModal={openTaskModal}
+              basePath={basePath} tenant={tenant}
             />
           ) : !meetings.length ? (
             <p className="knx-knowledge-empty">Sin reuniones agendadas todavía.</p>
@@ -1459,7 +1610,7 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
 
       {taskModalDate && (
         <TaskModal
-          tenant={tenant} roster={roster} organizerName={userName} organizerEmail={userEmail}
+          tenant={tenant} roster={roster} projects={allProjects} organizerName={userName} organizerEmail={userEmail}
           initialDate={taskModalDate}
           onClose={() => setTaskModalDate(null)}
           onCreated={onTaskCreated}

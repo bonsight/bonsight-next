@@ -5990,17 +5990,34 @@
 /* Calendario semanal */
 
 .knx-week {
+  --knx-week-head-h: 46px;
   border: 1px solid var(--knx-border);
   border-radius: 14px;
   background: var(--knx-bg);
-  display: flex;
-  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header, carril de tareas y grilla de horas viven todos DENTRO de este único contenedor con
+   scroll — antes la grilla de horas scrolleaba sola y el header/carril quedaban afuera, así que
+   si aparecía la barra de scroll vertical, el ancho disponible de la grilla se achicaba un par
+   de px y las columnas de los tres bloques dejaban de coincidir. Con un solo scroll compartido
+   (y scrollbar-gutter:stable, para que no haya salto cuando la barra aparece) eso no puede pasar
+   — header y carril quedan "pegados" con position:sticky, pero miden el ancho exactamente igual
+   que el cuerpo porque son hijos del mismo elemento que scrollea. */
+.knx-week-scroll {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  max-height: calc(100vh - 320px);
 }
 
 .knx-week-header {
-  border-radius: 14px 14px 0 0;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: var(--knx-week-head-h);
   display: grid;
   grid-template-columns: 48px repeat(7, minmax(0, 1fr));
+  background: var(--knx-bg);
   border-bottom: 1px solid var(--knx-border);
 }
 
@@ -6035,14 +6052,47 @@
   font-size: 14px;
 }
 
-.knx-week-tasksrow {
+.knx-week-lane {
+  position: sticky;
+  top: var(--knx-week-head-h);
+  z-index: 2;
   display: grid;
   grid-template-columns: 48px repeat(7, minmax(0, 1fr));
-  border-bottom: 1px solid var(--knx-border);
+  border-bottom: 2px solid var(--knx-border);
   background: var(--knx-sidebar-bg);
 }
 
-.knx-week-tasksrow-col {
+.knx-week-lane-label {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 8px 6px 0 0;
+}
+
+.knx-week-lane-toggle {
+  border: 0;
+  background: none;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--knx-text-muted);
+  cursor: pointer;
+}
+
+.knx-week-lane-toggle svg {
+  transition: transform 0.15s;
+}
+
+.knx-week-lane--closed .knx-week-lane-toggle svg {
+  transform: rotate(-90deg);
+}
+
+.knx-week-lane-col {
   padding: 6px 6px 8px;
   display: flex;
   flex-direction: column;
@@ -6051,18 +6101,34 @@
   min-height: 8px;
 }
 
-.knx-week-tasksrow-col:first-child {
+.knx-week-lane-col:first-child {
   border-left: 0;
+}
+
+.knx-week-lane-summary {
+  font-size: 11.5px;
+  color: var(--knx-text-muted);
+  padding: 2px 4px;
 }
 
 .knx-week-task {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-size: 12px;
   background: var(--knx-soft-bg);
-  border-radius: 6px;
-  padding: 3px 7px;
+  border-radius: 7px;
+  border-left: 4px solid var(--knx-primary);
+  padding: 4px 8px 4px 7px;
+}
+
+.knx-week-task--done {
+  background: var(--knx-sidebar-bg);
+  border-left-color: #8A978F;
+}
+
+.knx-week-task--done .knx-meeting-avatar {
+  opacity: 0.5;
 }
 
 .knx-week-task input[type="checkbox"] {
@@ -6071,28 +6137,49 @@
   flex-shrink: 0;
 }
 
-.knx-week-task span {
+.knx-week-task-main {
   flex: 1;
   min-width: 0;
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+}
+
+.knx-week-task-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.knx-week-task--done span {
+.knx-week-task--done .knx-week-task-title {
   text-decoration: line-through;
   color: var(--knx-text-muted);
 }
 
-.knx-week-task-del {
-  border: 0;
-  background: none;
+.knx-week-task-deadline {
+  font-size: 10px;
+  font-weight: 600;
   color: var(--knx-text-muted);
-  font-size: 13px;
-  line-height: 1;
-  padding: 0 2px;
-  flex-shrink: 0;
-  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.knx-week-task-deadline--due {
+  color: #9A6412;
+}
+
+.knx-week-task-deadline--over {
+  color: #B4382F;
+}
+
+.knx-week-task--over {
+  background: #FBEAE7;
+  border-left-color: #B4382F;
 }
 
 .knx-week-task-add {
@@ -6106,23 +6193,97 @@
   cursor: pointer;
 }
 
-.knx-week-task-input {
-  width: 100%;
-  border: 1px solid var(--knx-deep);
-  border-radius: 6px;
-  font-size: 12px;
-  padding: 3px 7px;
-  outline: none;
-  font-family: inherit;
+.knx-week-lane-more {
+  border: 0;
+  background: none;
+  padding: 0 4px;
+  font-size: 11.5px;
+  color: var(--knx-primary);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.knx-week-task-popover {
+  position: fixed;
+  z-index: 60;
+  width: 300px;
+  background: var(--knx-bg);
+  border: 1px solid var(--knx-border);
+  border-radius: 12px;
+  box-shadow: 0 14px 36px rgba(11, 16, 32, 0.16);
+  padding: 16px 18px;
+}
+
+.knx-week-task-popover h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.knx-week-task-popover dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 6px 10px;
+  font-size: 13px;
+}
+
+.knx-week-task-popover dt {
+  color: var(--knx-text-muted);
+}
+
+.knx-week-task-popover dd {
+  margin: 0;
+}
+
+.knx-week-task-popover-desc {
+  font-size: 13px;
+  color: var(--knx-text-muted);
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+}
+
+.knx-week-task-popover-actions .knx-canvas-mini {
+  height: 38px;
+  padding: 0 11px;
+  border-radius: 9px;
+  font-size: 13.5px;
+  font-weight: 500;
+  box-sizing: border-box;
+}
+
+.knx-week-task-popover-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.knx-week-task-popover-del {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #EED9D6;
+  border-radius: 8px;
+  background: #fff;
+  color: #B4382F;
+  cursor: pointer;
+}
+
+.knx-week-task-popover-del:hover {
+  background: #FBEAE7;
 }
 
 .knx-week-body {
   display: grid;
   grid-template-columns: 48px repeat(7, minmax(0, 1fr));
   position: relative;
-  overflow-y: auto;
-  max-height: calc(100vh - 320px);
-  border-radius: 0 0 14px 14px;
 }
 
 .knx-week-hours {

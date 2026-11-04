@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
+import { resolveProjectAccessLevel, getProjectMeta } from '@/lib/kaiNext/projects';
 import { listDevTasks, addDevTask, updateDevTask, removeDevTask } from '@/lib/kaiNext/devTasks';
 import { tryCreateGoogleTask, setGoogleTaskDone, deleteGoogleTask } from '@/lib/kai/tasks';
 
@@ -42,7 +42,7 @@ export async function POST(req, { params }) {
   } catch {
     return Response.json({ error: 'Body inválido.' }, { status: 400 });
   }
-  const { title, date, time, deadline, description, responsableId, responsableName, responsableEmail } = body;
+  const { title, date, time, deadline, description, responsableId, responsableName, responsableEmail, projectId } = body;
   if (!title?.trim()) return Response.json({ error: 'El título es requerido.' }, { status: 400 });
   if (!date) return Response.json({ error: 'La fecha es requerida.' }, { status: 400 });
 
@@ -52,10 +52,22 @@ export async function POST(req, { params }) {
   const rName = responsableName || identity.personName || null;
   const rEmail = responsableEmail || identity.personEmail || null;
 
+  // El nombre del proyecto se resuelve server-side (igual que dev-meetings/route.js) — nunca se
+  // confía en lo que mande el cliente, así queda siempre consistente con el proyecto real. Sin
+  // restricción de projectKind: a diferencia de dev-meetings (solo 'desarrollo'), una tarea
+  // puede colgar de cualquier tipo de proyecto.
+  let projectName = null;
+  if (projectId) {
+    const meta = await getProjectMeta(tenant, projectId);
+    if (!meta) return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
+    projectName = meta.name;
+  }
+
   const googleTaskId = await tryCreateGoogleTask(rEmail, { title: title.trim(), due: deadline || date, notes: description });
   const task = await addDevTask(tenant, {
     title: title.trim(), date, time: time || null, deadline: deadline || null, description: description || '', googleTaskId,
     responsableId: rId, responsableName: rName, responsableEmail: rEmail,
+    projectId: projectId || null, projectName,
     createdById: identity.personId ?? null, createdByName: identity.personName ?? null, createdByEmail: identity.personEmail ?? null,
   });
   return Response.json({ task });
