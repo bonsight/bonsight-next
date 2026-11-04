@@ -825,6 +825,10 @@ function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, on
   };
 
   const visible = meetings.filter((m) => !meOnly || (m.attendees ?? []).some((a) => a.email === userEmail));
+  // A diferencia de las reuniones (que tiene sentido ver "de todo el equipo", ese toggle de
+  // arriba es justo para eso), una tarea es un pendiente personal — mezclar los de todos vuelve
+  // el carril ruidoso sin aportar nada. Siempre scoped a lo propio, sin importar el toggle.
+  const myTasks = tasks.filter((t) => t.responsableEmail === userEmail || t.createdByEmail === userEmail);
 
   return (
     <div className="knx-week">
@@ -852,7 +856,7 @@ function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, on
         </div>
         {days.map((d) => {
           const dateStr = toDateInput(d);
-          const dayTasks = tasks.filter((t) => t.date === dateStr).sort((a, b) => Number(a.done) - Number(b.done));
+          const dayTasks = myTasks.filter((t) => t.date === dateStr).sort((a, b) => Number(a.done) - Number(b.done));
           const pending = dayTasks.filter((t) => !t.done).length;
           const expanded = expandedDays.has(dateStr);
           const shown = expanded ? dayTasks : dayTasks.slice(0, TASKS_PER_DAY_VISIBLE);
