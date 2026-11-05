@@ -1591,12 +1591,36 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [removeTaskTarget, setRemoveTaskTarget] = useState(null);
 
-  const load = () => {
+  // Los fallos acá son casi siempre transitorios (Notion/Redis con un hiccup momentáneo, ver
+  // bug reportado en prod) — reintentar un par de veces antes de rendirse resuelve la mayoría
+  // sin que la persona tenga que hacer nada. `attempt` solo se usa para el backoff, no se guarda
+  // en estado porque no hace falta re-renderizar por eso.
+  const MAX_AUTO_RETRIES = 2;
+  const load = (attempt = 0) => {
     setLoading(true);
     fetch(`/api/kai-next/${tenant}/projects/${projectId}`)
       .then((r) => r.json())
-      .then((d) => { if (d.error) setError(d.error); else setData(d); })
-      .finally(() => setLoading(false));
+      .then((d) => {
+        // Un 200 sin `meta` no debería pasar nunca, pero si pasa se trata igual que un error en
+        // vez de reventar más abajo al leer meta.status.
+        if (d.error || !d.meta) {
+          if (attempt < MAX_AUTO_RETRIES) { setTimeout(() => load(attempt + 1), 900); return; }
+          setError(d.error || 'No se pudo cargar el proyecto. Intenta de nuevo.');
+          setLoading(false);
+          return;
+        }
+        setError(null);
+        setData(d);
+        setLoading(false);
+      })
+      // Un 500 que no venga en JSON (error de plataforma, timeout) hace que r.json() tire — sin
+      // esto quedaba como una promise rejection sin atrapar y la pantalla se quedaba en blanco
+      // sin ningún mensaje (ver bug reportado en prod).
+      .catch(() => {
+        if (attempt < MAX_AUTO_RETRIES) { setTimeout(() => load(attempt + 1), 900); return; }
+        setError('No se pudo cargar el proyecto. Revisa tu conexión e intenta de nuevo.');
+        setLoading(false);
+      });
   };
 
   useEffect(() => { load(); }, [tenant, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1605,7 +1629,14 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
   // llamar después de cualquier acción (tildar una tarea, guardar, etc.) y antes blanqueaba toda
   // la página cada vez porque reusaba el mismo `loading` para ambos casos.
   if (loading && !data) return <p className="knx-knowledge-empty">Cargando…</p>;
-  if (error) return <div className="knx-analisis-empty"><p>{error}</p></div>;
+  if (error) {
+    return (
+      <div className="knx-analisis-empty">
+        <p>{error}</p>
+        <button type="button" className="knx-canvas-mini" onClick={() => load()}>Reintentar</button>
+      </div>
+    );
+  }
   if (!data) return null;
 
   const { meta, tasks, events, level, partidas = [], gastos = [], civilMetrics, civilAlerts = [], documents = [], tests = [], executions = [], grupos = [], tipologias = [] } = data;

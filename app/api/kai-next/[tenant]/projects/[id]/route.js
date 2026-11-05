@@ -37,11 +37,19 @@ export async function GET(req, { params }) {
     }
     const token = await getNotionToken(tenant);
     if (!token) return Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 });
-    const [notionProyecto, roadmap] = await Promise.all([
-      getProyecto(token, meta.notionProyectoId),
-      getRoadmap(token, meta.notionProyectoId),
-    ]);
-    return Response.json({ meta, notionProyecto, iniciativas: roadmap.iniciativas, level });
+    // Notion falla transitorio de vez en cuando (rate limit, 502) — sin este try/catch esa
+    // excepción no se atrapaba y Next devolvía un 500 sin body, que el cliente no podía
+    // distinguir de un error real (ver el blanco en pantalla reportado en prod).
+    try {
+      const [notionProyecto, roadmap] = await Promise.all([
+        getProyecto(token, meta.notionProyectoId),
+        getRoadmap(token, meta.notionProyectoId),
+      ]);
+      return Response.json({ meta, notionProyecto, iniciativas: roadmap.iniciativas, level });
+    } catch (err) {
+      console.error(`[kaiNext/projects] no se pudo cargar el detalle del proyecto ${id}:`, err.message);
+      return Response.json({ error: 'No se pudo cargar el proyecto desde Notion. Intenta de nuevo en unos segundos.' }, { status: 503 });
+    }
   }
 
   const project = await getProject(tenant, id);
