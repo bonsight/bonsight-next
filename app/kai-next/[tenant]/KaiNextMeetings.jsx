@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import KaiNextSidebar from './KaiNextSidebar';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
 import { useSidePanelClose } from '@/lib/kaiNext/useSidePanelClose';
@@ -771,7 +771,7 @@ function TaskPopover({ task, rect, basePath, tenant, todayIso, onClose, onToggle
   );
 }
 
-function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, onSelectMeeting, onCreateAt, tasks, onToggleTask, onDeleteTask, onOpenTaskModal, basePath, tenant }) {
+function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, onSelectMeeting, onCreateAt, tasks, tasksLoaded, onToggleTask, onDeleteTask, onOpenTaskModal, basePath, tenant }) {
   const now = new Date();
   const todayIso = toDateInput(now);
   const days = [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(weekStart, i));
@@ -785,18 +785,8 @@ function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, on
     next.has(dateStr) ? next.delete(dateStr) : next.add(dateStr);
     return next;
   });
-  // Al abrir, el scroll arranca en horario laboral (8 AM) fijo — nunca en medianoche, pero
-  // tampoco atado a la hora real de quien lo abre (si alguien entra de madrugada o a las 11pm,
-  // anclarlo a "ahora" lo deja en un lugar incómodo; 8 AM es un default razonable siempre).
-  // El contenedor que scrollea ahora incluye el header y el carril de tareas (ambos sticky) —
-  // por eso el offset se mide en vivo contra dónde arranca de verdad la grilla de horas
-  // (`hourGridRef.offsetTop`) en vez de asumir que scrollTop=0 es la medianoche.
   const scrollRef = useRef(null);
   const hourGridRef = useRef(null);
-  useEffect(() => {
-    if (!scrollRef.current || !hourGridRef.current) return;
-    scrollRef.current.scrollTop = hourGridRef.current.offsetTop + 7 * PX_PER_HOUR;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Arrastrar selecciona un rango (como Google Calendar) en vez de solo un bloque fijo de 30min
   // — el rect de la columna se captura una sola vez al apretar el mouse (no reactivo a `drag`,
   // para no desuscribir/resuscribir los listeners del documento en cada mousemove).
@@ -829,6 +819,70 @@ function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, on
   // arriba es justo para eso), una tarea es un pendiente personal — mezclar los de todos vuelve
   // el carril ruidoso sin aportar nada. Siempre scoped a lo propio, sin importar el toggle.
   const myTasks = tasks.filter((t) => t.responsableEmail === userEmail || t.createdByEmail === userEmail);
+
+  // Posiciona el scroll al entrar, al cambiar de semana (‹ ›) o al tocar "Hoy" (que siempre
+  // manda un Date nuevo al padre, aunque ya estés en la semana actual) — nunca al tildar una
+  // tarea, abrir "+N más" o cualquier otra actualización que no sea "entré a esta vista", para
+  // que el calendario no salte bajo la persona mientras mira algo. Por eso depende de
+  // [weekStart, tasksLoaded] nada más: tasksLoaded recién pasa a true cuando el carril de
+  // tareas ya tiene su alto final (antes de eso, medirlo deja la posición corrida — ver nota en
+  // KaiNextMeetings sobre por qué "ahora" aparecía mal ubicado).
+  useLayoutEffect(() => {
+    if (!tasksLoaded) return;
+    {
+      const scrollEl = scrollRef.current;
+      const headerEl = scrollEl?.querySelector('.knx-week-header');
+      const laneEl = scrollEl?.querySelector('.knx-week-lane');
+      if (!scrollEl || !headerEl || !laneEl || !hourGridRef.current) return;
+      const stickyHeight = headerEl.offsetHeight + laneEl.offsetHeight;
+      const visibleHeight = scrollEl.clientHeight - stickyHeight;
+      const isCurrentWeek = sameDay(weekStart, startOfWeek(new Date()));
+      let targetHours;
+      let offset;
+      if (isCurrentWeek) {
+        // "Ahora" a un tercio de lo visible — un poco de lo que pasó, bastante de lo que viene.
+        // De madrugada (antes de las 7) no tiene sentido anclar ahí, arranca en el horario
+        // laboral (8am) como si recién empezara el día.
+        const n = new Date();
+        let h = n.getHours() + n.getMinutes() / 60;
+        if (h < 7) h = 8;
+        targetHours = h;
+        offset = visibleHeight / 3;
+      } else {
+        // Otra semana: no hay "ahora" al que anclarse — arranca 30min antes de lo primero que
+        // haya en CUALQUIER día de esa semana (el eje de horas es compartido entre los 7 días),
+        // sea reunión o tarea con hora, o 8am si no hay nada.
+        let earliest = null;
+        for (const d of days) {
+          const dateStr = toDateInput(d);
+          for (const m of visible) {
+            if (!m.start) continue;
+            const occ = occurrenceOn(m, d);
+            if (!occ) continue;
+            const oh = occ.start.getHours() + occ.start.getMinutes() / 60;
+            if (earliest === null || oh < earliest) earliest = oh;
+          }
+          for (const t of myTasks) {
+            if (t.date !== dateStr || !t.time) continue;
+            const [th, tm] = t.time.split(':').map(Number);
+            const oh = th + tm / 60;
+            if (earliest === null || oh < earliest) earliest = oh;
+          }
+        }
+        targetHours = earliest !== null ? Math.max(0, earliest - 0.5) : 8;
+        offset = 0;
+      }
+      const target = hourGridRef.current.offsetTop + targetHours * PX_PER_HOUR - offset;
+      scrollEl.scrollTop = Math.max(0, Math.min(target, scrollEl.scrollHeight - scrollEl.clientHeight));
+    }
+  }, [weekStart, tasksLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // No monta la grilla real hasta que las tareas ya cargaron — si no, pinta una primera vez con
+  // scrollTop=0 (medianoche) y recién después la salta a la posición correcta, y esa primera
+  // pintada con reuniones recortadas justo en el borde se ve rota al cargar la página.
+  if (!tasksLoaded) {
+    return <div className="knx-week" style={{ height: 'calc(100vh - 320px)' }} />;
+  }
 
   return (
     <div className="knx-week">
@@ -1390,8 +1444,12 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
   // al Google Tasks de quien la crea; si esa cuenta no es una identidad real de Workspace, el
   // backend la guarda igual, solo que sin espejo (ver lib/kai/tasks.js).
   const [tasks, setTasks] = useState([]);
+  // El carril de tareas cambia de alto recién cuando esto llega — WeekCalendarView lo usa para
+  // no posicionar el scroll ("ahora" a un tercio) hasta que esa altura ya es la final, y para
+  // no reaccionar a cada actualización posterior de `tasks` (tildar una, agregar otra).
+  const [tasksLoaded, setTasksLoaded] = useState(false);
   const loadTasks = () => {
-    fetch(`/api/kai-next/${tenant}/dev-meetings/tasks`).then((r) => r.json()).then((d) => setTasks(d.tasks ?? [])).catch(() => null);
+    fetch(`/api/kai-next/${tenant}/dev-meetings/tasks`).then((r) => r.json()).then((d) => setTasks(d.tasks ?? [])).catch(() => null).finally(() => setTasksLoaded(true));
   };
   useEffect(() => { loadTasks(); }, [tenant]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1588,7 +1646,7 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
             <WeekCalendarView
               meetings={meetings} weekStart={weekStart} meOnly={meOnly} userEmail={userEmail} userName={userName}
               onSelectMeeting={setSelectedMeetingId} onCreateAt={handleCreateAt}
-              tasks={tasks} onToggleTask={handleToggleTask} onDeleteTask={handleDeleteTask} onOpenTaskModal={openTaskModal}
+              tasks={tasks} tasksLoaded={tasksLoaded} onToggleTask={handleToggleTask} onDeleteTask={handleDeleteTask} onOpenTaskModal={openTaskModal}
               basePath={basePath} tenant={tenant}
             />
           ) : !meetings.length ? (

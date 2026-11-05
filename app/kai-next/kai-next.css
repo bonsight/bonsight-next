@@ -6008,6 +6008,11 @@
   overflow-y: auto;
   scrollbar-gutter: stable;
   max-height: calc(100vh - 320px);
+  /* El "scroll anchoring" del navegador intenta mantener el mismo contenido a la vista cuando
+     algo arriba cambia de tamaño (el carril de tareas mide distinto según la semana) — eso podía
+     pelearse con la posición que calculamos en JS al cambiar de semana y dejar el scroll donde
+     no corresponde. Acá el único que decide la posición es nuestro cálculo, nunca el navegador. */
+  overflow-anchor: none;
 }
 
 .knx-week-header {
@@ -6060,6 +6065,11 @@
   grid-template-columns: 48px repeat(7, minmax(0, 1fr));
   border-bottom: 2px solid var(--knx-border);
   background: var(--knx-sidebar-bg);
+  /* Si un día se expande con "Ver menos"/"+N más" más allá de TASKS_PER_DAY_VISIBLE, el carril
+     entero (misma fila de grid para los 7 días) crecía con él y le comía espacio a la grilla de
+     horas — con esto, lo que no entra scrollea adentro del carril en vez de inflar la fila. */
+  max-height: 168px;
+  overflow-y: auto;
 }
 
 .knx-week-lane-label {
@@ -6284,6 +6294,12 @@
   display: grid;
   grid-template-columns: 48px repeat(7, minmax(0, 1fr));
   position: relative;
+  /* Aísla todo lo que hay acá (reuniones, línea de "ahora", selección al arrastrar) en su propio
+     contexto de apilamiento — sin esto, sus z-index internos (1, 2, 3 según se solapen) se
+     comparaban directamente contra el header/carril de tareas (sticky, con su propio z-index),
+     y a veces terminaban pintándose por encima de las tareas al hacer scroll en vez de quedar
+     tapados por ellas. Con esto, nada de acá adentro puede superar nunca al header ni al carril. */
+  z-index: 1;
 }
 
 .knx-week-hours {
