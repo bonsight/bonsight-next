@@ -2361,19 +2361,38 @@ async function processFeedbackFile(file, { tenant, experimentId, setAttachments,
     const urlData = await urlRes.json();
     if (!urlRes.ok) throw new Error(urlData.error || 'No se pudo iniciar la subida.');
 
-    const putRes = await fetch(urlData.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-    if (!putRes.ok) throw new Error('Drive rechazó el archivo. Intenta de nuevo en un momento.');
-    const uploaded = await putRes.json();
+    let uploaded = null;
+    try {
+      const putRes = await fetch(urlData.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+      if (!putRes.ok) throw new Error('Drive rechazó el archivo. Intenta de nuevo en un momento.');
+      uploaded = await putRes.json();
+    } catch (putErr) {
+      // La subida en sí puede haber terminado bien en Drive, pero esa respuesta puntual de
+      // Google no trae el header de CORS que el navegador exige para dejarnos LEERLA — así que
+      // fetch() revienta igual aunque el archivo ya esté ahí (confirmado viendo la respuesta real
+      // en las DevTools: 200, JSON válido, solo que sin Access-Control-Allow-Origin). En vez de
+      // confiar en leer esa respuesta bloqueada, le preguntamos a nuestro propio servidor
+      // (server-to-server, sin problema de CORS) si el archivo ya llegó antes de rendirnos.
+      const confirmRes = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/feedback/confirm-upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: file.name }),
+      }).catch(() => null);
+      const confirmData = confirmRes?.ok ? await confirmRes.json().catch(() => null) : null;
+      if (confirmData?.found) {
+        uploaded = { id: confirmData.id, webViewLink: confirmData.webViewLink };
+      } else {
+        throw putErr;
+      }
+    }
 
     setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, uploading: false, driveFileId: uploaded.id, driveUrl: uploaded.webViewLink } : a)));
   } catch (e) {
-    // "Failed to fetch" es el mensaje crudo del navegador cuando un fetch() se corta a mitad de
-    // camino — puede ser la conexión del usuario, pero también un timeout o problema nuestro del
-    // lado del servidor (de hecho, así se manifestaba el bug de las carpetas de Drive que recién
-    // arreglamos). No hay forma de saber cuál de las dos fue desde acá, así que el mensaje no le
-    // echa la culpa a la conexión del usuario sin estar seguros. Los errores con mensaje propio
-    // (los que tira nuestro route con un texto claro, como "este proyecto no tiene Drive
-    // conectado") se muestran tal cual porque ya son legibles y sí sabemos qué pasó.
+    // "Failed to fetch" acá ya pasó por el chequeo de arriba (confirmamos que el archivo
+    // realmente no está en Drive) — puede ser la conexión del usuario, pero también un timeout
+    // nuestro, así que el mensaje no le echa la culpa a la conexión sin estar seguros. Los
+    // errores con mensaje propio (los que tira nuestro route con un texto claro, como "este
+    // proyecto no tiene Drive conectado") se muestran tal cual porque ya son legibles.
     const isNetworkError = e.name === 'TypeError' || /failed to fetch|network/i.test(e.message || '');
     setErr(isNetworkError ? 'No se pudo completar la subida — puede ser tu conexión o un problema temporal nuestro. Intenta de nuevo.' : (e.message || 'No se pudo subir el archivo.'));
     setAttachments((prev) => prev.filter((a) => a.id !== id));
