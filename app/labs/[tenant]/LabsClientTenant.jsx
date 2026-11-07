@@ -2342,31 +2342,34 @@ async function processFeedbackFile(file, { tenant, experimentId, setAttachments,
     return;
   }
 
-  if (isVideo) {
-    setAttachments((prev) => [...prev, { id, name: file.name, mimeType: file.type, kind: 'video', uploading: true, previewUrl: null }]);
-    try {
-      const urlRes = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/feedback/video-upload-url`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: file.name, mimeType: file.type }),
-      });
-      const urlData = await urlRes.json();
-      if (!urlRes.ok) throw new Error(urlData.error || 'No se pudo iniciar la subida.');
+  // Video y documentos (PDF, Word, Excel, etc.) van por subida resumible directo a Drive, igual
+  // que el video siempre hizo — el archivo nunca pasa por el body de esta función serverless.
+  // Antes los documentos iban en base64 adentro del mismo POST normal: con cotizaciones o
+  // presupuestos de varios MB (más el ~33% extra que suma codificar a base64), eso superaba el
+  // límite duro de Vercel para el body de un Route Handler (~4.5 MB, fijo por la plataforma, no
+  // configurable) — la conexión se cortaba antes de que la función llegara a leer el request, y
+  // el fetch() del cliente tiraba una excepción de red real que el catch mostraba como "Error de
+  // conexión" (reportado en prod, pasaba en cualquier red porque no era un problema de red).
+  const kind = isVideo ? 'video' : 'document';
+  setAttachments((prev) => [...prev, { id, name: file.name, mimeType: file.type || 'application/octet-stream', kind, uploading: true, previewUrl: null }]);
+  try {
+    const urlRes = await fetch(`/api/labs/${tenant}/experiments/${experimentId}/feedback/video-upload-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: file.name, mimeType: file.type }),
+    });
+    const urlData = await urlRes.json();
+    if (!urlRes.ok) throw new Error(urlData.error || 'No se pudo iniciar la subida.');
 
-      const putRes = await fetch(urlData.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-      if (!putRes.ok) throw new Error('No se pudo subir el video.');
-      const uploaded = await putRes.json();
+    const putRes = await fetch(urlData.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+    if (!putRes.ok) throw new Error('No se pudo subir el archivo.');
+    const uploaded = await putRes.json();
 
-      setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, uploading: false, driveFileId: uploaded.id, driveUrl: uploaded.webViewLink } : a)));
-    } catch (e) {
-      setErr(e.message || 'No se pudo subir el video.');
-      setAttachments((prev) => prev.filter((a) => a.id !== id));
-    }
-    return;
+    setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, uploading: false, driveFileId: uploaded.id, driveUrl: uploaded.webViewLink } : a)));
+  } catch (e) {
+    setErr(e.message || 'No se pudo subir el archivo.');
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
   }
-
-  const data = await readAsBase64(file);
-  setAttachments((prev) => [...prev, { id, name: file.name, mimeType: file.type || 'application/octet-stream', kind: 'document', data, previewUrl: null }]);
 }
 
 function CommentAttachment({ att }) {
