@@ -1156,7 +1156,7 @@ function CreateExperimentModal({ tenant, allowedProjectKinds, onClose, onCreated
             <>
               <label className="field-label">Cronograma + Presupuesto (Excel)</label>
               <p style={{ fontSize: 12, color: 'var(--labs-cream-faint)', marginTop: -8, marginBottom: 10 }}>
-                Sube el mismo Excel que ya usan — se interpreta automáticamente. Revisa y corregí antes de crear el proyecto.
+                Sube el mismo Excel que ya usan — se interpreta automáticamente. Revisa y corrige antes de crear el proyecto.
               </p>
               <input
                 ref={excelInputRef}
@@ -2362,12 +2362,20 @@ async function processFeedbackFile(file, { tenant, experimentId, setAttachments,
     if (!urlRes.ok) throw new Error(urlData.error || 'No se pudo iniciar la subida.');
 
     const putRes = await fetch(urlData.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-    if (!putRes.ok) throw new Error('No se pudo subir el archivo.');
+    if (!putRes.ok) throw new Error('Drive rechazó el archivo. Intenta de nuevo en un momento.');
     const uploaded = await putRes.json();
 
     setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, uploading: false, driveFileId: uploaded.id, driveUrl: uploaded.webViewLink } : a)));
   } catch (e) {
-    setErr(e.message || 'No se pudo subir el archivo.');
+    // "Failed to fetch" es el mensaje crudo del navegador cuando un fetch() se corta a mitad de
+    // camino — puede ser la conexión del usuario, pero también un timeout o problema nuestro del
+    // lado del servidor (de hecho, así se manifestaba el bug de las carpetas de Drive que recién
+    // arreglamos). No hay forma de saber cuál de las dos fue desde acá, así que el mensaje no le
+    // echa la culpa a la conexión del usuario sin estar seguros. Los errores con mensaje propio
+    // (los que tira nuestro route con un texto claro, como "este proyecto no tiene Drive
+    // conectado") se muestran tal cual porque ya son legibles y sí sabemos qué pasó.
+    const isNetworkError = e.name === 'TypeError' || /failed to fetch|network/i.test(e.message || '');
+    setErr(isNetworkError ? 'No se pudo completar la subida — puede ser tu conexión o un problema temporal nuestro. Intenta de nuevo.' : (e.message || 'No se pudo subir el archivo.'));
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }
 }
