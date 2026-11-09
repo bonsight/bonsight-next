@@ -1,4 +1,6 @@
-import { isAuthorizedForTenant } from '@/lib/kai/auth';
+// Auth de Kai Next, no la de Kai legacy: el único consumidor es Reuniones de Kai Next, y una
+// persona con access.kaiNext pero sin access.kai recibía 401 y el picker se quedaba sin equipo.
+import { isAuthorizedForTenant } from '@/lib/kaiNext/auth';
 import { listTenantUsers } from '@/lib/kai/tenantUsers';
 
 // A diferencia de /api/kai/[tenant]/tenant-users (gateado con isKaiAuthorized, admin global, y

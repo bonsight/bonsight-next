@@ -262,6 +262,7 @@ function MeetingCard({ meeting, onOpen }) {
 // ── Picker de asistentes: roster + externos en un solo input con chips ─────────────────────
 function AttendeePicker({ roster, externalContacts = [], value, onChange, organizerName }) {
   const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
   const selectedEmails = new Set(value.map((a) => a.email));
   // Roster primero (gente de Bonsight, con avatar/cargo), después contactos externos ya usados
   // antes en reuniones tipo Cliente (ver rememberExternalContacts) — así la próxima vez que
@@ -270,17 +271,30 @@ function AttendeePicker({ roster, externalContacts = [], value, onChange, organi
     ...roster.map((p) => ({ ...p, isExternal: false })),
     ...externalContacts.filter((c) => !roster.some((p) => p.email === c.email)).map((c) => ({ ...c, isExternal: true })),
   ];
-  const suggestions = query.trim()
-    ? candidates.filter((p) => !selectedEmails.has(p.email) && (p.name?.toLowerCase().includes(query.toLowerCase()) || p.email?.toLowerCase().includes(query.toLowerCase()))).slice(0, 6)
-    : [];
+  const term = query.trim().toLowerCase();
+  // Autocomplete: solo aparece al escribir. Sin tope de resultados: la lista hace scroll, y un
+  // tope dejaría a los clientes fuera porque el equipo va primero.
+  const suggestions = !open || !term ? [] : candidates.filter((p) => !selectedEmails.has(p.email)
+    && (p.name?.toLowerCase().includes(term) || p.email?.toLowerCase().includes(term)));
   const looksLikeEmail = /\S+@\S+\.\S+/.test(query.trim());
 
   const addPerson = (p) => { onChange([...value, { email: p.email, name: p.name, timezone: p.timezone ?? null, external: !!p.isExternal, optional: false }]); setQuery(''); };
   const addExternal = () => {
     const email = query.trim();
     if (!looksLikeEmail || selectedEmails.has(email)) return;
+    // Un correo tipeado que ya es de alguien conocido entra como esa persona, no como externo.
+    const known = candidates.find((p) => p.email?.toLowerCase() === email.toLowerCase());
+    if (known) {
+      if (!selectedEmails.has(known.email)) addPerson(known);
+      else setQuery('');
+      return;
+    }
     onChange([...value, { email, name: email.split('@')[0], external: true, optional: false }]);
     setQuery('');
+  };
+  const submitQuery = () => {
+    if (term && !looksLikeEmail && suggestions.length > 0) addPerson(suggestions[0]);
+    else addExternal();
   };
   const remove = (email) => onChange(value.filter((a) => a.email !== email));
   const toggleOptional = (email) => onChange(value.map((a) => (a.email === email ? { ...a, optional: !a.optional } : a)));
@@ -312,13 +326,20 @@ function AttendeePicker({ roster, externalContacts = [], value, onChange, organi
         <input
           placeholder="Agregar persona o correo"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addExternal(); } }}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onClick={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); submitQuery(); }
+            else if (e.key === ',') { e.preventDefault(); addExternal(); }
+            else if (e.key === 'Escape' && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); }
+          }}
         />
         {suggestions.length > 0 && (
           <div className="knx-attendee-suggestions">
             {suggestions.map((p) => (
-              <button type="button" key={p.email} onClick={() => addPerson(p)}>
+              <button type="button" key={p.email} onMouseDown={(e) => e.preventDefault()} onClick={() => addPerson(p)}>
                 <Avatar name={p.name} size={20} /> {p.name}
                 {p.cargo ? ` · ${p.cargo}` : p.isExternal ? ' · externo' : ''}
               </button>

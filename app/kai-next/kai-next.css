@@ -5875,7 +5875,8 @@
   border-radius: 10px;
   box-shadow: 0 8px 20px rgba(11, 16, 32, 0.12);
   z-index: 5;
-  overflow: hidden;
+  max-height: 240px;
+  overflow-y: auto;
 }
 
 .knx-attendee-suggestions button {
