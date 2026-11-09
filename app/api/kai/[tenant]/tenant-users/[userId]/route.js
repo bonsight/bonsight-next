@@ -1,25 +1,25 @@
-import { isKaiAuthorized } from '@/lib/kai/auth';
+import { canManageTenantTeam } from '@/lib/kaiNext/auth';
 import {
   updateTenantUser, deleteTenantUser, resetTenantUserCredentials, setTenantUserCredentials, sanitizeTenantUser,
 } from '@/lib/kai/tenantUsers';
 
 export async function PATCH(req, { params }) {
   const { tenant, userId } = await params;
-  if (!(await isKaiAuthorized())) {
+  if (!(await canManageTenantTeam(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
   const { firstName, lastName, cargo, email, active, access, timezone, resetCredentials, setCredentials } = await req.json();
   try {
     if (resetCredentials) {
       const user = await resetTenantUserCredentials(tenant, userId);
-      return Response.json({ ok: true, user: sanitizeTenantUser(user, { includeCredentials: true }) });
+      return Response.json({ ok: true, user: sanitizeTenantUser(user) });
     }
     if (setCredentials) {
       const user = await setTenantUserCredentials(tenant, userId, setCredentials);
-      return Response.json({ ok: true, user: sanitizeTenantUser(user, { includeCredentials: true }) });
+      return Response.json({ ok: true, user: sanitizeTenantUser(user) });
     }
     const user = await updateTenantUser(tenant, userId, { firstName, lastName, cargo, email, active, access, timezone });
-    return Response.json({ ok: true, user: sanitizeTenantUser(user, { includeCredentials: true }) });
+    return Response.json({ ok: true, user: sanitizeTenantUser(user) });
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo actualizar.' }, { status: 400 });
   }
@@ -27,7 +27,7 @@ export async function PATCH(req, { params }) {
 
 export async function DELETE(req, { params }) {
   const { tenant, userId } = await params;
-  if (!(await isKaiAuthorized())) {
+  if (!(await canManageTenantTeam(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
   await deleteTenantUser(tenant, userId);
