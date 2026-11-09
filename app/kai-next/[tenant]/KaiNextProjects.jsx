@@ -1857,7 +1857,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
     <>
       <div className="knx-analisis-top">
         <div className="knx-analisis-head">
-          <button type="button" className="knx-analisis-compare" onClick={onBack} style={{ marginBottom: 10 }}>← Volver a Proyectos</button>
+          {onBack && <button type="button" className="knx-analisis-compare" onClick={onBack} style={{ marginBottom: 10 }}>← Volver a Proyectos</button>}
           <h1>{meta.name}</h1>
           <p>{meta.code ? `${meta.code} · ` : ''}{meta.type || PROJECT_KIND_LABEL[meta.projectKind] || meta.projectKind}</p>
         </div>
@@ -2397,7 +2397,11 @@ export default function KaiNextProjects({
   const [loggingOut, setLoggingOut] = useState(false);
   const [chats, setChats] = useState([]);
   const [projects, setProjects] = useState(initialProjects ?? []);
-  const [activeProjectId, setActiveProjectId] = useState(() => searchParams.get('p') || null);
+  // El resumen general es solo para Director y Supervisor: un Team member entra directo a su
+  // proyecto y cambia de uno a otro desde el sidebar.
+  const isTeamMember = !!level && !level.isSupervisorLevel;
+  const [activeProjectId, setActiveProjectId] = useState(() => searchParams.get('p')
+    || (isTeamMember ? ((initialProjects ?? []).find((p) => p.status === 'activo') ?? initialProjects?.[0])?.id ?? null : null));
   const [creating, setCreating] = useState(() => searchParams.get('new') === '1' && !!level?.isSupervisorLevel);
   const [deleteChatTarget, setDeleteChatTarget] = useState(null);
   const [kindFilter, setKindFilter] = useState('all');
@@ -2459,9 +2463,11 @@ export default function KaiNextProjects({
               projectId={activeProjectId}
               people={people}
               personId={personId}
-              onBack={() => setActiveProjectId(null)}
+              onBack={isTeamMember ? undefined : () => setActiveProjectId(null)}
               onUpdated={() => { /* el detalle se recarga solo */ }}
             />
+          ) : isTeamMember ? (
+            <p className="knx-knowledge-empty">Todavía no tienes proyectos asignados.</p>
           ) : (
             <>
               <div className="knx-analisis-top">
