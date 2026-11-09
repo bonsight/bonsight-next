@@ -1,6 +1,5 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { resolveProjectAccessLevel, getProjectMeta } from '@/lib/kaiNext/projects';
 import { getDevMeeting } from '@/lib/kaiNext/devMeetings';
 import { getCalendarEventById } from '@/lib/kai/calendar';
 
@@ -24,20 +23,9 @@ export async function GET(req, { params }) {
   if (!isSectionAllowed(identity.access, 'reuniones')) {
     return Response.json({ error: 'Reuniones no está habilitado para tu usuario.' }, { status: 403 });
   }
-  const level = resolveProjectAccessLevel(identity);
-  if (!level.isSupervisorLevel) {
-    return Response.json({ error: 'No tienes permiso para ver reuniones.' }, { status: 403 });
-  }
 
   const meeting = await getDevMeeting(tenant, meetingId);
   if (!meeting) return Response.json({ error: 'Reunión no encontrada.' }, { status: 404 });
-
-  if (meeting.projectId && !level.isDirectorLevel) {
-    const meta = await getProjectMeta(tenant, meeting.projectId);
-    if (!meta?.supervisorIds?.includes(identity.personId)) {
-      return Response.json({ error: 'No tienes acceso a esta reunión.' }, { status: 403 });
-    }
-  }
 
   let liveEvent = null;
   try {

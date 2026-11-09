@@ -85,21 +85,22 @@ function resolveRecurrence(repeat, startDateTime) {
 // body del POST o como ?projectId= en el GET), se revalida que el Supervisor esté asignado a
 // ESE proyecto puntual (mismo criterio que projects/[id]/route.js); sin proyecto, alcanza con
 // ser Supervisor-level de Proyectos en general (son reuniones del equipo, no de un cliente).
-async function gate(tenant, projectId) {
+// Ver el calendario es para todo el equipo con la sección Reuniones; gestionarlo pide Supervisor.
+async function gate(tenant, projectId, { readOnly = false } = {}) {
   if (!(await isAuthorizedForTenant(tenant))) return { error: Response.json({ error: 'No autorizado.' }, { status: 401 }) };
   const identity = await getCurrentKaiNextIdentity(tenant);
   if (!isSectionAllowed(identity.access, 'reuniones')) {
     return { error: Response.json({ error: 'Reuniones no está habilitado para tu usuario.' }, { status: 403 }) };
   }
   const level = resolveProjectAccessLevel(identity);
-  if (!level.isSupervisorLevel) {
+  if (!level.isSupervisorLevel && !readOnly) {
     return { error: Response.json({ error: 'No tienes permiso para gestionar reuniones.' }, { status: 403 }) };
   }
   let projectName = null;
   if (projectId) {
     const meta = await getProjectMeta(tenant, projectId);
     if (!meta || meta.projectKind !== 'desarrollo') return { error: Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 }) };
-    if (!level.isDirectorLevel && !meta.supervisorIds?.includes(identity.personId)) {
+    if (level.isSupervisorLevel && !level.isDirectorLevel && !meta.supervisorIds?.includes(identity.personId)) {
       return { error: Response.json({ error: 'No tienes acceso a las reuniones de este proyecto.' }, { status: 403 }) };
     }
     projectName = meta.name;
@@ -111,7 +112,7 @@ export async function GET(req, { params }) {
   const { tenant } = await params;
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get('projectId') || null;
-  const { error } = await gate(tenant, projectId);
+  const { error } = await gate(tenant, projectId, { readOnly: true });
   if (error) return error;
 
   const meetings = await listDevMeetings(tenant, { projectId });
