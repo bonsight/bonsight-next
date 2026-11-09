@@ -745,8 +745,13 @@ function deadlineLabel(t, todayIso) {
 
 // Popover anclado (no un modal con fondo oscuro completo) — una tarea es una consulta rápida,
 // no amerita tapar toda la pantalla. Se cierra con click afuera, Escape, o al completar/borrar.
-function TaskPopover({ task, rect, basePath, tenant, todayIso, onClose, onToggle, onDelete }) {
+function TaskPopover({ task, rect, basePath, tenant, todayIso, onClose, onToggle, onDelete, onSaveDates }) {
   const ref = useRef(null);
+  const [editing, setEditing] = useState(false);
+  const [date, setDate] = useState(task.date);
+  const [deadline, setDeadline] = useState(task.deadline ?? '');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
   useEffect(() => {
     const onDocMouseDown = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
     const onKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
@@ -758,27 +763,63 @@ function TaskPopover({ task, rect, basePath, tenant, todayIso, onClose, onToggle
     };
   }, [onClose]);
 
-  const left = Math.min(window.innerWidth - 312, Math.max(12, rect.left));
-  const top = Math.min(window.innerHeight - 260, rect.bottom + 6);
+  const left = Math.min(window.innerWidth - 352, Math.max(12, rect.left));
+  const top = Math.max(12, Math.min(window.innerHeight - 340, rect.bottom + 6));
   const dl = deadlineLabel(task, todayIso);
+
+  const saveDates = async () => {
+    if (!date) { setErr('Elige la fecha planificada.'); return; }
+    setSaving(true);
+    setErr('');
+    try {
+      await onSaveDates(task, { date, deadline: deadline || null });
+      onClose();
+    } catch {
+      setErr('No se pudo guardar. Intenta de nuevo.');
+      setSaving(false);
+    }
+  };
+  const cancelEdit = () => {
+    setDate(task.date);
+    setDeadline(task.deadline ?? '');
+    setErr('');
+    setEditing(false);
+  };
 
   return (
     <div className="knx-week-task-popover" ref={ref} style={{ left, top }} role="dialog" aria-label={task.title}>
       <h3>{task.title}</h3>
       <dl>
         <dt>Responsable</dt><dd>{task.responsableName ?? '—'}</dd>
-        <dt>Planificada</dt><dd>{new Date(`${task.date}T00:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short' })}{task.time ? ` · ${task.time}` : ''}</dd>
+        <dt>Planificada</dt>
+        {editing ? (
+          <dd><input type="date" className="knx-week-task-popover-date" aria-label="Fecha planificada" value={date} onChange={(e) => setDate(e.target.value)} /></dd>
+        ) : (
+          <dd>{new Date(`${task.date}T00:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short' })}{task.time ? ` · ${task.time}` : ''}</dd>
+        )}
         <dt>Fecha límite</dt>
-        <dd style={dl?.urgency ? { color: dl.urgency === 'over' ? '#B4382F' : '#9A6412', fontWeight: 600 } : undefined}>
-          {dl ? dl.text : 'Sin fecha límite'}
-        </dd>
+        {editing ? (
+          <dd><input type="date" className="knx-week-task-popover-date" aria-label="Fecha límite" value={deadline} onChange={(e) => setDeadline(e.target.value)} /></dd>
+        ) : (
+          <dd style={dl?.urgency ? { color: dl.urgency === 'over' ? '#B4382F' : '#9A6412', fontWeight: 600 } : undefined}>
+            {dl ? dl.text : 'Sin fecha límite'}
+          </dd>
+        )}
         <dt>Proyecto</dt>
         <dd>{task.projectId ? <a href={`${basePath}/${tenant}/proyectos?p=${task.projectId}`}>{task.projectName}</a> : 'Sin proyecto'}</dd>
         <dt>Estado</dt><dd>{task.done ? 'Hecha' : 'Pendiente'}</dd>
       </dl>
       {task.description && <p className="knx-week-task-popover-desc">{task.description}</p>}
+      {err && <p className="knx-week-task-popover-desc" style={{ color: '#B4382F' }}>{err}</p>}
+      {editing ? (
+      <div className="knx-week-task-popover-actions">
+        <button type="button" className="knx-new-chat" disabled={saving} onClick={saveDates}>{saving ? 'Guardando…' : 'Guardar'}</button>
+        <button type="button" className="knx-canvas-mini" disabled={saving} onClick={cancelEdit}>Cancelar</button>
+      </div>
+      ) : (
       <div className="knx-week-task-popover-actions">
         <button type="button" className="knx-new-chat" onClick={() => { onToggle(task); onClose(); }}>{task.done ? 'Reabrir' : 'Marcar hecha'}</button>
+        <button type="button" className="knx-canvas-mini" onClick={() => setEditing(true)}>Editar</button>
         <button type="button" className="knx-canvas-mini" onClick={onClose}>Cerrar</button>
         <span style={{ flexGrow: 1 }} />
         <button type="button" className="knx-week-task-popover-del" aria-label="Eliminar tarea" onClick={() => { onDelete(task); onClose(); }}>
@@ -788,11 +829,12 @@ function TaskPopover({ task, rect, basePath, tenant, todayIso, onClose, onToggle
           </svg>
         </button>
       </div>
+      )}
     </div>
   );
 }
 
-function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, onSelectMeeting, onCreateAt, tasks, tasksLoaded, onToggleTask, onDeleteTask, onOpenTaskModal, basePath, tenant }) {
+function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, onSelectMeeting, onCreateAt, tasks, tasksLoaded, onToggleTask, onDeleteTask, onUpdateTaskDates, onOpenTaskModal, basePath, tenant }) {
   const now = new Date();
   const todayIso = toDateInput(now);
   const days = [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(weekStart, i));
@@ -1074,6 +1116,7 @@ function WeekCalendarView({ meetings, weekStart, meOnly, userEmail, userName, on
           onClose={() => setTaskPopover(null)}
           onToggle={onToggleTask}
           onDelete={onDeleteTask}
+          onSaveDates={onUpdateTaskDates}
         />
       )}
     </div>
@@ -1481,6 +1524,16 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId: task.id, done }),
     }).catch(() => null);
   };
+  // A diferencia de marcar hecha, no es optimista: la tarjeta cambia de día, así que solo se
+  // mueve cuando el servidor confirmó, y si falla el popover sigue abierto con el error.
+  const handleUpdateTaskDates = async (task, dates) => {
+    const res = await fetch(`/api/kai-next/${tenant}/dev-meetings/tasks`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ taskId: task.id, ...dates }),
+    });
+    if (!res.ok) throw new Error('No se pudo guardar.');
+    const { task: updated } = await res.json();
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
+  };
   const handleDeleteTask = async (task) => {
     setTasks((prev) => prev.filter((t) => t.id !== task.id));
     await fetch(`/api/kai-next/${tenant}/dev-meetings/tasks?taskId=${task.id}`, { method: 'DELETE' }).catch(() => null);
@@ -1667,7 +1720,7 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
             <WeekCalendarView
               meetings={meetings} weekStart={weekStart} meOnly={meOnly} userEmail={userEmail} userName={userName}
               onSelectMeeting={setSelectedMeetingId} onCreateAt={handleCreateAt}
-              tasks={tasks} tasksLoaded={tasksLoaded} onToggleTask={handleToggleTask} onDeleteTask={handleDeleteTask} onOpenTaskModal={openTaskModal}
+              tasks={tasks} tasksLoaded={tasksLoaded} onToggleTask={handleToggleTask} onDeleteTask={handleDeleteTask} onUpdateTaskDates={handleUpdateTaskDates} onOpenTaskModal={openTaskModal}
               basePath={basePath} tenant={tenant}
             />
           ) : !meetings.length ? (

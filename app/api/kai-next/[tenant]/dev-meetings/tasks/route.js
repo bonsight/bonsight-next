@@ -2,7 +2,7 @@ import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { resolveProjectAccessLevel, getProjectMeta } from '@/lib/kaiNext/projects';
 import { listDevTasks, addDevTask, updateDevTask, removeDevTask } from '@/lib/kaiNext/devTasks';
-import { tryCreateGoogleTask, setGoogleTaskDone, deleteGoogleTask } from '@/lib/kai/tasks';
+import { tryCreateGoogleTask, setGoogleTaskDone, setGoogleTaskDue, deleteGoogleTask } from '@/lib/kai/tasks';
 
 // Mismo gate que .../dev-meetings/route.js — Tasks vive adentro de Reuniones, no tiene permiso
 // propio.
@@ -18,6 +18,8 @@ async function gate(tenant) {
   }
   return { identity };
 }
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function GET(req, { params }) {
   const { tenant } = await params;
@@ -84,11 +86,31 @@ export async function PATCH(req, { params }) {
   } catch {
     return Response.json({ error: 'Body inválido.' }, { status: 400 });
   }
-  const { taskId, done } = body;
+  const { taskId, done, date, deadline } = body;
   if (!taskId) return Response.json({ error: 'taskId es requerido.' }, { status: 400 });
 
-  const task = await updateDevTask(tenant, taskId, { done: !!done });
-  if (task?.synced) await setGoogleTaskDone(task.responsableEmail, task.googleTaskId, !!done);
+  // Solo se toca lo que venga en el body: marcar hecha no debe mover fechas, ni al revés.
+  const patch = {};
+  if (done !== undefined) patch.done = !!done;
+  if (date !== undefined) {
+    if (!ISO_DATE.test(date ?? '')) return Response.json({ error: 'Fecha planificada inválida.' }, { status: 400 });
+    patch.date = date;
+  }
+  if (deadline !== undefined) {
+    if (deadline && !ISO_DATE.test(deadline)) return Response.json({ error: 'Fecha límite inválida.' }, { status: 400 });
+    patch.deadline = deadline || null;
+  }
+  if (!Object.keys(patch).length) return Response.json({ error: 'Nada que actualizar.' }, { status: 400 });
+
+  const task = await updateDevTask(tenant, taskId, patch);
+  if (!task) return Response.json({ error: 'Tarea no encontrada.' }, { status: 404 });
+  if (task.synced) {
+    if (patch.done !== undefined) await setGoogleTaskDone(task.responsableEmail, task.googleTaskId, patch.done);
+    // Mismo criterio que al crear: en Google el vencimiento es la fecha límite o, sin ella, la planificada.
+    if (patch.date !== undefined || patch.deadline !== undefined) {
+      await setGoogleTaskDue(task.responsableEmail, task.googleTaskId, task.deadline || task.date);
+    }
+  }
   return Response.json({ task });
 }
 
