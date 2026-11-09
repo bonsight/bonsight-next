@@ -8,6 +8,11 @@ import {
 } from '@/lib/aria/board';
 import { getNotionPageRaw, pageToFields } from '@/lib/aria/notion';
 import { listEquipoOptions, resolveResponsableId, resolveColaboradorIds } from '@/lib/kaiNext/devResponsables';
+import { logProjectAction } from '@/lib/kaiNext/audit';
+
+// Lo que un Team member puede hacer en los proyectos donde está asignado: ejecutar el trabajo. Asignar
+// personas, mover tareas entre sprints o borrarlas sigue siendo de Supervisor en adelante.
+const EXECUTION_ACTIONS = new Set(['move_task', 'reorder_task', 'update_schedule', 'update_task_details', 'update_actual_hours', 'create_subtask']);
 
 // Tablero agregado de TODO el proyecto (todas las iniciativas) — a diferencia de EpicaTareas
 // (lista plana por épica), esto alimenta el tab "Tablero" con drag-and-drop entre columnas de
@@ -51,9 +56,6 @@ export async function PATCH(req, { params }) {
     return Response.json({ error: 'Proyectos no está habilitado para tu usuario.' }, { status: 403 });
   }
   const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
-  if (!isSupervisorLevel) {
-    return Response.json({ error: 'No tienes permiso para editar tareas en este proyecto.' }, { status: 403 });
-  }
 
   const meta = await getProjectMeta(tenant, id);
   if (!meta || meta.projectKind !== 'desarrollo') return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
@@ -68,6 +70,10 @@ export async function PATCH(req, { params }) {
     return Response.json({ error: 'Body inválido.' }, { status: 400 });
   }
   const { action, pageId } = body;
+
+  if (!isSupervisorLevel && !(EXECUTION_ACTIONS.has(action) && meta.supervisorIds?.includes(identity.personId))) {
+    return Response.json({ error: 'No tienes permiso para hacer esto en este proyecto.' }, { status: 403 });
+  }
 
   if (action === 'move_tasks_sprint') {
     if (!Array.isArray(body.pageIds) || !body.pageIds.length || !body.sprintId) {
@@ -107,7 +113,9 @@ export async function PATCH(req, { params }) {
     } else if (action === 'update_actual_hours') {
       await updateTaskActualHours(token, pageId, body.actualHours);
     } else if (action === 'remove_task') {
+      const page = await getNotionPageRaw(token, pageId);
       await deleteTask(token, pageId);
+      await logProjectAction(tenant, identity, { project: meta, action: 'Borró una tarea', detail: page ? pageToFields(page).fields.TASK : pageId });
     } else if (action === 'create_subtask') {
       // pageId acá es la tarea PADRE (mismo criterio que el resto de las acciones: pageId es a
       // qué apunta la acción). Arranca en Backlog — createTask no exige fecha/estimación como sí

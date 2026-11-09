@@ -4,6 +4,7 @@ import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/project
 import { getNotionToken } from '@/lib/kaiNext/projectsNotion';
 import { getBoardData, createSprint, closeSprintPlanning, closeSprint, updateSprintDates, computeSprintMetrics } from '@/lib/aria/board';
 import { saveSprintMetrics, getSprintMetrics } from '@/lib/aria/sprintMetrics';
+import { logProjectAction } from '@/lib/kaiNext/audit';
 
 // Ciclo de vida del sprint de ESTE proyecto (crear/cerrar planificación/cerrar) — a diferencia de
 // app/api/kai-next/[tenant]/board/route.js (el tablero universal, que sigue intacto y solo ve
@@ -75,10 +76,12 @@ export async function PATCH(req, { params }) {
 
   try {
     if (action === 'create_sprint') {
-      await createSprint(token, { startDate: p.startDate, endDate: p.endDate, objetivo: p.objetivo, proyectoId: meta.notionProyectoId });
+      const sprint = await createSprint(token, { startDate: p.startDate, endDate: p.endDate, objetivo: p.objetivo, proyectoId: meta.notionProyectoId });
+      await logProjectAction(tenant, identity, { project: meta, action: 'Creó un sprint', detail: sprint.title });
     } else if (action === 'close_planning') {
       if (!sprintId) throw new Error('sprintId es requerido.');
-      await closeSprintPlanning(token, sprintId);
+      const sprint = await closeSprintPlanning(token, sprintId);
+      await logProjectAction(tenant, identity, { project: meta, action: 'Cerró la planificación', detail: sprint.title });
     } else if (action === 'close_sprint') {
       if (!sprintId) throw new Error('sprintId es requerido.');
       const before = await getBoardData(token, { sprintId, proyectoId: meta.notionProyectoId });
@@ -86,6 +89,7 @@ export async function PATCH(req, { params }) {
       const metrics = computeSprintMetrics(before.sprint, before.tasks);
       await saveSprintMetrics(tenant, sprintId, metrics);
       await closeSprint(token, sprintId);
+      await logProjectAction(tenant, identity, { project: meta, action: 'Cerró un sprint', detail: before.sprint.title });
     } else if (action === 'update_sprint_dates') {
       if (!sprintId) throw new Error('sprintId es requerido.');
       await updateSprintDates(token, sprintId, { startDate: p.startDate, endDate: p.endDate });

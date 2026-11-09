@@ -172,7 +172,7 @@ function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragS
 
 // Panel de detalle/edición de una tarea — mismos campos/acciones que TaskDetailPanel del
 // tablero real, pegando a /dev/board en vez de /board.
-function DevTaskDetailPanel({ tenant, projectId, task, equipo, columns, onClose, onAction, onRemove, allTasks, onCreateSubtask, onToggleSubtask, onOpenSubtask }) {
+function DevTaskDetailPanel({ tenant, projectId, task, equipo, canManage, columns, onClose, onAction, onRemove, allTasks, onCreateSubtask, onToggleSubtask, onOpenSubtask }) {
   const [closing, handleClose] = useSidePanelClose(onClose);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? '');
@@ -242,7 +242,9 @@ function DevTaskDetailPanel({ tenant, projectId, task, equipo, columns, onClose,
         entregables: entregables.filter((e) => e.label?.trim() || e.url?.trim()),
       }));
       results.push(await onAction('update_schedule', { startDate, endDate, estimatedHours: estimatedHours === '' ? null : Number(estimatedHours) }));
-      results.push(await onAction('update_responsable', { responsableId: responsableId || null }));
+      if (responsableId !== (task.responsableId ?? '')) {
+        results.push(await onAction('update_responsable', { responsableId: responsableId || null }));
+      }
       if (!sameColaboradores(colaboradoresFinal, task.colaboradorIds)) {
         results.push(await onAction('update_colaboradores', { colaboradorIds: colaboradoresFinal }));
       }
@@ -390,7 +392,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, equipo, columns, onClose,
         <div className="knx-board-field-row">
           <div className="knx-board-field">
             <label>Responsable</label>
-            <select value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
+            <select value={responsableId} onChange={(e) => setResponsableId(e.target.value)} disabled={!canManage}>
               <option value="">Sin asignar</option>
               {responsableOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
@@ -406,6 +408,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, equipo, columns, onClose,
           options={colaboradorOptions(equipo, responsableId, task.colaboradores)}
           value={colaboradoresFinal}
           onChange={setColaboradorIds}
+          disabled={!canManage}
         />
         <div className="knx-board-field-row">
           <div className="knx-board-field">
@@ -478,7 +481,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, equipo, columns, onClose,
             </div>
           </div>
         </div>
-        <button type="button" className="knx-delete-task-btn" onClick={onRemove}>
+        <button type="button" className="knx-delete-task-btn" onClick={onRemove} hidden={!canManage}>
           Eliminar tarea
         </button>
       </div>
@@ -1861,7 +1864,7 @@ function LaneToggle({ name, iniciativaName, count, doneCount = 0, collapsed, onT
   );
 }
 
-function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeSprint, onOptimisticMove }) {
+function ProjectBoard({ canManage, tenant, projectId, board, onReload, iniciativas, activeSprint, onOptimisticMove }) {
   const [scheduleFor, setScheduleFor] = useState(null); // { taskId, status }
   const [hoursFor, setHoursFor] = useState(null); // { taskId, status }
   const [newTareaOpen, setNewTareaOpen] = useState(false);
@@ -2073,7 +2076,7 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
             {allLanesCollapsed ? 'Expandir todo' : 'Colapsar todo'}
           </button>
         )}
-        <button type="button" className="knx-new-chat" onClick={() => setNewTareaOpen(true)}>+ Nueva tarea</button>
+        {canManage && <button type="button" className="knx-new-chat" onClick={() => setNewTareaOpen(true)}>+ Nueva tarea</button>}
       </div>
       {!lanes.length ? (
         <p className="knx-knowledge-empty">
@@ -2128,7 +2131,7 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
                                 entering={justMovedTaskId === t.id}
                                 allTasks={tasks}
                               />
-                              {!t.sprintIds?.length && <AssignSprintControl pageId={t.id} activeSprint={activeSprint} onAssigned={assignSprint} />}
+                              {canManage && !t.sprintIds?.length && <AssignSprintControl pageId={t.id} activeSprint={activeSprint} onAssigned={assignSprint} />}
                             </div>
                           ))}
                         </div>
@@ -2158,6 +2161,7 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
       {selectedTask && (
         <DevTaskDetailPanel
           key={selectedTask.id}
+          canManage={canManage}
           tenant={tenant}
           projectId={projectId}
           task={selectedTask}
@@ -2296,7 +2300,7 @@ function BringTasksModal({ tasks, sprintOptions, busy, onConfirm, onClose }) {
 // tarjeta en el carril de OTRA iniciativa (la Iniciativa de una tarea no cambia acá, solo su
 // Status) — si se permitiera, la tarjeta "volvería" a su carril real al recargar, que confunde
 // más de lo que ayuda.
-function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, equipo, iniciativas, activeSprint, sprints, onReload, onSprintReload, onOptimisticMove, onOptimisticReorder }) {
+function SprintsBoardTab({ canManage, tenant, projectId, tasks, columns, talento, equipo, iniciativas, activeSprint, sprints, onReload, onSprintReload, onOptimisticMove, onOptimisticReorder }) {
   const [dragInfo, setDragInfo] = useState(null); // { taskId, laneId }
   const [dragOverCell, setDragOverCell] = useState(null);
   const [dragOverTaskId, setDragOverTaskId] = useState(null);
@@ -2596,7 +2600,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, equipo, i
         {creating ? (
           <NewProjectSprintForm busy={busy} onCreate={createSprint} onClose={() => setCreating(false)} />
         ) : (
-          <button type="button" className="knx-new-chat" onClick={() => setCreating(true)}>+ Nuevo sprint</button>
+          canManage && <button type="button" className="knx-new-chat" onClick={() => setCreating(true)}>+ Nuevo sprint</button>
         )}
       </div>
     );
@@ -2614,19 +2618,19 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, equipo, i
               {sprints.map((s) => <option key={s.id} value={s.id}>{s.title} · {sprintStatusLabel(s.status)}</option>)}
             </select>
           )}
-          {sprints.length > 1 && viewedSprint.status !== 'Cerrado' && (
+          {canManage && sprints.length > 1 && viewedSprint.status !== 'Cerrado' && (
             <button type="button" className="knx-analisis-compare" onClick={() => setBringTasksOpen(true)}>Traer tareas de otro sprint</button>
           )}
-          {viewedSprint.status === 'Planificado' && (
+          {canManage && viewedSprint.status === 'Planificado' && (
             <button type="button" className="knx-analisis-compare" disabled={busy} onClick={closePlanning}>Cerrar planificación</button>
           )}
-          {viewedSprint.status === 'En curso' && (
+          {canManage && viewedSprint.status === 'En curso' && (
             <button type="button" className="knx-analisis-compare" disabled={busy} onClick={() => setCloseTarget('sprint')}>Cerrar sprint</button>
           )}
           {creating ? (
             <NewProjectSprintForm busy={busy} onCreate={createSprint} onClose={() => setCreating(false)} />
           ) : (
-            <button type="button" className="knx-new-chat" onClick={() => setCreating(true)}>+ Nuevo sprint</button>
+            canManage && <button type="button" className="knx-new-chat" onClick={() => setCreating(true)}>+ Nuevo sprint</button>
           )}
         </div>
       </div>
@@ -2647,7 +2651,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, equipo, i
               {activeResponsables.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           )}
-          <button type="button" className="knx-new-chat" onClick={() => setNewTareaOpen(true)}>+ Nueva tarea</button>
+          {canManage && <button type="button" className="knx-new-chat" onClick={() => setNewTareaOpen(true)}>+ Nueva tarea</button>}
         </div>
       </div>
       {!lanes.length ? (
@@ -2772,6 +2776,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, equipo, i
       {selectedTask && (
         <DevTaskDetailPanel
           key={selectedTask.id}
+          canManage={canManage}
           tenant={tenant}
           projectId={projectId}
           task={selectedTask}
@@ -3047,11 +3052,12 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
         </>
       )}
 
-      {tab === 'tablero' && <ProjectBoard tenant={tenant} projectId={projectId} board={board} onReload={scheduleBoardReload} iniciativas={iniciativas} activeSprint={activeSprint} onOptimisticMove={setTaskStatusLocally} />}
+      {tab === 'tablero' && <ProjectBoard canManage={canManage} tenant={tenant} projectId={projectId} board={board} onReload={scheduleBoardReload} iniciativas={iniciativas} activeSprint={activeSprint} onOptimisticMove={setTaskStatusLocally} />}
 
       {tab === 'sprints' && (
         board ? (
           <SprintsBoardTab
+            canManage={canManage}
             tenant={tenant}
             projectId={projectId}
             tasks={board.tasks}

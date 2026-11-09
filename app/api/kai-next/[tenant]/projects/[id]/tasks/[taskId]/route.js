@@ -1,5 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
+import { logProjectAction } from '@/lib/kaiNext/audit';
 import { getProjectMeta, updateTask, deleteTask, projectInactiveMessage, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
 
 async function guard(tenant, id) {
@@ -16,7 +17,7 @@ async function guard(tenant, id) {
   if (!meta) return { error: Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 }) };
   const inactive = projectInactiveMessage(meta);
   if (inactive) return { error: Response.json({ error: inactive }, { status: 400 }) };
-  return {};
+  return { identity, meta };
 }
 
 export async function PATCH(req, { params }) {
@@ -41,11 +42,12 @@ export async function PATCH(req, { params }) {
 
 export async function DELETE(req, { params }) {
   const { tenant, id, taskId } = await params;
-  const { error } = await guard(tenant, id);
+  const { error, identity, meta } = await guard(tenant, id);
   if (error) return error;
 
   try {
-    await deleteTask(tenant, id, taskId);
+    const task = await deleteTask(tenant, id, taskId);
+    await logProjectAction(tenant, identity, { project: meta, action: 'Borró una tarea', detail: task.nombre });
     return Response.json({ ok: true });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });

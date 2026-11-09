@@ -14,6 +14,9 @@ import {
 } from '@/lib/kaiNext/conversations';
 import { buildSystemPrompt } from '@/lib/kaiNext/prompt';
 import { listTenantUsers } from '@/lib/kai/tenantUsers';
+import { soundsLikeDocumentPromise, NO_DOCUMENT_PROMISE } from '@/lib/kaiNext/documentPromise';
+import { listSharesVisibleTo } from '@/lib/kaiNext/sharedDocuments';
+import { listProjectsForPerson, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
 import { indexAnalysis, deleteAnalysesForConversation } from '@/lib/kaiNext/analyses';
 import { runAgenticLoop } from '@/lib/shared/agents/agenticLoop';
 import { trackUsage } from '@/lib/kai/usage';
@@ -113,12 +116,15 @@ export async function POST(req, { params }) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const [intelligenceSources, dbSources, memory, bic, tenantUsers] = await Promise.all([
+        const canSeeProjects = identity.personId && isSectionAllowed(kaiNextAccess, 'proyectos');
+        const [intelligenceSources, dbSources, memory, bic, tenantUsers, personProjects, sharedDocuments] = await Promise.all([
           getIntelligenceSources(tenant),
           getDbSources(tenant),
           getKaiNextMemory(tenant),
           buildBIC(tenant),
           listTenantUsers(tenant),
+          canSeeProjects ? listProjectsForPerson(tenant, { ...resolveProjectAccessLevel(identity), personId: identity.personId }) : [],
+          listSharesVisibleTo(tenant, identity),
         ]);
         // Memoria siempre activa (Business Profile + aprendizajes de discovery) — mismo
         // buildBIC/formatBICForPrompt que ya usan Kai y Aria, sin pedir el knowledge_digest
@@ -155,6 +161,13 @@ export async function POST(req, { params }) {
           googleAdsStatus: sourceStatus('google_ads'),
           dbSourcesContext: buildDbSourcesContext(dbSources),
           bicText,
+          currentUser: identity.personName ? {
+            name: identity.personName,
+            cargo: tenantUsers.find((u) => u.id === identity.personId)?.cargo ?? null,
+            projects: personProjects.filter((p) => p.status === 'activo').map((p) => p.name),
+            timezone: tenantUsers.find((u) => u.id === identity.personId)?.timezone ?? null,
+          } : null,
+          sharedDocuments,
           team: tenantUsers.filter((u) => u.active !== false && u.name?.trim()).map((u) => ({ name: u.name, cargo: u.cargo })),
           memory,
           activeRef,
@@ -206,7 +219,10 @@ export async function POST(req, { params }) {
           system,
           messages: conversation,
           tools: allowedTools,
-          context: { tenant, intelligenceSources, dbSources, identity, conversationId: convoId },
+          context: {
+            tenant, intelligenceSources, dbSources, identity, conversationId: convoId,
+            attachDocument: (doc) => { if (!documents.some((d) => d.sharedId === doc.sharedId)) documents.push(doc); },
+          },
           executeTool,
           isStopTool: (name) => name === 'present_analysis',
           onToolStart: (name, input) => {
@@ -241,9 +257,7 @@ export async function POST(req, { params }) {
         // documents sigue vacío, se fuerza UNA repregunta explícita en vez de dejar pasar la
         // promesa vacía — cuesta una llamada extra a Claude, pero solo en el caso raro donde ya
         // se detectó el problema.
-        const soundsLikeDocPromise = /(gener[oóaá]|generando|list[oa]\s+(el|la|para)|ya\s+(lo\s+)?gener[ée]|descargable\s+ya)/i.test(finalText)
-          && /\b(pdf|excel|documento|archivo)\b/i.test(finalText);
-        if (soundsLikeDocPromise && documents.length === 0) {
+        if (soundsLikeDocumentPromise(finalText) && documents.length === 0) {
           const retry = await runAgenticLoop({
             ...loopArgs,
             maxIterations: 2,
@@ -252,16 +266,14 @@ export async function POST(req, { params }) {
               { role: 'assistant', content: finalText },
               {
                 role: 'user',
-                content: 'No llamaste a generate_pdf_report ni generate_excel_report, pero tu respuesta da a entender que el documento ya está generado o lo estás generando. Llamá la tool ahora mismo, en este turno, con el contenido completo armado con datos reales de la conversación. Si de verdad te falta un dato puntual para armarlo, preguntámelo directo en vez de repetir que ya está listo.',
+                content: `Tu respuesta anterior parece indicar que un documento ya está generado o que lo estás generando, pero no llamaste a generate_pdf_report ni generate_excel_report. Si de verdad lo prometiste, llama la tool ahora mismo con el contenido completo armado con datos reales de la conversación; si te falta un dato puntual, pídelo directamente. Si tu respuesta no prometía ningún documento, responde únicamente ${NO_DOCUMENT_PROMISE}.`,
               },
             ],
           });
-          if (documents.length > 0 || retry.finalText) {
-            finalText = retry.finalText || finalText;
-            callLogs.push(...retry.callLogs);
-            usage.inputTokens += retry.usage.inputTokens;
-            usage.outputTokens += retry.usage.outputTokens;
-          }
+          callLogs.push(...retry.callLogs);
+          usage.inputTokens += retry.usage.inputTokens;
+          usage.outputTokens += retry.usage.outputTokens;
+          if (retry.finalText && !retry.finalText.includes(NO_DOCUMENT_PROMISE)) finalText = retry.finalText;
         }
 
         // El bloque [KAI_SOURCES] (si el modelo lo agregó) sirve para ACOTAR cuáles de los

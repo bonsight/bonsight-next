@@ -4774,6 +4774,12 @@
   cursor: pointer;
 }
 
+.knx-doc-card-btn--secondary {
+  border: 1px solid var(--knx-border);
+  background: none;
+  color: var(--knx-deep);
+}
+
 .knx-doc-card-btn:disabled {
   opacity: 0.6;
   cursor: default;

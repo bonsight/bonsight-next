@@ -2,14 +2,14 @@ import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getProject, getProjectMeta, updateProjectDetails, setProjectSupervisors, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
 import { getNotionToken, getProyecto, getRoadmap } from '@/lib/kaiNext/projectsNotion';
+import { listTenantUsers } from '@/lib/kai/tenantUsers';
+import { logProjectAction } from '@/lib/kaiNext/audit';
 
-// Quién puede ver este proyecto puntual — Director todos, Supervisor si está en supervisorIds,
-// Registrador si tiene al menos una tarea (civil/seguimiento) o una prueba (experimental)
-// asignada ahí. Igual que listProjectsForPerson pero para UN proyecto ya cargado.
-function canSeeProject(meta, tasks, tests, { isDirectorLevel, isSupervisorLevel, personId }) {
+// Mismo criterio que listProjectsForPerson pero para UN proyecto ya cargado.
+function canSeeProject(meta, tasks, tests, { isDirectorLevel, personId }) {
   if (isDirectorLevel) return true;
-  if (isSupervisorLevel) return meta.supervisorIds?.includes(personId);
   if (!personId) return false;
+  if (meta.supervisorIds?.includes(personId)) return true;
   if (meta.projectKind === 'experimental') return tests.some((t) => t.registradorIds?.includes(personId));
   return tasks.some((t) => (t.responsables ?? []).includes(personId));
 }
@@ -32,7 +32,7 @@ export async function GET(req, { params }) {
   // 'desarrollo' no tiene el nivel de detalle "acceso recortado por tarea/prueba" que sí tienen
   // los otros kinds (ver canSeeProject más abajo) — alcanza con Director, o Supervisor asignado.
   if (meta.projectKind === 'desarrollo') {
-    if (!level.isDirectorLevel && !(level.isSupervisorLevel && meta.supervisorIds?.includes(identity.personId))) {
+    if (!level.isDirectorLevel && !meta.supervisorIds?.includes(identity.personId)) {
       return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
     }
     const token = await getNotionToken(tenant);
@@ -92,9 +92,21 @@ export async function PATCH(req, { params }) {
   }
 
   try {
-    const meta = Array.isArray(body.supervisorIds)
-      ? await setProjectSupervisors(tenant, id, body.supervisorIds.filter((x) => typeof x === 'string'))
-      : await updateProjectDetails(tenant, id, body);
+    if (Array.isArray(body.supervisorIds)) {
+      const before = await getProjectMeta(tenant, id);
+      const meta = await setProjectSupervisors(tenant, id, body.supervisorIds.filter((x) => typeof x === 'string'));
+      const nameById = new Map((await listTenantUsers(tenant)).map((u) => [u.id, u.name || u.email]));
+      const names = (ids) => ids.map((x) => nameById.get(x) ?? x).join(', ');
+      const added = meta.supervisorIds.filter((x) => !before?.supervisorIds?.includes(x));
+      const removed = (before?.supervisorIds ?? []).filter((x) => !meta.supervisorIds.includes(x));
+      await logProjectAction(tenant, identity, {
+        project: meta,
+        action: 'Cambió el equipo',
+        detail: [added.length && `Agregó: ${names(added)}`, removed.length && `Quitó: ${names(removed)}`].filter(Boolean).join('. ') || 'Sin cambios',
+      });
+      return Response.json({ meta });
+    }
+    const meta = await updateProjectDetails(tenant, id, body);
     return Response.json({ meta });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });

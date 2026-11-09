@@ -65,7 +65,7 @@ function ToolTrace({ trace, citedSources }) {
         {trace.map((t, i) => {
           if (t.tool === 'query_knowledge' && citedSources?.length) {
             return citedSources.map((s) => {
-              const isLink = s.type === 'url' && s.url;
+              const isLink = !!s.url;
               const text = `${s.name} — Conocimiento · ${KNOWLEDGE_TYPE_LABELS[s.type] ?? s.type}${s.date ? ` · ${formatSourceDate(s.date)}` : ''}`;
               return (
                 <li key={s.id}>
@@ -576,7 +576,7 @@ export default function KaiNextClientChat({ tenant, tenantName, userName, userHa
                       </div>
                     )}
                     {m.documents?.map((doc, di) => (
-                      <KaiNextDocumentCard key={di} doc={doc} tenant={tenant} />
+                      <KaiNextDocumentCard key={di} doc={doc} tenant={tenant} conversationId={activeChatId} />
                     ))}
                     {m.activityStart ? (
                       <KaiNextActivityDashboardCard tenant={tenant} activity={m.activityStart} />

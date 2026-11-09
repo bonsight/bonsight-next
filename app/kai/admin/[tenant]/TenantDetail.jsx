@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { calcAreaScore, calcOverallScore } from '@/lib/kai/scoring';
-import { KAI_NEXT_SECTIONS } from '@/lib/kaiNext/capabilities';
+import { KAI_NEXT_SECTIONS, PROJECT_ROLES, PROJECT_ROLE_CAPS, NO_CAPABILITIES, projectRoleOf } from '@/lib/kaiNext/capabilities';
 import { FEATURE_LABELS } from '@/lib/kai/usageFeatureLabels';
 
 // ── Utilities ──────────────────────────────────────────────────────────────
@@ -2204,6 +2204,7 @@ function EquipoRow({ tenant, user: u, onSaved }) {
           <div style={{ minWidth: 0 }}>
             <p className="eq-name">{u.name}</p>
             {u.cargo && <p className="eq-cargo">{u.cargo}</p>}
+            {u.access?.kaiNext && <p className="eq-cargo">Proyectos: {projectRoleOf(u.access.kaiNextCapabilities).label}</p>}
           </div>
         </div>
         <div style={{ minWidth: 0 }}>
@@ -2284,6 +2285,7 @@ function KaiNextUserCapabilitiesPanel({ tenant, user: u, onSaved }) {
   const allCapIds = KAI_NEXT_SECTIONS.flatMap((s) => s.capabilities.map((c) => c.id));
   const [sections, setSections] = useState(new Set(u.access?.kaiNextSections?.length ? u.access.kaiNextSections : allSectionIds));
   const [caps, setCaps] = useState(new Set(u.access?.kaiNextCapabilities?.length ? u.access.kaiNextCapabilities : allCapIds));
+  const [roleId, setRoleId] = useState(projectRoleOf(u.access?.kaiNextCapabilities).id);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -2302,6 +2304,9 @@ function KaiNextUserCapabilitiesPanel({ tenant, user: u, onSaved }) {
   const save = async () => {
     setSaving(true);
     setErr(null);
+    const roleCaps = PROJECT_ROLES.find((r) => r.id === roleId).caps;
+    const otherCaps = [...caps].filter((c) => !PROJECT_ROLE_CAPS.includes(c) && c !== NO_CAPABILITIES);
+    const finalCaps = [...otherCaps, ...roleCaps];
     try {
       const res = await fetch(`/api/kai/${tenant}/tenant-users/${u.id}`, {
         method: 'PATCH',
@@ -2309,7 +2314,7 @@ function KaiNextUserCapabilitiesPanel({ tenant, user: u, onSaved }) {
         body: JSON.stringify({
           access: {
             kai: u.access?.kai, aria: u.access?.aria, kaiNext: u.access?.kaiNext,
-            kaiNextSections: [...sections], kaiNextCapabilities: [...caps],
+            kaiNextSections: [...sections], kaiNextCapabilities: finalCaps.length ? finalCaps : [NO_CAPABILITIES],
           },
         }),
       });
@@ -2338,7 +2343,16 @@ function KaiNextUserCapabilitiesPanel({ tenant, user: u, onSaved }) {
             </label>
             {s.capabilities.length > 0 && (
               <div style={{ marginLeft: 26, marginTop: 4 }}>
-                {s.capabilities.map((c) => (
+                {s.id === 'proyectos' && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', opacity: sectionOn ? 1 : 0.4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>Rol</span>
+                    <select value={roleId} disabled={!sectionOn} onChange={(e) => setRoleId(e.target.value)} style={{ fontSize: 12 }}>
+                      {PROJECT_ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+                    </select>
+                    <span style={{ fontSize: 11.5, color: '#999' }}>{PROJECT_ROLES.find((r) => r.id === roleId).description}</span>
+                  </label>
+                )}
+                {s.capabilities.filter((c) => !PROJECT_ROLE_CAPS.includes(c.id)).map((c) => (
                   <label
                     key={c.id}
                     style={{

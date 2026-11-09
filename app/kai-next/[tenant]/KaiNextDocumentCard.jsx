@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import KaiNextShareDocumentModal from './KaiNextShareDocumentModal';
 
 const FORMAT_META = {
   pdf: { label: 'PDF', className: 'knx-doc-card--pdf' },
@@ -26,8 +27,9 @@ function DownloadIcon() {
 // Mismo patrón que AriaDocumentCard.jsx (tool-call → spec guardado en el mensaje → el archivo de
 // verdad se genera recién al clickear "Descargar", ver /api/kai-next/[tenant]/generate-document)
 // pero con clases .knx-* en vez de estilos inline, consistente con el resto de Kai Next.
-export default function KaiNextDocumentCard({ doc, tenant }) {
+export default function KaiNextDocumentCard({ doc, tenant, conversationId }) {
   const [loading, setLoading] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [error, setError] = useState(null);
   const meta = FORMAT_META[doc.format] ?? FORMAT_META.pdf;
 
@@ -71,9 +73,13 @@ export default function KaiNextDocumentCard({ doc, tenant }) {
         {doc.description && <p className="knx-doc-card-desc">{doc.description}</p>}
         {error && <p className="knx-doc-card-error">{error}</p>}
       </div>
+      {conversationId && !doc.sharedId && (
+        <button type="button" className="knx-doc-card-btn knx-doc-card-btn--secondary" onClick={() => setSharing(true)}>Compartir</button>
+      )}
       <button type="button" className="knx-doc-card-btn" onClick={download} disabled={loading}>
         <DownloadIcon />{loading ? 'Generando…' : 'Descargar'}
       </button>
+      {sharing && <KaiNextShareDocumentModal tenant={tenant} conversationId={conversationId} doc={doc} onClose={() => setSharing(false)} />}
     </div>
   );
 }

@@ -49,11 +49,12 @@ export default function KaiNextSidebar({
   // a que cargue solo para elegir uno o crear uno nuevo. Mismo criterio que `sections` arriba:
   // se consulta acá, no por prop, así cualquier página que use este sidebar lo tiene gratis.
   const [projects, setProjects] = useState(null);
+  const [canCreateProject, setCanCreateProject] = useState(false);
   useEffect(() => {
     if (!showSection('proyectos')) return;
     fetch(`/api/kai-next/${tenant}/projects`)
       .then((r) => r.json())
-      .then((d) => setProjects(d.projects ?? []))
+      .then((d) => { setProjects(d.projects ?? []); setCanCreateProject(!!d.level?.isSupervisorLevel); })
       .catch(() => null);
   }, [tenant, sections]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -125,7 +126,7 @@ export default function KaiNextSidebar({
             ))}
           </div>
         )}
-        {showSection('proyectos') && (
+        {showSection('proyectos') && canCreateProject && (
           <a className="knx-sidebar-subitem knx-sidebar-subitem--add" href={`${basePath}/${tenant}/proyectos?new=1`}>
             + Nuevo proyecto
           </a>
