@@ -5147,6 +5147,20 @@
   justify-content: center;
 }
 
+.knx-board-card-collabs {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+.knx-board-card-collabs .knx-board-card-avatar {
+  box-shadow: 0 0 0 1.5px var(--knx-surface, #fff);
+}
+
+.knx-board-card-collabs .knx-board-card-avatar + .knx-board-card-avatar {
+  margin-left: -5px;
+}
+
 .knx-board-card-avatar--empty {
   background: none;
   border: 1.5px dashed var(--knx-border);
@@ -9924,6 +9938,26 @@
 
 .knx-project-row-team {
   display: flex;
+}
+
+.knx-project-row-team--edit {
+  width: fit-content;
+  min-height: 34px;
+  align-items: center;
+  padding: 3px 6px;
+  border: 1px dashed transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--knx-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.knx-project-row-team--edit:hover,
+.knx-project-row-team--edit:focus-visible {
+  border-color: var(--knx-border);
+  color: var(--knx-deep);
 }
 
 .knx-project-row-avatar {

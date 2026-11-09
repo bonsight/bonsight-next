@@ -3,10 +3,11 @@ import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
 import { getNotionToken, listTareasDelProyecto } from '@/lib/kaiNext/projectsNotion';
 import {
-  STATUS_COLUMNS, loadTalentoMap, moveTask, updateTaskDatesAndHours, updateTaskResponsable, addExistingTask,
+  STATUS_COLUMNS, loadTalentoMap, moveTask, updateTaskDatesAndHours, updateTaskResponsable, updateTaskColaboradores, addExistingTask,
   addExistingTasks, updateTaskDetails, updateTaskActualHours, deleteTask, createTask, reorderTask,
 } from '@/lib/aria/board';
 import { getNotionPageRaw, pageToFields } from '@/lib/aria/notion';
+import { listEquipoOptions, resolveResponsableId, resolveColaboradorIds } from '@/lib/kaiNext/devResponsables';
 
 // Tablero agregado de TODO el proyecto (todas las iniciativas) — a diferencia de EpicaTareas
 // (lista plana por épica), esto alimenta el tab "Tablero" con drag-and-drop entre columnas de
@@ -33,7 +34,8 @@ export async function GET(req, { params }) {
       listTareasDelProyecto(token, meta.notionProyectoId),
       loadTalentoMap(token),
     ]);
-    return Response.json({ tasks, talento: [...talentoMap.values()], columns: STATUS_COLUMNS });
+    const equipo = await listEquipoOptions(tenant, talentoMap.values());
+    return Response.json({ tasks, talento: [...talentoMap.values()], equipo, columns: STATUS_COLUMNS });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });
   }
@@ -90,7 +92,9 @@ export async function PATCH(req, { params }) {
     } else if (action === 'update_schedule') {
       await updateTaskDatesAndHours(token, pageId, { startDate: body.startDate, endDate: body.endDate, estimatedHours: body.estimatedHours });
     } else if (action === 'update_responsable') {
-      await updateTaskResponsable(token, pageId, body.responsableId || null);
+      await updateTaskResponsable(token, pageId, await resolveResponsableId(tenant, token, body.responsableId));
+    } else if (action === 'update_colaboradores') {
+      await updateTaskColaboradores(token, pageId, await resolveColaboradorIds(tenant, token, body.colaboradorIds));
     } else if (action === 'assign_sprint') {
       if (!body.sprintId) return Response.json({ error: 'sprintId es requerido.' }, { status: 400 });
       await addExistingTask(token, body.sprintId, pageId);

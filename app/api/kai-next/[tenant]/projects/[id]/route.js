@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProject, getProjectMeta, updateProjectDetails, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
+import { getProject, getProjectMeta, updateProjectDetails, setProjectSupervisors, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
 import { getNotionToken, getProyecto, getRoadmap } from '@/lib/kaiNext/projectsNotion';
 
 // Quién puede ver este proyecto puntual — Director todos, Supervisor si está en supervisorIds,
@@ -92,7 +92,9 @@ export async function PATCH(req, { params }) {
   }
 
   try {
-    const meta = await updateProjectDetails(tenant, id, body);
+    const meta = Array.isArray(body.supervisorIds)
+      ? await setProjectSupervisors(tenant, id, body.supervisorIds.filter((x) => typeof x === 'string'))
+      : await updateProjectDetails(tenant, id, body);
     return Response.json({ meta });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import KaiNextSidebar from './KaiNextSidebar';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
+import { KaiNextColaboradoresPicker, KaiNextCollabAvatars, colaboradorOptions } from './KaiNextColaboradores';
 import { useSidePanelClose } from '@/lib/kaiNext/useSidePanelClose';
 import { sortByOrder, dropsBefore, computeDropOrder } from '@/lib/kaiNext/dragOrder';
 
@@ -96,6 +97,7 @@ function TaskCard({ task, columns, busy, onOpen, onStatusChange, onRemove, onDra
         <span className="knx-board-card-resp">
           {task.responsableName ? <span className="knx-board-card-avatar">{initials(task.responsableName)}</span> : null}
           {task.responsableName ?? 'Sin asignar'}
+          <KaiNextCollabAvatars colaboradores={task.colaboradores} />
         </span>
         {task.estimatedHours != null && <span className="knx-board-card-hours">{task.estimatedHours}h</span>}
       </div>
@@ -124,6 +126,10 @@ function TaskDetailPanel({ task, data, busy, onClose, onAction, onRemove }) {
   const [endDate, setEndDate] = useState(task.dueDate ?? '');
   const [estimatedHours, setEstimatedHours] = useState(task.estimatedHours ?? '');
   const [actualHours, setActualHours] = useState(task.actualHours ?? '');
+  // Una tarea ya asignada a alguien fuera del equipo conserva a esa persona como opción.
+  const responsableOptions = task.responsableId && !(data.equipo ?? []).some((p) => p.id === task.responsableId)
+    ? [{ id: task.responsableId, name: task.responsableName ?? 'Responsable actual' }, ...(data.equipo ?? [])]
+    : (data.equipo ?? []);
 
   const saveTitle = () => { if (title.trim() && title !== task.title) onAction('update_task_details', { pageId: task.id, title: title.trim() }); };
   const saveDescription = () => { if (description !== (task.description ?? '')) onAction('update_task_details', { pageId: task.id, description }); };
@@ -159,7 +165,7 @@ function TaskDetailPanel({ task, data, busy, onClose, onAction, onRemove }) {
               onChange={(e) => onAction('update_task_responsable', { pageId: task.id, responsableId: e.target.value || null })}
             >
               <option value="">Sin asignar</option>
-              {data.talento.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              {responsableOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
           <div className="knx-board-field">
@@ -173,6 +179,12 @@ function TaskDetailPanel({ task, data, busy, onClose, onAction, onRemove }) {
             </select>
           </div>
         </div>
+        <KaiNextColaboradoresPicker
+          options={colaboradorOptions(data.equipo, task.responsableId, task.colaboradores)}
+          value={task.colaboradorIds ?? []}
+          disabled={busy}
+          onChange={(colaboradorIds) => onAction('update_task_colaboradores', { pageId: task.id, colaboradorIds })}
+        />
         <div className="knx-board-field-row">
           <div className="knx-board-field">
             <label>Inicio</label>
@@ -210,6 +222,7 @@ function NewTaskForm({ data, busy, sprint, defaultProyectoId, onCreate, onClose 
   // para adivinar en ese caso).
   const [proyectoId, setProyectoId] = useState(defaultProyectoId || '');
   const [responsableId, setResponsableId] = useState('');
+  const [colaboradorIds, setColaboradorIds] = useState([]);
   const [priority, setPriority] = useState('');
   const [taskType, setTaskType] = useState('');
   const [severity, setSeverity] = useState('');
@@ -231,6 +244,7 @@ function NewTaskForm({ data, busy, sprint, defaultProyectoId, onCreate, onClose 
     if (missingRequired) { setAttemptedSubmit(true); return; }
     onCreate({
       title, status, proyectoId: proyectoId || undefined, responsableId: responsableId || undefined,
+      colaboradorIds: colaboradorIds.filter((id) => id !== responsableId),
       priority: priority || undefined, taskType: taskType || undefined, severity: severity || undefined,
       startDate, endDate, estimatedHours,
       description: description || undefined,
@@ -288,10 +302,15 @@ function NewTaskForm({ data, busy, sprint, defaultProyectoId, onCreate, onClose 
           <label>Responsable</label>
           <select value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
             <option value="">Sin definir</option>
-            {data.talento.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {(data.equipo ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </div>
       </div>
+      <KaiNextColaboradoresPicker
+        options={colaboradorOptions(data.equipo, responsableId)}
+        value={colaboradorIds.filter((id) => id !== responsableId)}
+        onChange={setColaboradorIds}
+      />
       <div className="knx-board-field-row">
         <div className="knx-board-field">
           <label>Inicio — obligatorio</label>

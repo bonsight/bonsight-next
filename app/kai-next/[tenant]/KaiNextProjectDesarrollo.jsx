@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
+import { KaiNextColaboradoresPicker, KaiNextCollabAvatars, colaboradorOptions, sameColaboradores } from './KaiNextColaboradores';
 import { useSidePanelClose } from '@/lib/kaiNext/useSidePanelClose';
 import { sortByOrder, dropsBefore, computeDropOrder } from '@/lib/kaiNext/dragOrder';
 
@@ -128,6 +129,7 @@ function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragS
             {task.responsableName ? initials(task.responsableName) : ''}
           </span>
           {task.responsableName ?? 'Sin asignar'}
+          <KaiNextCollabAvatars colaboradores={task.colaboradores} />
         </span>
         {task.estimatedHours != null && <span className="knx-board-card-hours">{task.estimatedHours}h</span>}
       </div>
@@ -170,7 +172,7 @@ function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragS
 
 // Panel de detalle/edición de una tarea — mismos campos/acciones que TaskDetailPanel del
 // tablero real, pegando a /dev/board en vez de /board.
-function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose, onAction, onRemove, allTasks, onCreateSubtask, onToggleSubtask, onOpenSubtask }) {
+function DevTaskDetailPanel({ tenant, projectId, task, equipo, columns, onClose, onAction, onRemove, allTasks, onCreateSubtask, onToggleSubtask, onOpenSubtask }) {
   const [closing, handleClose] = useSidePanelClose(onClose);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? '');
@@ -178,6 +180,18 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
   const [priority, setPriority] = useState(task.priority ?? '');
   const [severity, setSeverity] = useState(task.severity ?? '');
   const [responsableId, setResponsableId] = useState(task.responsableId ?? '');
+  // Asignar a alguien nuevo crea su registro en Talento y cambia el ID: se sincroniza al recargar.
+  useEffect(() => { setResponsableId(task.responsableId ?? ''); }, [task.responsableId]);
+  const [colaboradorIds, setColaboradorIds] = useState(task.colaboradorIds ?? []);
+  const colaboradoresKey = (task.colaboradorIds ?? []).join();
+  useEffect(() => { setColaboradorIds(task.colaboradorIds ?? []); }, [colaboradoresKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Quien pasa a ser responsable deja de contar como colaborador.
+  const colaboradoresFinal = colaboradorIds.filter((id) => id !== responsableId);
+  // Una tarea ya asignada a alguien fuera del equipo conserva a esa persona como opción, para
+  // que guardar otro campo no la deje sin responsable.
+  const responsableOptions = task.responsableId && !(equipo ?? []).some((p) => p.id === task.responsableId)
+    ? [{ id: task.responsableId, name: task.responsableName ?? 'Responsable actual' }, ...(equipo ?? [])]
+    : (equipo ?? []);
   const [startDate, setStartDate] = useState(task.startDate ?? '');
   const [endDate, setEndDate] = useState(task.dueDate ?? '');
   const [estimatedHours, setEstimatedHours] = useState(task.estimatedHours ?? '');
@@ -192,21 +206,48 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
   // validaciones (ver requestStatusChange/ScheduleModal/HoursModal en el padre).
   const dirty = title !== task.title || description !== (task.description ?? '') || taskType !== (task.taskType ?? '')
     || priority !== (task.priority ?? '') || severity !== (task.severity ?? '') || responsableId !== (task.responsableId ?? '')
+    || !sameColaboradores(colaboradoresFinal, task.colaboradorIds)
     || startDate !== (task.startDate ?? '') || endDate !== (task.dueDate ?? '')
     || String(estimatedHours) !== String(task.estimatedHours ?? '') || String(actualHours) !== String(task.actualHours ?? '')
     || JSON.stringify(entregables) !== JSON.stringify(task.entregables ?? []);
 
+  // El tablero tarda un momento en recargar después de guardar y mientras tanto `dirty` sigue en
+  // true: la foto de lo guardado evita avisar de cambios pendientes que ya no lo son.
+  const draftSignature = JSON.stringify([
+    title, description, taskType, priority, severity, responsableId, startDate, endDate,
+    String(estimatedHours), String(actualHours), entregables, colaboradoresFinal,
+  ]);
+  const [savedSignature, setSavedSignature] = useState(null);
+  const hasPendingChanges = dirty && !saving && draftSignature !== savedSignature;
+  const [pendingExit, setPendingExit] = useState(null);
+  const requestExit = (exit) => {
+    if (hasPendingChanges) setPendingExit(() => exit);
+    else exit();
+  };
+
+  useEffect(() => {
+    if (!hasPendingChanges) return undefined;
+    const warn = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasPendingChanges]);
+
   const saveAll = async () => {
     setSaving(true);
     try {
-      await onAction('update_task_details', {
+      const results = [];
+      results.push(await onAction('update_task_details', {
         title: title.trim() || task.title, description, taskType, priority,
         severity: SEVERITY_APPLIES_TO.has(taskType) ? severity : '',
         entregables: entregables.filter((e) => e.label?.trim() || e.url?.trim()),
-      });
-      await onAction('update_schedule', { startDate, endDate, estimatedHours: estimatedHours === '' ? null : Number(estimatedHours) });
-      await onAction('update_responsable', { responsableId: responsableId || null });
-      await onAction('update_actual_hours', { actualHours: actualHours === '' ? null : Number(actualHours) });
+      }));
+      results.push(await onAction('update_schedule', { startDate, endDate, estimatedHours: estimatedHours === '' ? null : Number(estimatedHours) }));
+      results.push(await onAction('update_responsable', { responsableId: responsableId || null }));
+      if (!sameColaboradores(colaboradoresFinal, task.colaboradorIds)) {
+        results.push(await onAction('update_colaboradores', { colaboradorIds: colaboradoresFinal }));
+      }
+      results.push(await onAction('update_actual_hours', { actualHours: actualHours === '' ? null : Number(actualHours) }));
+      if (results.every(Boolean)) setSavedSignature(draftSignature);
     } finally {
       setSaving(false);
     }
@@ -243,14 +284,39 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
   // dos renders separados (cerrar, después volver a abrir con la otra tarea) y se vería un
   // parpadeo — por eso se excluye explícitamente cualquier click dentro de una tarjeta.
   const panelRef = useRef(null);
+  const pressStartedInside = useRef(false);
+  const skipExitGuard = useRef(false);
   useEffect(() => {
     const onDocMouseDown = (e) => {
-      if (e.target.closest('.knx-board-card')) return;
+      pressStartedInside.current = !!panelRef.current?.contains(e.target);
+      if (hasPendingChanges || e.target.closest('.knx-board-card')) return;
       if (panelRef.current && !panelRef.current.contains(e.target)) handleClose();
     };
+    // Con cambios pendientes se frena el clic antes de que llegue a su destino (otra tarjeta, las
+    // pestañas, el menú) y se repite tal cual si la persona decide descartar. Una selección de
+    // texto que empieza en el panel y termina afuera también dispara un clic: esa no cuenta.
+    const onDocClickCapture = (e) => {
+      const startedInside = pressStartedInside.current;
+      pressStartedInside.current = false;
+      if (!hasPendingChanges || skipExitGuard.current || startedInside) return;
+      if (panelRef.current?.contains(e.target) || e.target.closest('.knx-confirm-backdrop, .knx-ficha-share-backdrop')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const target = e.target;
+      setPendingExit(() => () => {
+        skipExitGuard.current = true;
+        target.click();
+        skipExitGuard.current = false;
+        if (!target.closest('.knx-board-card')) handleClose();
+      });
+    };
     document.addEventListener('mousedown', onDocMouseDown);
-    return () => document.removeEventListener('mousedown', onDocMouseDown);
-  }, [handleClose]);
+    document.addEventListener('click', onDocClickCapture, true);
+    return () => {
+      document.removeEventListener('mousedown', onDocMouseDown);
+      document.removeEventListener('click', onDocClickCapture, true);
+    };
+  }, [handleClose, hasPendingChanges]);
 
   const addSubtask = async () => {
     if (!newSubtask.trim() || savingSubtask) return;
@@ -265,6 +331,14 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
 
   return (
     <div className={`knx-side-panel${closing ? ' knx-side-panel--closing' : ''}`} ref={panelRef}>
+      <KaiNextConfirmDialog
+        open={!!pendingExit}
+        title="Cambios sin guardar"
+        message="Tienes cambios pendientes en esta tarea. Si sales ahora, se perderán."
+        confirmLabel="Descartar cambios"
+        onCancel={() => setPendingExit(null)}
+        onConfirm={() => { const exit = pendingExit; setPendingExit(null); exit(); }}
+      />
       <div className="knx-side-panel-header">
         <span className="knx-side-panel-title">Tarea</span>
         {task.url && (
@@ -272,12 +346,12 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
             <NotionLinkIcon /> Ver en Notion
           </a>
         )}
-        <button type="button" className="knx-side-panel-close" onClick={handleClose} aria-label="Cerrar">×</button>
+        <button type="button" className="knx-side-panel-close" onClick={() => requestExit(() => handleClose())} aria-label="Cerrar">×</button>
       </div>
       <div className="knx-side-panel-thread knx-board-detail-body">
         {parentTask && (
           <p className="knx-board-detail-meta">
-            Subtarea de: <a onClick={() => onOpenSubtask(parentTask.id)}>{parentTask.title}</a>
+            Subtarea de: <a onClick={() => requestExit(() => onOpenSubtask(parentTask.id))}>{parentTask.title}</a>
           </p>
         )}
         <div className="knx-board-field">
@@ -318,7 +392,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
             <label>Responsable</label>
             <select value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
               <option value="">Sin asignar</option>
-              {talento.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              {responsableOptions.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
           <div className="knx-board-field">
@@ -328,6 +402,11 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
             </select>
           </div>
         </div>
+        <KaiNextColaboradoresPicker
+          options={colaboradorOptions(equipo, responsableId, task.colaboradores)}
+          value={colaboradoresFinal}
+          onChange={setColaboradorIds}
+        />
         <div className="knx-board-field-row">
           <div className="knx-board-field">
             <label>Inicio</label>
@@ -380,7 +459,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, talento, columns, onClose
                   aria-label={c.status === 'Done' ? 'Marcar como pendiente' : 'Marcar como hecha'}
                   onClick={() => onToggleSubtask(c.id, c.status !== 'Done')}
                 />
-                <span className={`knx-board-card-child-title${c.status === 'Done' ? ' knx-board-card-child-title--done' : ''}`} onClick={() => onOpenSubtask(c.id)}>
+                <span className={`knx-board-card-child-title${c.status === 'Done' ? ' knx-board-card-child-title--done' : ''}`} onClick={() => requestExit(() => onOpenSubtask(c.id))}>
                   {c.title}
                 </span>
               </div>
@@ -1505,7 +1584,8 @@ function FaseStepper({ iniciativas }) {
 // el Tablero — acá no hay una épica implícita, así que se elige (agrupada por Iniciativa); el
 // resto (proyecto/iniciativa) ya está dado por estar parado en este proyecto, no hace falta
 // repetir ese picker como en el "Nueva tarea" de Sprints (que sí es multi-proyecto).
-function NewTareaModal({ tenant, projectId, iniciativas, talento, activeSprint, onClose, onCreated }) {
+function NewTareaModal({ tenant, projectId, iniciativas, equipo, activeSprint, onClose, onCreated }) {
+  const [colaboradorIds, setColaboradorIds] = useState([]);
   const epicasOptions = iniciativas.map((ini) => ({ iniciativaName: ini.name, epicas: ini.epicas }));
   const firstEpicaId = epicasOptions.flatMap((g) => g.epicas)[0]?.id || '';
 
@@ -1538,6 +1618,7 @@ function NewTareaModal({ tenant, projectId, iniciativas, talento, activeSprint, 
           title, sprintId: addToSprint && activeSprint ? activeSprint.id : null, startDate, endDate, estimatedHours,
           taskType: taskType || undefined, priority: priority || undefined, severity: severity || undefined,
           responsableId: responsableId || undefined, description,
+          colaboradorIds: colaboradorIds.filter((id) => id !== responsableId),
         }),
       });
       const data = await res.json();
@@ -1587,8 +1668,13 @@ function NewTareaModal({ tenant, projectId, iniciativas, talento, activeSprint, 
         )}
         <select className="knx-canvas-meta-select" value={responsableId} onChange={(e) => setResponsableId(e.target.value)} style={{ marginTop: 8 }}>
           <option value="">Responsable: sin asignar</option>
-          {(talento ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          {(equipo ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
+        <KaiNextColaboradoresPicker
+          options={colaboradorOptions(equipo, responsableId)}
+          value={colaboradorIds.filter((id) => id !== responsableId)}
+          onChange={setColaboradorIds}
+        />
         {activeSprint ? (
           <label className="knx-canvas-meta-checkbox" style={{ marginTop: 8, marginBottom: 10 }}>
             <input type="checkbox" checked={addToSprint} onChange={(e) => setAddToSprint(e.target.checked)} />
@@ -1799,7 +1885,7 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
   }, [board]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!board) return <p className="knx-knowledge-empty">Cargando…</p>;
-  const { tasks, columns, talento } = board;
+  const { tasks, columns, equipo } = board;
   const selectedTask = selectedTaskId ? tasks.find((t) => t.id === selectedTaskId) : null;
   // Anidados entre sí: elegir un Responsable acota el select de Épica a solo las épicas donde
   // ESE responsable tiene tareas, y viceversa — no son dos filtros independientes.
@@ -1934,8 +2020,10 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
     try {
       await patch({ action, pageId: selectedTask.id, ...extra });
       onReload();
+      return true;
     } catch (e) {
       setErr(e.message);
+      return false;
     }
   };
 
@@ -2061,7 +2149,7 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
           tenant={tenant}
           projectId={projectId}
           iniciativas={iniciativas}
-          talento={talento}
+          equipo={equipo}
           activeSprint={activeSprint}
           onClose={() => setNewTareaOpen(false)}
           onCreated={() => { setNewTareaOpen(false); onReload(); }}
@@ -2073,7 +2161,7 @@ function ProjectBoard({ tenant, projectId, board, onReload, iniciativas, activeS
           tenant={tenant}
           projectId={projectId}
           task={selectedTask}
-          talento={talento}
+          equipo={equipo}
           columns={columns}
           onClose={() => setSelectedTaskId(null)}
           onAction={detailAction}
@@ -2208,7 +2296,7 @@ function BringTasksModal({ tasks, sprintOptions, busy, onConfirm, onClose }) {
 // tarjeta en el carril de OTRA iniciativa (la Iniciativa de una tarea no cambia acá, solo su
 // Status) — si se permitiera, la tarjeta "volvería" a su carril real al recargar, que confunde
 // más de lo que ayuda.
-function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativas, activeSprint, sprints, onReload, onSprintReload, onOptimisticMove, onOptimisticReorder }) {
+function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, equipo, iniciativas, activeSprint, sprints, onReload, onSprintReload, onOptimisticMove, onOptimisticReorder }) {
   const [dragInfo, setDragInfo] = useState(null); // { taskId, laneId }
   const [dragOverCell, setDragOverCell] = useState(null);
   const [dragOverTaskId, setDragOverTaskId] = useState(null);
@@ -2422,8 +2510,10 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
     try {
       await patch({ action, pageId: selectedTask.id, ...extra });
       onReload();
+      return true;
     } catch (e) {
       setErr(e.message);
+      return false;
     }
   };
 
@@ -2671,7 +2761,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
           tenant={tenant}
           projectId={projectId}
           iniciativas={iniciativas}
-          talento={talento}
+          equipo={equipo}
           activeSprint={activeSprint}
           onClose={() => setNewTareaOpen(false)}
           onCreated={() => { setNewTareaOpen(false); onReload(); }}
@@ -2683,7 +2773,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, iniciativ
           tenant={tenant}
           projectId={projectId}
           task={selectedTask}
-          talento={talento}
+          equipo={equipo}
           columns={columns}
           onClose={() => setSelectedTaskId(null)}
           onAction={detailAction}
@@ -2965,6 +3055,7 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
             tasks={board.tasks}
             columns={board.columns}
             talento={board.talento}
+            equipo={board.equipo}
             iniciativas={iniciativas}
             activeSprint={activeSprint}
             sprints={projectSprints}

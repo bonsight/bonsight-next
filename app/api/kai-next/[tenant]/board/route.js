@@ -3,11 +3,12 @@ import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getIntelligenceSources } from '@/lib/kai/intelligenceSources';
 import {
   getBoardData, searchTareas, moveTask, createTask, addExistingTask, addExistingTasks, removeTask,
-  updateTaskResponsable, updateTaskSchedule, updateTaskDetails, updateTaskActualHours, reorderTask,
+  updateTaskResponsable, updateTaskColaboradores, updateTaskSchedule, updateTaskDetails, updateTaskActualHours, reorderTask,
   createSprint, closeSprintPlanning, closeSprint, updateSprintDates, computeSprintMetrics,
 } from '@/lib/aria/board';
 import { saveSprintMetrics, getSprintMetrics } from '@/lib/aria/sprintMetrics';
 import { markDoneAt, getDoneAtMap } from '@/lib/aria/doneAt';
+import { listEquipoOptions, resolveResponsableId, resolveColaboradorIds } from '@/lib/kaiNext/devResponsables';
 
 // Mismo backend que app/api/aria/[tenant]/board/route.js (lib/aria/board.js, Notion — cero
 // storage nuevo) — la única diferencia real es el gate de auth: acá usa el propio
@@ -56,6 +57,7 @@ export async function GET(req, { params }) {
     if (data.sprint?.status === 'Cerrado') {
       data.metrics = await getSprintMetrics(tenant, data.sprint.id);
     }
+    data.equipo = await listEquipoOptions(tenant, data.talento ?? []);
     return Response.json(await attachDoneAt(tenant, data));
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo cargar el tablero.' }, { status: 400 });
@@ -103,7 +105,11 @@ export async function PATCH(req, { params }) {
       await reorderTask(token, p.pageId, p.order);
     } else if (action === 'create_task') {
       if (!sprintId) throw new Error('sprintId es requerido.');
-      await createTask(token, sprintId, p);
+      await createTask(token, sprintId, {
+        ...p,
+        responsableId: await resolveResponsableId(tenant, token, p.responsableId),
+        colaboradorIds: await resolveColaboradorIds(tenant, token, p.colaboradorIds),
+      });
     } else if (action === 'add_existing_task') {
       if (!p.pageId || !sprintId) throw new Error('pageId y sprintId son requeridos.');
       await addExistingTask(token, sprintId, p.pageId);
@@ -121,7 +127,10 @@ export async function PATCH(req, { params }) {
       await removeTask(token, p.pageId);
     } else if (action === 'update_task_responsable') {
       if (!p.pageId) throw new Error('pageId es requerido.');
-      await updateTaskResponsable(token, p.pageId, p.responsableId || null);
+      await updateTaskResponsable(token, p.pageId, await resolveResponsableId(tenant, token, p.responsableId));
+    } else if (action === 'update_task_colaboradores') {
+      if (!p.pageId) throw new Error('pageId es requerido.');
+      await updateTaskColaboradores(token, p.pageId, await resolveColaboradorIds(tenant, token, p.colaboradorIds));
     } else if (action === 'update_task_schedule') {
       if (!p.pageId || !sprintId) throw new Error('pageId y sprintId son requeridos.');
       await updateTaskSchedule(token, p.pageId, sprintId, { startDate: p.startDate || null, endDate: p.endDate || null, estimatedHours: p.estimatedHours });
@@ -142,6 +151,7 @@ export async function PATCH(req, { params }) {
     if (data.sprint?.status === 'Cerrado') {
       data.metrics = await getSprintMetrics(tenant, data.sprint.id);
     }
+    data.equipo = await listEquipoOptions(tenant, data.talento ?? []);
     return Response.json({ ...(await attachDoneAt(tenant, data)), ...(moveResult ? { moveResult } : {}) });
   } catch (err) {
     return Response.json({ error: err.message || 'No se pudo actualizar el tablero.' }, { status: 400 });

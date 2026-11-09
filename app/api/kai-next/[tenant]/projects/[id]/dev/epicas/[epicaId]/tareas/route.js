@@ -3,6 +3,7 @@ import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
 import { getNotionToken, listTareas, getDevEpica } from '@/lib/kaiNext/projectsNotion';
 import { createTask } from '@/lib/aria/board';
+import { resolveResponsableId, resolveColaboradorIds } from '@/lib/kaiNext/devResponsables';
 
 export async function GET(req, { params }) {
   const { tenant, epicaId } = await params;
@@ -53,7 +54,7 @@ export async function POST(req, { params }) {
     return Response.json({ error: 'Body inválido.' }, { status: 400 });
   }
   const {
-    sprintId, title, fase, startDate, endDate, estimatedHours, responsableId,
+    sprintId, title, fase, startDate, endDate, estimatedHours, responsableId, colaboradorIds,
     taskType, priority, severity, description,
   } = body;
 
@@ -66,7 +67,9 @@ export async function POST(req, { params }) {
     const epica = await getDevEpica(token, epicaId);
     if (!epica) return Response.json({ error: 'Épica no encontrada.' }, { status: 404 });
     const taskId = await createTask(token, sprintId, {
-      title, iniciativaId: epica.iniciativaId, epicaId, fase, startDate, endDate, estimatedHours, responsableId,
+      title, iniciativaId: epica.iniciativaId, epicaId, fase, startDate, endDate, estimatedHours,
+      responsableId: await resolveResponsableId(tenant, token, responsableId),
+      colaboradorIds: await resolveColaboradorIds(tenant, token, colaboradorIds),
       taskType, priority, severity, description,
       proyectoId: meta?.notionProyectoId,
     });

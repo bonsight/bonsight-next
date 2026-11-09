@@ -2232,11 +2232,87 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
 // ese tipo (avance físico/plan en civil, ensayos en experimental, actividades en seguimiento).
 // 'desarrollo' no tiene `summary` todavía (ver summarizeProjectForList, vive en Notion) — se
 // muestra con el tratamiento simple de antes.
-function ProjectRow({ p, people, onSelect }) {
-  const s = p.summary;
-  const teamIds = s?.teamIds ?? [];
+function EditProjectTeamModal({ tenant, project, people, onClose, onSaved }) {
+  const [supervisorIds, setSupervisorIds] = useState(project.supervisorIds ?? []);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const toggle = (id) => setSupervisorIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/kai-next/${tenant}/projects/${project.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ supervisorIds }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo guardar.');
+      onSaved(data.meta);
+    } catch (e) {
+      setError(e.message || 'No se pudo guardar.');
+      setSaving(false);
+    }
+  };
+
   return (
-    <button type="button" className="knx-project-row" onClick={onSelect}>
+    <div className="knx-ficha-share-backdrop" onClick={onClose}>
+      <div className="knx-ficha-review-modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(460px, 92vw)' }}>
+        <div className="knx-ficha-review-head">
+          <div>
+            <span className="knx-ficha-review-badge">{project.name}</span>
+            <h3 className="knx-ficha-review-title">Equipo del proyecto</h3>
+          </div>
+          <button type="button" className="knx-side-panel-close" aria-label="Cerrar" onClick={onClose}>×</button>
+        </div>
+        <div className="knx-ficha-review-field">
+          <label>Supervisores</label>
+          <div className="knx-canvas-meta-checklist">
+            {!people.length ? (
+              <p className="knx-canvas-meta-empty">No hay personas en el equipo todavía.</p>
+            ) : people.map((p) => (
+              <label key={p.id} className="knx-canvas-meta-checkbox">
+                <input type="checkbox" checked={supervisorIds.includes(p.id)} onChange={() => toggle(p.id)} />
+                <span className="knx-canvas-meta-checkbox-box" />
+                {p.name || p.email}
+              </label>
+            ))}
+          </div>
+        </div>
+        {error && <p className="knx-canvas-error">{error}</p>}
+        <div className="knx-canvas-ficha-draft-actions" style={{ marginTop: 16 }}>
+          <button type="button" className="knx-canvas-mini" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button type="button" className="knx-analisis-sources-save" onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProjectRow({ p, people, onSelect, onEditTeam }) {
+  const s = p.summary;
+  const teamIds = [...new Set([...(p.supervisorIds ?? []), ...(s?.teamIds ?? [])])];
+  const avatars = (
+    <>
+      {teamIds.slice(0, 4).map((id) => (
+        <span key={id} className="knx-project-row-avatar" title={personName(people, id)}>{initials(personName(people, id))}</span>
+      ))}
+      {teamIds.length > 4 && <span className="knx-project-row-avatar">+{teamIds.length - 4}</span>}
+    </>
+  );
+  // Es un div y no un button porque adentro va el botón real de editar equipo.
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className="knx-project-row"
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+        e.preventDefault();
+        onSelect();
+      }}
+    >
       <span className="knx-project-row-name">
         <span className="knx-project-row-title">{p.name}</span>
         <span className="knx-project-row-sub">{p.code ? `${p.code} · ` : ''}{p.type || PROJECT_KIND_LABEL[p.projectKind] || p.projectKind}</span>
@@ -2288,12 +2364,19 @@ function ProjectRow({ p, people, onSelect }) {
         )}
       </span>
 
-      <span className="knx-project-row-team">
-        {teamIds.slice(0, 4).map((id) => (
-          <span key={id} className="knx-project-row-avatar" title={personName(people, id)}>{initials(personName(people, id))}</span>
-        ))}
-        {teamIds.length > 4 && <span className="knx-project-row-avatar">+{teamIds.length - 4}</span>}
-      </span>
+      {onEditTeam ? (
+        <button
+          type="button"
+          className="knx-project-row-team knx-project-row-team--edit"
+          aria-label={`Editar equipo de ${p.name}`}
+          title="Editar equipo"
+          onClick={(e) => { e.stopPropagation(); onEditTeam(); }}
+        >
+          {teamIds.length ? avatars : '+ Equipo'}
+        </button>
+      ) : (
+        <span className="knx-project-row-team">{avatars}</span>
+      )}
 
       {s?.statusTag ? (
         <span className={`knx-project-risk ${RISK_CLASS[s.statusTag]}`}>{RISK_LABEL[s.statusTag]}</span>
@@ -2303,7 +2386,7 @@ function ProjectRow({ p, people, onSelect }) {
         </span>
       )}
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
-    </button>
+    </div>
   );
 }
 
@@ -2318,6 +2401,7 @@ export default function KaiNextProjects({
   const [creating, setCreating] = useState(() => searchParams.get('new') === '1' && !!level?.isSupervisorLevel);
   const [deleteChatTarget, setDeleteChatTarget] = useState(null);
   const [kindFilter, setKindFilter] = useState('all');
+  const [editingTeamFor, setEditingTeamFor] = useState(null);
 
   useEffect(() => {
     fetch(`/api/kai-next/${tenant}`).then((r) => r.json()).then((d) => setChats(d.conversations ?? [])).catch(() => null);
@@ -2438,7 +2522,7 @@ export default function KaiNextProjects({
 
                     <div className="knx-project-list">
                       {visibleActivos.map((p) => (
-                        <ProjectRow key={p.id} p={p} people={people} onSelect={() => setActiveProjectId(p.id)} />
+                        <ProjectRow key={p.id} p={p} people={people} onSelect={() => setActiveProjectId(p.id)} onEditTeam={level?.isDirectorLevel ? () => setEditingTeamFor(p) : undefined} />
                       ))}
                     </div>
 
@@ -2447,7 +2531,7 @@ export default function KaiNextProjects({
                         <summary>Completados · {completados.length}</summary>
                         <div className="knx-project-list" style={{ marginTop: 10 }}>
                           {completados.map((p) => (
-                            <ProjectRow key={p.id} p={p} people={people} onSelect={() => setActiveProjectId(p.id)} />
+                            <ProjectRow key={p.id} p={p} people={people} onSelect={() => setActiveProjectId(p.id)} onEditTeam={level?.isDirectorLevel ? () => setEditingTeamFor(p) : undefined} />
                           ))}
                         </div>
                       </details>
@@ -2459,6 +2543,19 @@ export default function KaiNextProjects({
           )}
         </div>
       </main>
+
+      {editingTeamFor && (
+        <EditProjectTeamModal
+          tenant={tenant}
+          project={editingTeamFor}
+          people={people}
+          onClose={() => setEditingTeamFor(null)}
+          onSaved={(meta) => {
+            setProjects((prev) => prev.map((p) => (p.id === meta.id ? { ...p, ...meta } : p)));
+            setEditingTeamFor(null);
+          }}
+        />
+      )}
 
       {creating && (
         <CreateProjectModal
