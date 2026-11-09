@@ -2319,8 +2319,9 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, equipo, i
   const [bringTasksBusy, setBringTasksBusy] = useState(false);
 
   // El selector deja ver cualquier sprint de este proyecto (incluidos los cerrados), igual que
-  // el tablero real — por defecto sigue al sprint activo hasta que el usuario elige otro.
-  const viewedSprint = sprints.find((s) => s.id === viewedSprintId) ?? activeSprint;
+  // el tablero real — por defecto sigue al sprint activo hasta que el usuario elige otro. Sin
+  // sprint activo muestra el más reciente: `sprints` viene ordenado por número descendente.
+  const viewedSprint = sprints.find((s) => s.id === viewedSprintId) ?? activeSprint ?? sprints[0] ?? null;
 
   // Dentro de un sprint no debería quedar nada en Backlog (ver assignSprint en Tablero/
   // EpicaTareas, que promueve a "Por hacer" apenas entra) — esa columna no tiene sentido acá.
@@ -2591,7 +2592,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, equipo, i
     return (
       <div className="knx-board">
         {err && <p className="knx-canvas-error">{err}</p>}
-        <p className="knx-knowledge-empty">Este proyecto todavía no tiene un sprint activo.</p>
+        <p className="knx-knowledge-empty">Este proyecto todavía no tiene sprints.</p>
         {creating ? (
           <NewProjectSprintForm busy={busy} onCreate={createSprint} onClose={() => setCreating(false)} />
         ) : (
@@ -2604,6 +2605,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, equipo, i
   return (
     <div className="knx-board">
       {err && <p className="knx-canvas-error">{err}</p>}
+      {!activeSprint && <p className="knx-knowledge-empty">Este proyecto no tiene un sprint activo. Puedes revisar los sprints cerrados o crear uno nuevo.</p>}
       <div className="knx-board-sprint-head">
         <div />
         <div className="knx-board-sprint-actions">
@@ -2612,7 +2614,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, equipo, i
               {sprints.map((s) => <option key={s.id} value={s.id}>{s.title} · {sprintStatusLabel(s.status)}</option>)}
             </select>
           )}
-          {sprints.length > 1 && (
+          {sprints.length > 1 && viewedSprint.status !== 'Cerrado' && (
             <button type="button" className="knx-analisis-compare" onClick={() => setBringTasksOpen(true)}>Traer tareas de otro sprint</button>
           )}
           {viewedSprint.status === 'Planificado' && (
@@ -2794,7 +2796,7 @@ function SprintsBoardTab({ tenant, projectId, tasks, columns, talento, equipo, i
       <KaiNextConfirmDialog
         open={closeTarget === 'sprint'}
         title="Cerrar sprint"
-        message={`¿Cerrar ${activeSprint.title}? No se puede deshacer — vas a poder iniciar el siguiente después.`}
+        message={`¿Cerrar ${viewedSprint.title}? No se puede deshacer — vas a poder iniciar el siguiente después.`}
         confirmLabel="Cerrar sprint"
         onConfirm={confirmCloseSprint}
         onCancel={() => setCloseTarget(null)}

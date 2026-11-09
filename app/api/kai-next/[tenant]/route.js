@@ -13,6 +13,7 @@ import {
   deleteConversation,
 } from '@/lib/kaiNext/conversations';
 import { buildSystemPrompt } from '@/lib/kaiNext/prompt';
+import { listTenantUsers } from '@/lib/kai/tenantUsers';
 import { indexAnalysis, deleteAnalysesForConversation } from '@/lib/kaiNext/analyses';
 import { runAgenticLoop } from '@/lib/shared/agents/agenticLoop';
 import { trackUsage } from '@/lib/kai/usage';
@@ -112,11 +113,12 @@ export async function POST(req, { params }) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const [intelligenceSources, dbSources, memory, bic] = await Promise.all([
+        const [intelligenceSources, dbSources, memory, bic, tenantUsers] = await Promise.all([
           getIntelligenceSources(tenant),
           getDbSources(tenant),
           getKaiNextMemory(tenant),
           buildBIC(tenant),
+          listTenantUsers(tenant),
         ]);
         // Memoria siempre activa (Business Profile + aprendizajes de discovery) — mismo
         // buildBIC/formatBICForPrompt que ya usan Kai y Aria, sin pedir el knowledge_digest
@@ -153,6 +155,7 @@ export async function POST(req, { params }) {
           googleAdsStatus: sourceStatus('google_ads'),
           dbSourcesContext: buildDbSourcesContext(dbSources),
           bicText,
+          team: tenantUsers.filter((u) => u.active !== false && u.name?.trim()).map((u) => ({ name: u.name, cargo: u.cargo })),
           memory,
           activeRef,
         });

@@ -93,11 +93,9 @@ export async function PATCH(req, { params }) {
       return Response.json({ error: 'Acción inválida.' }, { status: 400 });
     }
 
-    const data = await getBoardData(token, { proyectoId: meta.notionProyectoId });
-    if (data.sprint?.status === 'Cerrado') {
-      data.metrics = await getSprintMetrics(tenant, data.sprint.id);
-    }
-    return Response.json(data);
+    // El cliente recarga por su cuenta. Releer el tablero acá solo sumaba peticiones a Notion, y
+    // si esa lectura fallaba mostraba un error aunque el cambio ya se hubiera guardado.
+    return Response.json({ ok: true });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });
   }
