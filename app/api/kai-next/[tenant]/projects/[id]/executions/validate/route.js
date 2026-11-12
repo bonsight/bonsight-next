@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { validateExecution, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
+import { validateExecution, resolveProjectAccessLevel, projectSupervisionError } from '@/lib/kaiNext/projects';
 
 export async function POST(req, { params }) {
   const { tenant, id } = await params;
@@ -15,6 +15,8 @@ export async function POST(req, { params }) {
   if (!isSupervisorLevel) {
     return Response.json({ error: 'Solo un Supervisor o Director puede validar.' }, { status: 403 });
   }
+  const notMine = await projectSupervisionError(tenant, id, identity);
+  if (notMine) return Response.json({ error: notMine }, { status: 403 });
 
   const { executionId, note } = await req.json();
   if (!executionId) return Response.json({ error: 'executionId es requerido.' }, { status: 400 });

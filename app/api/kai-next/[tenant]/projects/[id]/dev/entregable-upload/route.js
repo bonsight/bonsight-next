@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { resolveProjectAccessLevel, uploadEntregableToDrive } from '@/lib/kaiNext/projects';
+import { resolveProjectAccessLevel, uploadEntregableToDrive, projectSupervisionError } from '@/lib/kaiNext/projects';
 
 // Sube un archivo nuevo a la carpeta "Entregables" del proyecto (compartida entre tareas y
 // épicas, ver ensureProjectEntregablesFolder en lib/kaiNext/projects.js) y devuelve el link real
@@ -19,6 +19,8 @@ export async function POST(req, { params }) {
   if (!isSupervisorLevel) {
     return Response.json({ error: 'No tienes permiso para subir entregables en este proyecto.' }, { status: 403 });
   }
+  const notMine = await projectSupervisionError(tenant, id, identity);
+  if (notMine) return Response.json({ error: notMine }, { status: 403 });
 
   let body;
   try {

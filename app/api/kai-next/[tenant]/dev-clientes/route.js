@@ -1,9 +1,8 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getNotionToken, listClientes } from '@/lib/kaiNext/projectsNotion';
+import { listProjects } from '@/lib/kaiNext/projects';
 
-// Lista de Clientes real (Notion) para el picker de "Nuevo proyecto de desarrollo" — solo
-// tiene sentido para el tenant bonsight, mismo criterio que el resto de esta rama.
+// Sugerencias de cliente para "Nuevo proyecto de desarrollo": los que ya usan otros proyectos.
 export async function GET(req, { params }) {
   const { tenant } = await params;
   if (!(await isAuthorizedForTenant(tenant))) {
@@ -13,17 +12,7 @@ export async function GET(req, { params }) {
   if (!isSectionAllowed(identity.access, 'proyectos')) {
     return Response.json({ error: 'Proyectos no está habilitado para tu usuario.' }, { status: 403 });
   }
-  if (tenant !== 'bonsight') {
-    return Response.json({ clientes: [] });
-  }
-
-  const token = await getNotionToken(tenant);
-  if (!token) return Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 });
-
-  try {
-    const clientes = await listClientes(token);
-    return Response.json({ clientes });
-  } catch (err) {
-    return Response.json({ error: err.message }, { status: 400 });
-  }
+  const projects = await listProjects(tenant);
+  const clientes = [...new Set(projects.map((p) => p.clienteName?.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+  return Response.json({ clientes });
 }

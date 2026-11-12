@@ -1,46 +1,45 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
-import { getNotionToken, listTareasDelProyecto } from '@/lib/kaiNext/projectsNotion';
+import { getProjectMeta, supervisesProject, isProjectMember } from '@/lib/kaiNext/projects';
 import {
-  STATUS_COLUMNS, loadTalentoMap, moveTask, updateTaskDatesAndHours, updateTaskResponsable, updateTaskColaboradores, addExistingTask,
-  addExistingTasks, updateTaskDetails, updateTaskActualHours, deleteTask, createTask, reorderTask,
-} from '@/lib/aria/board';
-import { getNotionPageRaw, pageToFields } from '@/lib/aria/notion';
+  STATUS_COLUMNS, listTasks, getTask, moveTask, reorderTask, updateTaskDatesAndHours, updateTaskResponsable, updateTaskColaboradores,
+  assignTaskToSprint, assignTasksToSprint, updateTaskDetails, updateTaskActualHours, deleteTask, createTask,
+} from '@/lib/kaiNext/devStore';
+import { isOwnDevTask, canDeleteOwnDevTask } from '@/lib/kaiNext/devOwnership';
 import { listEquipoOptions, resolveResponsableId, resolveColaboradorIds } from '@/lib/kaiNext/devResponsables';
 import { logProjectAction } from '@/lib/kaiNext/audit';
 
-// Lo que un Team member puede hacer en los proyectos donde está asignado: ejecutar el trabajo. Asignar
-// personas, mover tareas entre sprints o borrarlas sigue siendo de Supervisor en adelante.
-const EXECUTION_ACTIONS = new Set(['move_task', 'reorder_task', 'update_schedule', 'update_task_details', 'update_actual_hours', 'create_subtask']);
+// Lo que un Team member puede hacer en los proyectos donde está asignado, siempre sobre SUS tareas
+// (ver isOwnDevTask): ejecutar el trabajo y sumarlas al sprint. Crear subtareas puede en cualquier
+// tarea (crear no es editar). Borrar, solo lo que creó y no empezó. Reasignar personas o mover
+// tareas entre sprints en bloque sigue siendo del Supervisor del proyecto.
+const EXECUTION_ACTIONS = new Set(['move_task', 'reorder_task', 'update_schedule', 'update_task_details', 'update_actual_hours', 'create_subtask', 'assign_sprint', 'remove_task']);
 
-// Tablero agregado de TODO el proyecto (todas las iniciativas) — a diferencia de EpicaTareas
-// (lista plana por épica), esto alimenta el tab "Tablero" con drag-and-drop entre columnas de
-// Status, igual criterio visual que el tablero real de Sprints pero sin tocar ese archivo ni su
-// ruta — ver /Users/itriagor/.claude/plans/serene-spinning-mochi.md.
+async function gate(tenant, id) {
+  if (!(await isAuthorizedForTenant(tenant))) return { error: 'No autorizado.', status: 401 };
+  const identity = await getCurrentKaiNextIdentity(tenant);
+  if (!isSectionAllowed(identity.access, 'proyectos')) return { error: 'Proyectos no está habilitado para tu usuario.', status: 403 };
+  const meta = await getProjectMeta(tenant, id);
+  if (!meta || meta.projectKind !== 'desarrollo') return { error: 'Proyecto no encontrado.', status: 404 };
+  if (!isProjectMember(identity, meta)) return { error: 'No tienes acceso a este proyecto.', status: 403 };
+  return { identity, meta };
+}
+
+// Tablero de TODO el proyecto (todas las iniciativas): alimenta los tabs Tablero y Sprints.
 export async function GET(req, { params }) {
   const { tenant, id } = await params;
-  if (!(await isAuthorizedForTenant(tenant))) {
-    return Response.json({ error: 'No autorizado.' }, { status: 401 });
-  }
-  const identity = await getCurrentKaiNextIdentity(tenant);
-  if (!isSectionAllowed(identity.access, 'proyectos')) {
-    return Response.json({ error: 'Proyectos no está habilitado para tu usuario.' }, { status: 403 });
-  }
-
-  const meta = await getProjectMeta(tenant, id);
-  if (!meta || meta.projectKind !== 'desarrollo') return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
-
-  const token = await getNotionToken(tenant);
-  if (!token) return Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 });
-
+  const g = await gate(tenant, id);
+  if (g.error) return Response.json({ error: g.error }, { status: g.status });
   try {
-    const [tasks, talentoMap] = await Promise.all([
-      listTareasDelProyecto(token, meta.notionProyectoId),
-      loadTalentoMap(token),
-    ]);
-    const equipo = await listEquipoOptions(tenant, talentoMap.values());
-    return Response.json({ tasks, talento: [...talentoMap.values()], equipo, columns: STATUS_COLUMNS });
+    const [tasks, equipo] = await Promise.all([listTasks(tenant, id), listEquipoOptions(tenant)]);
+    return Response.json({
+      tasks,
+      // Antes eran las fichas de Talento (Notion); ahora es el mismo Equipo de Kai.
+      talento: equipo,
+      equipo,
+      columns: STATUS_COLUMNS,
+      me: { personId: g.identity.personId ?? null, supervises: supervisesProject(g.identity, g.meta) },
+    });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });
   }
@@ -48,20 +47,9 @@ export async function GET(req, { params }) {
 
 export async function PATCH(req, { params }) {
   const { tenant, id } = await params;
-  if (!(await isAuthorizedForTenant(tenant))) {
-    return Response.json({ error: 'No autorizado.' }, { status: 401 });
-  }
-  const identity = await getCurrentKaiNextIdentity(tenant);
-  if (!isSectionAllowed(identity.access, 'proyectos')) {
-    return Response.json({ error: 'Proyectos no está habilitado para tu usuario.' }, { status: 403 });
-  }
-  const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
-
-  const meta = await getProjectMeta(tenant, id);
-  if (!meta || meta.projectKind !== 'desarrollo') return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
-
-  const token = await getNotionToken(tenant);
-  if (!token) return Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 });
+  const g = await gate(tenant, id);
+  if (g.error) return Response.json({ error: g.error }, { status: g.status });
+  const { identity, meta } = g;
 
   let body;
   try {
@@ -71,7 +59,8 @@ export async function PATCH(req, { params }) {
   }
   const { action, pageId } = body;
 
-  if (!isSupervisorLevel && !(EXECUTION_ACTIONS.has(action) && meta.supervisorIds?.includes(identity.personId))) {
+  const supervises = supervisesProject(identity, meta);
+  if (!supervises && !EXECUTION_ACTIONS.has(action)) {
     return Response.json({ error: 'No tienes permiso para hacer esto en este proyecto.' }, { status: 403 });
   }
 
@@ -80,7 +69,7 @@ export async function PATCH(req, { params }) {
       return Response.json({ error: 'pageIds y sprintId son requeridos.' }, { status: 400 });
     }
     try {
-      const result = await addExistingTasks(token, body.sprintId, body.pageIds);
+      const result = await assignTasksToSprint(tenant, id, body.sprintId, body.pageIds);
       return Response.json({ ok: true, moveResult: result });
     } catch (err) {
       return Response.json({ error: err.message }, { status: 400 });
@@ -88,57 +77,62 @@ export async function PATCH(req, { params }) {
   }
 
   if (!pageId) return Response.json({ error: 'pageId es requerido.' }, { status: 400 });
+  const task = await getTask(tenant, id, pageId);
+  if (!task) return Response.json({ error: 'Tarea no encontrada.' }, { status: 404 });
+
+  // Fuera de crear subtareas, un Team member solo actúa sobre sus tareas.
+  if (!supervises && action !== 'create_subtask') {
+    if (action === 'remove_task') {
+      if (!canDeleteOwnDevTask(task, identity.personId)) {
+        return Response.json({ error: 'Solo puedes borrar tareas que creaste y que todavía no empiezan.' }, { status: 403 });
+      }
+    } else if (!isOwnDevTask(task, identity.personId)) {
+      return Response.json({ error: 'Solo puedes cambiar tus propias tareas.' }, { status: 403 });
+    }
+  }
 
   try {
     if (action === 'move_task') {
-      await moveTask(token, pageId, body.status, body.actualHours, body.order);
+      await moveTask(tenant, id, pageId, body.status, body.actualHours, body.order);
     } else if (action === 'reorder_task') {
       if (typeof body.order !== 'number') return Response.json({ error: 'order es requerido.' }, { status: 400 });
-      await reorderTask(token, pageId, body.order);
+      await reorderTask(tenant, id, pageId, body.order);
     } else if (action === 'update_schedule') {
-      await updateTaskDatesAndHours(token, pageId, { startDate: body.startDate, endDate: body.endDate, estimatedHours: body.estimatedHours });
+      await updateTaskDatesAndHours(tenant, id, pageId, { startDate: body.startDate, endDate: body.endDate, estimatedHours: body.estimatedHours });
     } else if (action === 'update_responsable') {
-      await updateTaskResponsable(token, pageId, await resolveResponsableId(tenant, token, body.responsableId));
+      await updateTaskResponsable(tenant, id, pageId, await resolveResponsableId(tenant, body.responsableId));
     } else if (action === 'update_colaboradores') {
-      await updateTaskColaboradores(token, pageId, await resolveColaboradorIds(tenant, token, body.colaboradorIds));
+      await updateTaskColaboradores(tenant, id, pageId, await resolveColaboradorIds(tenant, body.colaboradorIds));
     } else if (action === 'assign_sprint') {
       if (!body.sprintId) return Response.json({ error: 'sprintId es requerido.' }, { status: 400 });
-      await addExistingTask(token, body.sprintId, pageId);
+      await assignTaskToSprint(tenant, id, body.sprintId, pageId);
     } else if (action === 'update_task_details') {
-      await updateTaskDetails(token, pageId, {
+      // Nombre, tipo, prioridad y severidad los define el Supervisor; de lo suyo, un Team member
+      // cambia la descripción y los entregables.
+      await updateTaskDetails(tenant, id, pageId, supervises ? {
         title: body.title, description: body.description,
         taskType: body.taskType, priority: body.priority, severity: body.severity,
         entregables: body.entregables,
-      });
+      } : { description: body.description, entregables: body.entregables });
     } else if (action === 'update_actual_hours') {
-      await updateTaskActualHours(token, pageId, body.actualHours);
+      await updateTaskActualHours(tenant, id, pageId, body.actualHours);
     } else if (action === 'remove_task') {
-      const page = await getNotionPageRaw(token, pageId);
-      await deleteTask(token, pageId);
-      await logProjectAction(tenant, identity, { project: meta, action: 'Borró una tarea', detail: page ? pageToFields(page).fields.TASK : pageId });
+      await deleteTask(tenant, id, pageId);
+      await logProjectAction(tenant, identity, { project: meta, action: 'Borró una tarea', detail: task.title });
     } else if (action === 'create_subtask') {
-      // pageId acá es la tarea PADRE (mismo criterio que el resto de las acciones: pageId es a
-      // qué apunta la acción). Arranca en Backlog — createTask no exige fecha/estimación como sí
-      // lo hace moveTask al sacar algo de Backlog, así que un "+ agregar" solo con título no
-      // queda en un estado inconsistente (Por hacer sin fechas). Hereda el sprint de la tarea
-      // padre (si tiene uno) para que no quede huérfana de su sprint en el tablero.
+      // pageId es la tarea PADRE. La subtarea nace en Backlog (sin exigir fechas ni estimación) y
+      // hereda el sprint del padre si sigue abierto.
       if (!body.title?.trim()) return Response.json({ error: 'El título es requerido.' }, { status: 400 });
-      const parentPage = await getNotionPageRaw(token, pageId);
-      const parentSprintId = parentPage ? (pageToFields(parentPage).fields['Sprint']?.[0] ?? null) : null;
-      const subtaskPayload = {
+      const payload = {
         title: body.title, status: 'Backlog', parentId: pageId,
-        proyectoId: body.proyectoId, iniciativaId: body.iniciativaId, epicaId: body.epicaId, fase: body.fase,
+        iniciativaId: task.iniciativaId, epicaId: task.epicaId, fase: task.fase,
+        createdBy: identity.personId ?? null,
       };
       try {
-        await createTask(token, parentSprintId, subtaskPayload);
+        await createTask(tenant, id, { ...payload, sprintId: task.sprintId });
       } catch (e) {
-        // El sprint del padre puede estar cerrado — en ese caso la subtarea nace sin sprint
-        // (como antes de esta regla) en vez de bloquear la creación por completo.
-        if (parentSprintId && /cerrado/i.test(e.message || '')) {
-          await createTask(token, null, subtaskPayload);
-        } else {
-          throw e;
-        }
+        if (task.sprintId && /cerrado/i.test(e.message || '')) await createTask(tenant, id, payload);
+        else throw e;
       }
     } else {
       return Response.json({ error: 'Acción inválida.' }, { status: 400 });

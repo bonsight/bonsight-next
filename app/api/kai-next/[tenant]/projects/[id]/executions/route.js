@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, getTests, addExecution, projectInactiveMessage, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
+import { getProjectMeta, getTests, addExecution, projectInactiveMessage, supervisesProject } from '@/lib/kaiNext/projects';
 
 export async function POST(req, { params }) {
   const { tenant, id } = await params;
@@ -21,17 +21,16 @@ export async function POST(req, { params }) {
   const { testId } = body;
   if (!testId) return Response.json({ error: 'testId es requerido.' }, { status: 400 });
 
-  const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
-  if (!isSupervisorLevel) {
+  const meta = await getProjectMeta(tenant, id);
+  if (!meta) return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
+  // Un Supervisor de OTRO proyecto acá es uno más: solo registra en las pruebas donde está asignado.
+  if (!supervisesProject(identity, meta)) {
     const tests = await getTests(tenant, id);
     const test = tests.find((t) => t.id === testId);
     if (!test?.registradorIds?.includes(identity.personId)) {
       return Response.json({ error: 'No estás asignado a esta prueba.' }, { status: 403 });
     }
   }
-
-  const meta = await getProjectMeta(tenant, id);
-  if (!meta) return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
   const inactive = projectInactiveMessage(meta);
   if (inactive) return Response.json({ error: inactive }, { status: 400 });
 

@@ -1,7 +1,7 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
-import { getNotionToken, createDevEpica } from '@/lib/kaiNext/projectsNotion';
+import { getProjectMeta, resolveProjectAccessLevel, projectSupervisionError } from '@/lib/kaiNext/projects';
+import { createEpica } from '@/lib/kaiNext/devStore';
 
 export async function POST(req, { params }) {
   const { tenant, id } = await params;
@@ -16,12 +16,11 @@ export async function POST(req, { params }) {
   if (!isSupervisorLevel) {
     return Response.json({ error: 'No tienes permiso para crear épicas en este proyecto.' }, { status: 403 });
   }
+  const notMine = await projectSupervisionError(tenant, id, identity);
+  if (notMine) return Response.json({ error: notMine }, { status: 403 });
 
   const meta = await getProjectMeta(tenant, id);
   if (!meta || meta.projectKind !== 'desarrollo') return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
-
-  const token = await getNotionToken(tenant);
-  if (!token) return Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 });
 
   let body;
   try {
@@ -31,7 +30,7 @@ export async function POST(req, { params }) {
   }
 
   try {
-    const epica = await createDevEpica(token, {
+    const epica = await createEpica(tenant, id, {
       name: body.name, iniciativaId: body.iniciativaId, fase: body.fase, startDate: body.startDate, endDate: body.endDate,
     });
     return Response.json({ epica });

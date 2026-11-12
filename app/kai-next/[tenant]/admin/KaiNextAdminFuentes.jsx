@@ -57,7 +57,8 @@ function PlatformRow({ source, saEmail, onToggle, onValidate, loading }) {
   const [configuring, setConfiguring] = useState(false);
   const [validating, setValidating] = useState(false);
   const [validationError, setValidationError] = useState(null);
-  const [fieldValues, setFieldValues] = useState(() => Object.fromEntries((source.fields ?? []).map((f) => [f.key, source.config?.[f.key] ?? ''])));
+  // Los secretos llegan enmascarados (••••1234): el formulario parte vacío para pegar uno nuevo.
+  const [fieldValues, setFieldValues] = useState(() => Object.fromEntries((source.fields ?? []).map((f) => [f.key, String(source.config?.[f.key] ?? '').startsWith('••••') ? '' : source.config?.[f.key] ?? ''])));
   const canSubmit = Object.values(fieldValues).some((v) => String(v).trim());
 
   const handleValidate = async () => {
@@ -67,7 +68,10 @@ function PlatformRow({ source, saEmail, onToggle, onValidate, loading }) {
     if (result.ok) setConfiguring(false); else setValidationError(result.error);
   };
 
-  const accMeta = source.config?.propertyName ?? source.config?.customerName ?? source.config?.siteUrl ?? (isActive ? 'Conectado' : 'Sin cuenta conectada');
+  const githubMeta = source.id === 'github' && source.config?.accountLogin
+    ? `${source.config.accountLogin} · ${source.config.repoCount ?? 0} repo${source.config.repoCount === 1 ? '' : 's'} con acceso`
+    : null;
+  const accMeta = githubMeta ?? source.config?.propertyName ?? source.config?.customerName ?? source.config?.siteUrl ?? (isActive ? 'Conectado' : 'Sin cuenta conectada');
 
   return (
     <>
@@ -155,6 +159,7 @@ function PlatformsSection({ tenant, onCount }) {
       const data = await res.json();
       if (data.ok) {
         const { ok, ...config } = data;
+        if (config.token) config.token = `••••${config.token.slice(-4)}`;
         setSources((prev) => prev.map((s) => s.id === sourceId ? { ...s, status: 'active', config: { ...s.config, ...config, permissionStatus: 'validated', lastError: null } } : s));
         return { ok: true };
       }

@@ -1,7 +1,7 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProject, getProjectMeta, updateProjectDetails, setProjectSupervisors, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
-import { getNotionToken, getProyecto, getRoadmap } from '@/lib/kaiNext/projectsNotion';
+import { getProject, getProjectMeta, updateProjectDetails, setProjectSupervisors, resolveProjectAccessLevel, supervisesProject } from '@/lib/kaiNext/projects';
+import { getRoadmap } from '@/lib/kaiNext/devStore';
 import { listTenantUsers } from '@/lib/kai/tenantUsers';
 import { logProjectAction } from '@/lib/kaiNext/audit';
 
@@ -27,28 +27,22 @@ export async function GET(req, { params }) {
   const meta = await getProjectMeta(tenant, id);
   if (!meta) return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
 
-  const level = resolveProjectAccessLevel(identity);
+  // El nivel que recibe la pantalla es el de ESTE proyecto: un Supervisor que no está en el equipo
+  // lo ve como Team member (ver supervisesProject en lib/kaiNext/projects.js).
+  const globalLevel = resolveProjectAccessLevel(identity);
+  const level = { ...globalLevel, isSupervisorLevel: supervisesProject(identity, meta) };
 
-  // 'desarrollo' no tiene el nivel de detalle "acceso recortado por tarea/prueba" que sí tienen
-  // los otros kinds (ver canSeeProject más abajo) — alcanza con Director, o Supervisor asignado.
+  // 'desarrollo': lo ve el Director o quien está en el equipo.
   if (meta.projectKind === 'desarrollo') {
     if (!level.isDirectorLevel && !meta.supervisorIds?.includes(identity.personId)) {
       return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
     }
-    const token = await getNotionToken(tenant);
-    if (!token) return Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 });
-    // Notion falla transitorio de vez en cuando (rate limit, 502) — sin este try/catch esa
-    // excepción no se atrapaba y Next devolvía un 500 sin body, que el cliente no podía
-    // distinguir de un error real (ver el blanco en pantalla reportado en prod).
     try {
-      const [notionProyecto, roadmap] = await Promise.all([
-        getProyecto(token, meta.notionProyectoId),
-        getRoadmap(token, meta.notionProyectoId),
-      ]);
-      return Response.json({ meta, notionProyecto, iniciativas: roadmap.iniciativas, level });
+      const roadmap = await getRoadmap(tenant, id);
+      return Response.json({ meta, iniciativas: roadmap.iniciativas, level });
     } catch (err) {
       console.error(`[kaiNext/projects] no se pudo cargar el detalle del proyecto ${id}:`, err.message);
-      return Response.json({ error: 'No se pudo cargar el proyecto desde Notion. Intenta de nuevo en unos segundos.' }, { status: 503 });
+      return Response.json({ error: 'No se pudo cargar el proyecto. Intenta de nuevo en unos segundos.' }, { status: 503 });
     }
   }
 
@@ -57,14 +51,21 @@ export async function GET(req, { params }) {
     return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
   }
 
-  // Un Registrador solo ve SUS tareas/pruebas, nunca las del resto del equipo ni el presupuesto
-  // ni la documentación — mismo recorte que Labs.
+  // Un Team member ve todo el trabajo del proyecto (tareas, pruebas, ejecuciones, mini proyectos y
+  // los documentos adjuntos a tareas) aunque solo incida en lo suyo. El presupuesto y la
+  // documentación general del proyecto siguen siendo de Supervisor.
   if (!level.isSupervisorLevel) {
-    const tasks = project.tasks.filter((t) => (t.responsables ?? []).includes(identity.personId));
-    const tests = project.tests.filter((t) => t.registradorIds?.includes(identity.personId));
-    const testIds = new Set(tests.map((t) => t.id));
-    const executions = project.executions.filter((e) => testIds.has(e.testId));
-    return Response.json({ meta: project.meta, tasks, events: project.events, tests, executions, level });
+    return Response.json({
+      meta: project.meta,
+      tasks: project.tasks,
+      events: project.events,
+      tests: project.tests,
+      executions: project.executions,
+      grupos: project.grupos ?? [],
+      tipologias: project.tipologias ?? [],
+      documents: (project.documents ?? []).filter((d) => d.taskId),
+      level,
+    });
   }
 
   return Response.json({ ...project, level });
@@ -80,9 +81,6 @@ export async function PATCH(req, { params }) {
     return Response.json({ error: 'Proyectos no está habilitado para tu usuario.' }, { status: 403 });
   }
   const { isDirectorLevel } = resolveProjectAccessLevel(identity);
-  if (!isDirectorLevel) {
-    return Response.json({ error: 'Solo un Director puede editar los detalles del proyecto.' }, { status: 403 });
-  }
 
   let body;
   try {
@@ -91,9 +89,20 @@ export async function PATCH(req, { params }) {
     return Response.json({ error: 'Body inválido.' }, { status: 400 });
   }
 
+  // El equipo lo arma el Director o un Supervisor del proyecto; el resto de los detalles (estado,
+  // nombre, fechas) es solo del Director.
+  const before = await getProjectMeta(tenant, id);
+  if (!before) return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
+  const onlyTeam = Array.isArray(body.supervisorIds);
+  if (!isDirectorLevel && !(onlyTeam && supervisesProject(identity, before))) {
+    return Response.json({ error: onlyTeam ? 'Solo un Supervisor de este proyecto puede cambiar su equipo.' : 'Solo un Director puede editar los detalles del proyecto.' }, { status: 403 });
+  }
+  if (onlyTeam && !isDirectorLevel && !body.supervisorIds.includes(identity.personId)) {
+    return Response.json({ error: 'No puedes quitarte a ti mismo del equipo: perderías el acceso al proyecto.' }, { status: 400 });
+  }
+
   try {
-    if (Array.isArray(body.supervisorIds)) {
-      const before = await getProjectMeta(tenant, id);
+    if (onlyTeam) {
       const meta = await setProjectSupervisors(tenant, id, body.supervisorIds.filter((x) => typeof x === 'string'));
       const nameById = new Map((await listTenantUsers(tenant)).map((u) => [u.id, u.name || u.email]));
       const names = (ids) => ids.map((x) => nameById.get(x) ?? x).join(', ');

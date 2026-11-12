@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, addProjectDocument, projectInactiveMessage, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
+import { getProjectMeta, getTasksList, addProjectDocument, projectInactiveMessage, supervisesProject, isOwnTask } from '@/lib/kaiNext/projects';
 
 export async function POST(req, { params }) {
   const { tenant, id } = await params;
@@ -11,11 +11,6 @@ export async function POST(req, { params }) {
   if (!isSectionAllowed(identity.access, 'proyectos')) {
     return Response.json({ error: 'Proyectos no está habilitado para tu usuario.' }, { status: 403 });
   }
-  const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
-  if (!isSupervisorLevel) {
-    return Response.json({ error: 'No tienes permiso para subir documentación en este proyecto.' }, { status: 403 });
-  }
-
   const meta = await getProjectMeta(tenant, id);
   if (!meta) return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
   const inactive = projectInactiveMessage(meta);
@@ -26,6 +21,15 @@ export async function POST(req, { params }) {
     body = await req.json();
   } catch {
     return Response.json({ error: 'Body inválido.' }, { status: 400 });
+  }
+
+  // La documentación general es del Supervisor del proyecto; adjuntar a una tarea lo puede hacer
+  // también quien la tiene a cargo.
+  if (!supervisesProject(identity, meta)) {
+    const task = body?.taskId ? (await getTasksList(tenant, id)).find((t) => t.id === body.taskId) : null;
+    if (!task || !isOwnTask(task, identity.personId)) {
+      return Response.json({ error: 'Solo puedes adjuntar documentos a tus propias tareas.' }, { status: 403 });
+    }
   }
 
   try {

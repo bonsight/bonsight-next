@@ -1,51 +1,37 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
-import { getNotionToken, listTareas, getDevEpica } from '@/lib/kaiNext/projectsNotion';
-import { createTask } from '@/lib/aria/board';
+import { getProjectMeta, isProjectMember } from '@/lib/kaiNext/projects';
+import { getEpica, listTasksByEpica, createTask } from '@/lib/kaiNext/devStore';
 import { resolveResponsableId, resolveColaboradorIds } from '@/lib/kaiNext/devResponsables';
 
-export async function GET(req, { params }) {
-  const { tenant, epicaId } = await params;
-  if (!(await isAuthorizedForTenant(tenant))) {
-    return Response.json({ error: 'No autorizado.' }, { status: 401 });
-  }
+async function gate(tenant, id) {
+  if (!(await isAuthorizedForTenant(tenant))) return { error: 'No autorizado.', status: 401 };
   const identity = await getCurrentKaiNextIdentity(tenant);
-  if (!isSectionAllowed(identity.access, 'proyectos')) {
-    return Response.json({ error: 'Proyectos no está habilitado para tu usuario.' }, { status: 403 });
-  }
+  if (!isSectionAllowed(identity.access, 'proyectos')) return { error: 'Proyectos no está habilitado para tu usuario.', status: 403 };
+  const meta = await getProjectMeta(tenant, id);
+  if (!meta || meta.projectKind !== 'desarrollo') return { error: 'Proyecto no encontrado.', status: 404 };
+  // Cualquier persona del equipo del proyecto (Director, Supervisor o Team member).
+  if (!isProjectMember(identity, meta)) return { error: 'No tienes acceso a este proyecto.', status: 403 };
+  return { identity, meta };
+}
 
-  const token = await getNotionToken(tenant);
-  if (!token) return Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 });
-
+export async function GET(req, { params }) {
+  const { tenant, id, epicaId } = await params;
+  const g = await gate(tenant, id);
+  if (g.error) return Response.json({ error: g.error }, { status: g.status });
   try {
-    const tareas = await listTareas(token, epicaId);
-    return Response.json({ tareas });
+    return Response.json({ tareas: await listTasksByEpica(tenant, id, epicaId) });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });
   }
 }
 
-// Crea la tarea vía el mismo createTask que ya usa Sprints, con Iniciativa/Épica/Fase seteados
-// de una — así la tarea aparece tanto en el Roadmap de este proyecto como en el tablero de
-// Sprints normal, sin duplicar nada. El sprint es opcional acá: la tarea puede quedar en backlog
-// (sin sprint) y jalarse a uno después desde el propio tablero de Sprints (addExistingTask).
+// Crea una historia dentro de la épica. El sprint es opcional: puede quedar en backlog y pasar a
+// un sprint después desde el tablero.
 export async function POST(req, { params }) {
   const { tenant, id, epicaId } = await params;
-  if (!(await isAuthorizedForTenant(tenant))) {
-    return Response.json({ error: 'No autorizado.' }, { status: 401 });
-  }
-  const identity = await getCurrentKaiNextIdentity(tenant);
-  if (!isSectionAllowed(identity.access, 'proyectos')) {
-    return Response.json({ error: 'Proyectos no está habilitado para tu usuario.' }, { status: 403 });
-  }
-  const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
-  if (!isSupervisorLevel) {
-    return Response.json({ error: 'No tienes permiso para crear tareas en este proyecto.' }, { status: 403 });
-  }
-
-  const token = await getNotionToken(tenant);
-  if (!token) return Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 });
+  const g = await gate(tenant, id);
+  if (g.error) return Response.json({ error: g.error }, { status: g.status });
 
   let body;
   try {
@@ -59,21 +45,17 @@ export async function POST(req, { params }) {
   } = body;
 
   try {
-    const meta = await getProjectMeta(tenant, id);
-    // La Iniciativa se resuelve acá, de la Épica real — no del body del cliente. Si se confía en
-    // que el formulario la mande, una tarea creada sin ese campo queda sin Iniciativa en Notion
-    // y listTareasByIniciativas (lo que arma los carriles del Tablero) nunca la encuentra: existe
-    // pero es invisible. Así, esta ruta es la única fuente de verdad y no puede volver a pasar.
-    const epica = await getDevEpica(token, epicaId);
+    // La iniciativa sale de la épica real, nunca del formulario.
+    const epica = await getEpica(tenant, id, epicaId);
     if (!epica) return Response.json({ error: 'Épica no encontrada.' }, { status: 404 });
-    const taskId = await createTask(token, sprintId, {
-      title, iniciativaId: epica.iniciativaId, epicaId, fase, startDate, endDate, estimatedHours,
-      responsableId: await resolveResponsableId(tenant, token, responsableId),
-      colaboradorIds: await resolveColaboradorIds(tenant, token, colaboradorIds),
+    const task = await createTask(tenant, id, {
+      sprintId, title, iniciativaId: epica.iniciativaId, epicaId, fase, startDate, endDate, estimatedHours,
+      responsableId: await resolveResponsableId(tenant, responsableId),
+      colaboradorIds: await resolveColaboradorIds(tenant, colaboradorIds),
       taskType, priority, severity, description,
-      proyectoId: meta?.notionProyectoId,
+      createdBy: g.identity.personId ?? null,
     });
-    return Response.json({ id: taskId });
+    return Response.json({ id: task.id });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });
   }

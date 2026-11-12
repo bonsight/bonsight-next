@@ -150,13 +150,9 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  // Solo para 'desarrollo' — Cliente real traído de Notion (lib/kaiNext/projectsNotion.js), o
-  // bien importar un Proyecto que ya existe en Notion (de antes de Kai Next) en vez de crear uno.
-  const [clientes, setClientes] = useState(null);
-  const [clienteId, setClienteId] = useState('');
-  const [devMode, setDevMode] = useState('crear'); // 'crear' | 'importar'
-  const [proyectosExistentes, setProyectosExistentes] = useState(null);
-  const [notionProyectoId, setNotionProyectoId] = useState('');
+  // Cliente como texto, con sugerencias de los que ya usan otros proyectos.
+  const [clienteName, setClienteName] = useState('');
+  const [clientes, setClientes] = useState([]);
 
   // Solo para civil — import del Excel de cronograma+presupuesto (port simplificado del flujo
   // de Labs: acá no hay grilla editable por fase, se revisa el total y los avisos nomás, y el
@@ -169,14 +165,8 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
   const toggleSupervisor = (id) => setSupervisorIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   useEffect(() => {
-    if (projectKind !== 'desarrollo' || devMode !== 'crear' || clientes) return;
-    fetch(`/api/kai-next/${tenant}/dev-clientes`).then((r) => r.json()).then((d) => setClientes(d.clientes ?? []));
-  }, [projectKind, devMode, clientes, tenant]);
-
-  useEffect(() => {
-    if (projectKind !== 'desarrollo' || devMode !== 'importar' || proyectosExistentes) return;
-    fetch(`/api/kai-next/${tenant}/dev-proyectos-existentes`).then((r) => r.json()).then((d) => setProyectosExistentes(d.proyectos ?? []));
-  }, [projectKind, devMode, proyectosExistentes, tenant]);
+    fetch(`/api/kai-next/${tenant}/dev-clientes`).then((r) => r.json()).then((d) => setClientes(d.clientes ?? [])).catch(() => null);
+  }, [tenant]);
 
   const handleExcelChange = async (e) => {
     const file = e.target.files?.[0];
@@ -202,12 +192,8 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
   const unassignedCount = (excelTasks ?? []).filter((t) => !(t.responsables?.length)).length;
   const budgetTotal = (excelPartidas ?? []).reduce((s, p) => s + (p.importe || 0), 0);
 
-  const importando = projectKind === 'desarrollo' && devMode === 'importar';
-  const proyectoElegido = importando ? (proyectosExistentes ?? []).find((p) => p.id === notionProyectoId) : null;
-
   const submit = async () => {
     if (!name.trim()) { setError('El nombre es requerido.'); return; }
-    if (importando && !notionProyectoId) { setError('Elige qué proyecto de Notion importar.'); return; }
     setSaving(true);
     setError(null);
     try {
@@ -220,9 +206,7 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
           partidas: projectKind === 'civil' ? excelPartidas : undefined,
           purpose: projectKind === 'experimental' ? purpose : undefined,
           hypothesis: projectKind === 'experimental' ? hypothesis : undefined,
-          clienteId: projectKind === 'desarrollo' && !importando ? clienteId || null : undefined,
-          notionProyectoId: importando ? notionProyectoId : undefined,
-          notionClienteId: importando ? proyectoElegido?.clienteId || null : undefined,
+          clienteName: clienteName.trim() || null,
         }),
       });
       const data = await res.json();
@@ -265,52 +249,20 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
           <label>Nombre</label>
           <input value={name} onChange={(e) => setName(e.target.value)} className="knx-canvas-meta-select" placeholder="Nombre del proyecto" />
         </div>
-        {projectKind === 'desarrollo' ? (
-          <>
-            <div className="knx-ficha-review-field" style={{ marginTop: 14 }}>
-              <div className="knx-knowledge-filters">
-                <button type="button" className={`knx-filter-pill${devMode === 'crear' ? ' knx-filter-pill--active' : ''}`} onClick={() => setDevMode('crear')}>Crear nuevo</button>
-                <button type="button" className={`knx-filter-pill${devMode === 'importar' ? ' knx-filter-pill--active' : ''}`} onClick={() => setDevMode('importar')}>Importar existente</button>
-              </div>
-            </div>
-            {devMode === 'crear' ? (
-              <div className="knx-ficha-review-field" style={{ marginTop: 14 }}>
-                <label>Cliente</label>
-                {clientes === null ? (
-                  <p className="knx-canvas-meta-empty">Cargando clientes…</p>
-                ) : (
-                  <select className="knx-canvas-meta-select" value={clienteId} onChange={(e) => setClienteId(e.target.value)}>
-                    <option value="">Sin cliente</option>
-                    {clientes.map((c) => <option key={c.id} value={c.id}>{c.name}{c.estado ? ` (${c.estado})` : ''}</option>)}
-                  </select>
-                )}
-              </div>
-            ) : (
-              <div className="knx-ficha-review-field" style={{ marginTop: 14 }}>
-                <label>Proyecto en Notion</label>
-                {proyectosExistentes === null ? (
-                  <p className="knx-canvas-meta-empty">Cargando proyectos…</p>
-                ) : proyectosExistentes.length === 0 ? (
-                  <p className="knx-canvas-meta-empty">No hay proyectos de Notion sin importar todavía.</p>
-                ) : (
-                  <select
-                    className="knx-canvas-meta-select"
-                    value={notionProyectoId}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      setNotionProyectoId(id);
-                      const p = proyectosExistentes.find((x) => x.id === id);
-                      if (p) setName(p.name);
-                    }}
-                  >
-                    <option value="">Elige un proyecto…</option>
-                    {proyectosExistentes.map((p) => <option key={p.id} value={p.id}>{p.name}{p.clienteName ? ` · ${p.clienteName}` : ''}</option>)}
-                  </select>
-                )}
-              </div>
-            )}
-          </>
-        ) : (
+        <div className="knx-ficha-review-field" style={{ marginBottom: 14 }}>
+          <label>Cliente</label>
+          <input
+            className="knx-canvas-meta-select"
+            list="knx-project-clientes"
+            value={clienteName}
+            onChange={(e) => setClienteName(e.target.value)}
+            placeholder="Nombre del cliente (opcional)"
+          />
+          <datalist id="knx-project-clientes">
+            {clientes.map((c) => <option key={c} value={c} />)}
+          </datalist>
+        </div>
+        {projectKind === 'desarrollo' ? null : (
           <>
             <div className="knx-ficha-review-grid">
               <div className="knx-ficha-review-field">
@@ -323,7 +275,7 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
               </div>
             </div>
             <div className="knx-ficha-review-field" style={{ marginTop: 14 }}>
-              <label>Supervisores</label>
+              <label>Equipo (tú quedas dentro)</label>
               <div className="knx-canvas-meta-checklist">
                 {!people.length ? (
                   <p className="knx-canvas-meta-empty">No hay personas en el equipo todavía.</p>
@@ -548,7 +500,9 @@ function TaskRow({ task, people, canManage, canToggle, onStatusChange, onDelete,
 
 // Panel de detalle de una tarea de Proyecto de Seguimiento — mismo shell visual
 // (.knx-side-panel) que ya usa DevTaskDetailPanel en Proyecto de Desarrollo.
-function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STATUSES, canManage, documents = [], onUploadDocument, onDeleteDocument, onClose, onSave, onStatusChange, onDelete }) {
+// canManage: Supervisor del proyecto (todo). canEdit: la tarea es suya (campos de ejecución:
+// estado, descripción, fechas, horas y documentos). canDelete: ver canDeleteOwnTask.
+function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STATUSES, canManage, canEdit = canManage, canDelete = canManage, documents = [], onUploadDocument, onDeleteDocument, onClose, onSave, onStatusChange, onDelete }) {
   const [closing, handleClose] = useSidePanelClose(onClose);
   const [nombre, setNombre] = useState(task.nombre);
   const [descripcion, setDescripcion] = useState(task.descripcion ?? '');
@@ -615,7 +569,7 @@ function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STA
         </div>
         <div className="knx-board-field">
           <label>Descripción</label>
-          <textarea rows={8} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} disabled={!canManage} />
+          <textarea rows={8} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} disabled={!canEdit} />
         </div>
         <div className="knx-board-field-row">
           <div className="knx-board-field">
@@ -648,7 +602,7 @@ function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STA
         <div className="knx-board-field-row">
           <div className="knx-board-field">
             <label>Estado</label>
-            <select value={task.status} onChange={(e) => onStatusChange(e.target.value)} disabled={!canManage}>
+            <select value={task.status} onChange={(e) => onStatusChange(e.target.value)} disabled={!canEdit}>
               {statuses.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           </div>
@@ -656,21 +610,21 @@ function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STA
         <div className="knx-board-field-row">
           <div className="knx-board-field">
             <label>Inicio</label>
-            <input type="date" value={fechaInicio ?? ''} onChange={(e) => setFechaInicio(e.target.value)} disabled={!canManage} />
+            <input type="date" value={fechaInicio ?? ''} onChange={(e) => setFechaInicio(e.target.value)} disabled={!canEdit} />
           </div>
           <div className="knx-board-field">
             <label>Fin</label>
-            <input type="date" value={fechaFin ?? ''} onChange={(e) => setFechaFin(e.target.value)} disabled={!canManage} />
+            <input type="date" value={fechaFin ?? ''} onChange={(e) => setFechaFin(e.target.value)} disabled={!canEdit} />
           </div>
         </div>
         <div className="knx-board-field-row">
           <div className="knx-board-field">
             <label>Estimación (hs)</label>
-            <input type="number" min="0" step="0.5" value={estimatedHours ?? ''} onChange={(e) => setEstimatedHours(e.target.value)} disabled={!canManage} />
+            <input type="number" min="0" step="0.5" value={estimatedHours ?? ''} onChange={(e) => setEstimatedHours(e.target.value)} disabled={!canEdit} />
           </div>
           <div className="knx-board-field">
             <label>Horas reales</label>
-            <input type="number" min="0" step="0.5" value={actualHours ?? ''} onChange={(e) => setActualHours(e.target.value)} disabled={!canManage} />
+            <input type="number" min="0" step="0.5" value={actualHours ?? ''} onChange={(e) => setActualHours(e.target.value)} disabled={!canEdit} />
           </div>
         </div>
         <div className="knx-board-field">
@@ -696,13 +650,13 @@ function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STA
                 ) : (
                   <span>{d.name}</span>
                 )}
-                {canManage && (
+                {canEdit && (
                   <button type="button" className="knx-side-panel-close" aria-label="Quitar" onClick={() => onDeleteDocument(d.id)}>×</button>
                 )}
               </div>
             ))}
             {!documents.length && <p className="knx-knowledge-empty">Sin documentos en esta tarea todavía.</p>}
-            {canManage && (
+            {canEdit && (
               <label className="knx-board-subtask-add-btn" style={{ cursor: uploadingDoc ? 'default' : 'pointer', opacity: uploadingDoc ? 0.5 : 1, display: 'inline-block' }}>
                 {uploadingDoc ? 'Subiendo…' : '+ Subir documento'}
                 <input type="file" style={{ display: 'none' }} disabled={uploadingDoc} onChange={(e) => uploadDoc(e.target.files?.[0])} />
@@ -710,12 +664,12 @@ function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STA
             )}
           </div>
         </div>
-        {canManage && (
+        {canEdit && (
           <button type="button" className="knx-new-chat" disabled={!dirty || saving} onClick={saveAll} style={{ width: '100%', justifyContent: 'center' }}>
             {saving ? 'Guardando…' : 'Guardar cambios'}
           </button>
         )}
-        {canManage && (
+        {canDelete && (
           <button type="button" className="knx-delete-task-btn" onClick={onDelete}>
             Eliminar tarea
           </button>
@@ -948,7 +902,7 @@ function TaskCanvasCard({ task, people, tipologias, draggable, onDragStart, onDr
 // rápida de escanear que la Lista, y no depende de fechas cargadas como el Cronograma.
 // Drag-and-drop entre columnas cambia el status real de la tarea (mismo setStatus que ya usan
 // Lista/Cronograma); dentro de la misma columna, reordena (onReorder) sin tocar el status.
-function KaiNextTaskCanvas({ tasks, people, tipologias, statuses = TASK_STATUSES, canManage, onStatusChange, onReorder, onBackfill, selectedTaskId, onSelectTask }) {
+function KaiNextTaskCanvas({ tasks, people, tipologias, statuses = TASK_STATUSES, canManage, canMoveTask, onStatusChange, onReorder, onBackfill, selectedTaskId, onSelectTask }) {
   const [dragId, setDragId] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
   const [dragOverTaskId, setDragOverTaskId] = useState(null);
@@ -1007,7 +961,7 @@ function KaiNextTaskCanvas({ tasks, people, tipologias, statuses = TASK_STATUSES
                   task={t}
                   people={people}
                   tipologias={tipologias}
-                  draggable={canManage}
+                  draggable={canMoveTask ? canMoveTask(t) : canManage}
                   onDragStart={() => setDragId(t.id)}
                   onDragEnd={clearDrag}
                   dragging={dragId === t.id}
@@ -1642,7 +1596,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
   const { meta, tasks, events, level, partidas = [], gastos = [], civilMetrics, civilAlerts = [], documents = [], tests = [], executions = [], grupos = [], tipologias = [] } = data;
   // Responsable/mini proyecto — compartidos entre Lista/Canvas/Cronograma (no uno por vista),
   // así cambiar de vista no pierde el filtro que ya elegiste. `tasks` no existe en absoluto
-  // para proyectos 'desarrollo' (esa rama del GET devuelve notionProyecto/iniciativas en vez de
+  // para proyectos 'desarrollo' (esa rama del GET devuelve iniciativas en vez de
   // tasks) — de ahí el fallback, para que esto no reviente en ese caso.
   const visibleTasks = (tasks ?? []).filter((t) =>
     (taskResponsableFilter === 'all' || (t.responsables ?? []).includes(taskResponsableFilter))
@@ -1675,6 +1629,16 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
     return next;
   });
   const inactive = meta.status !== 'activo';
+  // Crear tareas: Supervisores y cualquier miembro del equipo del proyecto (no basta con ser
+  // responsable de alguna tarea). Editar y eliminar siguen siendo de Supervisor.
+  const canCreateTask = !inactive && (level.isSupervisorLevel || (!!personId && (meta.supervisorIds ?? []).includes(personId)));
+  // level.isSupervisorLevel ya viene calculado para ESTE proyecto (ver GET del proyecto). El resto
+  // solo incide en sus tareas: las que tiene a cargo, o las que creó sin responsable todavía.
+  // Mismo criterio que isOwnTask/canDeleteOwnTask en lib/kaiNext/projects.js.
+  const isOwnTask = (t) => !!personId && ((t.responsables ?? []).includes(personId) || (!(t.responsables ?? []).length && t.createdBy === personId));
+  const canEditTask = (t) => !inactive && (level.isSupervisorLevel || isOwnTask(t));
+  const canDeleteTask = (t) => !inactive && (level.isSupervisorLevel
+    || (!!personId && t.createdBy === personId && ['backlog', 'todo'].includes(t.status) && !(Number(t.actualHours) > 0)));
   const isCivil = meta.projectKind === 'civil';
   const isExperimental = meta.projectKind === 'experimental';
   const isDesarrollo = meta.projectKind === 'desarrollo';
@@ -1885,9 +1849,9 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
         <KaiNextProjectDesarrollo
           tenant={tenant}
           projectId={projectId}
-          notionProyecto={data.notionProyecto}
           iniciativas={data.iniciativas ?? []}
           canManage={level.isSupervisorLevel && !inactive}
+          canWork={!inactive}
           onReload={load}
         />
       )}
@@ -1931,7 +1895,12 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
                 ))}
               </div>
             ) : (
-              <span className="knx-canvas-group-name">Tareas</span>
+              <>
+                <span className="knx-canvas-group-name">Tareas</span>
+                {canCreateTask && (
+                  <button type="button" className="knx-new-chat" onClick={() => setNewTaskOpen(true)}>+ Nueva tarea</button>
+                )}
+              </>
             )}
             {tasks.length > 0 && (
               <div className="knx-gantt-view-toggle">
@@ -2030,7 +1999,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
                     <input type="text" placeholder="Buscar" value={taskSearchQuery} onChange={(e) => setTaskSearchQuery(e.target.value)} />
                   </label>
                 </div>
-                {level.isSupervisorLevel && !inactive && (
+                {canCreateTask && (
                   <button type="button" className="knx-new-chat" onClick={() => setNewTaskOpen(true)}>+ Nueva tarea</button>
                 )}
               </div>
@@ -2092,8 +2061,8 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
                           people={people}
                           tipologias={tipologias}
                           statuses={taskStatuses}
-                          canManage={level.isSupervisorLevel && !inactive}
-                          canToggle={!inactive}
+                          canManage={canDeleteTask(t)}
+                          canToggle={canEditTask(t)}
                           onStatusChange={(status) => setStatus(t.id, status)}
                           onDelete={() => setRemoveTaskTarget(t.id)}
                           onOpen={() => setSelectedTaskId(t.id)}
@@ -2110,8 +2079,8 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
                     people={people}
                     tipologias={tipologias}
                     statuses={taskStatuses}
-                    canManage={level.isSupervisorLevel && !inactive}
-                    canToggle={!inactive}
+                    canManage={canDeleteTask(t)}
+                    canToggle={canEditTask(t)}
                     onStatusChange={(status) => setStatus(t.id, status)}
                     onDelete={() => setRemoveTaskTarget(t.id)}
                     onOpen={() => setSelectedTaskId(t.id)}
@@ -2127,9 +2096,10 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
               tipologias={tipologias}
               statuses={taskStatuses}
               canManage={level.isSupervisorLevel && !inactive}
+              canMoveTask={canEditTask}
               onStatusChange={setStatus}
               onReorder={reorderTaskLocal}
-              onBackfill={backfillOrder}
+              onBackfill={level.isSupervisorLevel ? backfillOrder : () => {}}
               selectedTaskId={selectedTaskId}
               onSelectTask={setSelectedTaskId}
             />
@@ -2139,7 +2109,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
               people={people}
               grupos={grupos}
               savingTaskId={savingTaskId}
-              canToggleTask={(t) => !inactive && (level.isSupervisorLevel || (t.responsables ?? []).includes(personId))}
+              canToggleTask={canEditTask}
               onToggle={toggleTaskDone}
               selectedTaskId={selectedTaskId}
               onSelectTask={setSelectedTaskId}
@@ -2157,6 +2127,8 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
           tipologias={tipologias}
           statuses={taskStatuses}
           canManage={level.isSupervisorLevel && !inactive}
+          canEdit={canEditTask(tasks.find((t) => t.id === selectedTaskId))}
+          canDelete={canDeleteTask(tasks.find((t) => t.id === selectedTaskId))}
           documents={documents.filter((d) => d.taskId === selectedTaskId)}
           onUploadDocument={(payload) => uploadDocument({ ...payload, taskId: selectedTaskId })}
           onDeleteDocument={deleteDocument}
@@ -2232,12 +2204,16 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
 // ese tipo (avance físico/plan en civil, ensayos en experimental, actividades en seguimiento).
 // 'desarrollo' no tiene `summary` todavía (ver summarizeProjectForList, vive en Notion) — se
 // muestra con el tratamiento simple de antes.
-function EditProjectTeamModal({ tenant, project, people, onClose, onSaved }) {
+// lockedId: quien no es Director no puede sacarse a sí mismo (perdería el acceso al proyecto).
+function EditProjectTeamModal({ tenant, project, people, lockedId = null, onClose, onSaved }) {
   const [supervisorIds, setSupervisorIds] = useState(project.supervisorIds ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  const toggle = (id) => setSupervisorIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const toggle = (id) => {
+    if (id === lockedId) return;
+    setSupervisorIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
   const save = async () => {
     setSaving(true);
@@ -2266,15 +2242,15 @@ function EditProjectTeamModal({ tenant, project, people, onClose, onSaved }) {
           <button type="button" className="knx-side-panel-close" aria-label="Cerrar" onClick={onClose}>×</button>
         </div>
         <div className="knx-ficha-review-field">
-          <label>Supervisores</label>
+          <label>Equipo</label>
           <div className="knx-canvas-meta-checklist">
             {!people.length ? (
               <p className="knx-canvas-meta-empty">No hay personas en el equipo todavía.</p>
             ) : people.map((p) => (
               <label key={p.id} className="knx-canvas-meta-checkbox">
-                <input type="checkbox" checked={supervisorIds.includes(p.id)} onChange={() => toggle(p.id)} />
+                <input type="checkbox" checked={supervisorIds.includes(p.id)} onChange={() => toggle(p.id)} disabled={p.id === lockedId} />
                 <span className="knx-canvas-meta-checkbox-box" />
-                {p.name || p.email}
+                {p.name || p.email}{p.id === lockedId ? ' (tú)' : ''}
               </label>
             ))}
           </div>
@@ -2443,6 +2419,9 @@ export default function KaiNextProjects({
     setChats((prev) => prev.filter((c) => c.id !== id));
   };
 
+  // El equipo lo arma el Director, o un Supervisor en los proyectos donde ya está.
+  const canEditTeam = (p) => !!level?.isDirectorLevel || (!!level?.isSupervisorLevel && !!personId && (p.supervisorIds ?? []).includes(personId));
+
   const upsertProject = (project) => {
     setProjects((prev) => [project, ...prev.filter((p) => p.id !== project.id)]);
   };
@@ -2528,7 +2507,7 @@ export default function KaiNextProjects({
 
                     <div className="knx-project-list">
                       {visibleActivos.map((p) => (
-                        <ProjectRow key={p.id} p={p} people={people} onSelect={() => setActiveProjectId(p.id)} onEditTeam={level?.isDirectorLevel ? () => setEditingTeamFor(p) : undefined} />
+                        <ProjectRow key={p.id} p={p} people={people} onSelect={() => setActiveProjectId(p.id)} onEditTeam={canEditTeam(p) ? () => setEditingTeamFor(p) : undefined} />
                       ))}
                     </div>
 
@@ -2537,7 +2516,7 @@ export default function KaiNextProjects({
                         <summary>Completados · {completados.length}</summary>
                         <div className="knx-project-list" style={{ marginTop: 10 }}>
                           {completados.map((p) => (
-                            <ProjectRow key={p.id} p={p} people={people} onSelect={() => setActiveProjectId(p.id)} onEditTeam={level?.isDirectorLevel ? () => setEditingTeamFor(p) : undefined} />
+                            <ProjectRow key={p.id} p={p} people={people} onSelect={() => setActiveProjectId(p.id)} onEditTeam={canEditTeam(p) ? () => setEditingTeamFor(p) : undefined} />
                           ))}
                         </div>
                       </details>
@@ -2555,6 +2534,7 @@ export default function KaiNextProjects({
           tenant={tenant}
           project={editingTeamFor}
           people={people}
+          lockedId={level?.isDirectorLevel ? null : personId}
           onClose={() => setEditingTeamFor(null)}
           onSaved={(meta) => {
             setProjects((prev) => prev.map((p) => (p.id === meta.id ? { ...p, ...meta } : p)));

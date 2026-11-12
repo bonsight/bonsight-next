@@ -1,8 +1,7 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
-import { getNotionToken } from '@/lib/kaiNext/projectsNotion';
-import { getBoardData, createSprint, closeSprintPlanning, closeSprint, updateSprintDates, computeSprintMetrics } from '@/lib/aria/board';
+import { getProjectMeta, resolveProjectAccessLevel, projectSupervisionError } from '@/lib/kaiNext/projects';
+import { getBoardData, createSprint, closeSprintPlanning, closeSprint, updateSprintDates, computeSprintMetrics } from '@/lib/kaiNext/devStore';
 import { saveSprintMetrics, getSprintMetrics } from '@/lib/aria/sprintMetrics';
 import { logProjectAction } from '@/lib/kaiNext/audit';
 
@@ -32,11 +31,8 @@ export async function GET(req, { params }) {
   const meta = await loadMeta(tenant, id);
   if (!meta) return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
 
-  const token = await getNotionToken(tenant);
-  if (!token) return Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 });
-
   try {
-    const data = await getBoardData(token, { proyectoId: meta.notionProyectoId });
+    const data = await getBoardData(tenant, id);
     if (data.sprint?.status === 'Cerrado') {
       data.metrics = await getSprintMetrics(tenant, data.sprint.id);
     }
@@ -59,12 +55,11 @@ export async function PATCH(req, { params }) {
   if (!isSupervisorLevel) {
     return Response.json({ error: 'No tienes permiso para editar sprints en este proyecto.' }, { status: 403 });
   }
+  const notMine = await projectSupervisionError(tenant, id, identity);
+  if (notMine) return Response.json({ error: notMine }, { status: 403 });
 
   const meta = await loadMeta(tenant, id);
   if (!meta) return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
-
-  const token = await getNotionToken(tenant);
-  if (!token) return Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 });
 
   let body;
   try {
@@ -76,29 +71,28 @@ export async function PATCH(req, { params }) {
 
   try {
     if (action === 'create_sprint') {
-      const sprint = await createSprint(token, { startDate: p.startDate, endDate: p.endDate, objetivo: p.objetivo, proyectoId: meta.notionProyectoId });
+      const sprint = await createSprint(tenant, id, { startDate: p.startDate, endDate: p.endDate, objetivo: p.objetivo });
       await logProjectAction(tenant, identity, { project: meta, action: 'Creó un sprint', detail: sprint.title });
     } else if (action === 'close_planning') {
       if (!sprintId) throw new Error('sprintId es requerido.');
-      const sprint = await closeSprintPlanning(token, sprintId);
+      const sprint = await closeSprintPlanning(tenant, id, sprintId);
       await logProjectAction(tenant, identity, { project: meta, action: 'Cerró la planificación', detail: sprint.title });
     } else if (action === 'close_sprint') {
       if (!sprintId) throw new Error('sprintId es requerido.');
-      const before = await getBoardData(token, { sprintId, proyectoId: meta.notionProyectoId });
+      const before = await getBoardData(tenant, id, { sprintId });
       if (!before.sprint) throw new Error('Ese sprint ya no existe.');
       const metrics = computeSprintMetrics(before.sprint, before.tasks);
       await saveSprintMetrics(tenant, sprintId, metrics);
-      await closeSprint(token, sprintId);
+      await closeSprint(tenant, id, sprintId);
       await logProjectAction(tenant, identity, { project: meta, action: 'Cerró un sprint', detail: before.sprint.title });
     } else if (action === 'update_sprint_dates') {
       if (!sprintId) throw new Error('sprintId es requerido.');
-      await updateSprintDates(token, sprintId, { startDate: p.startDate, endDate: p.endDate });
+      await updateSprintDates(tenant, id, sprintId, { startDate: p.startDate, endDate: p.endDate });
     } else {
       return Response.json({ error: 'Acción inválida.' }, { status: 400 });
     }
 
-    // El cliente recarga por su cuenta. Releer el tablero acá solo sumaba peticiones a Notion, y
-    // si esa lectura fallaba mostraba un error aunque el cambio ya se hubiera guardado.
+    // El cliente recarga por su cuenta.
     return Response.json({ ok: true });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });

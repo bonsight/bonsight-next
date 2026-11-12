@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, getTipologiasList, addTipologia, projectInactiveMessage, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
+import { getProjectMeta, getTipologiasList, addTipologia, projectInactiveMessage, resolveProjectAccessLevel, projectSupervisionError } from '@/lib/kaiNext/projects';
 
 export async function GET(req, { params }) {
   const { tenant, id } = await params;
@@ -30,6 +30,8 @@ export async function POST(req, { params }) {
   if (!isSupervisorLevel) {
     return Response.json({ error: 'No tienes permiso para gestionar tipologías acá.' }, { status: 403 });
   }
+  const notMine = await projectSupervisionError(tenant, id, identity);
+  if (notMine) return Response.json({ error: notMine }, { status: 403 });
 
   const meta = await getProjectMeta(tenant, id);
   if (!meta) return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });

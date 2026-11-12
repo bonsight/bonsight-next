@@ -1,7 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { listProjectsForPerson, createProject, createDevProjectPointer, resolveProjectAccessLevel, PROJECT_KINDS, summarizeProjectForList } from '@/lib/kaiNext/projects';
-import { getNotionToken, createDevProyecto } from '@/lib/kaiNext/projectsNotion';
 
 export async function GET(req, { params }) {
   const { tenant } = await params;
@@ -39,8 +38,7 @@ export async function POST(req, { params }) {
     return Response.json({ error: 'Body inválido.' }, { status: 400 });
   }
   const {
-    name, code, type, supervisorIds, fechaInicioProyecto, fechaFinProyecto, projectKind, tasks, partidas, purpose, hypothesis, clienteId,
-    notionProyectoId, notionClienteId,
+    name, code, type, supervisorIds, fechaInicioProyecto, fechaFinProyecto, projectKind, tasks, partidas, purpose, hypothesis,
   } = body;
   if (!name?.trim()) {
     return Response.json({ error: 'El nombre es requerido.' }, { status: 400 });
@@ -52,30 +50,12 @@ export async function POST(req, { params }) {
   const nextSupervisorIds = Array.isArray(supervisorIds) ? [...supervisorIds] : [];
   if (identity.personId && !nextSupervisorIds.includes(identity.personId)) nextSupervisorIds.push(identity.personId);
 
-  // 'desarrollo' reusa el Notion interno de Bonsight (el mismo que ya usa Sprints) — no tiene
-  // sentido para ningún otro tenant, ver hallazgo en el plan (Sprints tampoco filtra por cliente).
+  // 'desarrollo' vive en Kai (iniciativas, épicas, tareas y sprints en lib/kaiNext/devStore.js);
+  // el registro de proyectos guarda solo su ficha.
   if (kind === 'desarrollo') {
-    if (tenant !== 'bonsight') {
-      return Response.json({ error: 'Proyecto de desarrollo solo está disponible para Bonsight.' }, { status: 403 });
-    }
-    // Importar un Proyecto que ya existe en Notion (de antes de Kai Next): se salta createDevProyecto
-    // por completo, solo se crea el pointer apuntando al id que ya mandó /dev-proyectos-existentes.
-    if (notionProyectoId) {
-      try {
-        const project = await createDevProjectPointer(tenant, {
-          name, notionProyectoId, notionClienteId: notionClienteId || null, supervisorIds: nextSupervisorIds,
-        });
-        return Response.json({ project });
-      } catch (err) {
-        return Response.json({ error: err.message }, { status: 400 });
-      }
-    }
-    const token = await getNotionToken(tenant);
-    if (!token) return Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 });
     try {
-      const notionProyecto = await createDevProyecto(token, { name, clienteId });
       const project = await createDevProjectPointer(tenant, {
-        name, notionProyectoId: notionProyecto.id, notionClienteId: clienteId, supervisorIds: nextSupervisorIds,
+        name, clienteName: typeof body.clienteName === 'string' ? body.clienteName.trim() || null : null, supervisorIds: nextSupervisorIds,
       });
       return Response.json({ project });
     } catch (err) {
@@ -90,6 +70,7 @@ export async function POST(req, { params }) {
     fechaInicioProyecto, fechaFinProyecto,
     tasks, partidas,
     purpose, hypothesis,
+    clienteName: body.clienteName,
   });
   return Response.json({ project });
 }

@@ -17,6 +17,8 @@ import { listTenantUsers } from '@/lib/kai/tenantUsers';
 import { soundsLikeDocumentPromise, NO_DOCUMENT_PROMISE } from '@/lib/kaiNext/documentPromise';
 import { listSharesVisibleTo } from '@/lib/kaiNext/sharedDocuments';
 import { listProjectsForPerson, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
+import { listRepoProjectsFor } from '@/lib/kaiNext/tools/codeRepository';
+import { getGithubToken } from '@/lib/kaiNext/github';
 import { indexAnalysis, deleteAnalysesForConversation } from '@/lib/kaiNext/analyses';
 import { runAgenticLoop } from '@/lib/shared/agents/agenticLoop';
 import { trackUsage } from '@/lib/kai/usage';
@@ -29,6 +31,8 @@ import { getLatestDraft, createActivityDraft, updateActivityDraft, lockActivity 
 
 const MAX_TOKENS = 8000;
 const MAX_ITERATIONS = 3;
+// Explorar código pide más vueltas (mirar la estructura, buscar, leer): solo para quien tiene repos.
+const MAX_ITERATIONS_WITH_CODE = 5;
 
 // Mismo patrón que app/api/aria/[tenant]/route.js: imágenes y PDF van como bloques nativos de
 // Claude, documentos de oficina (docx/pptx/xlsx/csv) se extraen a texto primero.
@@ -117,7 +121,7 @@ export async function POST(req, { params }) {
     async start(controller) {
       try {
         const canSeeProjects = identity.personId && isSectionAllowed(kaiNextAccess, 'proyectos');
-        const [intelligenceSources, dbSources, memory, bic, tenantUsers, personProjects, sharedDocuments] = await Promise.all([
+        const [intelligenceSources, dbSources, memory, bic, tenantUsers, personProjects, sharedDocuments, repoProjects] = await Promise.all([
           getIntelligenceSources(tenant),
           getDbSources(tenant),
           getKaiNextMemory(tenant),
@@ -125,7 +129,11 @@ export async function POST(req, { params }) {
           listTenantUsers(tenant),
           canSeeProjects ? listProjectsForPerson(tenant, { ...resolveProjectAccessLevel(identity), personId: identity.personId }) : [],
           listSharesVisibleTo(tenant, identity),
+          isSectionAllowed(kaiNextAccess, 'proyectos')
+            ? getGithubToken(tenant).then((t) => (t ? listRepoProjectsFor(tenant, identity) : [])).catch(() => [])
+            : [],
         ]);
+        const codeRepos = repoProjects.map((p) => ({ project: p.name, repos: p.repos.map((r) => r.fullName) }));
         // Memoria siempre activa (Business Profile + aprendizajes de discovery) — mismo
         // buildBIC/formatBICForPrompt que ya usan Kai y Aria, sin pedir el knowledge_digest
         // acá porque eso ya es una tool aparte (query_knowledge) y duplicaría contexto.
@@ -171,6 +179,7 @@ export async function POST(req, { params }) {
           team: tenantUsers.filter((u) => u.active !== false && u.name?.trim()).map((u) => ({ name: u.name, cargo: u.cargo })),
           memory,
           activeRef,
+          codeRepos,
         });
 
         const userContent = await buildUserContent(message ?? '', attachments);
@@ -215,7 +224,7 @@ export async function POST(req, { params }) {
           anthropic,
           model: MODEL,
           maxTokens: MAX_TOKENS,
-          maxIterations: MAX_ITERATIONS,
+          maxIterations: codeRepos.length ? MAX_ITERATIONS_WITH_CODE : MAX_ITERATIONS,
           system,
           messages: conversation,
           tools: allowedTools,

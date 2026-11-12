@@ -1,7 +1,7 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
-import { getNotionToken, createDevIniciativa } from '@/lib/kaiNext/projectsNotion';
+import { getProjectMeta, resolveProjectAccessLevel, projectSupervisionError } from '@/lib/kaiNext/projects';
+import { createIniciativa } from '@/lib/kaiNext/devStore';
 
 export async function POST(req, { params }) {
   const { tenant, id } = await params;
@@ -16,12 +16,11 @@ export async function POST(req, { params }) {
   if (!isSupervisorLevel) {
     return Response.json({ error: 'No tienes permiso para crear iniciativas en este proyecto.' }, { status: 403 });
   }
+  const notMine = await projectSupervisionError(tenant, id, identity);
+  if (notMine) return Response.json({ error: notMine }, { status: 403 });
 
   const meta = await getProjectMeta(tenant, id);
   if (!meta || meta.projectKind !== 'desarrollo') return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
-
-  const token = await getNotionToken(tenant);
-  if (!token) return Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 });
 
   let body;
   try {
@@ -31,7 +30,7 @@ export async function POST(req, { params }) {
   }
 
   try {
-    const iniciativa = await createDevIniciativa(token, { name: body.name, proyectoId: meta.notionProyectoId });
+    const iniciativa = await createIniciativa(tenant, id, { name: body.name, startDate: body.startDate, endDate: body.endDate });
     return Response.json({ iniciativa });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });

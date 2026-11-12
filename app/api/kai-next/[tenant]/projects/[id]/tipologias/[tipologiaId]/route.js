@@ -1,8 +1,8 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, updateTipologia, deleteTipologia, projectInactiveMessage, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
+import { getProjectMeta, updateTipologia, deleteTipologia, projectInactiveMessage, resolveProjectAccessLevel, projectSupervisionError } from '@/lib/kaiNext/projects';
 
-async function guard(tenant) {
+async function guard(tenant, id) {
   if (!(await isAuthorizedForTenant(tenant))) return { error: Response.json({ error: 'No autorizado.' }, { status: 401 }) };
   const identity = await getCurrentKaiNextIdentity(tenant);
   if (!isSectionAllowed(identity.access, 'proyectos')) {
@@ -12,6 +12,8 @@ async function guard(tenant) {
   if (!isSupervisorLevel) {
     return { error: Response.json({ error: 'No tienes permiso para gestionar tipologías acá.' }, { status: 403 }) };
   }
+  const notMine = await projectSupervisionError(tenant, id, identity);
+  if (notMine) return { error: Response.json({ error: notMine }, { status: 403 }) };
   return {};
 }
 
@@ -25,7 +27,7 @@ async function checkActive(tenant, id) {
 
 export async function PATCH(req, { params }) {
   const { tenant, id, tipologiaId } = await params;
-  const { error } = await guard(tenant);
+  const { error } = await guard(tenant, id);
   if (error) return error;
   const { error: activeError } = await checkActive(tenant, id);
   if (activeError) return activeError;
@@ -47,7 +49,7 @@ export async function PATCH(req, { params }) {
 
 export async function DELETE(req, { params }) {
   const { tenant, id, tipologiaId } = await params;
-  const { error } = await guard(tenant);
+  const { error } = await guard(tenant, id);
   if (error) return error;
   const { error: activeError } = await checkActive(tenant, id);
   if (activeError) return activeError;

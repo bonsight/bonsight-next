@@ -9074,6 +9074,55 @@
   }
 }
 
+.knx-task-commits { display: flex; flex-direction: column; gap: 8px; }
+.knx-task-commit { border: 1px solid #E5E7EB; border-radius: 8px; padding: 8px 10px; background: #fff; }
+.knx-task-commit-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; width: 100%; padding: 0; border: none; background: none; cursor: pointer; text-align: left; }
+.knx-task-commit-summary { font-size: 13px; font-weight: 600; color: #111827; min-width: 0; }
+.knx-task-commit-meta { font-size: 11.5px; color: #6B7280; }
+.knx-task-commit-head .knx-task-commit-meta { flex-shrink: 0; }
+.knx-task-commit-shas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.knx-task-commit-shas a { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #0B4A3A; background: #F0FDF4; padding: 1px 6px; border-radius: 4px; text-decoration: none; }
+.knx-task-commit-body { margin-top: 6px; padding-top: 6px; border-top: 1px solid #F3F4F6; }
+.knx-task-commit-body p { margin: 0 0 6px; font-size: 12.5px; color: #374151; white-space: pre-wrap; }
+.knx-commits-bar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.knx-commits-picker { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .03em; }
+.knx-commits-picker select { min-width: 220px; padding: 7px 10px; border: 1px solid #E5E7EB; border-radius: 8px; background: #fff; font-size: 13px; color: #111827; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.knx-commits-notice { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: #ECFDF5; color: #065F46; font-size: 13px; }
+.knx-commits-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .knx-commits-grid { grid-template-columns: 1fr; } }
+.knx-commits-col { border: 1px solid #E5E7EB; border-radius: 12px; background: #fff; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.knx-commits-col-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; color: #111827; }
+.knx-commits-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; color: #6B7280; white-space: nowrap; }
+.knx-commits-list { display: flex; flex-direction: column; max-height: 560px; overflow-y: auto; }
+.knx-commit-row { display: flex; gap: 10px; align-items: flex-start; padding: 9px 6px; border-bottom: 1px solid #F3F4F6; cursor: pointer; border-radius: 6px; }
+.knx-commit-row:hover { background: #F9FAFB; }
+.knx-commit-row--on { background: #F0FDF4; }
+.knx-commit-row input { margin-top: 3px; }
+.knx-commit-main { min-width: 0; flex: 1; }
+.knx-commit-msg { font-size: 13px; color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.knx-commit-meta { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
+.knx-commit-meta a { color: #0B4A3A; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.knx-commit-formal { font-size: 11.5px; color: #065F46; margin-top: 3px; }
+.knx-commits-kai { font-size: 12px; font-weight: 500; color: #6B7280; }
+.knx-commits-tasks { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; }
+.knx-commits-task-title { flex: 1; min-width: 0; }
+.knx-commits-kai-tag, .knx-commits-done-tag { flex-shrink: 0; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px; }
+.knx-commits-kai-tag { background: #EDE9FE; color: #5B21B6; }
+.knx-commits-done-tag { background: #F3F4F6; color: #6B7280; }
+.knx-commits-form { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid #F3F4F6; }
+.knx-commits-form textarea { resize: vertical; font-family: inherit; }
+.knx-commits-submit { padding: 10px 14px; border: none; border-radius: 8px; background: #0B4A3A; color: #fff; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.knx-commits-submit:disabled { opacity: .45; cursor: default; }
+.knx-repos-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.knx-repos-chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; border: 1px solid #E5E7EB; background: #F9FAFB; font-size: 12px; color: #111827; text-decoration: none; }
+.knx-repos-chip:hover { border-color: #0B4A3A; color: #0B4A3A; }
+.knx-repos-selected { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.knx-repos-selected-row { display: flex; align-items: center; gap: 8px; }
+.knx-repos-name { flex: 0 0 auto; max-width: 45%; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.knx-repos-selected-row .knx-canvas-meta-select { flex: 1; min-width: 0; }
+.knx-repos-list { max-height: 220px; overflow-y: auto; }
+.knx-gantt-fase-dates { font-weight: 500; color: #9CA3AF; text-transform: none; letter-spacing: 0; }
+
 /* ── Proyecto de Desarrollo — tab Sprints (carriles por Iniciativa) ──────── */
 
 .knx-sprintboard-row {

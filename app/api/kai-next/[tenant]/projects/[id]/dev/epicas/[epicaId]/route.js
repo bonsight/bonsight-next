@@ -1,35 +1,26 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
-import { getNotionToken, updateDevEpica, deleteDevEpica } from '@/lib/kaiNext/projectsNotion';
+import { getProjectMeta, supervisesProject } from '@/lib/kaiNext/projects';
+import { updateEpica, deleteEpica } from '@/lib/kaiNext/devStore';
 
-// `projectId` es opcional por compatibilidad hacia atrás con cualquier caller que no lo pase
-// todavía, pero SIEMPRE debería mandarse — sin él no se puede revalidar que el Supervisor esté
-// asignado a ESTE proyecto puntual (mismo criterio que projects/[id]/route.js para 'desarrollo').
+// Editar o borrar una épica es del Supervisor del proyecto.
 async function gate(tenant, projectId) {
   if (!(await isAuthorizedForTenant(tenant))) return { error: Response.json({ error: 'No autorizado.' }, { status: 401 }) };
   const identity = await getCurrentKaiNextIdentity(tenant);
   if (!isSectionAllowed(identity.access, 'proyectos')) {
     return { error: Response.json({ error: 'Proyectos no está habilitado para tu usuario.' }, { status: 403 }) };
   }
-  const level = resolveProjectAccessLevel(identity);
-  if (!level.isSupervisorLevel) {
+  const meta = await getProjectMeta(tenant, projectId);
+  if (!meta || meta.projectKind !== 'desarrollo') return { error: Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 }) };
+  if (!supervisesProject(identity, meta)) {
     return { error: Response.json({ error: 'No tienes permiso para gestionar esta épica.' }, { status: 403 }) };
   }
-  if (projectId && !level.isDirectorLevel) {
-    const meta = await getProjectMeta(tenant, projectId);
-    if (!meta?.supervisorIds?.includes(identity.personId)) {
-      return { error: Response.json({ error: 'No tienes permiso para gestionar esta épica.' }, { status: 403 }) };
-    }
-  }
-  const token = await getNotionToken(tenant);
-  if (!token) return { error: Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 }) };
-  return { token };
+  return {};
 }
 
 export async function PATCH(req, { params }) {
   const { tenant, id, epicaId } = await params;
-  const { error, token } = await gate(tenant, id);
+  const { error } = await gate(tenant, id);
   if (error) return error;
 
   let body;
@@ -40,22 +31,21 @@ export async function PATCH(req, { params }) {
   }
 
   try {
-    await updateDevEpica(token, epicaId, body);
+    await updateEpica(tenant, id, epicaId, body);
     return Response.json({ ok: true });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });
   }
 }
 
-// Soft delete (archiva en Notion) — bloqueado si la épica todavía tiene historias asociadas,
-// ver deleteEpica en lib/aria/board.js.
+// Bloqueado si la épica todavía tiene historias asociadas (ver deleteEpica en devStore).
 export async function DELETE(req, { params }) {
   const { tenant, id, epicaId } = await params;
-  const { error, token } = await gate(tenant, id);
+  const { error } = await gate(tenant, id);
   if (error) return error;
 
   try {
-    await deleteDevEpica(token, epicaId);
+    await deleteEpica(tenant, id, epicaId);
     return Response.json({ ok: true });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });

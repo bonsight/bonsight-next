@@ -4,12 +4,12 @@ import { useState, useEffect, useRef } from 'react';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
 import { KaiNextColaboradoresPicker, KaiNextCollabAvatars, colaboradorOptions, sameColaboradores } from './KaiNextColaboradores';
 import { useSidePanelClose } from '@/lib/kaiNext/useSidePanelClose';
+import KaiNextProjectRepos from './KaiNextProjectRepos';
+import KaiNextProjectCommits from './KaiNextProjectCommits';
 import { sortByOrder, dropsBefore, computeDropOrder } from '@/lib/kaiNext/dragOrder';
 
-// Proyecto de Desarrollo — a diferencia de los otros 3 kinds, su contenido (Proyecto/
-// Iniciativas/Épicas/Tareas) vive en el Notion interno de Bonsight, el mismo que ya usa
-// Sprints (ver lib/kaiNext/projectsNotion.js + lib/aria/board.js). Se lee en vivo cada vez,
-// sin caché — mismo criterio que ya usa getBoardData para el tablero de Sprints.
+// Proyecto de Desarrollo: iniciativas, épicas, tareas y sprints viven en Kai
+// (lib/kaiNext/devStore.js). Hasta noviembre de 2026 vivían en Notion; lo migrado conserva su id.
 
 const FASE_OPTIONS = ['Preparación', 'Análisis', 'Diseño', 'Desarrollo', 'Pruebas', 'Producción', 'Monitoreo y Cierre'];
 const FASE_COLORS = {
@@ -17,7 +17,7 @@ const FASE_COLORS = {
   'Pruebas': '#FBBF24', 'Producción': '#34D399', 'Monitoreo y Cierre': '#6B7280',
 };
 
-// Status "crudo" de Notion (ver STATUS_COLUMNS en lib/aria/board.js) → etiqueta/clase visual.
+// Status guardado (ver STATUS_COLUMNS en lib/kaiNext/devStore.js) → etiqueta/clase visual.
 const STATUS_LABELS = { Backlog: 'Backlog', 'Not started': 'Por hacer', 'In progress': 'En curso', 'In Review': 'En revisión', Done: 'Hecho' };
 const STATUS_BADGE_CLASS = { Done: 'knx-badge--active', 'In progress': 'knx-badge--progress', Backlog: 'knx-badge--off' };
 
@@ -86,7 +86,7 @@ function TrashIcon() {
 
 // Tarjeta compartida por Tablero y el tab Sprints — misma estructura/clases que TaskCard del
 // tablero real (KaiNextSprints.jsx), para que una tarea se vea igual en los dos lugares.
-function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragStart, onDragEnd, dragging, entering, shake, showStatusSelect = true, allTasks, dropIndicator, onDragOverCard, onDropCard }) {
+function DevTaskCard({ task, columns, onOpen, onStatusChange, statusDisabled = false, draggable, onDragStart, onDragEnd, dragging, entering, shake, showStatusSelect = true, allTasks, dropIndicator, onDragOverCard, onDropCard }) {
   const [childrenOpen, setChildrenOpen] = useState(false);
   const hasDates = task.startDate || task.dueDate;
   const vencida = task.status !== 'Done' && !!task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10);
@@ -134,7 +134,7 @@ function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragS
         {task.estimatedHours != null && <span className="knx-board-card-hours">{task.estimatedHours}h</span>}
       </div>
       {showStatusSelect && (
-        <select className="knx-board-card-status" value={task.status} onClick={(e) => e.stopPropagation()} onChange={(e) => onStatusChange(task, e.target.value)}>
+        <select className="knx-board-card-status" value={task.status} disabled={statusDisabled} onClick={(e) => e.stopPropagation()} onChange={(e) => onStatusChange(task, e.target.value)}>
           {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       )}
@@ -170,9 +170,74 @@ function DevTaskCard({ task, columns, onOpen, onStatusChange, draggable, onDragS
   );
 }
 
+// Commits que el equipo formalizó para esta tarea o sus subtareas (pestaña Commits). Se recargan
+// al abrir la tarea; no consulta GitHub.
+function TaskCommits({ tenant, projectId, task, subtasks }) {
+  const [items, setItems] = useState(null);
+  const [openId, setOpenId] = useState(null);
+  const ids = [task.id, ...subtasks.map((c) => c.id)];
+  const idsKey = ids.join(',');
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/kai-next/${tenant}/projects/${projectId}/commits/formalizations?taskIds=${encodeURIComponent(idsKey)}`)
+      .then((r) => (r.ok ? r.json() : { formalizations: [] }))
+      .then((d) => { if (alive) setItems(d.formalizations ?? []); })
+      .catch(() => { if (alive) setItems([]); });
+    return () => { alive = false; };
+  }, [tenant, projectId, idsKey]);
+
+  if (items === null) return null;
+  const titleOf = new Map(subtasks.map((c) => [c.id, c.title]));
+  const commitCount = items.reduce((n, f) => n + f.commits.length, 0);
+
+  return (
+    <div className="knx-board-field">
+      <label>Commits{commitCount ? ` (${commitCount})` : ''}</label>
+      {!items.length ? (
+        <p className="knx-canvas-ficha-progress" style={{ margin: 0 }}>Todavía no hay commits formalizados para esta tarea. Se formalizan en la pestaña Commits.</p>
+      ) : (
+        <div className="knx-task-commits">
+          {items.map((f) => {
+            const viaSubtask = !f.taskIds.includes(task.id) ? f.taskIds.map((id) => titleOf.get(id)).filter(Boolean) : [];
+            const open = openId === f.id;
+            return (
+              <div key={f.id} className="knx-task-commit">
+                <button type="button" className="knx-task-commit-head" onClick={() => setOpenId(open ? null : f.id)}>
+                  <span className="knx-task-commit-summary">{open ? '▾' : '▸'} {f.summary}</span>
+                  <span className="knx-task-commit-meta">
+                    {f.by ? `${f.by} · ` : ''}{new Date(f.at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                  </span>
+                </button>
+                {viaSubtask.length > 0 && <div className="knx-task-commit-meta">Por la subtarea: {viaSubtask.join(', ')}</div>}
+                <div className="knx-task-commit-shas">
+                  {f.commits.map((c) => (
+                    <a key={c.sha} href={c.url} target="_blank" rel="noreferrer" title={c.message}>{c.shortSha}</a>
+                  ))}
+                  <span className="knx-task-commit-meta">{f.repo}</span>
+                </div>
+                {open && (
+                  <div className="knx-task-commit-body">
+                    <p>{f.description}</p>
+                    {f.commits.map((c) => (
+                      <div key={c.sha} className="knx-task-commit-meta">{c.shortSha} · {c.author} · {c.message}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Panel de detalle/edición de una tarea — mismos campos/acciones que TaskDetailPanel del
 // tablero real, pegando a /dev/board en vez de /board.
-function DevTaskDetailPanel({ tenant, projectId, task, equipo, canManage, columns, onClose, onAction, onRemove, allTasks, onCreateSubtask, onToggleSubtask, onOpenSubtask }) {
+// canManage: Supervisor del proyecto. canEdit: la tarea es suya (estado, descripción, fechas, horas
+// y entregables). canDelete: Supervisor, o la creó y no empezó. canEditTask: para sus subtareas.
+function DevTaskDetailPanel({ tenant, projectId, task, equipo, canManage, canEdit = canManage, canDelete = canManage, canEditTask = () => canEdit, columns, onClose, onAction, onRemove, allTasks, onCreateSubtask, onToggleSubtask, onOpenSubtask }) {
   const [closing, handleClose] = useSidePanelClose(onClose);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? '');
@@ -358,23 +423,23 @@ function DevTaskDetailPanel({ tenant, projectId, task, equipo, canManage, column
         )}
         <div className="knx-board-field">
           <label>Título</label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} disabled={!canManage} />
         </div>
         <div className="knx-board-field">
           <label>Descripción</label>
-          <textarea rows={8} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <textarea rows={8} value={description} onChange={(e) => setDescription(e.target.value)} disabled={!canEdit} />
         </div>
         <div className="knx-board-field-row">
           <div className="knx-board-field">
             <label>Tipo</label>
-            <select value={taskType} onChange={(e) => setTaskType(e.target.value)}>
+            <select value={taskType} onChange={(e) => setTaskType(e.target.value)} disabled={!canManage}>
               <option value="">Sin definir</option>
               {TASK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div className="knx-board-field">
             <label>Prioridad</label>
-            <select value={priority} onChange={(e) => setPriority(e.target.value)}>
+            <select value={priority} onChange={(e) => setPriority(e.target.value)} disabled={!canManage}>
               <option value="">Sin definir</option>
               {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -382,7 +447,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, equipo, canManage, column
           {SEVERITY_APPLIES_TO.has(taskType) && (
             <div className="knx-board-field">
               <label>Severidad</label>
-              <select value={severity} onChange={(e) => setSeverity(e.target.value)}>
+              <select value={severity} onChange={(e) => setSeverity(e.target.value)} disabled={!canManage}>
                 <option value="">Sin definir</option>
                 {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -399,7 +464,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, equipo, canManage, column
           </div>
           <div className="knx-board-field">
             <label>Estado</label>
-            <select value={task.status} onChange={(e) => onAction('move_task', { status: e.target.value })}>
+            <select value={task.status} onChange={(e) => onAction('move_task', { status: e.target.value })} disabled={!canEdit}>
               {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
@@ -413,20 +478,20 @@ function DevTaskDetailPanel({ tenant, projectId, task, equipo, canManage, column
         <div className="knx-board-field-row">
           <div className="knx-board-field">
             <label>Inicio</label>
-            <input type="date" value={startDate ?? ''} onChange={(e) => setStartDate(e.target.value)} />
+            <input type="date" value={startDate ?? ''} onChange={(e) => setStartDate(e.target.value)} disabled={!canEdit} />
           </div>
           <div className="knx-board-field">
             <label>Fin</label>
-            <input type="date" value={endDate ?? ''} onChange={(e) => setEndDate(e.target.value)} />
+            <input type="date" value={endDate ?? ''} onChange={(e) => setEndDate(e.target.value)} disabled={!canEdit} />
           </div>
           <div className="knx-board-field">
             <label>Estimación (hs)</label>
-            <input type="number" min="0" step="0.5" value={estimatedHours ?? ''} onChange={(e) => setEstimatedHours(e.target.value)} />
+            <input type="number" min="0" step="0.5" value={estimatedHours ?? ''} onChange={(e) => setEstimatedHours(e.target.value)} disabled={!canEdit} />
           </div>
         </div>
         <div className="knx-board-field">
           <label>Horas reales</label>
-          <input type="number" min="0" step="0.5" value={actualHours ?? ''} onChange={(e) => setActualHours(e.target.value)} />
+          <input type="number" min="0" step="0.5" value={actualHours ?? ''} onChange={(e) => setActualHours(e.target.value)} disabled={!canEdit} />
         </div>
         <div className="knx-board-field">
           <label>Entregables</label>
@@ -439,7 +504,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, equipo, canManage, column
                 <button type="button" className="knx-side-panel-close" aria-label="Quitar" onClick={() => removeEntregable(idx)}>×</button>
               </div>
             ))}
-            <div className="knx-entregable-row">
+            <div className="knx-entregable-row" hidden={!canEdit}>
               <button type="button" className="knx-board-subtask-add-btn" onClick={addEntregable}>+ Agregar link</button>
               <label className="knx-board-subtask-add-btn" style={{ cursor: uploadingEntregable ? 'default' : 'pointer', opacity: uploadingEntregable ? 0.5 : 1 }}>
                 {uploadingEntregable ? 'Subiendo…' : '+ Subir a Drive'}
@@ -448,9 +513,11 @@ function DevTaskDetailPanel({ tenant, projectId, task, equipo, canManage, column
             </div>
           </div>
         </div>
-        <button type="button" className="knx-new-chat" disabled={!dirty || saving} onClick={saveAll} style={{ width: '100%', justifyContent: 'center' }}>
-          {saving ? 'Guardando…' : 'Guardar cambios'}
-        </button>
+        {canEdit && (
+          <button type="button" className="knx-new-chat" disabled={!dirty || saving} onClick={saveAll} style={{ width: '100%', justifyContent: 'center' }}>
+            {saving ? 'Guardando…' : 'Guardar cambios'}
+          </button>
+        )}
         <div className="knx-board-field">
           <label>Subtareas{children.length > 0 ? ` (${children.filter((c) => c.status === 'Done').length}/${children.length})` : ''}</label>
           <div className="knx-board-subtask-list">
@@ -460,6 +527,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, equipo, canManage, column
                   type="button"
                   className={`knx-board-card-child-check${c.status === 'Done' ? ' knx-board-card-child-check--done' : ''}`}
                   aria-label={c.status === 'Done' ? 'Marcar como pendiente' : 'Marcar como hecha'}
+                  disabled={!canEditTask(c)}
                   onClick={() => onToggleSubtask(c.id, c.status !== 'Done')}
                 />
                 <span className={`knx-board-card-child-title${c.status === 'Done' ? ' knx-board-card-child-title--done' : ''}`} onClick={() => requestExit(() => onOpenSubtask(c.id))}>
@@ -481,7 +549,8 @@ function DevTaskDetailPanel({ tenant, projectId, task, equipo, canManage, column
             </div>
           </div>
         </div>
-        <button type="button" className="knx-delete-task-btn" onClick={onRemove} hidden={!canManage}>
+        <TaskCommits tenant={tenant} projectId={projectId} task={task} subtasks={children} />
+        <button type="button" className="knx-delete-task-btn" onClick={onRemove} hidden={!canDelete}>
           Eliminar tarea
         </button>
       </div>
@@ -623,7 +692,7 @@ function RoadmapView({ iniciativas, selectedEpicaId, onSelectEpica }) {
             if (!epicasConFecha.length) return null;
             return (
               <div key={ini.id}>
-                <div className="knx-gantt-fase"><span>{ini.name}</span></div>
+                <div className="knx-gantt-fase"><span>{ini.name}{iniciativaRange(ini) && <span className="knx-gantt-fase-dates"> · {iniciativaRange(ini)}</span>}</span></div>
                 {epicasConFecha.map((e) => {
                   const barLeft = Math.max(0, daysBetween(domainStart, e.startDate)) * ROADMAP_PX_PER_DAY;
                   const barWidth = Math.max(ROADMAP_PX_PER_DAY, (daysBetween(e.startDate, e.endDate) + 1) * ROADMAP_PX_PER_DAY);
@@ -665,21 +734,39 @@ function RoadmapView({ iniciativas, selectedEpicaId, onSelectEpica }) {
   );
 }
 
+function iniciativaRange(ini) {
+  if (!ini.startDate && !ini.endDate) return '';
+  return `${ini.startDate ? formatShortDate(ini.startDate) : '—'} → ${ini.endDate ? formatShortDate(ini.endDate) : '—'}`;
+}
+
 // Fila de una Iniciativa existente — nombre en modo lectura, con ✎ para renombrar inline y 🗑
 // para borrar (soft delete en Notion, bloqueado del lado del servidor si todavía tiene épicas).
 function IniciativaRow({ tenant, projectId, iniciativa, onReload, onRequestDelete }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(iniciativa.name);
+  const [startDate, setStartDate] = useState(iniciativa.startDate ?? '');
+  const [endDate, setEndDate] = useState(iniciativa.endDate ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  const cancel = () => {
+    setEditing(false);
+    setName(iniciativa.name);
+    setStartDate(iniciativa.startDate ?? '');
+    setEndDate(iniciativa.endDate ?? '');
+    setError(null);
+  };
+
   const save = async () => {
-    if (!name.trim() || name.trim() === iniciativa.name) { setEditing(false); setName(iniciativa.name); return; }
+    const unchanged = name.trim() === iniciativa.name && startDate === (iniciativa.startDate ?? '') && endDate === (iniciativa.endDate ?? '');
+    if (!name.trim() || unchanged) { cancel(); return; }
+    if (startDate && endDate && endDate < startDate) { setError('La fecha de fin no puede ser anterior a la de inicio.'); return; }
     setSaving(true);
     setError(null);
     try {
       const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/dev/iniciativas/${iniciativa.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, startDate: startDate || null, endDate: endDate || null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo renombrar.');
@@ -692,30 +779,52 @@ function IniciativaRow({ tenant, projectId, iniciativa, onReload, onRequestDelet
     }
   };
 
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-      {editing ? (
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '6px 0', borderBottom: '1px solid #EEF0F2' }}>
         <input
           className="knx-canvas-meta-select"
-          style={{ flex: 1, minWidth: 0 }}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && save()}
           disabled={saving}
           autoFocus
         />
-      ) : (
-        <span>{iniciativa.name} <span className="knx-canvas-group-count">{iniciativa.epicas.length} épica{iniciativa.epicas.length !== 1 ? 's' : ''}</span></span>
-      )}
+        <IniciativaDateFields startDate={startDate} endDate={endDate} onStart={setStartDate} onEnd={setEndDate} disabled={saving} />
+        {error && <p className="knx-canvas-error" style={{ margin: 0 }}>{error}</p>}
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button type="button" className="knx-canvas-mini" disabled={saving} onClick={save}>{saving ? 'Guardando…' : 'Guardar'}</button>
+          <button type="button" className="knx-canvas-mini" disabled={saving} onClick={cancel}>Cancelar</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+      <span>
+        {iniciativa.name} <span className="knx-canvas-group-count">{iniciativa.epicas.length} épica{iniciativa.epicas.length !== 1 ? 's' : ''}</span>
+        {iniciativaRange(iniciativa) && <span className="knx-canvas-ficha-progress" style={{ display: 'block' }}>{iniciativaRange(iniciativa)}</span>}
+      </span>
       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-        {editing ? (
-          <button type="button" className="knx-canvas-mini" disabled={saving} onClick={save}>Guardar</button>
-        ) : (
-          <button type="button" className="knx-canvas-mini" onClick={() => setEditing(true)}>✎</button>
-        )}
+        <button type="button" className="knx-canvas-mini" onClick={() => setEditing(true)}>✎</button>
         <button type="button" className="knx-canvas-mini" onClick={() => onRequestDelete(iniciativa)}>🗑</button>
       </div>
-      {error && <p className="knx-canvas-error" style={{ margin: 0 }}>{error}</p>}
+    </div>
+  );
+}
+
+function IniciativaDateFields({ startDate, endDate, onStart, onEnd, disabled }) {
+  return (
+    <div style={{ display: 'flex', gap: 6 }}>
+      <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span className="knx-canvas-meta-field-label">Inicio (opcional)</span>
+        <input type="date" className="knx-canvas-meta-select" value={startDate} onChange={(e) => onStart(e.target.value)} disabled={disabled} />
+      </label>
+      <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span className="knx-canvas-meta-field-label">Fin (opcional)</span>
+        <input type="date" className="knx-canvas-meta-select" value={endDate} min={startDate || undefined} onChange={(e) => onEnd(e.target.value)} disabled={disabled} />
+      </label>
     </div>
   );
 }
@@ -723,16 +832,25 @@ function IniciativaRow({ tenant, projectId, iniciativa, onReload, onRequestDelet
 function NewIniciativaForm({ tenant, projectId, iniciativas, onCreate, onReload }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [createError, setCreateError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
 
   const submit = async () => {
-    if (!name.trim()) return;
+    if (!name.trim()) { setCreateError('Escribe un nombre para la iniciativa.'); return; }
+    if (startDate && endDate && endDate < startDate) { setCreateError('La fecha de fin no puede ser anterior a la de inicio.'); return; }
     setSaving(true);
+    setCreateError(null);
     try {
-      await onCreate(name);
+      await onCreate({ name, startDate: startDate || null, endDate: endDate || null });
       setName('');
+      setStartDate('');
+      setEndDate('');
+    } catch (e) {
+      setCreateError(e.message || 'No se pudo crear la iniciativa.');
     } finally {
       setSaving(false);
     }
@@ -756,7 +874,7 @@ function NewIniciativaForm({ tenant, projectId, iniciativas, onCreate, onReload 
     <div style={{ position: 'relative' }}>
       <button type="button" className="knx-new-chat" onClick={() => setOpen((v) => !v)}>+ Nueva iniciativa</button>
       {open && (
-        <div className="knx-canvas-newcol-form knx-popover-form" style={{ width: 280 }}>
+        <div className="knx-canvas-newcol-form knx-popover-form" style={{ width: 320 }}>
           {iniciativas.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
               {iniciativas.map((ini) => (
@@ -765,9 +883,13 @@ function NewIniciativaForm({ tenant, projectId, iniciativas, onCreate, onReload 
             </div>
           )}
           {deleteError && <p className="knx-canvas-error">{deleteError}</p>}
-          <input className="knx-canvas-meta-select" placeholder="Nombre de la iniciativa…" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className="knx-canvas-meta-select" placeholder="Nombre de la iniciativa…" value={name} onChange={(e) => setName(e.target.value)} disabled={saving} />
+          <div style={{ marginTop: 6 }}>
+            <IniciativaDateFields startDate={startDate} endDate={endDate} onStart={setStartDate} onEnd={setEndDate} disabled={saving} />
+          </div>
+          {createError && <p className="knx-canvas-error">{createError}</p>}
           <div className="knx-canvas-newcol-actions">
-            <button type="button" className="knx-canvas-mini" disabled={saving} onClick={submit}>Agregar</button>
+            <button type="button" className="knx-canvas-mini" disabled={saving} onClick={submit}>{saving ? 'Agregando…' : 'Agregar'}</button>
             <button type="button" className="knx-canvas-mini" onClick={() => setOpen(false)}>Cerrar</button>
           </div>
         </div>
@@ -775,7 +897,7 @@ function NewIniciativaForm({ tenant, projectId, iniciativas, onCreate, onReload 
       <KaiNextConfirmDialog
         open={!!deleteTarget}
         title="Eliminar iniciativa"
-        message={`¿Eliminar "${deleteTarget?.name}"? No se puede deshacer (se puede recuperar desde la papelera de Notion). Solo se puede borrar si no tiene épicas.`}
+        message={`¿Eliminar "${deleteTarget?.name}"? No se puede deshacer. Solo se puede borrar si no tiene épicas.`}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
@@ -1198,7 +1320,7 @@ function ImportDocModal({ tenant, projectId, iniciativas, onClose, onImported })
   );
 }
 
-function EpicaTareas({ tenant, projectId, epicaId, activeSprint, onReload }) {
+function EpicaTareas({ tenant, projectId, epicaId, activeSprint, canWork, canEditTask = () => canWork, onReload }) {
   const [tareas, setTareas] = useState(null);
   const [scheduleFor, setScheduleFor] = useState(null); // taskId pendiente de completar antes de salir de Backlog
   const [err, setErr] = useState(null);
@@ -1286,16 +1408,16 @@ function EpicaTareas({ tenant, projectId, epicaId, activeSprint, onReload }) {
               <span className="knx-canvas-ficha-progress">faltan fechas/estimación</span>
             )}
           </div>
-          {!t.sprintIds?.length && <AssignSprintControl pageId={t.id} activeSprint={activeSprint} onAssigned={assignSprint} />}
+          {canEditTask(t) && !t.sprintIds?.length && <AssignSprintControl pageId={t.id} activeSprint={activeSprint} onAssigned={assignSprint} />}
         </div>
       ))}
-      <NewTareaForm activeSprint={activeSprint} onCreate={createTarea} />
+      {canWork && <NewTareaForm activeSprint={activeSprint} onCreate={createTarea} />}
       {scheduleFor && <ScheduleModal onCancel={() => setScheduleFor(null)} onConfirm={confirmSchedule} />}
     </div>
   );
 }
 
-function EditEpicaForm({ tenant, projectId, epica, onSaved, onCancel }) {
+function EditEpicaForm({ tenant, projectId, epica, onSaved, onCancel, onDirtyChange }) {
   const [name, setName] = useState(epica.name ?? '');
   const [fase, setFase] = useState(epica.fase ?? '');
   const [startDate, setStartDate] = useState(epica.startDate ?? '');
@@ -1303,6 +1425,11 @@ function EditEpicaForm({ tenant, projectId, epica, onSaved, onCancel }) {
   const [entregables, setEntregables] = useState(epica.entregables ?? []);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
+
+  const dirty = name !== (epica.name ?? '') || fase !== (epica.fase ?? '') || startDate !== (epica.startDate ?? '')
+    || endDate !== (epica.endDate ?? '') || JSON.stringify(entregables) !== JSON.stringify(epica.entregables ?? []);
+  useEffect(() => { onDirtyChange?.(dirty && !saving); }, [dirty, saving]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onDirtyChange?.(false), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [uploadingEntregable, setUploadingEntregable] = useState(false);
   const [uploadErr, setUploadErr] = useState(null);
@@ -1404,9 +1531,57 @@ function EditEpicaForm({ tenant, projectId, epica, onSaved, onCancel }) {
 // KaiNextAnalisis.jsx (panelMessages/sendToPanel), pero el chat pega a una ruta propia y liviana
 // (.../dev/epicas/{epicaId}/ask) en vez del chat agéntico completo, para que las respuestas queden
 // ancladas a esta épica y no se mezclen con el historial general de conversaciones.
-function EpicaDetailPanel({ tenant, projectId, epica, index, total, activeSprint, onPrev, onNext, onClose, onReload }) {
+function EpicaDetailPanel({ tenant, projectId, epica, index, total, activeSprint, canManage, canWork, canEditTask, onPrev, onNext, onClose, onReload }) {
   const [closing, handleClose] = useSidePanelClose(onClose);
   const [editing, setEditing] = useState(false);
+  const [editDirty, setEditDirty] = useState(false);
+  const hasPendingChanges = editing && editDirty;
+  const [pendingExit, setPendingExit] = useState(null);
+  const requestExit = (exit) => {
+    if (hasPendingChanges) setPendingExit(() => exit);
+    else exit();
+  };
+
+  useEffect(() => {
+    if (!hasPendingChanges) return undefined;
+    const warn = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasPendingChanges]);
+
+  // Igual que el detalle de tarea: clic afuera cierra, salvo que sea otra épica del Roadmap (esa
+  // ya cambia el panel sola). Con cambios pendientes se frena el clic y se pregunta antes.
+  const panelRef = useRef(null);
+  const pressStartedInside = useRef(false);
+  const skipExitGuard = useRef(false);
+  useEffect(() => {
+    const onDocMouseDown = (e) => {
+      pressStartedInside.current = !!panelRef.current?.contains(e.target);
+      if (hasPendingChanges || e.target.closest('.knx-gantt-row')) return;
+      if (panelRef.current && !panelRef.current.contains(e.target)) handleClose();
+    };
+    const onDocClickCapture = (e) => {
+      const startedInside = pressStartedInside.current;
+      pressStartedInside.current = false;
+      if (!hasPendingChanges || skipExitGuard.current || startedInside) return;
+      if (panelRef.current?.contains(e.target) || e.target.closest('.knx-confirm-backdrop, .knx-ficha-share-backdrop')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const target = e.target;
+      setPendingExit(() => () => {
+        skipExitGuard.current = true;
+        target.click();
+        skipExitGuard.current = false;
+        if (!target.closest('.knx-gantt-row')) handleClose();
+      });
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    document.addEventListener('click', onDocClickCapture, true);
+    return () => {
+      document.removeEventListener('mousedown', onDocMouseDown);
+      document.removeEventListener('click', onDocClickCapture, true);
+    };
+  }, [handleClose, hasPendingChanges]);
   const [historias, setHistorias] = useState(null);
   const [messages, setMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
@@ -1470,21 +1645,29 @@ function EpicaDetailPanel({ tenant, projectId, epica, index, total, activeSprint
   };
 
   return (
-    <div className={`knx-side-panel${closing ? ' knx-side-panel--closing' : ''}`}>
+    <div className={`knx-side-panel${closing ? ' knx-side-panel--closing' : ''}`} ref={panelRef}>
+      <KaiNextConfirmDialog
+        open={!!pendingExit}
+        title="Cambios sin guardar"
+        message="Tienes cambios pendientes en esta épica. Si sales ahora, se perderán."
+        confirmLabel="Descartar cambios"
+        onCancel={() => setPendingExit(null)}
+        onConfirm={() => { const exit = pendingExit; setPendingExit(null); exit(); }}
+      />
       <div className="knx-side-panel-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <button type="button" className="knx-side-panel-close" aria-label="Épica anterior" onClick={onPrev} disabled={index <= 0}>‹</button>
-          <button type="button" className="knx-side-panel-close" aria-label="Épica siguiente" onClick={onNext} disabled={index >= total - 1}>›</button>
+          <button type="button" className="knx-side-panel-close" aria-label="Épica anterior" onClick={() => requestExit(onPrev)} disabled={index <= 0}>‹</button>
+          <button type="button" className="knx-side-panel-close" aria-label="Épica siguiente" onClick={() => requestExit(onNext)} disabled={index >= total - 1}>›</button>
           <span className="knx-canvas-ficha-progress" style={{ marginLeft: 6 }}>{index + 1} de {total}</span>
         </div>
-        <button type="button" className="knx-side-panel-close" aria-label="Cerrar panel" onClick={handleClose}>×</button>
+        <button type="button" className="knx-side-panel-close" aria-label="Cerrar panel" onClick={() => requestExit(() => handleClose())}>×</button>
       </div>
       <div className="knx-side-panel-thread">
         <h3 className="knx-epica-panel-title">{epica.name}</h3>
         <div className="knx-epica-panel-badges">
           <span className="knx-epica-fase-badge" style={{ color, background: `${color}1A` }}>{epica.fase ?? 'Sin fase'}</span>
-          <button type="button" className="knx-canvas-icon-btn" title="Editar nombre/fase/fechas" onClick={() => setEditing((v) => !v)}>✎</button>
-          <button type="button" className="knx-canvas-icon-btn knx-canvas-icon-btn--danger" title="Eliminar épica" onClick={() => setConfirmDelete(true)}>🗑</button>
+          {canManage && <button type="button" className="knx-canvas-icon-btn" title="Editar nombre/fase/fechas" onClick={() => (editing ? requestExit(() => setEditing(false)) : setEditing(true))}>✎</button>}
+          {canManage && <button type="button" className="knx-canvas-icon-btn knx-canvas-icon-btn--danger" title="Eliminar épica" onClick={() => setConfirmDelete(true)}>🗑</button>}
         </div>
         {deleteErr && <p className="knx-canvas-error">{deleteErr}</p>}
 
@@ -1493,8 +1676,9 @@ function EpicaDetailPanel({ tenant, projectId, epica, index, total, activeSprint
             tenant={tenant}
             projectId={projectId}
             epica={epica}
+            onDirtyChange={setEditDirty}
             onCancel={() => setEditing(false)}
-            onSaved={() => { setEditing(false); onReload(); }}
+            onSaved={() => { setEditDirty(false); setEditing(false); onReload(); }}
           />
         )}
 
@@ -1529,7 +1713,7 @@ function EpicaDetailPanel({ tenant, projectId, epica, index, total, activeSprint
 
         <div style={{ marginTop: 10 }}>
           <h4 className="knx-canvas-meta-field-label">Historias · {totalCount}</h4>
-          <EpicaTareas tenant={tenant} projectId={projectId} epicaId={epica.id} activeSprint={activeSprint} onReload={onReload} />
+          <EpicaTareas tenant={tenant} projectId={projectId} epicaId={epica.id} activeSprint={activeSprint} canWork={canWork} canEditTask={canEditTask} onReload={onReload} />
         </div>
 
         {messages.map((m, i) => (
@@ -1544,7 +1728,7 @@ function EpicaDetailPanel({ tenant, projectId, epica, index, total, activeSprint
       <KaiNextConfirmDialog
         open={confirmDelete}
         title="Eliminar épica"
-        message={`¿Eliminar "${epica.name}"? No se puede deshacer (se puede recuperar desde la papelera de Notion). Solo se puede borrar si no tiene historias.`}
+        message={`¿Eliminar "${epica.name}"? No se puede deshacer. Solo se puede borrar si no tiene historias.`}
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}
       />
@@ -1864,7 +2048,7 @@ function LaneToggle({ name, iniciativaName, count, doneCount = 0, collapsed, onT
   );
 }
 
-function ProjectBoard({ canManage, tenant, projectId, board, onReload, iniciativas, activeSprint, onOptimisticMove }) {
+function ProjectBoard({ canManage, canWork, canEditTask = () => canWork, canDeleteTask = () => canManage, tenant, projectId, board, onReload, iniciativas, activeSprint, onOptimisticMove }) {
   const [scheduleFor, setScheduleFor] = useState(null); // { taskId, status }
   const [hoursFor, setHoursFor] = useState(null); // { taskId, status }
   const [newTareaOpen, setNewTareaOpen] = useState(false);
@@ -2076,7 +2260,7 @@ function ProjectBoard({ canManage, tenant, projectId, board, onReload, iniciativ
             {allLanesCollapsed ? 'Expandir todo' : 'Colapsar todo'}
           </button>
         )}
-        {canManage && <button type="button" className="knx-new-chat" onClick={() => setNewTareaOpen(true)}>+ Nueva tarea</button>}
+        {canWork && <button type="button" className="knx-new-chat" onClick={() => setNewTareaOpen(true)}>+ Nueva tarea</button>}
       </div>
       {!lanes.length ? (
         <p className="knx-knowledge-empty">
@@ -2131,7 +2315,7 @@ function ProjectBoard({ canManage, tenant, projectId, board, onReload, iniciativ
                                 entering={justMovedTaskId === t.id}
                                 allTasks={tasks}
                               />
-                              {canManage && !t.sprintIds?.length && <AssignSprintControl pageId={t.id} activeSprint={activeSprint} onAssigned={assignSprint} />}
+                              {canEditTask(t) && !t.sprintIds?.length && <AssignSprintControl pageId={t.id} activeSprint={activeSprint} onAssigned={assignSprint} />}
                             </div>
                           ))}
                         </div>
@@ -2162,6 +2346,9 @@ function ProjectBoard({ canManage, tenant, projectId, board, onReload, iniciativ
         <DevTaskDetailPanel
           key={selectedTask.id}
           canManage={canManage}
+          canEdit={canEditTask(selectedTask)}
+          canDelete={canDeleteTask(selectedTask)}
+          canEditTask={canEditTask}
           tenant={tenant}
           projectId={projectId}
           task={selectedTask}
@@ -2300,7 +2487,7 @@ function BringTasksModal({ tasks, sprintOptions, busy, onConfirm, onClose }) {
 // tarjeta en el carril de OTRA iniciativa (la Iniciativa de una tarea no cambia acá, solo su
 // Status) — si se permitiera, la tarjeta "volvería" a su carril real al recargar, que confunde
 // más de lo que ayuda.
-function SprintsBoardTab({ canManage, tenant, projectId, tasks, columns, talento, equipo, iniciativas, activeSprint, sprints, onReload, onSprintReload, onOptimisticMove, onOptimisticReorder }) {
+function SprintsBoardTab({ canManage, canWork, canEditTask = () => canWork, canDeleteTask = () => canManage, tenant, projectId, tasks, columns, talento, equipo, iniciativas, activeSprint, sprints, onReload, onSprintReload, onOptimisticMove, onOptimisticReorder }) {
   const [dragInfo, setDragInfo] = useState(null); // { taskId, laneId }
   const [dragOverCell, setDragOverCell] = useState(null);
   const [dragOverTaskId, setDragOverTaskId] = useState(null);
@@ -2651,7 +2838,7 @@ function SprintsBoardTab({ canManage, tenant, projectId, tasks, columns, talento
               {activeResponsables.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           )}
-          {canManage && <button type="button" className="knx-new-chat" onClick={() => setNewTareaOpen(true)}>+ Nueva tarea</button>}
+          {canWork && <button type="button" className="knx-new-chat" onClick={() => setNewTareaOpen(true)}>+ Nueva tarea</button>}
         </div>
       </div>
       {!lanes.length ? (
@@ -2715,7 +2902,8 @@ function SprintsBoardTab({ canManage, tenant, projectId, tasks, columns, talento
                               columns={sprintColumns}
                               onOpen={setSelectedTaskId}
                               onStatusChange={(task, status) => requestStatusChange(task.id, status)}
-                              draggable
+                              statusDisabled={!canEditTask(t)}
+                              draggable={canEditTask(t)}
                               onDragStart={() => setDragInfo({ taskId: t.id, laneId: lane.id })}
                               onDragEnd={clearCellDrag}
                               dragging={dragInfo?.taskId === t.id}
@@ -2777,6 +2965,9 @@ function SprintsBoardTab({ canManage, tenant, projectId, tasks, columns, talento
         <DevTaskDetailPanel
           key={selectedTask.id}
           canManage={canManage}
+          canEdit={canEditTask(selectedTask)}
+          canDelete={canDeleteTask(selectedTask)}
+          canEditTask={canEditTask}
           tenant={tenant}
           projectId={projectId}
           task={selectedTask}
@@ -2916,9 +3107,10 @@ const DEV_TABS = [
   { id: 'plan', label: 'Plan' },
   { id: 'tablero', label: 'Tablero' },
   { id: 'sprints', label: 'Sprints' },
+  { id: 'commits', label: 'Commits' },
 ];
 
-export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProyecto, iniciativas, canManage, onReload }) {
+export default function KaiNextProjectDesarrollo({ tenant, projectId, iniciativas, canManage, canWork = canManage, onReload }) {
   const [tab, setTab] = useState('plan');
   const [board, setBoard] = useState(null);
   const [activeSprint, setActiveSprint] = useState(null);
@@ -2956,6 +3148,25 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
 
   const reload = () => { onReload(); loadBoard(); };
 
+  // canManage = Supervisor de ESTE proyecto. El resto del equipo solo incide en sus tareas: las que
+  // tiene a cargo o en las que colabora, o las que creó y siguen sin responsable. Mismo criterio que
+  // isOwnDevTask/canDeleteOwnDevTask en lib/kaiNext/devOwnership.js (el servidor vuelve a validarlo).
+  const me = board?.me ?? null;
+  const creatorById = new Map((board?.tasks ?? []).map((t) => [t.id, t.createdBy ?? null]));
+  const createdByOf = (t) => t?.createdBy ?? creatorById.get(t?.id) ?? null;
+  const canEditTask = (t) => {
+    if (!t || !canWork) return false;
+    if (canManage) return true;
+    if (!me) return false;
+    if (me.personId && (t.responsableId === me.personId || (t.colaboradorIds ?? []).includes(me.personId))) return true;
+    return !t.responsableId && !!me.personId && createdByOf(t) === me.personId;
+  };
+  const canDeleteTask = (t) => {
+    if (!t || !canWork) return false;
+    if (canManage) return true;
+    return !!me?.personId && createdByOf(t) === me.personId && ['Backlog', 'Not started'].includes(t.status) && !(Number(t.actualHours) > 0);
+  };
+
   // Pinta el nuevo status AL INSTANTE (sin esperar la ida y vuelta a Notion) — mismo criterio
   // que moveTaskOptimistic en KaiNextSprints.jsx, para que el drop "pegue" al toque en vez de
   // que la tarjeta vuelva a su columna un segundo y recién salte cuando llega la respuesta.
@@ -2969,11 +3180,13 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
     setBoard((prev) => (prev ? { ...prev, tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, order } : t)) } : prev));
   };
 
-  const createIniciativa = async (name) => {
+  const createIniciativa = async ({ name, startDate, endDate }) => {
     const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/dev/iniciativas`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, startDate, endDate }),
     });
-    if (res.ok) reload();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'No se pudo crear la iniciativa.');
+    reload();
   };
 
   const totalEpicas = iniciativas.reduce((n, i) => n + i.epicas.length, 0);
@@ -2989,6 +3202,7 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
 
   return (
     <>
+      <KaiNextProjectRepos tenant={tenant} projectId={projectId} />
       <p className="knx-canvas-ficha-progress" style={{ marginBottom: 10 }}>
         {totalEpicas} épica{totalEpicas !== 1 ? 's' : ''}{totalHistorias != null ? ` · ${totalHistorias} historia${totalHistorias !== 1 ? 's' : ''}` : ''}
       </p>
@@ -3002,8 +3216,8 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
           <div style={{ display: 'flex', gap: 8 }}>
             {canManage && <NewIniciativaForm tenant={tenant} projectId={projectId} iniciativas={iniciativas} onCreate={createIniciativa} onReload={reload} />}
             {canManage && <button type="button" className="knx-new-chat" onClick={() => setNewEpicaOpen(true)}>+ Nueva épica</button>}
-            <button type="button" className="knx-canvas-mini" onClick={() => setImportOpen(true)}>Importar con Kai</button>
-            {epicasSinFecha.length > 0 && (
+            {canManage && <button type="button" className="knx-canvas-mini" onClick={() => setImportOpen(true)}>Importar con Kai</button>}
+            {canManage && epicasSinFecha.length > 0 && (
               <button type="button" className="knx-canvas-mini" onClick={() => setSuggestOpen(true)}>✨ Sugerir fechas con Kai</button>
             )}
           </div>
@@ -3052,12 +3266,15 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
         </>
       )}
 
-      {tab === 'tablero' && <ProjectBoard canManage={canManage} tenant={tenant} projectId={projectId} board={board} onReload={scheduleBoardReload} iniciativas={iniciativas} activeSprint={activeSprint} onOptimisticMove={setTaskStatusLocally} />}
+      {tab === 'tablero' && <ProjectBoard canManage={canManage} canWork={canWork} canEditTask={canEditTask} canDeleteTask={canDeleteTask} tenant={tenant} projectId={projectId} board={board} onReload={scheduleBoardReload} iniciativas={iniciativas} activeSprint={activeSprint} onOptimisticMove={setTaskStatusLocally} />}
 
       {tab === 'sprints' && (
         board ? (
           <SprintsBoardTab
             canManage={canManage}
+            canWork={canWork}
+            canEditTask={canEditTask}
+            canDeleteTask={canDeleteTask}
             tenant={tenant}
             projectId={projectId}
             tasks={board.tasks}
@@ -3075,6 +3292,8 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
         ) : <p className="knx-knowledge-empty">Cargando…</p>
       )}
 
+      {tab === 'commits' && <KaiNextProjectCommits tenant={tenant} projectId={projectId} />}
+
       {selectedEpica && (
         <EpicaDetailPanel
           key={selectedEpica.id}
@@ -3084,6 +3303,9 @@ export default function KaiNextProjectDesarrollo({ tenant, projectId, notionProy
           index={selectedIndex}
           total={epicasNavegables.length}
           activeSprint={activeSprint}
+          canManage={canManage}
+          canWork={canWork}
+          canEditTask={canEditTask}
           onPrev={() => setSelectedEpicaId(epicasNavegables[selectedIndex - 1]?.id)}
           onNext={() => setSelectedEpicaId(epicasNavegables[selectedIndex + 1]?.id)}
           onClose={() => setSelectedEpicaId(null)}

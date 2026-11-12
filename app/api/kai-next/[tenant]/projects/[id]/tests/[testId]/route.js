@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { setTestRegistradores, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
+import { setTestRegistradores, resolveProjectAccessLevel, projectSupervisionError } from '@/lib/kaiNext/projects';
 
 export async function PATCH(req, { params }) {
   const { tenant, id, testId } = await params;
@@ -15,6 +15,8 @@ export async function PATCH(req, { params }) {
   if (!isSupervisorLevel) {
     return Response.json({ error: 'No tienes permiso para gestionar esta prueba.' }, { status: 403 });
   }
+  const notMine = await projectSupervisionError(tenant, id, identity);
+  if (notMine) return Response.json({ error: notMine }, { status: 403 });
 
   let body;
   try {

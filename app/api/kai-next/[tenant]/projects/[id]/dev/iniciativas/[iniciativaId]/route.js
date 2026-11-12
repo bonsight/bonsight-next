@@ -1,7 +1,7 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
-import { getNotionToken, renameDevIniciativa, deleteDevIniciativa } from '@/lib/kaiNext/projectsNotion';
+import { getProjectMeta, resolveProjectAccessLevel, projectSupervisionError } from '@/lib/kaiNext/projects';
+import { updateIniciativa, deleteIniciativa } from '@/lib/kaiNext/devStore';
 
 async function gate(tenant, id) {
   if (!(await isAuthorizedForTenant(tenant))) return { error: 'No autorizado.', status: 401 };
@@ -9,11 +9,11 @@ async function gate(tenant, id) {
   if (!isSectionAllowed(identity.access, 'proyectos')) return { error: 'Proyectos no está habilitado para tu usuario.', status: 403 };
   const { isSupervisorLevel } = resolveProjectAccessLevel(identity);
   if (!isSupervisorLevel) return { error: 'No tienes permiso para editar iniciativas en este proyecto.', status: 403 };
+  const notMine = await projectSupervisionError(tenant, id, identity);
+  if (notMine) return { error: notMine, status: 403 };
   const meta = await getProjectMeta(tenant, id);
   if (!meta || meta.projectKind !== 'desarrollo') return { error: 'Proyecto no encontrado.', status: 404 };
-  const token = await getNotionToken(tenant);
-  if (!token) return { error: 'Notion no está conectado para este tenant.', status: 400 };
-  return { token };
+  return {};
 }
 
 export async function PATCH(req, { params }) {
@@ -29,7 +29,11 @@ export async function PATCH(req, { params }) {
   }
 
   try {
-    await renameDevIniciativa(g.token, iniciativaId, body.name);
+    await updateIniciativa(tenant, id, iniciativaId, {
+      name: body.name,
+      ...('startDate' in body ? { startDate: body.startDate } : {}),
+      ...('endDate' in body ? { endDate: body.endDate } : {}),
+    });
     return Response.json({ ok: true });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });
@@ -42,7 +46,7 @@ export async function DELETE(req, { params }) {
   if (g.error) return Response.json({ error: g.error }, { status: g.status });
 
   try {
-    await deleteDevIniciativa(g.token, iniciativaId);
+    await deleteIniciativa(tenant, id, iniciativaId);
     return Response.json({ ok: true });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });

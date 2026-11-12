@@ -1,0 +1,255 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+
+const DONE = new Set(['Done', 'Cancelada', 'Cancelado']);
+
+function firstLine(message) {
+  return String(message ?? '').split('\n')[0];
+}
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+// Formalizar commits: el desarrollador sube sus commits como siempre y después, acá, los asocia a
+// las tareas que resuelven. Kai propone tareas, resumen y descripción; la persona valida.
+export default function KaiNextProjectCommits({ tenant, projectId }) {
+  const [repo, setRepo] = useState('');
+  const [branch, setBranch] = useState('');
+  const [data, setData] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const [selected, setSelected] = useState([]);
+  const [taskIds, setTaskIds] = useState([]);
+  const [proposedIds, setProposedIds] = useState([]);
+  const [summary, setSummary] = useState('');
+  const [description, setDescription] = useState('');
+  const [taskFilter, setTaskFilter] = useState('');
+  const [showDone, setShowDone] = useState(false);
+  const [onlyPending, setOnlyPending] = useState(true);
+  const [proposing, setProposing] = useState(false);
+  const [proposeError, setProposeError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [notice, setNotice] = useState(null);
+  // Lo que la persona escribe a mano no se pisa con una propuesta nueva de Kai.
+  const touched = useRef({ tasks: false, summary: false, description: false });
+  const proposeSeq = useRef(0);
+
+  const load = (nextRepo = repo, nextBranch = branch) => {
+    setLoading(true);
+    setLoadError(null);
+    const qs = new URLSearchParams();
+    if (nextRepo) qs.set('repo', nextRepo);
+    if (nextBranch) qs.set('branch', nextBranch);
+    fetch(`/api/kai-next/${tenant}/projects/${projectId}/commits?${qs}`)
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'No se pudieron cargar los commits.');
+        setData(d);
+        if (d.repo) setRepo(d.repo);
+        if (d.branch) setBranch(d.branch);
+      })
+      .catch((e) => setLoadError(e.message))
+      .finally(() => setLoading(false));
+  };
+  useEffect(() => { load('', ''); }, [tenant, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const resetDraft = () => {
+    setSelected([]);
+    setTaskIds([]);
+    setProposedIds([]);
+    setSummary('');
+    setDescription('');
+    setProposeError(null);
+    touched.current = { tasks: false, summary: false, description: false };
+  };
+
+  const propose = async (shas) => {
+    const seq = ++proposeSeq.current;
+    setProposing(true);
+    setProposeError(null);
+    try {
+      const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/commits`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'propose', repo, shas }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Kai no pudo proponer.');
+      if (seq !== proposeSeq.current) return;
+      const p = d.proposal;
+      setProposedIds(p.taskIds);
+      if (!touched.current.tasks) setTaskIds(p.taskIds);
+      if (!touched.current.summary) setSummary(p.summary);
+      if (!touched.current.description) setDescription(p.description);
+    } catch (e) {
+      if (seq === proposeSeq.current) setProposeError(e.message);
+    } finally {
+      if (seq === proposeSeq.current) setProposing(false);
+    }
+  };
+
+  // Kai propone solo cuando la selección se aquieta, no en cada clic.
+  useEffect(() => {
+    if (!selected.length) { proposeSeq.current++; setProposing(false); return undefined; }
+    const t = setTimeout(() => propose(selected), 900);
+    return () => clearTimeout(t);
+  }, [selected.join()]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleCommit = (sha) => setSelected((prev) => (prev.includes(sha) ? prev.filter((s) => s !== sha) : [...prev, sha]));
+  const toggleTask = (id) => {
+    touched.current.tasks = true;
+    setTaskIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const formalize = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/commits`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'formalize', repo, shas: selected, taskIds, summary, description }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'No se pudo formalizar.');
+      const gh = d.formalization.github;
+      setNotice(gh?.error
+        ? `Formalizado en Kai. ${gh.error}`
+        : `Formalizado en Kai y comentado en GitHub (${gh?.commented ?? 0} commit${gh?.commented === 1 ? '' : 's'}).`);
+      resetDraft();
+      load();
+    } catch (e) {
+      setSaveError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading && !data) return <p className="knx-knowledge-empty">Cargando commits…</p>;
+  if (loadError && !data) return <p className="knx-canvas-error">{loadError}</p>;
+  if (!data?.repos?.length) {
+    return <p className="knx-knowledge-empty">Este proyecto no tiene un repositorio conectado. Conéctalo arriba, en "Repositorios".</p>;
+  }
+
+  const commits = (data.commits ?? []).filter((c) => !onlyPending || !c.formalization || selected.includes(c.sha));
+  const q = taskFilter.trim().toLowerCase();
+  const tasks = (data.tasks ?? [])
+    .filter((t) => showDone || !DONE.has(t.status) || taskIds.includes(t.id))
+    .filter((t) => !q || t.title.toLowerCase().includes(q) || taskIds.includes(t.id));
+  // Las elegidas y las que propone Kai van arriba.
+  tasks.sort((a, b) => Number(taskIds.includes(b.id)) - Number(taskIds.includes(a.id)) || Number(proposedIds.includes(b.id)) - Number(proposedIds.includes(a.id)));
+  const canSave = selected.length > 0 && taskIds.length > 0 && summary.trim() && description.trim() && !saving;
+
+  return (
+    <div className="knx-commits">
+      <div className="knx-commits-bar">
+        <label className="knx-commits-picker">
+          <span>Repositorio</span>
+          <select value={repo} onChange={(e) => { setRepo(e.target.value); setBranch(''); resetDraft(); load(e.target.value, ''); }}>
+            {data.repos.map((r) => <option key={r.fullName} value={r.fullName}>{r.fullName}</option>)}
+          </select>
+        </label>
+        <label className="knx-commits-picker">
+          <span>Rama</span>
+          <select value={branch} onChange={(e) => { setBranch(e.target.value); resetDraft(); load(repo, e.target.value); }}>
+            {(data.branches ?? []).map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </label>
+        <button type="button" className="knx-canvas-mini" onClick={() => load()} disabled={loading}>{loading ? 'Actualizando…' : 'Actualizar'}</button>
+      </div>
+      {loadError && <p className="knx-canvas-error">{loadError}</p>}
+      {notice && <p className="knx-commits-notice">{notice}</p>}
+
+      <div className="knx-commits-grid">
+        <section className="knx-commits-col">
+          <div className="knx-commits-col-head">
+            <span>Commits{selected.length ? ` · ${selected.length} elegido${selected.length === 1 ? '' : 's'}` : ''}</span>
+            <label className="knx-commits-toggle">
+              <input type="checkbox" checked={onlyPending} onChange={(e) => setOnlyPending(e.target.checked)} /> Solo sin formalizar
+            </label>
+          </div>
+          <div className="knx-commits-list">
+            {!commits.length && <p className="knx-knowledge-empty">No hay commits pendientes de formalizar en esta rama.</p>}
+            {commits.map((c) => (
+              <label key={c.sha} className={`knx-commit-row${selected.includes(c.sha) ? ' knx-commit-row--on' : ''}`}>
+                <input type="checkbox" checked={selected.includes(c.sha)} onChange={() => toggleCommit(c.sha)} />
+                <div className="knx-commit-main">
+                  <div className="knx-commit-msg" title={c.message}>{firstLine(c.message)}</div>
+                  <div className="knx-commit-meta">
+                    <a href={c.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{c.shortSha}</a>
+                    {' · '}{c.author}{' · '}{fmtDate(c.date)}
+                  </div>
+                  {c.formalization && (
+                    <div className="knx-commit-formal">
+                      Formalizado por {c.formalization.by}: {c.formalization.tasks.map((t) => t.title).join(', ')}
+                    </div>
+                  )}
+                </div>
+              </label>
+            ))}
+          </div>
+        </section>
+
+        <section className="knx-commits-col">
+          <div className="knx-commits-col-head">
+            <span>Tareas asociadas{taskIds.length ? ` · ${taskIds.length}` : ''}</span>
+            {proposing && <span className="knx-commits-kai">Kai está leyendo los commits…</span>}
+            {!proposing && selected.length > 0 && (
+              <button type="button" className="knx-canvas-mini" onClick={() => { touched.current = { tasks: false, summary: false, description: false }; propose(selected); }}>
+                Volver a proponer
+              </button>
+            )}
+          </div>
+          {!selected.length ? (
+            <p className="knx-knowledge-empty">Elige uno o más commits y Kai propondrá las tareas, el resumen y la descripción.</p>
+          ) : (
+            <>
+              {proposeError && <p className="knx-canvas-error">{proposeError}</p>}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input className="knx-canvas-meta-select" placeholder="Buscar tarea…" value={taskFilter} onChange={(e) => setTaskFilter(e.target.value)} />
+                <label className="knx-commits-toggle"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> Hechas</label>
+              </div>
+              <div className="knx-commits-tasks">
+                {!tasks.length && <p className="knx-knowledge-empty">Ninguna tarea coincide.</p>}
+                {tasks.map((t) => (
+                  <label key={t.id} className="knx-canvas-meta-checkbox">
+                    <input type="checkbox" checked={taskIds.includes(t.id)} onChange={() => toggleTask(t.id)} />
+                    <span className="knx-canvas-meta-checkbox-box" />
+                    <span className="knx-commits-task-title">{t.title}</span>
+                    {proposedIds.includes(t.id) && <span className="knx-commits-kai-tag">Kai</span>}
+                    {DONE.has(t.status) && <span className="knx-commits-done-tag">Hecha</span>}
+                  </label>
+                ))}
+              </div>
+
+              <div className="knx-commits-form">
+                <input
+                  className="knx-canvas-meta-select"
+                  placeholder="Resumen (obligatorio)"
+                  maxLength={120}
+                  value={summary}
+                  onChange={(e) => { touched.current.summary = true; setSummary(e.target.value); }}
+                />
+                <textarea
+                  className="knx-canvas-meta-select"
+                  rows={5}
+                  placeholder="Descripción (obligatoria)"
+                  value={description}
+                  onChange={(e) => { touched.current.description = true; setDescription(e.target.value); }}
+                />
+                {saveError && <p className="knx-canvas-error">{saveError}</p>}
+                <button type="button" className="knx-commits-submit" disabled={!canSave} onClick={formalize}>
+                  {saving ? 'Formalizando…' : `Formalizar ${selected.length} commit${selected.length === 1 ? '' : 's'}`}
+                </button>
+                {!taskIds.length && <p className="knx-canvas-ficha-progress">Elige al menos una tarea.</p>}
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}

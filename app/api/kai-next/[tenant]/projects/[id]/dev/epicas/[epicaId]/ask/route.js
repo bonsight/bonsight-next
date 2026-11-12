@@ -1,7 +1,7 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta } from '@/lib/kaiNext/projects';
-import { getNotionToken, getDevEpica, listTareas } from '@/lib/kaiNext/projectsNotion';
+import { getProjectMeta, isProjectMember } from '@/lib/kaiNext/projects';
+import { getEpica, listTasksByEpica } from '@/lib/kaiNext/devStore';
 import { askAboutEpica } from '@/lib/kaiNext/projectEpicaAsk';
 
 // Q&A liviano del panel de detalle de Épica — un solo llamado a Claude sin tools, acotado al
@@ -18,9 +18,7 @@ export async function POST(req, { params }) {
 
   const meta = await getProjectMeta(tenant, id);
   if (!meta || meta.projectKind !== 'desarrollo') return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
-
-  const token = await getNotionToken(tenant);
-  if (!token) return Response.json({ error: 'Notion no está conectado para este tenant.' }, { status: 400 });
+  if (!isProjectMember(identity, meta)) return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
 
   let body;
   try {
@@ -32,8 +30,8 @@ export async function POST(req, { params }) {
 
   try {
     const [epica, historias] = await Promise.all([
-      getDevEpica(token, epicaId),
-      listTareas(token, epicaId),
+      getEpica(tenant, id, epicaId),
+      listTasksByEpica(tenant, id, epicaId),
     ]);
     if (!epica) return Response.json({ error: 'Épica no encontrada.' }, { status: 404 });
 
