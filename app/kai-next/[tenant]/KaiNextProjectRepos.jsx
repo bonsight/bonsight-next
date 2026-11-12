@@ -5,34 +5,40 @@ import { useEffect, useState } from 'react';
 // Repositorios de GitHub conectados a un proyecto de Desarrollo. Kai los lee en modo solo lectura
 // para responder sobre módulos, código y commits. Elegirlos es de Supervisores del proyecto y
 // Directores; el resto del equipo solo los ve.
-function EditReposModal({ tenant, projectId, current, onClose, onSaved }) {
+function EditReposModal({ tenant, projectId, current, connections, onClose, onSaved }) {
+  const [connectionId, setConnectionId] = useState(connections[0]?.id ?? null);
   const [available, setAvailable] = useState(null);
   const [loadError, setLoadError] = useState(null);
-  const [selected, setSelected] = useState(() => current.map((r) => ({ fullName: r.fullName, branch: r.branch ?? '' })));
+  const [selected, setSelected] = useState(() => current.map((r) => ({ fullName: r.fullName, branch: r.branch ?? '', connectionId: r.connectionId ?? null })));
   const [manual, setManual] = useState('');
   const [filter, setFilter] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch(`/api/kai-next/${tenant}/projects/${projectId}/repos?available=1`)
+    setAvailable(null);
+    setLoadError(null);
+    setFilter('');
+    const qs = connectionId ? `&connectionId=${encodeURIComponent(connectionId)}` : '';
+    fetch(`/api/kai-next/${tenant}/projects/${projectId}/repos?available=1${qs}`)
       .then((r) => r.json())
       .then((d) => {
         if (d.availableError) setLoadError(d.availableError);
         setAvailable(d.available ?? []);
       })
       .catch(() => { setLoadError('No se pudo cargar la lista de repositorios.'); setAvailable([]); });
-  }, [tenant, projectId]);
+  }, [tenant, projectId, connectionId]);
 
+  const connLabel = (id) => connections.find((c) => c.id === id)?.label ?? null;
   const isSelected = (fullName) => selected.some((s) => s.fullName.toLowerCase() === fullName.toLowerCase());
   const toggle = (fullName) => setSelected((prev) => (isSelected(fullName)
     ? prev.filter((s) => s.fullName.toLowerCase() !== fullName.toLowerCase())
-    : [...prev, { fullName, branch: '' }]));
+    : [...prev, { fullName, branch: '', connectionId }]));
   const setBranch = (fullName, branch) => setSelected((prev) => prev.map((s) => (s.fullName === fullName ? { ...s, branch } : s)));
   const addManual = () => {
     const name = manual.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/+$/, '');
     if (!name) return;
-    if (!isSelected(name)) setSelected((prev) => [...prev, { fullName: name, branch: '' }]);
+    if (!isSelected(name)) setSelected((prev) => [...prev, { fullName: name, branch: '', connectionId }]);
     setManual('');
   };
 
@@ -73,7 +79,10 @@ function EditReposModal({ tenant, projectId, current, onClose, onSaved }) {
           <div className="knx-repos-selected">
             {selected.map((s) => (
               <div key={s.fullName} className="knx-repos-selected-row">
-                <span className="knx-repos-name">{s.fullName}</span>
+                <span className="knx-repos-name">
+                  {s.fullName}
+                  {connections.length > 1 && connLabel(s.connectionId) && <small style={{ display: 'block', fontWeight: 400, opacity: 0.6 }}>vía {connLabel(s.connectionId)}</small>}
+                </span>
                 <input
                   className="knx-canvas-meta-select"
                   placeholder="Rama (opcional, por defecto la principal)"
@@ -83,6 +92,17 @@ function EditReposModal({ tenant, projectId, current, onClose, onSaved }) {
                 <button type="button" className="knx-side-panel-close" aria-label={`Quitar ${s.fullName}`} onClick={() => toggle(s.fullName)}>×</button>
               </div>
             ))}
+          </div>
+        )}
+
+        {connections.length > 1 && (
+          <div style={{ margin: '12px 0 2px' }}>
+            <span className="knx-canvas-meta-field-label">Cuenta de GitHub</span>
+            <select className="knx-canvas-meta-select" value={connectionId ?? ''} onChange={(e) => setConnectionId(e.target.value)} style={{ marginTop: 4 }}>
+              {connections.map((c) => (
+                <option key={c.id} value={c.id}>{c.label} · {c.repoCount} repo{c.repoCount === 1 ? '' : 's'}</option>
+              ))}
+            </select>
           </div>
         )}
 
@@ -143,7 +163,7 @@ export default function KaiNextProjectRepos({ tenant, projectId }) {
   }, [tenant, projectId]);
 
   if (!state) return null;
-  const { repos, githubConnected, canEdit } = state;
+  const { repos, githubConnected, canEdit, connections = [] } = state;
   if (!repos.length && !canEdit) return null;
 
   return (
@@ -167,6 +187,7 @@ export default function KaiNextProjectRepos({ tenant, projectId }) {
           tenant={tenant}
           projectId={projectId}
           current={repos}
+          connections={connections}
           onClose={() => setEditing(false)}
           onSaved={(next) => { setState((s) => ({ ...s, repos: next })); setEditing(false); }}
         />

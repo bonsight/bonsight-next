@@ -3,9 +3,17 @@
 import { useEffect, useRef, useState } from 'react';
 
 const DONE = new Set(['Done', 'Cancelada', 'Cancelado']);
+const PENDING_LABEL = { Backlog: 'en backlog', 'Not started': 'por hacer', 'In progress': 'en curso', 'In Review': 'en revisión' };
 
 function firstLine(message) {
   return String(message ?? '').split('\n')[0];
+}
+
+function fmtDay(iso) {
+  if (!iso) return '';
+  // Las fechas sin hora (AAAA-MM-DD) se leen como día local, no UTC.
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T12:00:00`) : new Date(iso);
+  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
 }
 
 function fmtDate(iso) {
@@ -24,11 +32,11 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
 
   const [selected, setSelected] = useState([]);
   const [taskIds, setTaskIds] = useState([]);
-  const [proposedIds, setProposedIds] = useState([]);
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
   const [taskFilter, setTaskFilter] = useState('');
-  const [showDone, setShowDone] = useState(false);
+  // Por defecto solo las hechas: un commit formaliza trabajo terminado.
+  const [showPending, setShowPending] = useState(false);
   const [onlyPending, setOnlyPending] = useState(true);
   const [proposing, setProposing] = useState(false);
   const [proposeError, setProposeError] = useState(null);
@@ -36,7 +44,7 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
   const [saveError, setSaveError] = useState(null);
   const [notice, setNotice] = useState(null);
   // Lo que la persona escribe a mano no se pisa con una propuesta nueva de Kai.
-  const touched = useRef({ tasks: false, summary: false, description: false });
+  const touched = useRef({ summary: false, description: false });
   const proposeSeq = useRef(0);
 
   const load = (nextRepo = repo, nextBranch = branch) => {
@@ -61,28 +69,25 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
   const resetDraft = () => {
     setSelected([]);
     setTaskIds([]);
-    setProposedIds([]);
     setSummary('');
     setDescription('');
     setProposeError(null);
-    touched.current = { tasks: false, summary: false, description: false };
+    touched.current = { summary: false, description: false };
   };
 
-  const propose = async (shas) => {
+  const propose = async (shas, ids) => {
     const seq = ++proposeSeq.current;
     setProposing(true);
     setProposeError(null);
     try {
       const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/commits`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'propose', repo, shas }),
+        body: JSON.stringify({ action: 'propose', repo, shas, taskIds: ids }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Kai no pudo proponer.');
       if (seq !== proposeSeq.current) return;
       const p = d.proposal;
-      setProposedIds(p.taskIds);
-      if (!touched.current.tasks) setTaskIds(p.taskIds);
       if (!touched.current.summary) setSummary(p.summary);
       if (!touched.current.description) setDescription(p.description);
     } catch (e) {
@@ -92,16 +97,15 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
     }
   };
 
-  // Kai propone solo cuando la selección se aquieta, no en cada clic.
+  // Kai redacta solo cuando hay commits y tareas elegidos, y la selección se aquieta.
   useEffect(() => {
-    if (!selected.length) { proposeSeq.current++; setProposing(false); return undefined; }
-    const t = setTimeout(() => propose(selected), 900);
+    if (!selected.length || !taskIds.length) { proposeSeq.current++; setProposing(false); return undefined; }
+    const t = setTimeout(() => propose(selected, taskIds), 900);
     return () => clearTimeout(t);
-  }, [selected.join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selected.join(), taskIds.join()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleCommit = (sha) => setSelected((prev) => (prev.includes(sha) ? prev.filter((s) => s !== sha) : [...prev, sha]));
   const toggleTask = (id) => {
-    touched.current.tasks = true;
     setTaskIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
@@ -136,11 +140,17 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
 
   const commits = (data.commits ?? []).filter((c) => !onlyPending || !c.formalization || selected.includes(c.sha));
   const q = taskFilter.trim().toLowerCase();
+  const isDone = (t) => t.status === 'Done';
   const tasks = (data.tasks ?? [])
-    .filter((t) => showDone || !DONE.has(t.status) || taskIds.includes(t.id))
-    .filter((t) => !q || t.title.toLowerCase().includes(q) || taskIds.includes(t.id));
-  // Las elegidas y las que propone Kai van arriba.
-  tasks.sort((a, b) => Number(taskIds.includes(b.id)) - Number(taskIds.includes(a.id)) || Number(proposedIds.includes(b.id)) - Number(proposedIds.includes(a.id)));
+    .filter((t) => (showPending ? !DONE.has(t.status) || isDone(t) : isDone(t)) || taskIds.includes(t.id))
+    .filter((t) => !q || t.title.toLowerCase().includes(q) || (t.responsableName ?? '').toLowerCase().includes(q) || taskIds.includes(t.id));
+  // Las elegidas van arriba; después las hechas, de la más reciente a la más
+  // antigua; al final las pendientes (si se piden).
+  const doneKey = (t) => (isDone(t) && t.doneAt ? String(t.doneAt) : '');
+  tasks.sort((a, b) => Number(taskIds.includes(b.id)) - Number(taskIds.includes(a.id))
+    || Number(isDone(b)) - Number(isDone(a))
+    || doneKey(b).localeCompare(doneKey(a))
+    || a.title.localeCompare(b.title));
   const canSave = selected.length > 0 && taskIds.length > 0 && summary.trim() && description.trim() && !saving;
 
   return (
@@ -196,31 +206,36 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
         <section className="knx-commits-col">
           <div className="knx-commits-col-head">
             <span>Tareas asociadas{taskIds.length ? ` · ${taskIds.length}` : ''}</span>
-            {proposing && <span className="knx-commits-kai">Kai está leyendo los commits…</span>}
-            {!proposing && selected.length > 0 && (
-              <button type="button" className="knx-canvas-mini" onClick={() => { touched.current = { tasks: false, summary: false, description: false }; propose(selected); }}>
-                Volver a proponer
+            {proposing && <span className="knx-commits-kai">Kai está redactando…</span>}
+            {!proposing && selected.length > 0 && taskIds.length > 0 && (
+              <button type="button" className="knx-canvas-mini" onClick={() => { touched.current = { summary: false, description: false }; propose(selected, taskIds); }}>
+                Volver a redactar
               </button>
             )}
           </div>
           {!selected.length ? (
-            <p className="knx-knowledge-empty">Elige uno o más commits y Kai propondrá las tareas, el resumen y la descripción.</p>
+            <p className="knx-knowledge-empty">Elige uno o más commits y después las tareas que resuelven. Con eso Kai redacta el resumen y la descripción.</p>
           ) : (
             <>
               {proposeError && <p className="knx-canvas-error">{proposeError}</p>}
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input className="knx-canvas-meta-select" placeholder="Buscar tarea…" value={taskFilter} onChange={(e) => setTaskFilter(e.target.value)} />
-                <label className="knx-commits-toggle"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> Hechas</label>
+                <input className="knx-canvas-meta-select" placeholder="Buscar tarea o responsable…" value={taskFilter} onChange={(e) => setTaskFilter(e.target.value)} />
+                <label className="knx-commits-toggle"><input type="checkbox" checked={showPending} onChange={(e) => setShowPending(e.target.checked)} /> Incluir pendientes</label>
               </div>
               <div className="knx-commits-tasks">
-                {!tasks.length && <p className="knx-knowledge-empty">Ninguna tarea coincide.</p>}
+                {!tasks.length && <p className="knx-knowledge-empty">{q ? 'Ninguna tarea coincide.' : showPending ? 'No hay tareas.' : 'No hay tareas hechas. Marca "Incluir pendientes" para ver el resto.'}</p>}
                 {tasks.map((t) => (
-                  <label key={t.id} className="knx-canvas-meta-checkbox">
+                  <label key={t.id} className="knx-canvas-meta-checkbox knx-commits-task">
                     <input type="checkbox" checked={taskIds.includes(t.id)} onChange={() => toggleTask(t.id)} />
                     <span className="knx-canvas-meta-checkbox-box" />
-                    <span className="knx-commits-task-title">{t.title}</span>
-                    {proposedIds.includes(t.id) && <span className="knx-commits-kai-tag">Kai</span>}
-                    {DONE.has(t.status) && <span className="knx-commits-done-tag">Hecha</span>}
+                    <span className="knx-commits-task-title">
+                      {t.title}
+                      <span className="knx-commits-task-meta">
+                        {t.responsableName ?? 'Sin responsable'}
+                        {isDone(t) ? (t.doneAt ? ` · hecha el ${fmtDay(t.doneAt)}` : ' · hecha') : ` · ${PENDING_LABEL[t.status] ?? t.status}`}
+                      </span>
+                    </span>
+                    {!isDone(t) && <span className="knx-commits-done-tag">Pendiente</span>}
                   </label>
                 ))}
               </div>

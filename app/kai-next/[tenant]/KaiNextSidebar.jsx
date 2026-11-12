@@ -37,10 +37,12 @@ export default function KaiNextSidebar({
   // este tenant, el link ni se muestra. Se consulta acá (no vía props) para no tener que
   // enchufar esto en cada page.jsx que ya renderiza el sidebar.
   const [sections, setSections] = useState(null); // null = todavía sin cargar, se asume todo visible
+  // Admin: no todas las páginas pasan isAdmin, así que también sale de esta misma consulta.
+  const [adminFromAccess, setAdminFromAccess] = useState(false);
   useEffect(() => {
     fetch(`/api/kai-next/${tenant}/capabilities`)
       .then((r) => r.json())
-      .then((d) => setSections(d.access?.sections ?? []))
+      .then((d) => { setSections(d.access?.sections ?? []); setAdminFromAccess(!!d.isAdmin); })
       .catch(() => null);
   }, [tenant]);
   const showSection = (id) => !sections?.length || sections.includes(id);
@@ -181,7 +183,7 @@ export default function KaiNextSidebar({
       </div>
 
       <div className="knx-sidebar-footer">
-        {(isTeamUser || isAdmin) && (
+        {(isTeamUser || isAdmin || adminFromAccess) && (
           <a className={`knx-admin-link${active === 'admin' ? ' knx-admin-link--active' : ''}`} href={`${basePath}/${tenant}/admin`}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" /></svg>
             Admin

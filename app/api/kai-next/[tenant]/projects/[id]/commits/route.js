@@ -2,7 +2,7 @@ import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
 import { listTasks as listDevTasks } from '@/lib/kaiNext/devStore';
-import { getGithubToken, listRepoBranches, listCommitsForFormalizing, getCommitBasic, commentOnCommit } from '@/lib/kaiNext/github';
+import { getGithubToken, getGithubTokenForRepo, listRepoBranches, listCommitsForFormalizing, getCommitBasic, commentOnCommit } from '@/lib/kaiNext/github';
 import { listFormalizations, addFormalization, formalizationBySha } from '@/lib/kaiNext/commitFormalizations';
 import { proposeFormalization } from '@/lib/kaiNext/commitProposal';
 import { logProjectAction } from '@/lib/kaiNext/audit';
@@ -24,7 +24,7 @@ async function gate(tenant, id) {
   }
   const githubToken = await getGithubToken(tenant);
   if (!githubToken) return { error: 'GitHub no está conectado. Se configura en Admin → Fuentes.', status: 400 };
-  return { identity, meta, githubToken };
+  return { identity, meta };
 }
 
 function pickRepo(meta, repo) {
@@ -33,10 +33,23 @@ function pickRepo(meta, repo) {
   return repos.find((r) => r.fullName.toLowerCase() === String(repo ?? '').toLowerCase()) ?? (repo ? null : repos[0]);
 }
 
+// Si se cerró antes de su fecha de fin planificada, esa fecha está en el futuro: se usa la última edición.
+function doneDate(t) {
+  if (t.doneAt) return t.doneAt;
+  const today = new Date().toISOString().slice(0, 10);
+  if (t.endDate && t.endDate.slice(0, 10) <= today) return t.endDate;
+  return t.updatedAt ?? t.endDate ?? null;
+}
+
 async function loadTasks(tenant, meta) {
   const tasks = await listDevTasks(tenant, meta.id);
   return tasks
-    .map((t) => ({ id: t.id, title: t.title, status: t.status, url: null, responsableName: t.responsableName ?? null, description: t.description ?? '', sprintIds: t.sprintIds ?? [] }))
+    // doneAt existe desde que se registra; lo hecho antes usa la fecha de fin de la tarea.
+    .map((t) => ({
+      id: t.id, title: t.title, status: t.status, url: null, responsableName: t.responsableName ?? null,
+      description: t.description ?? '', sprintIds: t.sprintIds ?? [],
+      doneAt: t.status === 'Done' ? doneDate(t) : null,
+    }))
     .sort((a, b) => Number(DONE.has(a.status)) - Number(DONE.has(b.status)) || a.title.localeCompare(b.title));
 }
 
@@ -49,11 +62,12 @@ export async function GET(req, { params }) {
   const repo = pickRepo(g.meta, url.searchParams.get('repo'));
   if (!repo) return Response.json({ repos: g.meta.repos ?? [], branches: [], commits: [], tasks: [], formalizations: [] });
   const branch = url.searchParams.get('branch') || repo.branch || repo.defaultBranch || null;
+  const githubToken = await getGithubTokenForRepo(tenant, repo);
 
   try {
     const [branches, commits, tasks, formalizations] = await Promise.all([
-      listRepoBranches(g.githubToken, repo.fullName),
-      listCommitsForFormalizing(g.githubToken, repo.fullName, branch),
+      listRepoBranches(githubToken, repo.fullName),
+      listCommitsForFormalizing(githubToken, repo.fullName, branch),
       loadTasks(tenant, g.meta),
       listFormalizations(tenant, id),
     ]);
@@ -88,6 +102,7 @@ export async function POST(req, { params }) {
   }
   const repo = pickRepo(g.meta, body.repo);
   if (!repo) return Response.json({ error: 'Ese repositorio no está conectado a este proyecto.' }, { status: 400 });
+  const githubToken = await getGithubTokenForRepo(tenant, repo);
   const shas = [...new Set((Array.isArray(body.shas) ? body.shas : []).filter((s) => /^[0-9a-f]{7,40}$/i.test(s)))];
   if (!shas.length) return Response.json({ error: 'Elige al menos un commit.' }, { status: 400 });
   if (shas.length > MAX_COMMITS) return Response.json({ error: `Puedes formalizar hasta ${MAX_COMMITS} commits a la vez.` }, { status: 400 });
@@ -96,7 +111,11 @@ export async function POST(req, { params }) {
     const tasks = await loadTasks(tenant, g.meta);
 
     if (body.action === 'propose') {
-      const proposal = await proposeFormalization({ token: g.githubToken, repo: repo.fullName, shas, tasks });
+      // Solo las tareas que eligió la persona: Kai ya no las elige, solo redacta.
+      const ids = new Set(Array.isArray(body.taskIds) ? body.taskIds : []);
+      const chosenTasks = tasks.filter((t) => ids.has(t.id));
+      if (!chosenTasks.length) return Response.json({ error: 'Elige al menos una tarea.' }, { status: 400 });
+      const proposal = await proposeFormalization({ token: githubToken, repo: repo.fullName, shas, tasks: chosenTasks });
       return Response.json({ proposal });
     }
 
@@ -112,7 +131,7 @@ export async function POST(req, { params }) {
 
     // Los commits se confirman contra GitHub: que existan y sean de este repo.
     const commits = [];
-    for (const sha of shas) commits.push(await getCommitBasic(g.githubToken, repo.fullName, sha));
+    for (const sha of shas) commits.push(await getCommitBasic(githubToken, repo.fullName, sha));
 
     const by = { personId: g.identity.personId ?? null, name: g.identity.personName ?? 'Equipo Bonsight' };
     const comment = [
@@ -129,7 +148,7 @@ export async function POST(req, { params }) {
 
     const github = { commented: 0, urls: [], error: null };
     for (const c of commits) {
-      const r = await commentOnCommit(g.githubToken, repo.fullName, c.sha, comment);
+      const r = await commentOnCommit(githubToken, repo.fullName, c.sha, comment);
       if (r.ok) { github.commented += 1; github.urls.push(r.url); } else { github.error = r.error; break; }
     }
 

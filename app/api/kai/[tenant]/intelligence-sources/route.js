@@ -1,6 +1,7 @@
 import { isKaiAuthorized } from '@/lib/kai/auth';
 import { isAuthorized as isAriaAuthorized } from '@/lib/aria/auth';
 import { getIntelligenceSources, updateIntelligenceSource } from '@/lib/kai/intelligenceSources';
+import { githubConnectionsFromConfig } from '@/lib/kaiNext/github';
 
 async function isAllowed() {
   return (await isKaiAuthorized()) || (await isAriaAuthorized());
@@ -9,10 +10,21 @@ async function isAllowed() {
 export async function GET(req, { params }) {
   if (!(await isAllowed())) return Response.json({ error: 'No autorizado.' }, { status: 401 });
   const { tenant } = await params;
-  // El token de GitHub nunca vuelve al navegador: solo se muestra que existe.
-  const sources = (await getIntelligenceSources(tenant)).map((s) => (s.id === 'github' && s.config?.token
-    ? { ...s, config: { ...s.config, token: `••••${s.config.token.slice(-4)}` } }
-    : s));
+  // Los tokens de GitHub nunca vuelven al navegador: solo se muestra que existen.
+  const sources = (await getIntelligenceSources(tenant)).map((s) => {
+    if (s.id !== 'github') return s;
+    const { token, connections, ...rest } = s.config ?? {};
+    return {
+      ...s,
+      config: {
+        ...rest,
+        connections: githubConnectionsFromConfig(s.config).map((c) => ({
+          id: c.id, token: `••••${c.token.slice(-4)}`, accountLogin: c.accountLogin, owners: c.owners ?? [],
+          repoCount: c.repoCount ?? 0, lastValidatedAt: c.lastValidatedAt ?? null,
+        })),
+      },
+    };
+  });
   return Response.json({ sources, saEmail: process.env.GOOGLE_SA_EMAIL ?? null });
 }
 

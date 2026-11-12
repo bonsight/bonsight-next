@@ -1,4 +1,5 @@
 import { isAuthorizedForTenant, getCurrentKaiNextAccess } from '@/lib/kaiNext/auth';
+import { getCurrentTenantUser } from '@/lib/kai/tenantAuth';
 
 // Rollout por PERSONA, no por tenant (ver lib/kaiNext/capabilities.js) — la config real vive en
 // access.kaiNextSections/kaiNextCapabilities de cada tenant-user (se edita desde su fila en
@@ -9,6 +10,7 @@ export async function GET(req, { params }) {
   if (!(await isAuthorizedForTenant(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
-  const access = await getCurrentKaiNextAccess(tenant);
-  return Response.json({ access });
+  const [access, tenantUser] = await Promise.all([getCurrentKaiNextAccess(tenant), getCurrentTenantUser(tenant)]);
+  // isAdmin decide si el menú muestra Admin (el equipo de Bonsight lo ve siempre por isTeamUser).
+  return Response.json({ access, isAdmin: !!tenantUser?.access?.isAdmin });
 }

@@ -124,6 +124,101 @@ function PlatformRow({ source, saEmail, onToggle, onValidate, loading }) {
   );
 }
 
+// GitHub admite varias cuentas u organizaciones, cada una con su token. Un token fine-grained
+// solo ve los repos de un dueño (la cuenta personal o una organización), así que para repos de
+// distintos dueños se agrega una conexión por cada uno.
+function GithubRow({ tenant, source, onChange }) {
+  const connections = source.config?.connections ?? [];
+  const isActive = source.status === 'active' && connections.length > 0;
+  const [form, setForm] = useState(null); // null | { id?: string, token: string }
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [removing, setRemoving] = useState({});
+
+  const label = (c) => (c.owners?.length ? c.owners.join(', ') : c.accountLogin) || 'GitHub';
+  const total = connections.reduce((n, c) => n + (c.repoCount ?? 0), 0);
+
+  const save = async () => {
+    setBusy(true); setError(null);
+    try {
+      const res = await fetch(`/api/kai/${tenant}/intelligence-sources/github/validate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: form.token, id: form.id }),
+      });
+      const data = await res.json();
+      if (!data.ok) { setError(data.error ?? 'No se pudo validar el token.'); return; }
+      onChange({ status: 'active', connections: data.connections });
+      setForm(null);
+    } catch { setError('Error de conexión. Intenta de nuevo.'); } finally { setBusy(false); }
+  };
+
+  const remove = async (c) => {
+    if (!confirm(`¿Desconectar ${label(c)}? Los proyectos con repos de esa cuenta dejarán de poder leerlos.`)) return;
+    setRemoving((p) => ({ ...p, [c.id]: true }));
+    try {
+      const res = await fetch(`/api/kai/${tenant}/intelligence-sources/github/validate`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }),
+      });
+      const data = await res.json();
+      if (data.ok) onChange({ status: data.connections.length ? source.status : 'inactive', connections: data.connections });
+    } finally { setRemoving((p) => ({ ...p, [c.id]: false })); }
+  };
+
+  const meta = connections.length
+    ? `${connections.length} cuenta${connections.length === 1 ? '' : 's'} · ${total} repo${total === 1 ? '' : 's'} con acceso`
+    : 'Sin cuenta conectada';
+
+  return (
+    <>
+      <div className="knx-src-row">
+        <span className={`knx-src-dot${isActive ? ' knx-src-dot--on' : ''}`} />
+        <div className="knx-src-main">
+          <div className="knx-src-nm">{source.label}</div>
+          <div className="knx-src-mt">{meta} · {source.capabilities?.slice(0, 3).join(', ')}</div>
+        </div>
+        <span className="knx-src-chip knx-src-chip--hm">{LEVEL_LABEL[source.evidenceLevel]}</span>
+        <button type="button" className="knx-admin-chip-btn knx-admin-chip-btn--sm" disabled={busy} onClick={() => { setForm({ token: '' }); setError(null); }}>
+          {connections.length ? '+ Agregar cuenta' : 'Configurar'}
+        </button>
+      </div>
+      {connections.map((c) => (
+        <div key={c.id} className="knx-src-row" style={{ paddingLeft: 34 }}>
+          <div className="knx-src-main">
+            <div className="knx-src-nm" style={{ fontWeight: 500 }}>{label(c)}</div>
+            <div className="knx-src-mt knx-src-mt--hm">
+              {c.repoCount ?? 0} repo{c.repoCount === 1 ? '' : 's'} · token {c.token}{c.accountLogin && label(c) !== c.accountLogin ? ` · de ${c.accountLogin}` : ''}
+            </div>
+          </div>
+          {c.lastValidatedAt && <span className="knx-src-mt knx-src-mt--hm">Validado {new Date(c.lastValidatedAt).toLocaleDateString('es-ES')}</span>}
+          <KebabMenu
+            label={`Opciones de ${label(c)}`}
+            items={[
+              { label: 'Renovar token', onClick: () => { setForm({ id: c.id, token: '' }); setError(null); } },
+              { label: removing[c.id] ? 'Desconectando…' : 'Desconectar', danger: true, onClick: () => remove(c) },
+            ]}
+          />
+        </div>
+      ))}
+      {form && (
+        <div className="knx-admin-source-form" style={{ margin: '0 0 10px' }}>
+          <div className="knx-admin-source-form-step">
+            <label className="knx-admin-source-form-step-label">
+              {form.id
+                ? `Nuevo token para ${label(connections.find((c) => c.id === form.id) ?? {})}`
+                : 'Token fine-grained de la cuenta u organización. En "Resource owner" elige el dueño de los repos. Permisos: Metadata y Pull requests en lectura; Contents en lectura y escritura (la escritura solo se usa para comentar los commits formalizados).'}
+            </label>
+            <input type="password" value={form.token} placeholder="github_pat_..." autoComplete="off" onChange={(e) => setForm((f) => ({ ...f, token: e.target.value }))} />
+          </div>
+          {error && <div className="knx-admin-test-result knx-admin-test-result--error">⚠ {error}</div>}
+          <div className="knx-admin-db-form-actions">
+            <button type="button" className="knx-admin-chip-btn" onClick={() => { setForm(null); setError(null); }}>Cancelar</button>
+            <button type="button" className="knx-admin-btn" disabled={busy || !form.token.trim()} onClick={save}>{busy ? 'Validando…' : 'Guardar y validar'}</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function PlatformsSection({ tenant, onCount }) {
   const [sources, setSources] = useState(null);
   const [saEmail, setSaEmail] = useState(null);
@@ -174,7 +269,9 @@ function PlatformsSection({ tenant, onCount }) {
 
   return (
     <div className="knx-src-list">
-      {configurable.map((s) => <PlatformRow key={s.id} source={s} saEmail={saEmail} loading={!!loading[s.id]} onToggle={() => toggle(s.id, s.status)} onValidate={validate} />)}
+      {configurable.map((s) => (s.id === 'github'
+        ? <GithubRow key={s.id} tenant={tenant} source={s} onChange={({ status, connections }) => setSources((prev) => prev.map((x) => (x.id === 'github' ? { ...x, status, config: { ...x.config, connections } } : x)))} />
+        : <PlatformRow key={s.id} source={s} saEmail={saEmail} loading={!!loading[s.id]} onToggle={() => toggle(s.id, s.status)} onValidate={validate} />))}
       {soon.length > 0 && (
         <div className="knx-src-soon">Próximamente: {soon.map((s) => <span key={s.id} className="knx-src-chip">{s.label}</span>)}</div>
       )}
