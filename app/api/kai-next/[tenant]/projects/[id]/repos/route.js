@@ -1,4 +1,4 @@
-import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
+import { isAuthorizedForTenant, getCurrentKaiNextIdentity, isKaiNextAdmin } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getProjectMeta, resolveProjectAccessLevel, setProjectRepos } from '@/lib/kaiNext/projects';
 import { getGithubConnections, githubConnectionLabel, listAccessibleRepos, getRepoInfo, isValidRepoName } from '@/lib/kaiNext/github';
@@ -6,7 +6,8 @@ import { logProjectAction } from '@/lib/kaiNext/audit';
 
 const MAX_REPOS = 5;
 
-// Ver: Directores y el equipo del proyecto. Cambiar: Directores y Supervisores del proyecto.
+// Ver: Directores y el equipo del proyecto. Conectar o cambiar repositorios: solo admins (los
+// tokens de GitHub son configuración del tenant, igual que Admin › Fuentes).
 async function gate(tenant, id) {
   if (!(await isAuthorizedForTenant(tenant))) return { error: 'No autorizado.', status: 401 };
   const identity = await getCurrentKaiNextIdentity(tenant);
@@ -16,7 +17,7 @@ async function gate(tenant, id) {
   const level = resolveProjectAccessLevel(identity);
   const inTeam = !!identity.personId && meta.supervisorIds?.includes(identity.personId);
   if (!level.isDirectorLevel && !inTeam) return { error: 'No tienes acceso a este proyecto.', status: 403 };
-  return { identity, meta, canEdit: level.isDirectorLevel || (level.isSupervisorLevel && inTeam) };
+  return { identity, meta, canEdit: await isKaiNextAdmin(tenant) };
 }
 
 export async function GET(req, { params }) {
@@ -54,7 +55,7 @@ export async function PUT(req, { params }) {
   const { tenant, id } = await params;
   const g = await gate(tenant, id);
   if (g.error) return Response.json({ error: g.error }, { status: g.status });
-  if (!g.canEdit) return Response.json({ error: 'Solo un Supervisor del proyecto o un Director puede cambiar los repositorios.' }, { status: 403 });
+  if (!g.canEdit) return Response.json({ error: 'Solo un admin puede conectar o cambiar los repositorios.' }, { status: 403 });
 
   const conns = await getGithubConnections(tenant);
   if (!conns.length) return Response.json({ error: 'GitHub no está conectado. Configúralo en Admin → Fuentes.' }, { status: 400 });
