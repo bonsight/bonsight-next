@@ -3,7 +3,7 @@ import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
 import { listTasks as listDevTasks } from '@/lib/kaiNext/devStore';
 import { getGithubToken, getGithubTokenForRepo, listRepoBranches, listCommitsForFormalizing, getCommitBasic, commentOnCommit } from '@/lib/kaiNext/github';
-import { listFormalizations, addFormalization, formalizationBySha } from '@/lib/kaiNext/commitFormalizations';
+import { listFormalizations, addFormalization } from '@/lib/kaiNext/commitFormalizations';
 import { proposeFormalization } from '@/lib/kaiNext/commitProposal';
 import { logProjectAction } from '@/lib/kaiNext/audit';
 
@@ -41,6 +41,19 @@ function doneDate(t) {
   return t.updatedAt ?? t.endDate ?? null;
 }
 
+// Un commit se formaliza una sola vez, y una tarea queda cerrada para formalizaciones una vez que
+// se asoció a un commit: ninguno de los dos vuelve a ser elegible.
+function formalizedSets(formalizations) {
+  const shas = new Set();
+  const taskIds = new Set();
+  for (const f of formalizations) {
+    for (const c of f.commits ?? []) if (c.sha) shas.add(c.sha.toLowerCase());
+    for (const t of f.tasks ?? []) if (t.id) taskIds.add(t.id);
+  }
+  return { shas, taskIds };
+}
+const shaTaken = (set, sha) => [...set].some((s) => s.startsWith(sha.toLowerCase()));
+
 async function loadTasks(tenant, meta) {
   const tasks = await listDevTasks(tenant, meta.id);
   return tasks
@@ -71,17 +84,20 @@ export async function GET(req, { params }) {
       loadTasks(tenant, g.meta),
       listFormalizations(tenant, id),
     ]);
-    const bySha = formalizationBySha(formalizations.filter((f) => f.repo === repo.fullName));
+    const taken = formalizedSets(formalizations);
     return Response.json({
       repos: g.meta.repos,
       repo: repo.fullName,
       branch: branch ?? branches[0] ?? null,
       branches,
-      commits: commits.map((c) => {
-        const f = bySha.get(c.sha);
-        return { ...c, formalization: f ? { id: f.id, summary: f.summary, tasks: f.tasks, by: f.by?.name, at: f.at } : null };
-      }),
-      tasks,
+      commits: commits.filter((c) => !taken.shas.has(c.sha.toLowerCase())),
+      tasks: tasks.filter((t) => !taken.taskIds.has(t.id)),
+      // Historial para el apartado "Formalizados" (de todos los repos del proyecto, más reciente primero).
+      formalized: formalizations.slice(0, 300).map((f) => ({
+        id: f.id, at: f.at, repo: f.repo, summary: f.summary, description: f.description,
+        by: f.by?.name ?? null, tasks: f.tasks ?? [], github: f.github ?? null,
+        commits: (f.commits ?? []).map((c) => ({ sha: c.sha, shortSha: c.shortSha, message: c.message, author: c.author, date: c.date, url: c.url })),
+      })),
       me: g.identity.personName ?? null,
     });
   } catch (err) {
@@ -108,7 +124,12 @@ export async function POST(req, { params }) {
   if (shas.length > MAX_COMMITS) return Response.json({ error: `Puedes formalizar hasta ${MAX_COMMITS} commits a la vez.` }, { status: 400 });
 
   try {
-    const tasks = await loadTasks(tenant, g.meta);
+    const [allTasks, formalizations] = await Promise.all([loadTasks(tenant, g.meta), listFormalizations(tenant, id)]);
+    const taken = formalizedSets(formalizations);
+    if (shas.some((s) => shaTaken(taken.shas, s))) {
+      return Response.json({ error: 'Alguno de esos commits ya fue formalizado. Actualiza la lista.' }, { status: 400 });
+    }
+    const tasks = allTasks.filter((t) => !taken.taskIds.has(t.id));
 
     if (body.action === 'propose') {
       // Solo las tareas que eligió la persona: Kai ya no las elige, solo redacta.
@@ -127,7 +148,7 @@ export async function POST(req, { params }) {
     if (!description) return Response.json({ error: 'La descripción es obligatoria.' }, { status: 400 });
     const taskById = new Map(tasks.map((t) => [t.id, t]));
     const chosen = [...new Set(Array.isArray(body.taskIds) ? body.taskIds : [])].map((tid) => taskById.get(tid)).filter(Boolean);
-    if (!chosen.length) return Response.json({ error: 'Elige al menos una tarea.' }, { status: 400 });
+    if (!chosen.length) return Response.json({ error: 'Elige al menos una tarea (que no esté ya asociada a otro commit).' }, { status: 400 });
 
     // Los commits se confirman contra GitHub: que existan y sean de este repo.
     const commits = [];

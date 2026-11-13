@@ -1,14 +1,19 @@
+import { isKaiNextAdmin } from '@/lib/kaiNext/auth';
 import { isKaiAuthorized } from '@/lib/kai/auth';
 import { isAuthorized as isAriaAuthorized } from '@/lib/aria/auth';
 import { getIntelligenceSources, updateIntelligenceSource } from '@/lib/kai/intelligenceSources';
 import { githubConnectionsFromConfig } from '@/lib/kaiNext/github';
 
-async function isAllowed() {
-  return (await isKaiAuthorized()) || (await isAriaAuthorized());
+// Equipo de Bonsight, sesión de Aria, o una persona del cliente marcada como Admin del tenant
+// (la misma que entra a Admin de Kai Next).
+async function isAllowed(params) {
+  if ((await isKaiAuthorized()) || (await isAriaAuthorized())) return true;
+  const { tenant } = await params;
+  return isKaiNextAdmin(tenant);
 }
 
 export async function GET(req, { params }) {
-  if (!(await isAllowed())) return Response.json({ error: 'No autorizado.' }, { status: 401 });
+  if (!(await isAllowed(params))) return Response.json({ error: 'No autorizado.' }, { status: 401 });
   const { tenant } = await params;
   // Los tokens de GitHub nunca vuelven al navegador: solo se muestra que existen.
   const sources = (await getIntelligenceSources(tenant)).map((s) => {
@@ -29,7 +34,7 @@ export async function GET(req, { params }) {
 }
 
 export async function PATCH(req, { params }) {
-  if (!(await isAllowed())) return Response.json({ error: 'No autorizado.' }, { status: 401 });
+  if (!(await isAllowed(params))) return Response.json({ error: 'No autorizado.' }, { status: 401 });
   const { tenant } = await params;
   const { sourceId, enabled, config } = await req.json();
   if (!sourceId) return Response.json({ error: 'sourceId requerido' }, { status: 400 });

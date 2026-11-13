@@ -21,6 +21,81 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+// Historial de lo ya formalizado: una fila por formalización; al hacer clic se ve el detalle.
+function FormalizedList({ items, multiRepo }) {
+  const [openId, setOpenId] = useState(null);
+  const [q, setQ] = useState('');
+  const needle = q.trim().toLowerCase();
+  const visible = items.filter((f) => !needle
+    || f.summary?.toLowerCase().includes(needle)
+    || f.by?.toLowerCase().includes(needle)
+    || f.tasks.some((t) => t.title?.toLowerCase().includes(needle))
+    || f.commits.some((c) => c.sha?.startsWith(needle) || c.author?.toLowerCase().includes(needle) || c.message?.toLowerCase().includes(needle)));
+
+  return (
+    <section className="knx-commits-col knx-formal-section">
+      <div className="knx-commits-col-head">
+        <span>Formalizados{items.length ? ` · ${items.length}` : ''}</span>
+      </div>
+      {!items.length ? (
+        <p className="knx-knowledge-empty">Todavía no hay commits formalizados en este proyecto.</p>
+      ) : (
+        <>
+          <input className="knx-canvas-meta-select" placeholder="Buscar por resumen, tarea, autor o commit…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="knx-formal-list">
+            {!visible.length && <p className="knx-knowledge-empty">Nada coincide.</p>}
+            {visible.map((f) => {
+              const open = openId === f.id;
+              return (
+                <div key={f.id} className={`knx-formal-item${open ? ' knx-formal-item--open' : ''}`}>
+                  <button type="button" className="knx-formal-row" onClick={() => setOpenId(open ? null : f.id)} aria-expanded={open}>
+                    <span className="knx-formal-chev">{open ? '▾' : '▸'}</span>
+                    <span className="knx-formal-main">
+                      <span className="knx-formal-summary">{f.summary}</span>
+                      <span className="knx-commit-meta">
+                        {fmtDate(f.at)}{f.by ? ` · ${f.by}` : ''}
+                        {' · '}{f.commits.length} commit{f.commits.length === 1 ? '' : 's'}
+                        {' · '}{f.tasks.length} tarea{f.tasks.length === 1 ? '' : 's'}
+                        {multiRepo && f.repo ? ` · ${f.repo}` : ''}
+                      </span>
+                    </span>
+                  </button>
+                  {open && (
+                    <div className="knx-formal-detail">
+                      {f.description && <p className="knx-formal-desc">{f.description}</p>}
+                      <div className="knx-formal-block">
+                        <div className="knx-formal-label">Tareas</div>
+                        <ul>{f.tasks.map((t) => <li key={t.id}>{t.title}</li>)}</ul>
+                      </div>
+                      <div className="knx-formal-block">
+                        <div className="knx-formal-label">Commits</div>
+                        <ul>
+                          {f.commits.map((c) => (
+                            <li key={c.sha}>
+                              {c.url ? <a href={c.url} target="_blank" rel="noreferrer" className="knx-formal-sha">{c.shortSha}</a> : <span className="knx-formal-sha">{c.shortSha}</span>}
+                              {' '}{firstLine(c.message)}
+                              <span className="knx-commit-meta"> · {c.author}{c.date ? ` · ${fmtDate(c.date)}` : ''}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="knx-commit-meta">
+                        {f.github?.commented
+                          ? <>Comentado en GitHub ({f.github.commented} commit{f.github.commented === 1 ? '' : 's'}).</>
+                          : f.github?.error ? <>Sin comentario en GitHub: {f.github.error}</> : null}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 // Formalizar commits: el desarrollador sube sus commits como siempre y después, acá, los asocia a
 // las tareas que resuelven. Kai propone tareas, resumen y descripción; la persona valida.
 export default function KaiNextProjectCommits({ tenant, projectId }) {
@@ -37,13 +112,12 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
   const [taskFilter, setTaskFilter] = useState('');
   // Por defecto solo las hechas: un commit formaliza trabajo terminado.
   const [showPending, setShowPending] = useState(false);
-  const [onlyPending, setOnlyPending] = useState(true);
   const [proposing, setProposing] = useState(false);
   const [proposeError, setProposeError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [notice, setNotice] = useState(null);
-  // Lo que la persona escribe a mano no se pisa con una propuesta nueva de Kai.
+  // Si la persona escribió a mano, se le pregunta antes de que Kai lo reemplace.
   const touched = useRef({ summary: false, description: false });
   const proposeSeq = useRef(0);
 
@@ -73,6 +147,8 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
     setDescription('');
     setProposeError(null);
     touched.current = { summary: false, description: false };
+    proposeSeq.current++;
+    setProposing(false);
   };
 
   const propose = async (shas, ids) => {
@@ -88,8 +164,9 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
       if (!res.ok) throw new Error(d.error || 'Kai no pudo proponer.');
       if (seq !== proposeSeq.current) return;
       const p = d.proposal;
-      if (!touched.current.summary) setSummary(p.summary);
-      if (!touched.current.description) setDescription(p.description);
+      setSummary(p.summary);
+      setDescription(p.description);
+      touched.current = { summary: false, description: false };
     } catch (e) {
       if (seq === proposeSeq.current) setProposeError(e.message);
     } finally {
@@ -97,12 +174,12 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
     }
   };
 
-  // Kai redacta solo cuando hay commits y tareas elegidos, y la selección se aquieta.
-  useEffect(() => {
-    if (!selected.length || !taskIds.length) { proposeSeq.current++; setProposing(false); return undefined; }
-    const t = setTimeout(() => propose(selected, taskIds), 900);
-    return () => clearTimeout(t);
-  }, [selected.join(), taskIds.join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Kai redacta solo cuando la persona lo pide, con los commits y las tareas que eligió.
+  const draftWithKai = () => {
+    const wrote = (touched.current.summary && summary.trim()) || (touched.current.description && description.trim());
+    if (wrote && !confirm('Kai va a reemplazar el resumen y la descripción que escribiste. ¿Seguir?')) return;
+    propose(selected, taskIds);
+  };
 
   const toggleCommit = (sha) => setSelected((prev) => (prev.includes(sha) ? prev.filter((s) => s !== sha) : [...prev, sha]));
   const toggleTask = (id) => {
@@ -138,7 +215,8 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
     return <p className="knx-knowledge-empty">Este proyecto no tiene un repositorio conectado. Conéctalo arriba, en "Repositorios".</p>;
   }
 
-  const commits = (data.commits ?? []).filter((c) => !onlyPending || !c.formalization || selected.includes(c.sha));
+  // El servidor ya excluye los commits formalizados y las tareas asociadas a uno.
+  const commits = data.commits ?? [];
   const q = taskFilter.trim().toLowerCase();
   const isDone = (t) => t.status === 'Done';
   const tasks = (data.tasks ?? [])
@@ -177,9 +255,6 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
         <section className="knx-commits-col">
           <div className="knx-commits-col-head">
             <span>Commits{selected.length ? ` · ${selected.length} elegido${selected.length === 1 ? '' : 's'}` : ''}</span>
-            <label className="knx-commits-toggle">
-              <input type="checkbox" checked={onlyPending} onChange={(e) => setOnlyPending(e.target.checked)} /> Solo sin formalizar
-            </label>
           </div>
           <div className="knx-commits-list">
             {!commits.length && <p className="knx-knowledge-empty">No hay commits pendientes de formalizar en esta rama.</p>}
@@ -192,11 +267,6 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
                     <a href={c.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{c.shortSha}</a>
                     {' · '}{c.author}{' · '}{fmtDate(c.date)}
                   </div>
-                  {c.formalization && (
-                    <div className="knx-commit-formal">
-                      Formalizado por {c.formalization.by}: {c.formalization.tasks.map((t) => t.title).join(', ')}
-                    </div>
-                  )}
                 </div>
               </label>
             ))}
@@ -206,15 +276,9 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
         <section className="knx-commits-col">
           <div className="knx-commits-col-head">
             <span>Tareas asociadas{taskIds.length ? ` · ${taskIds.length}` : ''}</span>
-            {proposing && <span className="knx-commits-kai">Kai está redactando…</span>}
-            {!proposing && selected.length > 0 && taskIds.length > 0 && (
-              <button type="button" className="knx-canvas-mini" onClick={() => { touched.current = { summary: false, description: false }; propose(selected, taskIds); }}>
-                Volver a redactar
-              </button>
-            )}
           </div>
           {!selected.length ? (
-            <p className="knx-knowledge-empty">Elige uno o más commits y después las tareas que resuelven. Con eso Kai redacta el resumen y la descripción.</p>
+            <p className="knx-knowledge-empty">Elige uno o más commits y después las tareas que resuelven. Con eso puedes pedirle a Kai que redacte el resumen y la descripción.</p>
           ) : (
             <>
               {proposeError && <p className="knx-canvas-error">{proposeError}</p>}
@@ -241,6 +305,17 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
               </div>
 
               <div className="knx-commits-form">
+                <div className="knx-commits-draft">
+                  <button type="button" className="knx-canvas-mini" disabled={proposing || !taskIds.length} onClick={draftWithKai}>
+                    {proposing ? 'Kai está redactando…' : summary.trim() || description.trim() ? 'Volver a redactar con Kai' : 'Redactar con Kai'}
+                  </button>
+                  {!taskIds.length && <span className="knx-commits-kai">Elige las tareas para que Kai pueda redactar.</span>}
+                  <button type="button" className="knx-canvas-mini" style={{ marginLeft: 'auto' }} disabled={saving || proposing || (!summary && !description)}
+                    onClick={() => { setSummary(''); setDescription(''); touched.current = { summary: false, description: false }; }}
+                    title="Borra el resumen y la descripción">
+                    Limpiar
+                  </button>
+                </div>
                 <input
                   className="knx-canvas-meta-select"
                   placeholder="Resumen (obligatorio)"
@@ -265,6 +340,7 @@ export default function KaiNextProjectCommits({ tenant, projectId }) {
           )}
         </section>
       </div>
+      <FormalizedList items={data.formalized ?? []} multiRepo={(data.repos ?? []).length > 1} />
     </div>
   );
 }

@@ -1,10 +1,15 @@
+import { isKaiNextAdmin } from '@/lib/kaiNext/auth';
 import { isKaiAuthorized } from '@/lib/kai/auth';
 import { isAuthorized as isAriaAuthorized } from '@/lib/aria/auth';
 import { getIntelligenceSources, updateIntelligenceSource } from '@/lib/kai/intelligenceSources';
 import { validateGithubToken, githubConnectionsFromConfig } from '@/lib/kaiNext/github';
 
-async function isAllowed() {
-  return (await isKaiAuthorized()) || (await isAriaAuthorized());
+// Equipo de Bonsight, sesión de Aria, o una persona del cliente marcada como Admin del tenant
+// (la misma que entra a Admin de Kai Next).
+async function isAllowed(params) {
+  if ((await isKaiAuthorized()) || (await isAriaAuthorized())) return true;
+  const { tenant } = await params;
+  return isKaiNextAdmin(tenant);
 }
 
 // El token nunca vuelve al navegador: solo los últimos 4 caracteres.
@@ -35,7 +40,7 @@ async function saveConnections(tenant, connections, enabled) {
 // Agrega una cuenta u organización, o renueva el token de una que ya estaba (por id, o porque
 // el token nuevo ve exactamente los mismos dueños).
 export async function POST(req, { params }) {
-  if (!(await isAllowed())) return Response.json({ error: 'No autorizado.' }, { status: 401 });
+  if (!(await isAllowed(params))) return Response.json({ error: 'No autorizado.' }, { status: 401 });
 
   const { tenant } = await params;
   const { token: rawToken, id: replaceId } = await req.json();
@@ -75,7 +80,7 @@ export async function POST(req, { params }) {
 }
 
 export async function DELETE(req, { params }) {
-  if (!(await isAllowed())) return Response.json({ error: 'No autorizado.' }, { status: 401 });
+  if (!(await isAllowed(params))) return Response.json({ error: 'No autorizado.' }, { status: 401 });
   const { tenant } = await params;
   const { id } = await req.json().catch(() => ({}));
   if (!id) return Response.json({ error: 'Falta la conexión.' }, { status: 400 });
