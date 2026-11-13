@@ -31,8 +31,15 @@ import { getLatestDraft, createActivityDraft, updateActivityDraft, lockActivity 
 
 const MAX_TOKENS = 8000;
 const MAX_ITERATIONS = 3;
-// Explorar código pide más vueltas (mirar la estructura, buscar, leer): solo para quien tiene repos.
-const MAX_ITERATIONS_WITH_CODE = 5;
+// Cruzar datos (ver qué hay en la base, comparar periodos, bajar al detalle y presentar) pide más
+// vueltas: con 3 Kai se quedaba a mitad de la investigación. Solo si hay fuentes de datos o repos.
+const MAX_ITERATIONS_WITH_DATA = 6;
+// Varias vueltas a Claude + consultas a la base no caben en el timeout por defecto.
+export const maxDuration = 300;
+
+// La última vuelta es para concluir: solo queda la tool del panel, para que el hallazgo llegue
+// como análisis visual (KPIs + gráfico) y no como un párrafo con una promesa colgando.
+const LAST_ITERATION_PROMPT = 'Esta es tu última vuelta: ya no puedes consultar más datos. Concluye ahora con lo que ya encontraste. Si tienes cifras suficientes, preséntalas con present_analysis incluyendo al menos un gráfico (chart) que muestre el hallazgo principal; si no, responde en texto con conclusiones concretas. No anuncies consultas pendientes ni digas que vas a revisar algo más; si algo quedó sin verificar, dilo como límite del análisis.';
 
 // Mismo patrón que app/api/aria/[tenant]/route.js: imágenes y PDF van como bloques nativos de
 // Claude, documentos de oficina (docx/pptx/xlsx/csv) se extraen a texto primero.
@@ -162,6 +169,7 @@ export async function POST(req, { params }) {
         }
 
         const sourceStatus = (id) => intelligenceSources.find((s) => s.id === id)?.status;
+        const hasDataSources = ['ga4', 'search_console', 'google_ads'].some((id) => sourceStatus(id) === 'active');
         const system = buildSystemPrompt({
           tenantName: meta.name,
           ga4Status: sourceStatus('ga4'),
@@ -224,7 +232,9 @@ export async function POST(req, { params }) {
           anthropic,
           model: MODEL,
           maxTokens: MAX_TOKENS,
-          maxIterations: codeRepos.length ? MAX_ITERATIONS_WITH_CODE : MAX_ITERATIONS,
+          maxIterations: codeRepos.length || dbSources.length || hasDataSources ? MAX_ITERATIONS_WITH_DATA : MAX_ITERATIONS,
+          lastIterationTools: allowedTools.filter((t) => t.name === 'present_analysis'),
+          lastIterationPrompt: LAST_ITERATION_PROMPT,
           system,
           messages: conversation,
           tools: allowedTools,

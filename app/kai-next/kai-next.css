@@ -817,6 +817,9 @@
 .knx-table {
   border-collapse: collapse;
   font-size: 12px;
+  /* La tarjeta tiene min-width (el ancho del texto): sin esto, con pocas columnas cortas la
+     franja de la fuente llegaba hasta el borde y las celdas no, y la tabla se veía cortada. */
+  min-width: 100%;
 }
 
 .knx-table th,
@@ -4051,8 +4054,7 @@
   grid-column: span 2;
 }
 
-.knx-analysis-block:has(.knx-bar-chart),
-.knx-analysis-block:has(.knx-chart-svg) {
+.knx-analysis-block--half {
   grid-column: span 1;
 }
 
@@ -4073,9 +4075,17 @@
 
 .knx-block-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 6px 12px;
+}
+
+/* El título cede antes que el enlace de seguimiento: si no caben juntos, el enlace baja de línea
+   en vez de aplastar el título a una palabra por renglón. */
+.knx-block-header h4 {
+  flex: 1 1 260px;
+  min-width: 0;
 }
 
 .knx-block-ask {
@@ -4188,8 +4198,14 @@
 
 .knx-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(var(--knx-kpi-cols, 4), minmax(0, 1fr));
   gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .knx-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .knx-kpi-card {
@@ -4320,17 +4336,17 @@
   justify-content: center;
 }
 
+/* Una sola grilla para todas las filas: así la columna de etiquetas mide lo mismo en cada fila y
+   las barras arrancan alineadas (antes cada fila calculaba su propio ancho de etiqueta). */
 .knx-bar-chart {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(70px, max-content) 1fr auto;
+  align-items: center;
   gap: 10px;
 }
 
 .knx-bar-row {
-  display: grid;
-  grid-template-columns: minmax(70px, auto) 1fr auto;
-  align-items: center;
-  gap: 10px;
+  display: contents;
 }
 
 .knx-bar-label {
@@ -4353,6 +4369,44 @@
 
 .knx-bar-fill--alt {
   background: var(--knx-deep);
+}
+
+.knx-bar-fill--neg {
+  background: #C2554B;
+}
+
+.knx-bar-value--neg {
+  color: #B3261E;
+}
+
+.knx-bar-pct {
+  margin-left: 8px;
+  font-weight: 500;
+  color: var(--knx-primary);
+}
+
+.knx-bar-pct--neg {
+  color: #B3261E;
+}
+
+.knx-bar-net {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--knx-border);
+  font-size: 13px;
+  color: var(--knx-text-muted);
+}
+
+.knx-bar-net strong {
+  font-size: 15px;
+  color: var(--knx-text);
+}
+
+.knx-bar-net--neg strong {
+  color: #B3261E;
 }
 
 .knx-bar-value {

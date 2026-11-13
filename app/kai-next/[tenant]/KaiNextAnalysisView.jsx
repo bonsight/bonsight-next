@@ -72,26 +72,52 @@ function LecturaDeKaiCard({ items, basePath, tenant, onAsk }) {
   );
 }
 
+const isNumeric = (v) => typeof v === 'number' || (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim()));
+
+// El modelo a veces manda el KPI ya formateado ("$68,6M", "-23%") y a veces crudo (89213760,
+// -23.2): lo crudo se formatea acá con el mismo criterio que los gráficos; lo que ya viene como
+// texto se respeta tal cual.
+function kpiValue(k) {
+  return isNumeric(k.value) ? formatCompact(Number(k.value), k.unit) : k.value;
+}
+
+// change numérico = variación porcentual (es lo que el modelo manda cuando no lo formatea).
+function kpiChange(k) {
+  if (!isNumeric(k.change)) return { text: k.change, trend: k.trend };
+  const n = Number(k.change);
+  const text = `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toLocaleString('es', { maximumFractionDigits: 1 })}%`;
+  return { text, trend: k.trend || (n > 0 ? 'up' : n < 0 ? 'down' : 'flat') };
+}
+
+// Filas parejas: 6 KPIs van 3 + 3, no 5 + 1 con una tarjeta sola abajo.
+function kpiColumns(n) {
+  if (n <= 4) return n;
+  return n % 3 === 0 || n === 5 ? 3 : 4;
+}
+
 function KpiGridBlock({ title, data, followUp, basePath, tenant, onAsk }) {
   const items = Array.isArray(data) ? data : [];
   if (!items.length) return null;
   return (
     <div className="knx-kpi-grid-wrap">
       <BlockHeader title={title} followUp={followUp} basePath={basePath} tenant={tenant} onAsk={onAsk} />
-      <div className="knx-kpi-grid">
-        {items.map((k, i) => (
-          <div key={i} className={`knx-kpi-card knx-kpi-card--${k.status || 'neutral'}`}>
-            <span className="knx-kpi-label">{k.label}</span>
-            <span className="knx-kpi-value">{k.value}</span>
-            {k.note ? (
-              <span className="knx-kpi-note">{k.note}</span>
-            ) : k.change ? (
-              <span className={`knx-kpi-change knx-kpi-change--${k.trend || 'flat'}`}>
-                {k.trend === 'up' ? '↑' : k.trend === 'down' ? '↓' : '→'} {k.change}
-              </span>
-            ) : null}
-          </div>
-        ))}
+      <div className="knx-kpi-grid" style={{ '--knx-kpi-cols': kpiColumns(items.length) }}>
+        {items.map((k, i) => {
+          const change = kpiChange(k);
+          return (
+            <div key={i} className={`knx-kpi-card knx-kpi-card--${k.status || 'neutral'}`}>
+              <span className="knx-kpi-label">{k.label}</span>
+              <span className="knx-kpi-value">{kpiValue(k)}</span>
+              {k.note ? (
+                <span className="knx-kpi-note">{k.note}</span>
+              ) : change.text ? (
+                <span className={`knx-kpi-change knx-kpi-change--${change.trend || 'flat'}`}>
+                  {change.trend === 'up' ? '↑' : change.trend === 'down' ? '↓' : '→'} {change.text}
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -101,7 +127,32 @@ function formatChartValue(v) {
   return typeof v === 'number' ? v.toLocaleString('es') : v;
 }
 
-function LineChartBlock({ title, subtitle, data, followUp, basePath, tenant, onAsk }) {
+// Mismo formato compacto que los KPIs ("$68,6M"): sin esto el gráfico decía "-13.158.110" justo
+// debajo de una tarjeta que decía "$68,6M", la misma unidad escrita de dos formas.
+function formatCompact(v, unit) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return v;
+  if (unit === 'percent') return `${n.toLocaleString('es', { maximumFractionDigits: 1 })}%`;
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '−' : '';
+  const money = unit === 'currency' ? '$' : '';
+  if (abs >= 1e9) return `${sign}${money}${(abs / 1e9).toLocaleString('es', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MM`;
+  if (abs >= 1e6) return `${sign}${money}${(abs / 1e6).toLocaleString('es', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
+  if (abs >= 1e4) return `${sign}${money}${(abs / 1e3).toLocaleString('es', { maximumFractionDigits: 1 })}k`;
+  return `${sign}${money}${abs.toLocaleString('es', { maximumFractionDigits: 2, useGrouping: 'always' })}`;
+}
+
+// % de cambio calculado acá, nunca escrito por el modelo: solo si la barra trae `previous`, que
+// es la MISMA métrica en el periodo base (value = actual). Antes se interpretaba como base de una
+// variación y salía "+73,7%" para una categoría que había caído 26%.
+function pctChange(value, previous) {
+  const v = Number(value), p = Number(previous);
+  if (!Number.isFinite(v) || !Number.isFinite(p) || p === 0) return null;
+  const pct = ((v - p) / Math.abs(p)) * 100;
+  return `${pct > 0 ? '+' : pct < 0 ? '−' : ''}${Math.abs(pct).toLocaleString('es', { maximumFractionDigits: 1 })}%`;
+}
+
+function LineChartBlock({ title, subtitle, data, followUp, basePath, tenant, onAsk, half }) {
   const [hoverIndex, setHoverIndex] = useState(null);
   const series = data?.series;
   if (!Array.isArray(series) || !series.length) return null;
@@ -134,7 +185,7 @@ function LineChartBlock({ title, subtitle, data, followUp, basePath, tenant, onA
   const hoveredPrev = hoverIndex !== null ? previousSeries?.[hoverIndex] : null;
 
   return (
-    <div className="knx-analysis-block">
+    <div className={`knx-analysis-block${half ? ' knx-analysis-block--half' : ''}`}>
       <BlockHeader title={title} followUp={followUp} basePath={basePath} tenant={tenant} onAsk={onAsk} />
       {subtitle && <p className="knx-chart-subtitle">{subtitle}</p>}
       <svg className="knx-chart-svg" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} onMouseMove={handleMove} onMouseLeave={() => setHoverIndex(null)}>
@@ -176,26 +227,43 @@ function LineChartBlock({ title, subtitle, data, followUp, basePath, tenant, onA
   );
 }
 
-function BarChartBlock({ title, subtitle, data, followUp, basePath, tenant, onAsk }) {
+function BarChartBlock({ title, subtitle, data, followUp, basePath, tenant, onAsk, half }) {
   const series = data?.series;
   if (!Array.isArray(series) || !series.length) return null;
-  const maxValue = Math.max(1, ...series.map((d) => d.value));
+  // Escala por magnitud: con variaciones (oct vs. sep) hay valores negativos, y antes el ancho
+  // salía negativo (CSS lo ignora → barra llena), así una caída se veía igual que una subida.
+  const maxValue = Math.max(1, ...series.map((d) => Math.abs(Number(d.value) || 0)));
   const total = series.reduce((sum, d) => sum + (Number(d.value) || 0), 0);
+  const unit = data?.unit;
+  // Con subidas y bajadas mezcladas (una variación) el dato que importa es el neto, y antes solo
+  // aparecía si el modelo no escribía su propio subtítulo — ahora va siempre, al pie.
+  const mixedSigns = series.some((d) => d.value < 0) && series.some((d) => d.value > 0);
   return (
-    <div className="knx-analysis-block">
+    <div className={`knx-analysis-block${half ? ' knx-analysis-block--half' : ''}`}>
       <BlockHeader title={title} followUp={followUp} basePath={basePath} tenant={tenant} onAsk={onAsk} />
-      {subtitle ? <p className="knx-chart-subtitle">{subtitle}</p> : (title && <p className="knx-chart-subtitle">Total {formatChartValue(total)}</p>)}
+      {subtitle ? <p className="knx-chart-subtitle">{subtitle}</p> : (title && !mixedSigns && <p className="knx-chart-subtitle">Total {formatCompact(total, unit)}</p>)}
       <div className="knx-bar-chart">
         {series.map((d, i) => (
           <div className="knx-bar-row" key={i}>
             <span className="knx-bar-label">{d.label}</span>
             <div className="knx-bar-track">
-              <div className={`knx-bar-fill${d.tone === 'alt' ? ' knx-bar-fill--alt' : ''}`} style={{ width: `${(d.value / maxValue) * 100}%` }} />
+              <div className={`knx-bar-fill${d.value < 0 ? ' knx-bar-fill--neg' : d.tone === 'alt' ? ' knx-bar-fill--alt' : ''}`} style={{ width: `${(Math.abs(Number(d.value) || 0) / maxValue) * 100}%` }} />
             </div>
-            <span className="knx-bar-value">{formatChartValue(d.value)}</span>
+            <span className={`knx-bar-value${d.value < 0 ? ' knx-bar-value--neg' : ''}`}>
+              {formatCompact(d.value, unit)}
+              {pctChange(d.value, d.previous) && (
+                <span className={`knx-bar-pct${Number(d.value) < Number(d.previous) ? ' knx-bar-pct--neg' : ''}`}>{pctChange(d.value, d.previous)}</span>
+              )}
+            </span>
           </div>
         ))}
       </div>
+      {mixedSigns && (
+        <div className={`knx-bar-net${total < 0 ? ' knx-bar-net--neg' : ''}`}>
+          <span>Neto</span>
+          <strong>{formatCompact(total, unit)}</strong>
+        </div>
+      )}
     </div>
   );
 }
@@ -244,8 +312,8 @@ function PinnedCardBlock({ title, description, followUp, basePath, tenant, onAsk
   );
 }
 
-function renderBlock(block, basePath, tenant, onAsk) {
-  const props = { ...block, basePath, tenant, onAsk };
+function renderBlock(block, basePath, tenant, onAsk, half = false) {
+  const props = { ...block, basePath, tenant, onAsk, half };
   if (block.type === 'chart') {
     const ChartComp = block.chart_type === 'bar' ? BarChartBlock : LineChartBlock;
     return <ChartComp key={block.id} {...props} />;
@@ -280,6 +348,14 @@ export default function KaiNextAnalysisView({ presentation, basePath, tenant, on
     }
   }
 
+  // Un gráfico va a media columna solo si tiene otro gráfico al lado; solo, ocupa todo el ancho
+  // (antes iba siempre a media columna y quedaba un hueco al lado con el título aplastado).
+  const isChart = (g) => g?.kind === 'block' && g.block.type === 'chart';
+  const half = new Set();
+  for (let j = 0; j < grouped.length; j += 1) {
+    if (isChart(grouped[j]) && isChart(grouped[j + 1])) { half.add(j); half.add(j + 1); j += 1; }
+  }
+
   return (
     <div className="knx-analysis-view">
       {summary && <p className="knx-analysis-summary">{summary}</p>}
@@ -291,9 +367,9 @@ export default function KaiNextAnalysisView({ presentation, basePath, tenant, on
         </div>
       )}
       <div className="knx-analysis-blocks">
-        {grouped.map((g) => (g.kind === 'lectura'
+        {grouped.map((g, j) => (g.kind === 'lectura'
           ? <LecturaDeKaiCard key={g.id} items={g.items} basePath={basePath} tenant={tenant} onAsk={onAsk} />
-          : renderBlock(g.block, basePath, tenant, onAsk)))}
+          : renderBlock(g.block, basePath, tenant, onAsk, half.has(j))))}
       </div>
     </div>
   );
