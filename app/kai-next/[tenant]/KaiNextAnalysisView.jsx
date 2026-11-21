@@ -142,6 +142,14 @@ function formatCompact(v, unit) {
   return `${sign}${money}${abs.toLocaleString('es', { maximumFractionDigits: 2, useGrouping: 'always' })}`;
 }
 
+// Rojo = cayó. Con `previous` manda la dirección del cambio (un monto de octubre es positivo
+// aunque haya caído 59% vs. septiembre); sin él, el signo del valor (una variación negativa).
+function isDecline(d) {
+  const v = Number(d.value), p = Number(d.previous);
+  if (d.previous != null && Number.isFinite(p) && Number.isFinite(v)) return v < p;
+  return v < 0;
+}
+
 // % de cambio calculado acá, nunca escrito por el modelo: solo si la barra trae `previous`, que
 // es la MISMA métrica en el periodo base (value = actual). Antes se interpretaba como base de una
 // variación y salía "+73,7%" para una categoría que había caído 26%.
@@ -247,7 +255,7 @@ function BarChartBlock({ title, subtitle, data, followUp, basePath, tenant, onAs
           <div className="knx-bar-row" key={i}>
             <span className="knx-bar-label">{d.label}</span>
             <div className="knx-bar-track">
-              <div className={`knx-bar-fill${d.value < 0 ? ' knx-bar-fill--neg' : d.tone === 'alt' ? ' knx-bar-fill--alt' : ''}`} style={{ width: `${(Math.abs(Number(d.value) || 0) / maxValue) * 100}%` }} />
+              <div className={`knx-bar-fill${isDecline(d) ? ' knx-bar-fill--neg' : d.tone === 'alt' ? ' knx-bar-fill--alt' : ''}`} style={{ width: `${(Math.abs(Number(d.value) || 0) / maxValue) * 100}%` }} />
             </div>
             <span className={`knx-bar-value${d.value < 0 ? ' knx-bar-value--neg' : ''}`}>
               {formatCompact(d.value, unit)}
