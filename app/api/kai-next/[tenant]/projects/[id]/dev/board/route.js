@@ -1,3 +1,4 @@
+import { notifyDevTask } from '@/lib/kaiNext/notifications';
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getProjectMeta, supervisesProject, isProjectMember } from '@/lib/kaiNext/projects';
@@ -91,18 +92,27 @@ export async function PATCH(req, { params }) {
     }
   }
 
+  // Correos de hitos (lib/kaiNext/notifications.js): asignación, paso a revisión y cierre.
+  const notify = { actorId: identity.personId ?? null, actorName: identity.personName ?? null };
   try {
     if (action === 'move_task') {
       await moveTask(tenant, id, pageId, body.status, body.actualHours, body.order);
+      if (body.status !== task.status && body.status === 'In Review') await notifyDevTask(tenant, meta, task, 'revision', notify);
+      if (body.status !== task.status && body.status === 'Done') await notifyDevTask(tenant, meta, task, 'hecha', notify);
     } else if (action === 'reorder_task') {
       if (typeof body.order !== 'number') return Response.json({ error: 'order es requerido.' }, { status: 400 });
       await reorderTask(tenant, id, pageId, body.order);
     } else if (action === 'update_schedule') {
       await updateTaskDatesAndHours(tenant, id, pageId, { startDate: body.startDate, endDate: body.endDate, estimatedHours: body.estimatedHours });
     } else if (action === 'update_responsable') {
-      await updateTaskResponsable(tenant, id, pageId, await resolveResponsableId(tenant, body.responsableId));
+      const responsableId = await resolveResponsableId(tenant, body.responsableId);
+      await updateTaskResponsable(tenant, id, pageId, responsableId);
+      if (responsableId && responsableId !== task.responsableId) await notifyDevTask(tenant, meta, task, 'asignada', { ...notify, newIds: [responsableId] });
     } else if (action === 'update_colaboradores') {
-      await updateTaskColaboradores(tenant, id, pageId, await resolveColaboradorIds(tenant, body.colaboradorIds));
+      const colaboradorIds = await resolveColaboradorIds(tenant, body.colaboradorIds);
+      await updateTaskColaboradores(tenant, id, pageId, colaboradorIds);
+      const added = (colaboradorIds ?? []).filter((c) => !(task.colaboradorIds ?? []).includes(c));
+      if (added.length) await notifyDevTask(tenant, meta, task, 'asignada', { ...notify, newIds: added });
     } else if (action === 'assign_sprint') {
       if (!body.sprintId) return Response.json({ error: 'sprintId es requerido.' }, { status: 400 });
       await assignTaskToSprint(tenant, id, body.sprintId, pageId);

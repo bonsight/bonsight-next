@@ -1,3 +1,5 @@
+import { after } from 'next/server';
+import { warmDocumentText, fileIdFromUrl } from '@/lib/kaiNext/documentSearch';
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { resolveProjectAccessLevel, uploadEntregableToDrive, projectSupervisionError } from '@/lib/kaiNext/projects';
@@ -34,6 +36,8 @@ export async function POST(req, { params }) {
 
   try {
     const entregable = await uploadEntregableToDrive(tenant, id, { name: body.name, mimeType: body.mimeType, data: body.data });
+    const fileId = fileIdFromUrl(entregable.url);
+    if (fileId) after(() => warmDocumentText(tenant, fileId));
     return Response.json({ entregable });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });

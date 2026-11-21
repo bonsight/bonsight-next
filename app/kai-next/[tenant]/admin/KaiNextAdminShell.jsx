@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import KaiNextSidebar from '../KaiNextSidebar';
 import { EquipoTab, CostsTab } from '@/app/kai/admin/[tenant]/TenantDetail';
 import KaiNextAdminFuentes from './KaiNextAdminFuentes';
+import KaiNextAdminEmpresas from './KaiNextAdminEmpresas';
+import KaiNextAdminRoles from './KaiNextAdminRoles';
 
 // Equipo y Costos IA se reusan tal cual del admin legacy de Kai (TenantDetail.jsx) — Kai Next
 // es ahora el admin real, así que no hace falta forkear: estos componentes se van a seguir
@@ -14,17 +16,23 @@ import '@/app/kai/admin/admin.css';
 // importarlo entero en vez de ir copiando regla por regla cada vez que falte una.
 import '@/app/kai/kai.css';
 
+// adminScope 'team' (ej. directores de Sesuveca) ve solo Equipo y Empresas; 'full', todo. Ver
+// getKaiNextAdminScope en lib/kaiNext/auth.js.
 const TABS = [
-  { id: 'fuentes', label: 'Fuentes' },
-  { id: 'equipo', label: 'Equipo' },
-  { id: 'costos', label: 'Costos IA' },
+  { id: 'fuentes', label: 'Fuentes', scopes: ['full'] },
+  { id: 'empresas', label: 'Empresas', scopes: ['full', 'team'] },
+  { id: 'equipo', label: 'Equipo', scopes: ['full', 'team'] },
+  { id: 'costos', label: 'Costos IA', scopes: ['full'] },
 ];
 
 export default function KaiNextAdminShell({
-  tenant, tenantName, basePath, userName, userHandle, isTeamUser,
+  tenant, tenantName, basePath, userName, userHandle, isTeamUser, adminScope = 'full',
   tenantUsage, usageEvents, dailyUsage,
 }) {
-  const [activeTab, setActiveTab] = useState('fuentes');
+  const tabs = TABS.filter((t) => t.scopes.includes(adminScope));
+  const [activeTab, setActiveTab] = useState(tabs[0].id);
+  // Roles y Equipo se recargan juntos: editar un rol puede cambiarle el acceso a varias personas.
+  const [equipoReload, setEquipoReload] = useState(0);
   const [chats, setChats] = useState([]);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -62,7 +70,7 @@ export default function KaiNextAdminShell({
 
           <div className="knx-admin-shell">
             <div className="knx-admin-tabs">
-              {TABS.map((t) => (
+              {tabs.map((t) => (
                 <button
                   key={t.id}
                   type="button"
@@ -76,7 +84,15 @@ export default function KaiNextAdminShell({
 
             <div className="knx-admin-tab-content">
               {activeTab === 'fuentes' && <KaiNextAdminFuentes tenant={tenant} />}
-              {activeTab === 'equipo' && <EquipoTab slug={tenant} hideProjectsDrive />}
+              {activeTab === 'empresas' && <KaiNextAdminEmpresas tenant={tenant} />}
+              {activeTab === 'equipo' && (
+                <EquipoTab
+                  slug={tenant}
+                  hideProjectsDrive
+                  reloadKey={equipoReload}
+                  rolesSlot={adminScope === 'full' ? <KaiNextAdminRoles tenant={tenant} onChanged={() => setEquipoReload((k) => k + 1)} /> : null}
+                />
+              )}
               {activeTab === 'costos' && <CostsTab slug={tenant} usage={tenantUsage} events={usageEvents} dailyUsage={dailyUsage} />}
             </div>
           </div>

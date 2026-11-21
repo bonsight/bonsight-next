@@ -1,3 +1,4 @@
+import { notifyDevTask } from '@/lib/kaiNext/notifications';
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getProjectMeta, isProjectMember } from '@/lib/kaiNext/projects';
@@ -55,6 +56,10 @@ export async function POST(req, { params }) {
       taskType, priority, severity, description,
       createdBy: g.identity.personId ?? null,
     });
+    const newIds = [task.responsableId, ...(task.colaboradorIds ?? [])].filter(Boolean);
+    if (newIds.length) {
+      await notifyDevTask(tenant, g.meta, task, 'asignada', { actorId: g.identity.personId ?? null, actorName: g.identity.personName ?? null, newIds });
+    }
     return Response.json({ id: task.id });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });

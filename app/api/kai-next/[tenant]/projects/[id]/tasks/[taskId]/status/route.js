@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, getTasksList, setTaskStatus, projectInactiveMessage, supervisesProject, isOwnTask } from '@/lib/kaiNext/projects';
+import { getProjectMeta, getTasksList, setTaskStatus, projectInactiveMessage, supervisesProject, isOwnTask, resolveTaskStatusChange } from '@/lib/kaiNext/projects';
 
 // Un Supervisor del proyecto mueve cualquier tarea; el resto, solo las suyas (ver isOwnTask).
 export async function PATCH(req, { params }) {
@@ -17,12 +17,11 @@ export async function PATCH(req, { params }) {
   const inactive = projectInactiveMessage(meta);
   if (inactive) return Response.json({ error: inactive }, { status: 400 });
 
-  if (!supervisesProject(identity, meta)) {
-    const tasks = await getTasksList(tenant, id);
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task || !isOwnTask(task, identity.personId)) {
-      return Response.json({ error: 'Solo puedes actualizar tus propias tareas.' }, { status: 403 });
-    }
+  const supervises = supervisesProject(identity, meta);
+  const task = (await getTasksList(tenant, id)).find((t) => t.id === taskId);
+  if (!task) return Response.json({ error: 'Tarea no encontrada.' }, { status: 404 });
+  if (!supervises && !isOwnTask(task, identity.personId)) {
+    return Response.json({ error: 'Solo puedes actualizar tus propias tareas.' }, { status: 403 });
   }
 
   let body;
@@ -33,8 +32,12 @@ export async function PATCH(req, { params }) {
   }
 
   try {
-    const task = await setTaskStatus(tenant, id, taskId, body.status, identity.personName ?? 'Alguien', body.order);
-    return Response.json({ task });
+    // En proyectos con revisión, pasar a Hecho lo valida un Director o Supervisor del proyecto
+    // que no sea responsable de la tarea; si lo pide otro, queda En revisión.
+    const resolved = resolveTaskStatusChange(meta, task, body.status, { canValidate: supervises, personId: identity.personId });
+    if (resolved.error) return Response.json({ error: resolved.error }, { status: 403 });
+    const updated = await setTaskStatus(tenant, id, taskId, resolved.status, identity.personName ?? 'Alguien', body.order);
+    return Response.json({ task: updated, sentToReview: resolved.status === 'review' && body.status !== 'review' });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });
   }

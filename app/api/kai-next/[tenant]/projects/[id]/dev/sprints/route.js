@@ -1,3 +1,4 @@
+import { notifySprint } from '@/lib/kaiNext/notifications';
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getProjectMeta, resolveProjectAccessLevel, projectSupervisionError } from '@/lib/kaiNext/projects';
@@ -68,6 +69,8 @@ export async function PATCH(req, { params }) {
     return Response.json({ error: 'Body inválido.' }, { status: 400 });
   }
   const { action, sprintId, ...p } = body;
+  // Correos de hitos: sprint iniciado (a cada quien sus tareas) y sprint cerrado (el resultado).
+  const notify = { actorId: identity.personId ?? null, actorName: identity.personName ?? null };
 
   try {
     if (action === 'create_sprint') {
@@ -77,6 +80,8 @@ export async function PATCH(req, { params }) {
       if (!sprintId) throw new Error('sprintId es requerido.');
       const sprint = await closeSprintPlanning(tenant, id, sprintId);
       await logProjectAction(tenant, identity, { project: meta, action: 'Cerró la planificación', detail: sprint.title });
+      const board = await getBoardData(tenant, id, { sprintId });
+      if (board.sprint) await notifySprint(tenant, meta, board.sprint, board.tasks, 'iniciado', notify);
     } else if (action === 'close_sprint') {
       if (!sprintId) throw new Error('sprintId es requerido.');
       const before = await getBoardData(tenant, id, { sprintId });
@@ -85,6 +90,7 @@ export async function PATCH(req, { params }) {
       await saveSprintMetrics(tenant, sprintId, metrics);
       await closeSprint(tenant, id, sprintId);
       await logProjectAction(tenant, identity, { project: meta, action: 'Cerró un sprint', detail: before.sprint.title });
+      await notifySprint(tenant, meta, before.sprint, before.tasks, 'cerrado', { ...notify, metrics });
     } else if (action === 'update_sprint_dates') {
       if (!sprintId) throw new Error('sprintId es requerido.');
       await updateSprintDates(tenant, id, sprintId, { startDate: p.startDate, endDate: p.endDate });

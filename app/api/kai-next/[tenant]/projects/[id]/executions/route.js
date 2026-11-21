@@ -36,7 +36,7 @@ export async function POST(req, { params }) {
 
   try {
     // contributor viene SIEMPRE de la sesión verificada, nunca del body.
-    const execution = await addExecution(tenant, id, { ...body, contributor: identity.personName ?? 'Alguien' });
+    const execution = await addExecution(tenant, id, { ...body, contributor: identity.personName ?? 'Alguien', contributorId: identity.personId ?? null });
     return Response.json({ execution });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });

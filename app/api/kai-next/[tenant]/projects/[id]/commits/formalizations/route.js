@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
+import { getProjectMeta, isProjectMember } from '@/lib/kaiNext/projects';
 import { listFormalizations } from '@/lib/kaiNext/commitFormalizations';
 
 // Commits formalizados para una tarea (y sus subtareas), para el panel de detalle. Lee solo lo
@@ -14,8 +14,7 @@ export async function GET(req, { params }) {
   }
   const meta = await getProjectMeta(tenant, id);
   if (!meta || meta.projectKind !== 'desarrollo') return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
-  const { isDirectorLevel } = resolveProjectAccessLevel(identity);
-  if (!isDirectorLevel && !(identity.personId && meta.supervisorIds?.includes(identity.personId))) {
+  if (!isProjectMember(identity, meta)) {
     return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
   }
 

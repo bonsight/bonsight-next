@@ -1,3 +1,4 @@
+import { empresaAllows } from '@/lib/kaiNext/empresas';
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
@@ -100,7 +101,7 @@ async function gate(tenant, projectId, { readOnly = false } = {}) {
   if (projectId) {
     const meta = await getProjectMeta(tenant, projectId);
     if (!meta || meta.projectKind !== 'desarrollo') return { error: Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 }) };
-    if (level.isSupervisorLevel && !level.isDirectorLevel && !meta.supervisorIds?.includes(identity.personId)) {
+    if (!empresaAllows(identity.empresaIds, meta) || (level.isSupervisorLevel && !level.isDirectorLevel && !meta.supervisorIds?.includes(identity.personId))) {
       return { error: Response.json({ error: 'No tienes acceso a las reuniones de este proyecto.' }, { status: 403 }) };
     }
     projectName = meta.name;

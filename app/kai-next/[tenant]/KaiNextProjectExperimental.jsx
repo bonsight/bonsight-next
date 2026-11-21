@@ -197,7 +197,7 @@ function EditRegistradoresPanel({ tenant, projectId, test, people, onSaved }) {
   );
 }
 
-function ExecutionRow({ tenant, projectId, execution, test, canValidate, onValidated }) {
+function ExecutionRow({ tenant, projectId, execution, test, canValidate, onValidated, renderFeedback }) {
   const [busy, setBusy] = useState(false);
 
   const validate = async () => {
@@ -219,6 +219,7 @@ function ExecutionRow({ tenant, projectId, execution, test, canValidate, onValid
           <span className="knx-canvas-item-name">{execution.contributor}</span>
           <span className={`knx-activity-status knx-activity-status--${execution.tag === 'éxito' ? 'finished' : execution.tag === 'fallo' ? 'ready' : 'active'}`}>{TAG_LABEL[execution.tag] ?? execution.tag}</span>
         </div>
+        {renderFeedback?.({ type: 'aporte', id: execution.id }, `Aporte de ${execution.contributor} — ${test?.name ?? ''}`)}
         {execution.validatedBy ? (
           <span className="knx-canvas-ficha-progress">✓ validado por {execution.validatedBy}</span>
         ) : canValidate ? (
@@ -240,13 +241,23 @@ function ExecutionRow({ tenant, projectId, execution, test, canValidate, onValid
   );
 }
 
-function TestCard({ tenant, projectId, test, executions, people, canManage, onReload }) {
+// Estado de la prueba según sus aportes: Pendiente (ninguno), Parcial (hay aportes sin validar)
+// o Hecho (todos validados).
+function testStatus(testExecutions) {
+  if (!testExecutions.length) return { label: 'Pendiente', cls: 'pend' };
+  return testExecutions.every((e) => e.validatedBy) ? { label: 'Hecho', cls: 'ok' } : { label: 'Parcial', cls: 'part' };
+}
+
+function TestCard({ tenant, projectId, test, executions, people, canManage, onReload, renderFeedback }) {
   const testExecutions = executions.filter((e) => e.testId === test.id);
+  const st = testStatus(testExecutions);
   return (
     <div className="knx-canvas-group">
-      <div className="knx-canvas-group-head">
+      <div className="knx-canvas-group-head knx-test-head">
         <span className="knx-canvas-group-name">{test.icon} {test.name}</span>
+        <span className={`knx-test-status knx-test-status--${st.cls}`}>{st.label}</span>
         <span className="knx-canvas-group-count">{testExecutions.length} aporte{testExecutions.length !== 1 ? 's' : ''}</span>
+        {renderFeedback?.({ type: 'prueba', id: test.id }, test.name)}
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
         {test.fields.map((f) => <span key={f.key} className="knx-canvas-ficha-progress" style={{ border: '1px solid var(--knx-border)', borderRadius: 20, padding: '2px 8px' }}>{formatFieldCriterion(f)}</span>)}
@@ -254,7 +265,7 @@ function TestCard({ tenant, projectId, test, executions, people, canManage, onRe
       {canManage && <EditRegistradoresPanel tenant={tenant} projectId={projectId} test={test} people={people} onSaved={onReload} />}
       <div className="knx-canvas-cards" style={{ marginTop: 10 }}>
         {!testExecutions.length ? <p className="knx-knowledge-empty">Sin aportes todavía.</p> : testExecutions.map((e) => (
-          <ExecutionRow key={e.id} tenant={tenant} projectId={projectId} execution={e} test={test} canValidate={canManage} onValidated={onReload} />
+          <ExecutionRow key={e.id} tenant={tenant} projectId={projectId} execution={e} test={test} canValidate={canManage} onValidated={onReload} renderFeedback={renderFeedback} />
         ))}
       </div>
     </div>
@@ -500,7 +511,7 @@ export function AportarFlow({ tenant, projectId, tests, personId, onClose, onDon
   );
 }
 
-export function PruebasSection({ tenant, projectId, tests, executions, people, canManage, personId, onReload }) {
+export function PruebasSection({ tenant, projectId, tests, executions, people, canManage, personId, onReload, renderFeedback }) {
   const [creatingTest, setCreatingTest] = useState(false);
   const [aportando, setAportando] = useState(false);
 
@@ -519,7 +530,7 @@ export function PruebasSection({ tenant, projectId, tests, executions, people, c
       ) : (
         <div className="knx-canvas-groups">
           {tests.map((t) => (
-            <TestCard key={t.id} tenant={tenant} projectId={projectId} test={t} executions={executions} people={people} canManage={canManage} onReload={onReload} />
+            <TestCard key={t.id} tenant={tenant} projectId={projectId} test={t} executions={executions} people={people} canManage={canManage} onReload={onReload} renderFeedback={renderFeedback} />
           ))}
         </div>
       )}

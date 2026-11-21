@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { renderMessage } from '@/lib/shared/markdown';
 import KaiNextSidebar from './KaiNextSidebar';
+import { useEmpresaScope } from '@/lib/kaiNext/useEmpresaScope';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
 import KaiNextAnalysisView from './KaiNextAnalysisView';
 import KaiNextDocumentCard from './KaiNextDocumentCard';
@@ -66,7 +67,9 @@ function ToolTrace({ trace, citedSources }) {
           if (t.tool === 'query_knowledge' && citedSources?.length) {
             return citedSources.map((s) => {
               const isLink = !!s.url;
-              const text = `${s.name} — Conocimiento · ${KNOWLEDGE_TYPE_LABELS[s.type] ?? s.type}${s.date ? ` · ${formatSourceDate(s.date)}` : ''}`;
+              // Documento de proyecto: se dice de qué proyecto/tarea salió; de Fuentes, su tipo.
+              const where = s.origen && s.origen !== 'Fuentes' ? s.origen : `Conocimiento · ${KNOWLEDGE_TYPE_LABELS[s.type] ?? s.type}`;
+              const text = `${s.name} — ${where}${s.date ? ` · ${formatSourceDate(s.date)}` : ''}`;
               return (
                 <li key={s.id}>
                   {isLink ? <a href={s.url} target="_blank" rel="noreferrer">{text}</a> : text}
@@ -218,6 +221,8 @@ function Composer({
 export default function KaiNextClientChat({ tenant, tenantName, userName, userHandle, isTeamUser, isAdmin, basePath, initialChatId, initialDraft, initialRef }) {
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
+  // Empresa elegida en el selector: si es una puntual, Kai responde solo con lo de esa empresa.
+  const empresaScope = useEmpresaScope(tenant);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState([]);
@@ -448,6 +453,7 @@ export default function KaiNextClientChat({ tenant, tenantName, userName, userHa
           conversationId: activeChatId,
           attachments: atts.length ? atts.map(({ data, mimeType, name }) => ({ data, mimeType, name })) : undefined,
           ref: !activeChatId && opts.ref ? opts.ref : undefined,
+          empresaScope: empresaScope.hasEmpresas && empresaScope.scope !== 'all' ? empresaScope.scope : undefined,
         }),
         signal: controller.signal,
       });

@@ -1,3 +1,4 @@
+import { empresaAllows } from '@/lib/kaiNext/empresas';
 import Anthropic from '@anthropic-ai/sdk';
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { getTenantMeta } from '@/lib/kai/tenants';
@@ -109,7 +110,7 @@ export async function POST(req, { params }) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
 
-  const { message, conversationId, attachments, ref } = await req.json();
+  const { message, conversationId, attachments, ref, empresaScope } = await req.json();
   if ((!message || typeof message !== 'string') && !attachments?.length) {
     return Response.json({ error: 'Falta el mensaje.' }, { status: 400 });
   }
@@ -118,11 +119,16 @@ export async function POST(req, { params }) {
   if (!meta) return Response.json({ error: 'Tenant no encontrado.' }, { status: 404 });
   // Rollout por persona (ver lib/kaiNext/capabilities.js) — no por tenant: cada usuario del
   // cliente trae su propio access.kaiNextSections/kaiNextCapabilities.
-  const identity = await getCurrentKaiNextIdentity(tenant);
-  const kaiNextAccess = identity.access;
+  const baseIdentity = await getCurrentKaiNextIdentity(tenant);
+  const kaiNextAccess = baseIdentity.access;
   if (!isSectionAllowed(kaiNextAccess, 'chat')) {
     return Response.json({ error: 'El chat no está habilitado para tu usuario.' }, { status: 403 });
   }
+  // Empresa elegida en el selector: el chat se acota a esa empresa (proyectos, fuentes y lo que
+  // consulten las tools), siempre dentro de las que la persona tiene asignadas — nunca amplía.
+  const identity = typeof empresaScope === 'string' && empresaScope && empresaAllows(baseIdentity.empresaIds, { empresaId: empresaScope })
+    ? { ...baseIdentity, empresaIds: [empresaScope], empresaScope }
+    : baseIdentity;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -134,7 +140,7 @@ export async function POST(req, { params }) {
           getKaiNextMemory(tenant),
           buildBIC(tenant),
           listTenantUsers(tenant),
-          canSeeProjects ? listProjectsForPerson(tenant, { ...resolveProjectAccessLevel(identity), personId: identity.personId }) : [],
+          canSeeProjects ? listProjectsForPerson(tenant, { ...resolveProjectAccessLevel(identity), personId: identity.personId, empresaIds: identity.empresaIds }) : [],
           listSharesVisibleTo(tenant, identity),
           isSectionAllowed(kaiNextAccess, 'proyectos')
             ? getGithubToken(tenant).then((t) => (t ? listRepoProjectsFor(tenant, identity) : [])).catch(() => [])
@@ -256,7 +262,7 @@ export async function POST(req, { params }) {
               // ("Consultó X y Y"); las citas específicas por documento van aparte, ver abajo.
               toolTrace.push({ tool: name, label: TOOL_LABELS[name]?.replace(/^Consultando /, '') ?? name, period: null });
               for (const d of result.documents ?? []) {
-                knowledgeDocsSeen.set(d.id, { id: d.id, name: d.name, type: d.type, url: d.url, date: d.date });
+                knowledgeDocsSeen.set(d.id, { id: d.id, name: d.name, type: d.type, url: d.url, date: d.date, origen: d.origen ?? null });
               }
             } else if (name === 'present_analysis') {
               presentation = input;

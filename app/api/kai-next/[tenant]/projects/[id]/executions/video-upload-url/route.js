@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getOrCreateTestDriveFolder } from '@/lib/kaiNext/projects';
+import { getOrCreateTestDriveFolder, getProjectMeta, isProjectMember } from '@/lib/kaiNext/projects';
 import { initiateResumableUpload } from '@/lib/kaiNext/projectsDrive';
 
 // El navegador sube el video DIRECTO a la URL que devuelve esto — nunca pasa por nuestro
@@ -13,6 +13,11 @@ export async function POST(req, { params }) {
   const identity = await getCurrentKaiNextIdentity(tenant);
   if (!isSectionAllowed(identity.access, 'proyectos')) {
     return Response.json({ error: 'Proyectos no está habilitado para tu usuario.' }, { status: 403 });
+  }
+  const meta = await getProjectMeta(tenant, id);
+  if (!meta) return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
+  if (!isProjectMember(identity, meta)) {
+    return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
   }
 
   const { testId, name, mimeType } = await req.json();

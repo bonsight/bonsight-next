@@ -1,9 +1,10 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProject, getProjectMeta, updateProjectDetails, setProjectSupervisors, resolveProjectAccessLevel, supervisesProject } from '@/lib/kaiNext/projects';
+import { getProject, getProjectMeta, updateProjectDetails, setProjectSupervisors, resolveProjectAccessLevel, supervisesProject, feedbackVisibleToMember } from '@/lib/kaiNext/projects';
 import { getRoadmap } from '@/lib/kaiNext/devStore';
 import { listTenantUsers } from '@/lib/kai/tenantUsers';
 import { logProjectAction } from '@/lib/kaiNext/audit';
+import { empresaAllows, getEmpresa } from '@/lib/kaiNext/empresas';
 
 // Mismo criterio que listProjectsForPerson pero para UN proyecto ya cargado.
 function canSeeProject(meta, tasks, tests, { isDirectorLevel, personId }) {
@@ -26,6 +27,11 @@ export async function GET(req, { params }) {
 
   const meta = await getProjectMeta(tenant, id);
   if (!meta) return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
+  // Antes que cualquier rol: un proyecto de una empresa que la persona no tiene asignada no
+  // existe para ella (mismo criterio que listProjectsForPerson).
+  if (!empresaAllows(identity.empresaIds, meta)) {
+    return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
+  }
 
   // El nivel que recibe la pantalla es el de ESTE proyecto: un Supervisor que no está en el equipo
   // lo ve como Team member (ver supervisesProject en lib/kaiNext/projects.js).
@@ -47,6 +53,8 @@ export async function GET(req, { params }) {
   }
 
   const project = await getProject(tenant, id);
+  // Con qué clave queda marcado lo que esta persona ya vio en la Historia (ver markEventsSeen).
+  const viewerKey = identity.personId ?? identity.chatOwnerId;
   if (!canSeeProject(project.meta, project.tasks, project.tests, { ...level, personId: identity.personId })) {
     return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
   }
@@ -64,11 +72,15 @@ export async function GET(req, { params }) {
       grupos: project.grupos ?? [],
       tipologias: project.tipologias ?? [],
       documents: (project.documents ?? []).filter((d) => d.taskId),
+      // Feedback: solo el general y el de lo suyo, nunca el privado. Reportes: no los ve.
+      feedback: feedbackVisibleToMember(project.feedback ?? [], project, identity.personId),
+      reports: [],
       level,
+      viewerKey,
     });
   }
 
-  return Response.json({ ...project, level });
+  return Response.json({ ...project, level, viewerKey });
 }
 
 export async function PATCH(req, { params }) {
@@ -93,6 +105,9 @@ export async function PATCH(req, { params }) {
   // nombre, fechas) es solo del Director.
   const before = await getProjectMeta(tenant, id);
   if (!before) return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
+  if (!empresaAllows(identity.empresaIds, before)) {
+    return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
+  }
   const onlyTeam = Array.isArray(body.supervisorIds);
   if (!isDirectorLevel && !(onlyTeam && supervisesProject(identity, before))) {
     return Response.json({ error: onlyTeam ? 'Solo un Supervisor de este proyecto puede cambiar su equipo.' : 'Solo un Director puede editar los detalles del proyecto.' }, { status: 403 });
@@ -115,7 +130,34 @@ export async function PATCH(req, { params }) {
       });
       return Response.json({ meta });
     }
-    const meta = await updateProjectDetails(tenant, id, body);
+    // Mover de empresa: solo a una que exista y que quien lo mueve tenga asignada (si no, el
+    // proyecto desaparecería de su vista en el mismo acto).
+    if (body.empresaId !== undefined && body.empresaId !== (before.empresaId ?? null)) {
+      const target = body.empresaId ? await getEmpresa(tenant, body.empresaId) : null;
+      if (body.empresaId && !target) return Response.json({ error: 'Esa empresa no existe.' }, { status: 400 });
+      if (!body.empresaId && Array.isArray(identity.empresaIds)) {
+        return Response.json({ error: 'El proyecto tiene que pertenecer a una empresa.' }, { status: 400 });
+      }
+      if (target && !empresaAllows(identity.empresaIds, { empresaId: target.id })) {
+        return Response.json({ error: 'No puedes mover el proyecto a una empresa que no tienes asignada.' }, { status: 403 });
+      }
+      const from = before.empresaId ? await getEmpresa(tenant, before.empresaId) : null;
+      await logProjectAction(tenant, identity, {
+        project: before,
+        action: 'Cambió la empresa',
+        detail: `${from?.name ?? 'Sin empresa'} → ${target?.name ?? 'Sin empresa'}`,
+      });
+    }
+    // Nombres legibles para la Historia (la empresa se guarda por id).
+    const labels = {};
+    if (body.empresaId !== undefined && body.empresaId !== (before.empresaId ?? null)) {
+      const [from, to] = await Promise.all([
+        before.empresaId ? getEmpresa(tenant, before.empresaId) : null,
+        body.empresaId ? getEmpresa(tenant, body.empresaId) : null,
+      ]);
+      labels.empresaId = { from: from?.name ?? 'Sin empresa', to: to?.name ?? 'Sin empresa' };
+    }
+    const meta = await updateProjectDetails(tenant, id, body, identity.personName ?? 'Alguien', labels);
     return Response.json({ meta });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });

@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
+import { getProjectMeta, isProjectMember } from '@/lib/kaiNext/projects';
 import { listTasks as listDevTasks } from '@/lib/kaiNext/devStore';
 import { getGithubToken, getGithubTokenForRepo, listRepoBranches, listCommitsForFormalizing, getCommitBasic, commentOnCommit } from '@/lib/kaiNext/github';
 import { listFormalizations, addFormalization } from '@/lib/kaiNext/commitFormalizations';
@@ -18,8 +18,7 @@ async function gate(tenant, id) {
   if (!isSectionAllowed(identity.access, 'proyectos')) return { error: 'Proyectos no está habilitado para tu usuario.', status: 403 };
   const meta = await getProjectMeta(tenant, id);
   if (!meta || meta.projectKind !== 'desarrollo') return { error: 'Proyecto no encontrado.', status: 404 };
-  const { isDirectorLevel } = resolveProjectAccessLevel(identity);
-  if (!isDirectorLevel && !(identity.personId && meta.supervisorIds?.includes(identity.personId))) {
+  if (!isProjectMember(identity, meta)) {
     return { error: 'No tienes acceso a este proyecto.', status: 403 };
   }
   const githubToken = await getGithubToken(tenant);

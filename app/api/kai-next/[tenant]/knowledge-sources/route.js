@@ -1,4 +1,5 @@
-import { isAuthorizedForTenant } from '@/lib/kaiNext/auth';
+import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
+import { empresaAllows } from '@/lib/kaiNext/empresas';
 import { addSource, listSources, getKnowledgeDigest } from '@/lib/kai/knowledgeSources';
 
 // Mismo backend que app/api/kai/[tenant]/knowledge-sources/route.js (lib/kai/knowledgeSources.js,
@@ -10,11 +11,13 @@ export async function GET(req, { params }) {
   if (!(await isAuthorizedForTenant(tenant))) {
     return Response.json({ error: 'No autorizado.' }, { status: 401 });
   }
-  const [sources, digest] = await Promise.all([
+  const [sources, digest, identity] = await Promise.all([
     listSources(tenant),
     getKnowledgeDigest(tenant),
+    getCurrentKaiNextIdentity(tenant),
   ]);
-  return Response.json({ sources, digest });
+  // Fuentes por empresa: cada persona ve las de sus empresas y las comunes (sin empresa).
+  return Response.json({ sources: sources.filter((src) => empresaAllows(identity.empresaIds, src)), digest });
 }
 
 export async function POST(req, { params }) {

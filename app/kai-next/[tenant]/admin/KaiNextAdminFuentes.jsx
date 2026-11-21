@@ -584,6 +584,76 @@ function DriveSection({ tenant, onCount }) {
 }
 
 // ── Resumen + shell de la pestaña Fuentes ───────────────────────────────────
+// Empresa de cada fuente (solo si el tenant usa empresas): una fuente con empresa solo la usa en
+// el chat quien tiene esa empresa; sin empresa es contexto común (ver tools/knowledge.js).
+function SourceEmpresasSection({ tenant }) {
+  const [empresas, setEmpresas] = useState(null);
+  const [sources, setSources] = useState([]);
+  const [busy, setBusy] = useState(null);
+  const [bulkTo, setBulkTo] = useState('');
+  const [err, setErr] = useState(null);
+
+  const load = () => {
+    fetch(`/api/kai-next/${tenant}/empresas?admin=1`).then((r) => (r.ok ? r.json() : null)).then((d) => setEmpresas(d?.empresas ?? [])).catch(() => setEmpresas([]));
+    fetch(`/api/kai-next/${tenant}/knowledge-sources`).then((r) => r.json()).then((d) => setSources(d.sources ?? [])).catch(() => {});
+  };
+  useEffect(load, [tenant]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!empresas?.length || !sources.length) return null;
+
+  const assign = async (ids, empresaId) => {
+    setBusy(ids.length === 1 ? ids[0] : 'bulk');
+    setErr(null);
+    try {
+      for (const id of ids) {
+        const res = await fetch(`/api/kai-next/${tenant}/knowledge-sources/${id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ empresaId: empresaId || null }),
+        });
+        if (!res.ok) { setErr((await res.json().catch(() => ({}))).error || 'No se pudo guardar.'); break; }
+      }
+    } finally {
+      setBusy(null);
+      load();
+    }
+  };
+  const unassigned = sources.filter((src) => !src.empresaId);
+
+  return (
+    <div id="knx-s-emp" className="knx-admin-section">
+      <h2 className="knx-admin-subsection-title">Empresa de cada fuente</h2>
+      <p className="knx-admin-section-sub">Una fuente con empresa solo la usa Kai con quienes tienen esa empresa asignada. Sin empresa, es contexto común para todo el equipo.</p>
+      {unassigned.length > 0 && (
+        <div className="knx-emp-note knx-emp-note--warn" style={{ marginTop: 0, marginBottom: 10 }}>
+          <b>{unassigned.length} {unassigned.length === 1 ? 'fuente no tiene' : 'fuentes no tienen'} empresa.</b>{' '}
+          <span className="knx-emp-form-foot" style={{ justifyContent: 'flex-start', marginTop: 8 }}>
+            <select className="knx-emp-select" value={bulkTo} onChange={(e) => setBulkTo(e.target.value)} aria-label="Empresa a asignar">
+              <option value="">Elige una empresa</option>
+              {empresas.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+            <button type="button" className="knx-admin-btn" disabled={!bulkTo || !!busy} onClick={() => assign(unassigned.map((src) => src.id), bulkTo)}>
+              {busy === 'bulk' ? 'Asignando…' : `Asignar las ${unassigned.length}`}
+            </button>
+          </span>
+        </div>
+      )}
+      {err && <p className="knx-emp-err">{err}</p>}
+      <ul className="knx-emp-list">
+        {sources.map((src) => (
+          <li key={src.id} className="knx-emp-item">
+            <div className="knx-src-emp-row">
+              <span className="knx-emp-main"><b>{src.name}</b><span className="knx-emp-meta">{src.sourceType}</span></span>
+              <select className="knx-emp-select" value={src.empresaId ?? ''} disabled={busy === src.id} onChange={(e) => assign([src.id], e.target.value)} aria-label={`Empresa de ${src.name}`}>
+                <option value="">Común (sin empresa)</option>
+                {empresas.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function KaiNextAdminFuentes({ tenant }) {
   const [platCount, setPlatCount] = useState(null);
   const [dbCount, setDbCount] = useState(null);
@@ -632,6 +702,8 @@ export default function KaiNextAdminFuentes({ tenant }) {
         <h2 className="knx-admin-subsection-title">Documentos y notas</h2>
         <KnowledgeSourcesTab slug={tenant} hideDrivePanel />
       </div>
+
+      <SourceEmpresasSection tenant={tenant} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity, isKaiNextAdmin } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, resolveProjectAccessLevel, setProjectRepos } from '@/lib/kaiNext/projects';
+import { getProjectMeta, setProjectRepos, isProjectMember } from '@/lib/kaiNext/projects';
 import { getGithubConnections, githubConnectionLabel, listAccessibleRepos, getRepoInfo, isValidRepoName } from '@/lib/kaiNext/github';
 import { logProjectAction } from '@/lib/kaiNext/audit';
 
@@ -14,9 +14,7 @@ async function gate(tenant, id) {
   if (!isSectionAllowed(identity.access, 'proyectos')) return { error: 'Proyectos no está habilitado para tu usuario.', status: 403 };
   const meta = await getProjectMeta(tenant, id);
   if (!meta || meta.projectKind !== 'desarrollo') return { error: 'Proyecto no encontrado.', status: 404 };
-  const level = resolveProjectAccessLevel(identity);
-  const inTeam = !!identity.personId && meta.supervisorIds?.includes(identity.personId);
-  if (!level.isDirectorLevel && !inTeam) return { error: 'No tienes acceso a este proyecto.', status: 403 };
+  if (!isProjectMember(identity, meta)) return { error: 'No tienes acceso a este proyecto.', status: 403 };
   return { identity, meta, canEdit: await isKaiNextAdmin(tenant) };
 }
 

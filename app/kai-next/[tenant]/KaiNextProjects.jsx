@@ -8,6 +8,7 @@ import { useSidePanelClose } from '@/lib/kaiNext/useSidePanelClose';
 import { sortByOrder, dropsBefore, computeDropOrder } from '@/lib/kaiNext/dragOrder';
 import { PruebasSection } from './KaiNextProjectExperimental';
 import KaiNextProjectDesarrollo from './KaiNextProjectDesarrollo';
+import { ProjectTabsNav, ResumenTab, HistoriaTab, FeedbackTab, ReportesTab, FeedbackButton, FeedbackThreads } from './KaiNextProjectTabs';
 
 const STATUS_LABEL = { activo: 'Activo', pausado: 'Pausado', completado: 'Completado' };
 const RISK_LABEL = { en_plan: 'En plan', en_riesgo: 'En riesgo', atrasado: 'Atrasado' };
@@ -33,6 +34,8 @@ const TASK_STATUSES = [
 // Solo para projectKind='seguimiento' (ver taskStatuses en el componente de detalle) — civil
 // comparte el mismo tablero pero con las 3 columnas de siempre.
 const BACKLOG_STATUS = { id: 'backlog', label: 'Backlog' };
+// Solo en Seguimiento con revisión (meta.requiresReview): la tarea terminada espera validación.
+const REVIEW_STATUS = { id: 'review', label: 'En revisión' };
 const PRIORITIES = ['Alta', 'Media', 'Baja'];
 
 // Tabs de la lista de tareas — "Activas" (todo+doing) va primero y es el default: una tarea
@@ -42,6 +45,7 @@ const STATUS_TABS = [
   { id: 'activas', label: 'Activas', test: (t) => t.status !== 'done' },
   { id: 'todo', label: 'Por hacer', test: (t) => t.status === 'todo' },
   { id: 'doing', label: 'Haciendo', test: (t) => t.status === 'doing' },
+  { id: 'review', label: 'En revisión', test: (t) => t.status === 'review' },
   { id: 'done', label: 'Terminadas', test: (t) => t.status === 'done' },
   { id: 'all', label: 'Todas', test: () => true },
 ];
@@ -139,7 +143,26 @@ function readFileAsBase64(file) {
   });
 }
 
+// Empresas que la persona tiene asignadas (lib/kaiNext/empresas.js). [] = el tenant no usa
+// empresas, y nada de esto se muestra.
+function useMyEmpresas(tenant) {
+  const [empresas, setEmpresas] = useState([]);
+  useEffect(() => {
+    fetch(`/api/kai-next/${tenant}/empresas`).then((r) => (r.ok ? r.json() : null)).then((d) => setEmpresas(d?.empresas ?? [])).catch(() => {});
+  }, [tenant]);
+  return empresas;
+}
+
 function CreateProjectModal({ tenant, people, onClose, onCreated }) {
+  const empresas = useMyEmpresas(tenant);
+  const [empresaId, setEmpresaId] = useState('');
+  useEffect(() => { if (empresas.length === 1) setEmpresaId(empresas[0].id); }, [empresas]);
+  // Revisión de tareas (solo Seguimiento): por defecto activa en tenants con empresas (grupos como
+  // Sesuveca, donde Dirección valida el avance) y apagada en el resto, como siempre fue.
+  const [requiresReview, setRequiresReview] = useState(null);
+  const reviewOn = requiresReview ?? empresas.length > 0;
+  // Con empresas, el equipo solo puede salir de quienes tienen acceso a la empresa elegida.
+  const teamPeople = empresas.length ? people.filter((p) => empresaId && p.empresaIds?.includes(empresaId)) : people;
   const [projectKind, setProjectKind] = useState('seguimiento');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -194,6 +217,7 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
 
   const submit = async () => {
     if (!name.trim()) { setError('El nombre es requerido.'); return; }
+    if (empresas.length && !empresaId) { setError('Elige la empresa del proyecto.'); return; }
     setSaving(true);
     setError(null);
     try {
@@ -201,7 +225,10 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name, code, type, supervisorIds, projectKind,
+          name, code, type, projectKind,
+          supervisorIds: supervisorIds.filter((id) => teamPeople.some((p) => p.id === id)),
+          empresaId: empresaId || undefined,
+          requiresReview: projectKind === 'seguimiento' ? reviewOn : undefined,
           tasks: projectKind === 'civil' ? excelTasks : undefined,
           partidas: projectKind === 'civil' ? excelPartidas : undefined,
           purpose: projectKind === 'experimental' ? purpose : undefined,
@@ -245,6 +272,20 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
           </div>
         </div>
 
+        {empresas.length > 0 && (
+          <div className="knx-ficha-review-field" style={{ marginBottom: 14 }}>
+            <label>Empresa</label>
+            {empresas.length === 1 ? (
+              <p className="knx-project-empresa"><i style={{ background: empresas[0].color }} />{empresas[0].name}</p>
+            ) : (
+              <select className="knx-canvas-meta-select" value={empresaId} onChange={(e) => setEmpresaId(e.target.value)}>
+                <option value="">Elige una empresa</option>
+                {empresas.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+            )}
+          </div>
+        )}
+
         <div className="knx-ficha-review-field" style={{ marginBottom: 14 }}>
           <label>Nombre</label>
           <input value={name} onChange={(e) => setName(e.target.value)} className="knx-canvas-meta-select" placeholder="Nombre del proyecto" />
@@ -277,9 +318,9 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
             <div className="knx-ficha-review-field" style={{ marginTop: 14 }}>
               <label>Equipo (tú quedas dentro)</label>
               <div className="knx-canvas-meta-checklist">
-                {!people.length ? (
-                  <p className="knx-canvas-meta-empty">No hay personas en el equipo todavía.</p>
-                ) : people.map((p) => (
+                {!teamPeople.length ? (
+                  <p className="knx-canvas-meta-empty">{empresas.length && !empresaId ? 'Elige la empresa para ver quiénes pueden estar en el equipo.' : 'No hay personas en el equipo todavía.'}</p>
+                ) : teamPeople.map((p) => (
                   <label key={p.id} className="knx-canvas-meta-checkbox">
                     <input type="checkbox" checked={supervisorIds.includes(p.id)} onChange={() => toggleSupervisor(p.id)} />
                     <span className="knx-canvas-meta-checkbox-box" />
@@ -289,6 +330,13 @@ function CreateProjectModal({ tenant, people, onClose, onCreated }) {
               </div>
             </div>
           </>
+        )}
+
+        {projectKind === 'seguimiento' && (
+          <label className="knx-role-check" style={{ marginTop: 14 }}>
+            <input type="checkbox" checked={reviewOn} onChange={(e) => setRequiresReview(e.target.checked)} />
+            <span><b>Las tareas pasan por revisión</b><small>Una tarea terminada queda «En revisión» hasta que un Director o Supervisor del proyecto la valida.</small></span>
+          </label>
         )}
 
         {projectKind === 'civil' && (
@@ -502,7 +550,7 @@ function TaskRow({ task, people, canManage, canToggle, onStatusChange, onDelete,
 // (.knx-side-panel) que ya usa DevTaskDetailPanel en Proyecto de Desarrollo.
 // canManage: Supervisor del proyecto (todo). canEdit: la tarea es suya (campos de ejecución:
 // estado, descripción, fechas, horas y documentos). canDelete: ver canDeleteOwnTask.
-function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STATUSES, canManage, canEdit = canManage, canDelete = canManage, documents = [], onUploadDocument, onDeleteDocument, onClose, onSave, onStatusChange, onDelete }) {
+function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STATUSES, canManage, canEdit = canManage, canDelete = canManage, documents = [], onUploadDocument, onDeleteDocument, onClose, onSave, onStatusChange, onDelete, feedbackSlot = null }) {
   const [closing, handleClose] = useSidePanelClose(onClose);
   const [nombre, setNombre] = useState(task.nombre);
   const [descripcion, setDescripcion] = useState(task.descripcion ?? '');
@@ -664,6 +712,7 @@ function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STA
             )}
           </div>
         </div>
+        {feedbackSlot}
         {canEdit && (
           <button type="button" className="knx-new-chat" disabled={!dirty || saving} onClick={saveAll} style={{ width: '100%', justifyContent: 'center' }}>
             {saving ? 'Guardando…' : 'Guardar cambios'}
@@ -1027,7 +1076,7 @@ function NewPartidaForm({ onCreate }) {
   );
 }
 
-function PartidaRow({ partida, gastos, canManage, onDelete, onAddGasto, onDeleteGasto }) {
+function PartidaRow({ partida, gastos, canManage, onDelete, onAddGasto, onDeleteGasto, renderFeedback }) {
   const [gastoOpen, setGastoOpen] = useState(false);
   const [monto, setMonto] = useState('');
   const [proveedor, setProveedor] = useState('');
@@ -1056,6 +1105,7 @@ function PartidaRow({ partida, gastos, canManage, onDelete, onAddGasto, onDelete
         <div className="knx-canvas-item-who">
           <span className="knx-canvas-item-name">{partida.etapa ? `${partida.etapa} · ` : ''}{partida.descripcion}</span>
         </div>
+        {renderFeedback?.({ type: 'partida', id: partida.id }, partida.descripcion)}
         {canManage && (
           <button type="button" className="knx-canvas-icon-btn knx-canvas-icon-btn--danger" aria-label="Eliminar partida" onClick={onDelete}>×</button>
         )}
@@ -1098,7 +1148,7 @@ function PartidaRow({ partida, gastos, canManage, onDelete, onAddGasto, onDelete
   );
 }
 
-function PresupuestoSection({ metrics, alerts, partidas, gastos, canManage, onAddPartida, onDeletePartida, onAddGasto, onDeleteGasto }) {
+function PresupuestoSection({ metrics, alerts, partidas, gastos, canManage, onAddPartida, onDeletePartida, onAddGasto, onDeleteGasto, renderFeedback }) {
   return (
     <div className="knx-canvas-group" style={{ marginBottom: 16 }}>
       <div className="knx-canvas-group-head"><span className="knx-canvas-group-name">Presupuesto</span></div>
@@ -1129,6 +1179,7 @@ function PresupuestoSection({ metrics, alerts, partidas, gastos, canManage, onAd
             onDelete={() => onDeletePartida(p.id)}
             onAddGasto={onAddGasto}
             onDeleteGasto={onDeleteGasto}
+            renderFeedback={renderFeedback}
           />
         ))}
       </div>
@@ -1525,7 +1576,10 @@ function TipologiasManageModal({ tipologias, tasks, canManage, onAdd, onUpdate, 
   );
 }
 
-function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated }) {
+function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated, initialTab = null, backLabel = 'Volver a Proyectos' }) {
+  const empresas = useMyEmpresas(tenant);
+  const [detailsError, setDetailsError] = useState(null);
+  const [ptab, setPtab] = useState(initialTab);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -1629,6 +1683,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
     return next;
   });
   const inactive = meta.status !== 'activo';
+  const empresaOfProject = empresas.find((x) => x.id === meta.empresaId) ?? null;
   // Crear tareas: Supervisores y cualquier miembro del equipo del proyecto (no basta con ser
   // responsable de alguna tarea). Editar y eliminar siguen siendo de Supervisor.
   const canCreateTask = !inactive && (level.isSupervisorLevel || (!!personId && (meta.supervisorIds ?? []).includes(personId)));
@@ -1644,7 +1699,36 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
   const isDesarrollo = meta.projectKind === 'desarrollo';
   // Backlog solo en Seguimiento (no civil, aunque comparten el mismo tablero/componente) — una
   // tarea sin planificar todavía tiene más sentido ahí que en una obra con cronograma físico.
-  const taskStatuses = meta.projectKind === 'seguimiento' ? [BACKLOG_STATUS, ...TASK_STATUSES] : TASK_STATUSES;
+  const taskStatuses = meta.projectKind === 'seguimiento'
+    ? [BACKLOG_STATUS, ...TASK_STATUSES.filter((x) => x.id !== 'done'), ...(meta.requiresReview ? [REVIEW_STATUS] : []), ...TASK_STATUSES.filter((x) => x.id === 'done')]
+    : TASK_STATUSES;
+  const statusTabs = STATUS_TABS.filter((x) => x.id !== 'review' || meta.requiresReview);
+
+  // Pestañas según el tipo, mismo criterio que Labs. Las de trabajo (Tareas/Cronograma/Pruebas)
+  // abren por defecto para no cambiarle el día a día a quien ya usaba Proyectos.
+  const feedback = data.feedback ?? [];
+  const reports = data.reports ?? [];
+  const viewerKey = data.viewerKey ?? null;
+  const unseenCount = viewerKey ? (events ?? []).filter((e) => !e.seenBy?.includes(viewerKey)).length : 0;
+  const projectTabs = isDesarrollo ? [] : [
+    { id: 'resumen', label: 'Resumen' },
+    ...(isExperimental ? [{ id: 'pruebas', label: 'Pruebas', count: tests.length }] : []),
+    ...(isCivil ? [{ id: 'trabajo', label: 'Cronograma', count: tasks.filter((t) => t.status !== 'done').length }] : []),
+    ...(isCivil && level.isSupervisorLevel ? [{ id: 'partidas', label: 'Partidas', count: partidas.length }] : []),
+    ...(meta.projectKind === 'seguimiento' ? [{ id: 'trabajo', label: 'Tareas', count: tasks.filter((t) => t.status !== 'done').length }] : []),
+    { id: 'historia', label: 'Historia', count: unseenCount, alert: unseenCount > 0 },
+    ...(level.isSupervisorLevel ? [{ id: 'doc', label: 'Documentación', count: documents.filter((d) => !d.taskId).length }] : []),
+    { id: 'feedback', label: 'Feedback', count: feedback.filter((f) => !f.replyTo).length },
+    ...(level.isSupervisorLevel ? [{ id: 'reportes', label: 'Reportes', count: reports.filter((r) => r.status === 'enviado').length, alert: level.isDirectorLevel && reports.some((r) => r.status === 'enviado') }] : []),
+  ];
+  const defaultTab = isExperimental ? 'pruebas' : 'trabajo';
+  const activeTab = projectTabs.some((t) => t.id === ptab) ? ptab : defaultTab;
+  const show = (id) => !isDesarrollo && activeTab === id;
+  // Botón "Feedback (N)" para cualquier ítem (partida, prueba, aporte). Lo dejan Director y
+  // Supervisor del proyecto; el resto solo ve el que le corresponde.
+  const renderFeedback = (target, label) => (
+    <FeedbackButton tenant={tenant} projectId={projectId} feedback={feedback} target={target} label={label} canWrite={level.isSupervisorLevel} onChanged={load} />
+  );
 
   const addPartidaRow = async (payload) => {
     const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/partidas`, {
@@ -1807,11 +1891,15 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
 
   const updateDetails = async (patch) => {
     setSavingDetails(true);
+    setDetailsError(null);
     try {
       const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
       });
       if (res.ok) { load(); onUpdated?.(); }
+      else setDetailsError((await res.json().catch(() => ({}))).error || 'No se pudo guardar.');
+    } catch {
+      setDetailsError('Error de conexión.');
     } finally {
       setSavingDetails(false);
     }
@@ -1821,9 +1909,12 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
     <>
       <div className="knx-analisis-top">
         <div className="knx-analisis-head">
-          {onBack && <button type="button" className="knx-analisis-compare" onClick={onBack} style={{ marginBottom: 10 }}>← Volver a Proyectos</button>}
+          {onBack && <button type="button" className="knx-analisis-compare" onClick={onBack} style={{ marginBottom: 10 }}>← {backLabel}</button>}
           <h1>{meta.name}</h1>
-          <p>{meta.code ? `${meta.code} · ` : ''}{meta.type || PROJECT_KIND_LABEL[meta.projectKind] || meta.projectKind}</p>
+          <p>
+            {empresaOfProject && <span className="knx-project-empresa knx-project-empresa--inline"><i style={{ background: empresaOfProject.color }} />{empresaOfProject.name} · </span>}
+            {meta.code ? `${meta.code} · ` : ''}{meta.type || PROJECT_KIND_LABEL[meta.projectKind] || meta.projectKind}
+          </p>
         </div>
         <div className="knx-analisis-controls">
           <span className={`knx-activity-status knx-activity-status--${meta.status === 'activo' ? 'active' : meta.status === 'pausado' ? 'ready' : 'finished'}`}>
@@ -1840,10 +1931,53 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
               {Object.entries(STATUS_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
             </select>
           )}
+          {/* Mover de empresa: solo el Director, y solo entre empresas que tiene asignadas. */}
+          {level.isDirectorLevel && empresas.length > 1 && (
+            <select
+              className="knx-canvas-meta-select"
+              style={{ width: 'auto' }}
+              aria-label="Empresa del proyecto"
+              value={meta.empresaId ?? ''}
+              disabled={savingDetails}
+              onChange={(e) => {
+                const target = empresas.find((x) => x.id === e.target.value);
+                if (target && confirm(`¿Mover «${meta.name}» a ${target.name}? Lo verán solo quienes tengan esa empresa asignada.`)) {
+                  updateDetails({ empresaId: target.id });
+                }
+              }}
+            >
+              {!meta.empresaId && <option value="">Sin empresa</option>}
+              {empresas.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select>
+          )}
         </div>
       </div>
+      {detailsError && <p className="knx-canvas-error" style={{ marginBottom: 12 }}>{detailsError}</p>}
 
       {inactive && <p className="knx-canvas-error" style={{ marginBottom: 12 }}>Este proyecto está {meta.status} — reactivalo para poder gestionar tareas.</p>}
+
+      {!isDesarrollo && <ProjectTabsNav tabs={projectTabs} active={activeTab} onChange={setPtab} />}
+
+      {show('resumen') && (
+        <ResumenTab
+          tenant={tenant}
+          projectId={projectId}
+          meta={meta}
+          level={level}
+          people={people}
+          tasks={tasks ?? []}
+          tests={tests}
+          executions={executions}
+          civilMetrics={civilMetrics}
+          events={events ?? []}
+          viewerKey={viewerKey}
+          onSaveDetails={updateDetails}
+          onGoTo={setPtab}
+        />
+      )}
+      {show('historia') && <HistoriaTab tenant={tenant} projectId={projectId} events={events ?? []} viewerKey={viewerKey} onSeen={load} />}
+      {show('feedback') && <FeedbackTab tenant={tenant} projectId={projectId} feedback={feedback} canWrite={level.isSupervisorLevel} onChanged={load} />}
+      {show('reportes') && <ReportesTab tenant={tenant} projectId={projectId} reports={reports} feedback={feedback} canApprove={level.isDirectorLevel} onChanged={load} />}
 
       {isDesarrollo && (
         <KaiNextProjectDesarrollo
@@ -1856,7 +1990,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
         />
       )}
 
-      {!isExperimental && !isDesarrollo && (
+      {!isExperimental && show('trabajo') && (
         <GruposSection
           grupos={grupos}
           tasks={tasks}
@@ -1870,7 +2004,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
         />
       )}
 
-      {!isExperimental && !isDesarrollo && miniProyectoCandidate && level.isSupervisorLevel && !inactive && (
+      {!isExperimental && show('trabajo') && miniProyectoCandidate && level.isSupervisorLevel && !inactive && (
         <MiniProyectoSuggestionBanner
           task={miniProyectoCandidate}
           onConvert={convertTaskToMiniProyecto}
@@ -1878,12 +2012,12 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
         />
       )}
 
-      {!isExperimental && !isDesarrollo && (
+      {!isExperimental && show('trabajo') && (
         <div className="knx-canvas-group" style={{ marginBottom: 16 }}>
           <div className="knx-canvas-group-head">
             {tasks.length > 0 ? (
               <div className="knx-task-status-tabs">
-                {STATUS_TABS.map((s) => (
+                {statusTabs.map((s) => (
                   <button
                     key={s.id}
                     type="button"
@@ -2136,6 +2270,19 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
           onSave={(patch) => saveTaskDetail(selectedTaskId, patch)}
           onStatusChange={(status) => setStatus(selectedTaskId, status)}
           onDelete={() => setRemoveTaskTarget(selectedTaskId)}
+          feedbackSlot={(
+            <div className="knx-task-feedback">
+              <span className="knx-pt-label">Feedback</span>
+              <FeedbackThreads
+                tenant={tenant}
+                projectId={projectId}
+                feedback={feedback}
+                target={{ type: 'tarea', id: selectedTaskId }}
+                canWrite={level.isSupervisorLevel}
+                onChanged={load}
+              />
+            </div>
+          )}
         />
       )}
       <KaiNextConfirmDialog
@@ -2146,7 +2293,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
         onCancel={() => setRemoveTaskTarget(null)}
       />
 
-      {isExperimental && (
+      {isExperimental && show('pruebas') && (
         <PruebasSection
           tenant={tenant}
           projectId={projectId}
@@ -2156,10 +2303,11 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
           canManage={level.isSupervisorLevel && !inactive}
           personId={personId}
           onReload={load}
+          renderFeedback={renderFeedback}
         />
       )}
 
-      {isCivil && level.isSupervisorLevel && (
+      {isCivil && level.isSupervisorLevel && show('partidas') && (
         <PresupuestoSection
           metrics={civilMetrics}
           alerts={civilAlerts}
@@ -2170,10 +2318,11 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
           onDeletePartida={deletePartidaRow}
           onAddGasto={addGastoRow}
           onDeleteGasto={deleteGastoRow}
+          renderFeedback={renderFeedback}
         />
       )}
 
-      {!isDesarrollo && level.isSupervisorLevel && (
+      {level.isSupervisorLevel && show('doc') && (
         <DocumentacionSection
           projectKind={meta.projectKind}
           documents={documents.filter((d) => !d.taskId)}
@@ -2183,19 +2332,6 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated 
         />
       )}
 
-      {!isDesarrollo && (
-      <div className="knx-canvas-group">
-        <div className="knx-canvas-group-head"><span className="knx-canvas-group-name">Historia</span></div>
-        <div className="knx-canvas-cards">
-          {!events.length ? <p className="knx-knowledge-empty">Sin actividad todavía.</p> : events.map((e) => (
-            <div className="knx-canvas-item" key={e.id}>
-              <p className="knx-canvas-item-text">{e.title}</p>
-              <span className="knx-canvas-ficha-progress">{new Date(e.date).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      )}
     </>
   );
 }
@@ -2379,6 +2515,9 @@ export default function KaiNextProjects({
   const [activeProjectId, setActiveProjectId] = useState(() => searchParams.get('p')
     || (isTeamMember ? ((initialProjects ?? []).find((p) => p.status === 'activo') ?? initialProjects?.[0])?.id ?? null : null));
   const [creating, setCreating] = useState(() => searchParams.get('new') === '1' && !!level?.isSupervisorLevel);
+  // Desde dónde llegó al proyecto, para el "← Volver". Solo rutas de Empresas: nunca un destino
+  // arbitrario armado en la URL.
+  const backFrom = /^empresas(\/[A-Za-z0-9_-]+)?$/.test(searchParams.get('from') ?? '') ? searchParams.get('from') : null;
   const [deleteChatTarget, setDeleteChatTarget] = useState(null);
   const [kindFilter, setKindFilter] = useState('all');
   const [editingTeamFor, setEditingTeamFor] = useState(null);
@@ -2438,11 +2577,18 @@ export default function KaiNextProjects({
         <div className="knx-analisis-page">
           {activeProjectId ? (
             <ProjectDetail
+              key={activeProjectId}
               tenant={tenant}
               projectId={activeProjectId}
               people={people}
               personId={personId}
-              onBack={isTeamMember ? undefined : () => setActiveProjectId(null)}
+              initialTab={searchParams.get('tab')}
+              // "← Volver" regresa a donde estaba la persona: si llegó desde Empresas (o el
+              // resumen de una empresa), vuelve ahí; si no, a la lista de Proyectos.
+              backLabel={backFrom ? (backFrom === 'empresas' ? 'Volver a Empresas' : 'Volver al resumen de la empresa') : 'Volver a Proyectos'}
+              onBack={backFrom
+                ? () => { window.location.href = `${basePath}/${tenant}/${backFrom}`; }
+                : isTeamMember ? undefined : () => setActiveProjectId(null)}
               onUpdated={() => { /* el detalle se recarga solo */ }}
             />
           ) : isTeamMember ? (

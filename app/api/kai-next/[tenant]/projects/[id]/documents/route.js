@@ -1,3 +1,5 @@
+import { after } from 'next/server';
+import { warmDocumentText } from '@/lib/kaiNext/documentSearch';
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getProjectMeta, getTasksList, addProjectDocument, projectInactiveMessage, supervisesProject, isOwnTask } from '@/lib/kaiNext/projects';
@@ -34,6 +36,7 @@ export async function POST(req, { params }) {
 
   try {
     const document = await addProjectDocument(tenant, id, { ...body, uploadedBy: identity.personName ?? 'Alguien' });
+    if (document?.driveFileId) after(() => warmDocumentText(tenant, document.driveFileId));
     return Response.json({ document });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });

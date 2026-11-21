@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getTests } from '@/lib/kaiNext/projects';
+import { getTests, getProjectMeta, isProjectMember } from '@/lib/kaiNext/projects';
 import { interpretContribution } from '@/lib/kaiNext/projectContribution';
 
 export async function POST(req, { params }) {
@@ -11,6 +11,11 @@ export async function POST(req, { params }) {
   const identity = await getCurrentKaiNextIdentity(tenant);
   if (!isSectionAllowed(identity.access, 'proyectos')) {
     return Response.json({ error: 'Proyectos no está habilitado para tu usuario.' }, { status: 403 });
+  }
+  const meta = await getProjectMeta(tenant, id);
+  if (!meta) return Response.json({ error: 'Proyecto no encontrado.' }, { status: 404 });
+  if (!isProjectMember(identity, meta)) {
+    return Response.json({ error: 'No tienes acceso a este proyecto.' }, { status: 403 });
   }
 
   const { testId, freeText, evidence } = await req.json();

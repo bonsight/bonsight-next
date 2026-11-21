@@ -253,16 +253,18 @@ function ContentPage({ projectName, report }) {
   );
 }
 
-function LabsReport({ projectName, report, period }) {
+function LabsReport({ projectName, report, period, author }) {
   return (
-    <Document title={`Reporte de ${projectName}`} author="Bonsight · Labs">
+    <Document title={`Reporte de ${projectName}`} author={author}>
       <CoverPage projectName={projectName} report={report} period={period} />
       <ContentPage projectName={projectName} report={report} />
     </Document>
   );
 }
 
-export async function generateLabsReportPDF({ projectName, report }) {
+// author: metadato del PDF. Kai Next lo reusa con su propio nombre (ver
+// app/api/kai-next/[tenant]/projects/[id]/reports/[reportId]/pdf/route.js).
+export async function generateLabsReportPDF({ projectName, report, author = 'Bonsight · Labs' }) {
   const period = `${new Date(report.periodFrom).toLocaleDateString('es-ES')} – ${new Date(report.periodTo).toLocaleDateString('es-ES')}`;
-  return renderToBuffer(<LabsReport projectName={projectName} report={report} period={period} />);
+  return renderToBuffer(<LabsReport projectName={projectName} report={report} period={period} author={author} />);
 }

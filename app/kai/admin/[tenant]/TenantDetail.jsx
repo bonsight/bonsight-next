@@ -2135,7 +2135,7 @@ function EquipoAssignCredentials({ tenant, user, onSaved }) {
   );
 }
 
-function EquipoRow({ tenant, user: u, onSaved }) {
+function EquipoRow({ tenant, user: u, roles = [], empresas = [], adminScope = 'full', onSaved }) {
   const inactive = u.active === false;
   const [mode, setMode] = useState(null); // null | 'edit' | 'menu'
   const [draft, setDraft] = useState(null);
@@ -2204,7 +2204,22 @@ function EquipoRow({ tenant, user: u, onSaved }) {
           <div style={{ minWidth: 0 }}>
             <p className="eq-name">{u.name}</p>
             {u.cargo && <p className="eq-cargo">{u.cargo}</p>}
-            {u.access?.kaiNext && <p className="eq-cargo">Proyectos: {projectRoleOf(u.access.kaiNextCapabilities).label}</p>}
+            {u.access?.kaiNext && (
+              <p className="eq-cargo">
+                {roles.find((r) => r.id === u.roleId)?.name ?? projectRoleOf(u.access.kaiNextCapabilities).label}
+                {u.roleCustomized ? ' (ajustado)' : ''}
+              </p>
+            )}
+            {empresas.length > 0 && u.access?.kaiNext && (
+              <p className="eq-emps">
+                {empresas.every((e) => u.empresaIds?.includes(e.id))
+                  ? <span className="eq-emp-chip eq-emp-chip--all">Todas las empresas</span>
+                  : empresas.filter((e) => u.empresaIds?.includes(e.id)).map((e) => (
+                    <span key={e.id} className="eq-emp-chip"><i style={{ background: e.color }} />{e.name}</span>
+                  ))}
+                {!u.empresaIds?.length && <span className="eq-emp-chip eq-emp-chip--none">Sin empresas</span>}
+              </p>
+            )}
           </div>
         </div>
         <div style={{ minWidth: 0 }}>
@@ -2229,7 +2244,8 @@ function EquipoRow({ tenant, user: u, onSaved }) {
             </button>
           )}
         </div>
-        <button type="button" className="eq-switch" role="switch" aria-checked={!!u.access?.isAdmin} aria-label={`Admin para ${u.name}`} disabled={inactive} onClick={() => toggleAccess('isAdmin')} title="Acceso al admin de Kai Next" />
+        {/* Un admin de solo Equipo y Empresas no da ni quita acceso al Admin: eso va por rol. */}
+        <button type="button" className="eq-switch" role="switch" aria-checked={!!u.access?.isAdmin} aria-label={`Admin para ${u.name}`} disabled={inactive || adminScope !== 'full'} onClick={() => toggleAccess('isAdmin')} title={u.access?.isAdmin && u.access?.adminScope === 'team' ? 'Admin de Equipo y Empresas' : 'Acceso al admin de Kai Next'} />
         <span className="eq-last-login">
           {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
         </span>
@@ -2268,55 +2284,67 @@ function EquipoRow({ tenant, user: u, onSaved }) {
       )}
       {mode === 'kaiNextConfig' && (
         <div className="eq-edit-row">
-          <KaiNextUserCapabilitiesPanel tenant={tenant} user={u} onSaved={() => { onSaved(); setMode(null); }} />
+          <KaiNextUserCapabilitiesPanel tenant={tenant} user={u} roles={roles} empresas={empresas} onSaved={() => { onSaved(); setMode(null); }} />
         </div>
       )}
     </div>
   );
 }
 
-// Rollout por PERSONA de Kai Next (ver lib/kaiNext/capabilities.js) — a diferencia de
-// allowedProjectKinds de Labs (que es por tenant), esto vive en access.kaiNextSections/
-// access.kaiNextCapabilities de CADA tenant-user, porque acá lo que varía es qué puede ver y
-// hacer cada persona del cliente, no el cliente entero. Mismas dos capas: secciones (el nav
-// real) y, anidadas, las capacidades puntuales de cada una.
-function KaiNextUserCapabilitiesPanel({ tenant, user: u, onSaved }) {
+// Qué puede ver y hacer cada persona en Kai Next. Tres piezas:
+// - Rol del tenant (lib/kaiNext/roles.js): plantilla de secciones/capacidades. Elegir uno carga
+//   sus valores en los checks de abajo.
+// - Empresas (lib/kaiNext/empresas.js): qué empresas ve. Solo aparece si el tenant tiene empresas.
+// - Ajustes a mano sobre el rol: si quedan distintos al rol, la persona deja de recibir los
+//   cambios que se le hagan al rol después (roleCustomized).
+function KaiNextUserCapabilitiesPanel({ tenant, user: u, roles, empresas, onSaved }) {
   const allSectionIds = KAI_NEXT_SECTIONS.map((s) => s.id);
   const allCapIds = KAI_NEXT_SECTIONS.flatMap((s) => s.capabilities.map((c) => c.id));
+  const activeRoles = roles.filter((r) => r.active !== false || r.id === u.roleId);
+  const initialRoleId = u.roleId ?? projectRoleOf(u.access?.kaiNextCapabilities).id;
+  const [roleId, setRoleId] = useState(activeRoles.some((r) => r.id === initialRoleId) ? initialRoleId : '');
+  // Solo se asigna rol si alguien lo cambió de verdad: a quien no tiene uno se le muestra el que
+  // corresponde a sus permisos, pero guardar sin tocarlo no debe pisarle nada (ej. el Admin).
+  const [roleTouched, setRoleTouched] = useState(false);
   const [sections, setSections] = useState(new Set(u.access?.kaiNextSections?.length ? u.access.kaiNextSections : allSectionIds));
-  const [caps, setCaps] = useState(new Set(u.access?.kaiNextCapabilities?.length ? u.access.kaiNextCapabilities : allCapIds));
-  const [roleId, setRoleId] = useState(projectRoleOf(u.access?.kaiNextCapabilities).id);
+  const [caps, setCaps] = useState(new Set(
+    (u.access?.kaiNextCapabilities?.length ? u.access.kaiNextCapabilities : allCapIds).filter((c) => c !== NO_CAPABILITIES),
+  ));
+  const [empresaIds, setEmpresaIds] = useState(new Set(u.empresaIds ?? []));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
 
-  const toggleSection = (id) => setSections((prev) => {
+  const toggle = (setter, id) => setter((prev) => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
 
-  const toggleCap = (id) => setCaps((prev) => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
+  const pickRole = (id) => {
+    setRoleId(id);
+    setRoleTouched(true);
+    const role = roles.find((r) => r.id === id);
+    if (!role) return;
+    setSections(new Set(role.sections));
+    setCaps(new Set(role.capabilities));
+  };
+
+  const allEmpresas = empresas.length > 0 && empresas.every((e) => empresaIds.has(e.id));
+  const toggleAllEmpresas = () => setEmpresaIds(allEmpresas ? new Set() : new Set(empresas.map((e) => e.id)));
 
   const save = async () => {
+    if (!sections.size) { setErr('Deja al menos una sección.'); return; }
     setSaving(true);
     setErr(null);
-    const roleCaps = PROJECT_ROLES.find((r) => r.id === roleId).caps;
-    const otherCaps = [...caps].filter((c) => !PROJECT_ROLE_CAPS.includes(c) && c !== NO_CAPABILITIES);
-    const finalCaps = [...otherCaps, ...roleCaps];
+    const finalCaps = [...caps].filter((c) => c !== NO_CAPABILITIES);
+    const body = {
+      access: { kaiNextSections: [...sections], kaiNextCapabilities: finalCaps.length ? finalCaps : [NO_CAPABILITIES] },
+    };
+    if (roleTouched && roleId && roleId !== u.roleId) body.roleId = roleId;
+    if (empresas.length) body.empresaIds = [...empresaIds];
     try {
       const res = await fetch(`/api/kai/${tenant}/tenant-users/${u.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          access: {
-            kai: u.access?.kai, aria: u.access?.aria, kaiNext: u.access?.kaiNext,
-            kaiNextSections: [...sections], kaiNextCapabilities: finalCaps.length ? finalCaps : [NO_CAPABILITIES],
-          },
-        }),
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
       if (!res.ok) { const d = await res.json().catch(() => ({})); setErr(d.error || 'No se pudo guardar.'); return; }
       onSaved();
@@ -2327,49 +2355,67 @@ function KaiNextUserCapabilitiesPanel({ tenant, user: u, onSaved }) {
     }
   };
 
+  const role = roles.find((r) => r.id === roleId);
+
   return (
-    <div style={{ padding: '10px 2px' }}>
-      <p style={{ fontSize: 12.5, color: '#888', marginBottom: 10 }}>
-        Qué puede ver y hacer <strong>{u.name}</strong> en Kai Next.
-      </p>
-      {KAI_NEXT_SECTIONS.map((s) => {
-        const sectionOn = sections.has(s.id);
-        return (
-          <div key={s.id} style={{ padding: '8px 0', borderTop: '1px solid #eee' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-              <input type="checkbox" checked={sectionOn} onChange={() => toggleSection(s.id)} />
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{s.label}</span>
-              <span style={{ fontSize: 11.5, color: '#999' }}>{s.description}</span>
+    <div className="eq-caps">
+      <p className="eq-caps-intro">Qué puede ver y hacer <strong>{u.name}</strong> en Kai Next.</p>
+
+      <label className="eq-caps-role">
+        <span className="eq-label">Rol</span>
+        <select className="eq-input" value={roleId} onChange={(e) => pickRole(e.target.value)} disabled={saving}>
+          {!roleId && <option value="">Sin rol</option>}
+          {activeRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+        </select>
+        {role?.description && <span className="eq-caps-hint">{role.description}</span>}
+        {u.roleCustomized && roleId === u.roleId && <span className="eq-caps-hint">Ajustado a mano: no recibe los cambios que se hagan al rol.</span>}
+      </label>
+
+      {empresas.length > 0 && (
+        <div className="eq-caps-block">
+          <span className="eq-label">Empresas que ve</span>
+          <div className="eq-caps-emps">
+            <label className="eq-caps-emp eq-caps-emp--all">
+              <input type="checkbox" checked={allEmpresas} onChange={toggleAllEmpresas} disabled={saving} />
+              <b>Todas</b>
             </label>
-            {s.capabilities.length > 0 && (
-              <div style={{ marginLeft: 26, marginTop: 4 }}>
-                {s.id === 'proyectos' && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', opacity: sectionOn ? 1 : 0.4 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600 }}>Rol</span>
-                    <select value={roleId} disabled={!sectionOn} onChange={(e) => setRoleId(e.target.value)} style={{ fontSize: 12 }}>
-                      {PROJECT_ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
-                    </select>
-                    <span style={{ fontSize: 11.5, color: '#999' }}>{PROJECT_ROLES.find((r) => r.id === roleId).description}</span>
-                  </label>
-                )}
-                {s.capabilities.filter((c) => !PROJECT_ROLE_CAPS.includes(c.id)).map((c) => (
-                  <label
-                    key={c.id}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0',
-                      cursor: sectionOn ? 'pointer' : 'default',
-                      opacity: sectionOn ? 1 : 0.4,
-                    }}
-                  >
-                    <input type="checkbox" checked={caps.has(c.id)} disabled={!sectionOn} onChange={() => toggleCap(c.id)} />
-                    <span style={{ fontSize: 12 }}>{c.label}</span>
-                  </label>
-                ))}
-              </div>
-            )}
+            {empresas.map((e) => (
+              <label key={e.id} className="eq-caps-emp">
+                <input type="checkbox" checked={empresaIds.has(e.id)} onChange={() => toggle(setEmpresaIds, e.id)} disabled={saving} />
+                <i style={{ background: e.color }} aria-hidden="true" />
+                {e.name}
+              </label>
+            ))}
           </div>
-        );
-      })}
+          {empresaIds.size === 0 && <span className="eq-caps-hint eq-caps-hint--warn">Sin empresas no ve ningún proyecto.</span>}
+        </div>
+      )}
+
+      <div className="eq-caps-block">
+        <span className="eq-label">Secciones y funcionalidades</span>
+        {KAI_NEXT_SECTIONS.map((s) => {
+          const sectionOn = sections.has(s.id);
+          return (
+            <div key={s.id} className="eq-caps-section">
+              <label className="eq-caps-check">
+                <input type="checkbox" checked={sectionOn} onChange={() => toggle(setSections, s.id)} disabled={saving} />
+                <span><b>{s.label}</b> <small>{s.description}</small></span>
+              </label>
+              {s.capabilities.length > 0 && (
+                <div className="eq-caps-sub" style={{ opacity: sectionOn ? 1 : 0.4 }}>
+                  {s.capabilities.map((c) => (
+                    <label key={c.id} className="eq-caps-check">
+                      <input type="checkbox" checked={caps.has(c.id)} disabled={!sectionOn || saving} onChange={() => toggle(setCaps, c.id)} />
+                      <span>{c.label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
       <div className="eq-edit-footer" style={{ marginTop: 8 }}>
         {err && <span style={{ color: '#c0392b', fontSize: 12, marginRight: 8 }}>{err}</span>}
         <button className="admin-btn admin-btn--primary" onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</button>
@@ -2463,21 +2509,35 @@ function KaiNextProjectsDrivePanel({ tenant }) {
 // Exportada — reusada tal cual por el admin de Kai Next (ver app/kai-next/[tenant]/admin), que
 // no tiene su propia gestión de equipo. Mismo criterio que CostsTab más abajo: una sola fuente
 // de verdad para esta pieza, en vez de mantener una copia en cada admin.
-export function EquipoTab({ slug, hideProjectsDrive }) {
+export function EquipoTab({ slug, hideProjectsDrive, rolesSlot, reloadKey = 0 }) {
   const [users, setUsers] = useState(undefined);
   const [addOpen, setAddOpen] = useState(false);
+  // Roles y empresas del tenant (Kai Next). Si el endpoint no responde (ej. el admin legacy sin
+  // sesión de equipo), se usan los tres roles de siempre y sin empresas: nada cambia.
+  const [roles, setRoles] = useState(PROJECT_ROLES.map((r) => ({ id: r.id, name: r.label, description: r.description, active: true, sections: KAI_NEXT_SECTIONS.map((x) => x.id), capabilities: KAI_NEXT_SECTIONS.flatMap((x) => x.capabilities.map((c) => c.id)).filter((c) => !PROJECT_ROLE_CAPS.includes(c) || r.caps.includes(c)) })));
+  const [empresas, setEmpresas] = useState([]);
+  const [adminScope, setAdminScope] = useState('full');
 
   const load = () => {
     fetch(`/api/kai/${slug}/tenant-users`)
       .then((r) => r.json())
       .then((d) => setUsers(d.users ?? []))
       .catch(() => setUsers([]));
+    fetch(`/api/kai-next/${slug}/roles`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.roles) { setRoles(d.roles); setAdminScope(d.adminScope ?? 'full'); } })
+      .catch(() => {});
+    fetch(`/api/kai-next/${slug}/empresas?admin=1`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setEmpresas(d?.empresas ?? []))
+      .catch(() => {});
   };
-  useEffect(() => { load(); }, [slug]);
+  useEffect(() => { load(); }, [slug, reloadKey]);
 
   return (
     <>
       {!hideProjectsDrive && <KaiNextProjectsDrivePanel tenant={slug} />}
+      {rolesSlot}
       <div className="admin-detail-card" style={{ padding: 0, overflow: 'hidden' }}>
         <div className="eq-header">
           <div>
@@ -2497,7 +2557,7 @@ export function EquipoTab({ slug, hideProjectsDrive }) {
 
         {users === undefined && <p style={{ fontSize: 12, color: '#bbb', padding: '16px' }}>Cargando…</p>}
         {users?.length === 0 && <p style={{ fontSize: 12, color: '#bbb', padding: '16px' }}>Todavía no hay nadie en el equipo.</p>}
-        {users?.map((u) => <EquipoRow key={u.id} tenant={slug} user={u} onSaved={load} />)}
+        {users?.map((u) => <EquipoRow key={u.id} tenant={slug} user={u} roles={roles} empresas={empresas} adminScope={adminScope} onSaved={load} />)}
       </div>
     </>
   );

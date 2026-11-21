@@ -1,6 +1,6 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
-import { getProjectMeta, addTask, projectInactiveMessage, isProjectMember } from '@/lib/kaiNext/projects';
+import { getProjectMeta, addTask, projectInactiveMessage, isProjectMember, supervisesProject, resolveTaskStatusChange } from '@/lib/kaiNext/projects';
 
 // Crear tareas: cualquier persona del equipo del proyecto (Director, Supervisor o Team member).
 // Editar y borrar dependen de si la tarea es suya (ver [taskId]/route.js).
@@ -27,6 +27,13 @@ export async function POST(req, { params }) {
     body = await req.json();
   } catch {
     return Response.json({ error: 'Body inválido.' }, { status: 400 });
+  }
+
+  // Crear una tarea ya terminada tampoco se salta la revisión del proyecto.
+  if (body.status) {
+    const resolved = resolveTaskStatusChange(meta, { responsables: body.responsables ?? [] }, body.status, { canValidate: supervisesProject(identity, meta), personId: identity.personId });
+    if (resolved.error) return Response.json({ error: resolved.error }, { status: 403 });
+    body.status = resolved.status;
   }
 
   try {

@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { headers } from 'next/headers';
-import { isKaiNextAdmin } from '@/lib/kaiNext/auth';
+import { getKaiNextAdminScope } from '@/lib/kaiNext/auth';
 import { getTenantMeta } from '@/lib/kai/tenants';
 import { getCurrentTeamUser } from '@/lib/team/auth';
 import { getCurrentTenantUser } from '@/lib/kai/tenantAuth';
@@ -25,7 +25,8 @@ export default async function KaiNextAdminPage({ params }) {
   const host = (await headers()).get('host') ?? '';
   const basePath = kaiNextBasePath(host);
 
-  if (!(await isKaiNextAdmin(tenant))) redirect(`${basePath}/${tenant}`);
+  const adminScope = await getKaiNextAdminScope(tenant);
+  if (!adminScope) redirect(`${basePath}/${tenant}`);
 
   // Mismo criterio que las otras páginas de Kai Next (ver fuentes/page.jsx): una sesión de
   // tenant activa (alguien de equipo logueado explícito como ese usuario) manda sobre la
@@ -57,6 +58,7 @@ export default async function KaiNextAdminPage({ params }) {
       userName={userName}
       userHandle={userHandle}
       isTeamUser={isTeamUser}
+      adminScope={adminScope}
       tenantUsage={tenantUsage}
       usageEvents={usageEvents}
       dailyUsage={dailyUsage}

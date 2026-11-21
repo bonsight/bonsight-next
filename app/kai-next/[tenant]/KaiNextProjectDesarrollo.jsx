@@ -7,6 +7,7 @@ import { useSidePanelClose } from '@/lib/kaiNext/useSidePanelClose';
 import KaiNextProjectRepos from './KaiNextProjectRepos';
 import KaiNextProjectCommits from './KaiNextProjectCommits';
 import { sortByOrder, dropsBefore, computeDropOrder } from '@/lib/kaiNext/dragOrder';
+import { ItemFeedback } from './KaiNextProjectTabs';
 
 // Proyecto de Desarrollo: iniciativas, épicas, tareas y sprints viven en Kai
 // (lib/kaiNext/devStore.js). Hasta noviembre de 2026 vivían en Notion; lo migrado conserva su id.
@@ -550,6 +551,7 @@ function DevTaskDetailPanel({ tenant, projectId, task, equipo, canManage, canEdi
           </div>
         </div>
         <TaskCommits tenant={tenant} projectId={projectId} task={task} subtasks={children} />
+        <ItemFeedback tenant={tenant} projectId={projectId} target={{ type: 'dev_tarea', id: task.id }} />
         <button type="button" className="knx-delete-task-btn" onClick={onRemove} hidden={!canDelete}>
           Eliminar tarea
         </button>
@@ -1715,6 +1717,8 @@ function EpicaDetailPanel({ tenant, projectId, epica, index, total, activeSprint
           <h4 className="knx-canvas-meta-field-label">Historias · {totalCount}</h4>
           <EpicaTareas tenant={tenant} projectId={projectId} epicaId={epica.id} activeSprint={activeSprint} canWork={canWork} canEditTask={canEditTask} onReload={onReload} />
         </div>
+
+        <ItemFeedback tenant={tenant} projectId={projectId} target={{ type: 'epica', id: epica.id }} />
 
         {messages.map((m, i) => (
           <div key={i} className={`knx-side-msg knx-side-msg--${m.role}`}>{m.content}</div>

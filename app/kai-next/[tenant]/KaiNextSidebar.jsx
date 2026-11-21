@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useEmpresaScope } from '@/lib/kaiNext/useEmpresaScope';
 
 function initials(name = '') {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') || '·';
@@ -47,6 +48,23 @@ export default function KaiNextSidebar({
   }, [tenant]);
   const showSection = (id) => !sections?.length || sections.includes(id);
 
+  // Empresas (lib/kaiNext/empresas.js): solo si el tenant tiene empresas asignadas a esta persona.
+  // Con empresas, el nav muestra "Empresas" (proyectos agrupados por empresa) en vez de
+  // "Proyectos", y la sección del perfil de negocio pasa a llamarse "Perfil".
+  const emp = useEmpresaScope(tenant);
+  const [scopeOpen, setScopeOpen] = useState(false);
+  const scopeName = emp.scope === 'all' ? 'Todas mis empresas' : (emp.empresas.find((e) => e.id === emp.scope)?.name ?? 'Todas mis empresas');
+  const activeEmpresaId = active.startsWith('empresa:') ? active.slice(8) : null;
+
+  // Celular: la barra lateral es un menú que se abre desde la barra superior.
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
   // Lista de proyectos directo en el sidebar — para no tener que entrar a Proyectos y esperar
   // a que cargue solo para elegir uno o crear uno nuevo. Mismo criterio que `sections` arriba:
   // se consulta acá, no por prop, así cualquier página que use este sidebar lo tiene gratis.
@@ -60,8 +78,30 @@ export default function KaiNextSidebar({
       .catch(() => null);
   }, [tenant, sections]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const projectsInScope = (projects ?? []).filter((p) => !emp.hasEmpresas || emp.scope === 'all' || p.empresaId === emp.scope);
+  const groups = emp.hasEmpresas
+    ? [
+      ...emp.selectable.filter((e) => emp.scope === 'all' || e.id === emp.scope)
+        .map((e) => ({ empresa: e, items: projectsInScope.filter((p) => p.empresaId === e.id) })),
+      ...(projectsInScope.some((p) => !p.empresaId) ? [{ empresa: null, items: projectsInScope.filter((p) => !p.empresaId) }] : []),
+    ].filter((g) => g.items.length)
+    : [{ empresa: null, items: projectsInScope }];
+
   return (
-    <aside className="knx-sidebar">
+    <>
+    <div className="knx-mobile-bar">
+      <button type="button" className="knx-mobile-menu-btn" aria-label="Abrir menú" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+      </button>
+      <span className="knx-mobile-title">
+        <img src="/assets/bonsight-isotipo.svg" alt="" width="20" height="11" />
+        Kai · {tenantName}
+      </span>
+      {emp.hasEmpresas && <span className="knx-mobile-scope">{scopeName}</span>}
+    </div>
+    {menuOpen && <div className="knx-sidebar-scrim" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+    <aside className={`knx-sidebar${menuOpen ? ' knx-sidebar--open' : ''}`}>
+      <button type="button" className="knx-sidebar-close" aria-label="Cerrar menú" onClick={() => setMenuOpen(false)}>×</button>
       <div className="knx-sidebar-top">
         <div className="knx-brand">
           <img src="/assets/bonsight-isotipo.svg" alt="" width="22" height="12" />
@@ -71,6 +111,39 @@ export default function KaiNextSidebar({
           <span className="knx-tenant-avatar">{initials(tenantName)[0]}</span>
           <span className="knx-tenant-name">{tenantName}</span>
         </div>
+        {emp.hasEmpresas && emp.selectable.length > 0 && (
+          <div className="knx-scope">
+            <button
+              type="button"
+              className="knx-scope-btn"
+              aria-haspopup="menu"
+              aria-expanded={scopeOpen}
+              disabled={emp.fixed}
+              onClick={() => setScopeOpen((v) => !v)}
+            >
+              <small>Viendo</small>
+              <span className="knx-scope-name">{scopeName}</span>
+              {!emp.fixed && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>}
+            </button>
+            {scopeOpen && !emp.fixed && (
+              <>
+                <div className="knx-scope-scrim" onClick={() => setScopeOpen(false)} aria-hidden="true" />
+                <div className="knx-scope-pop" role="menu">
+                  <button type="button" role="menuitemradio" aria-checked={emp.scope === 'all'} onClick={() => { emp.setScope('all'); setScopeOpen(false); }}>
+                    <span className="knx-scope-sw knx-scope-sw--all" />Todas mis empresas
+                    <em>{emp.selectable.reduce((n, e) => n + e.projectCount, 0)}</em>
+                  </button>
+                  <hr />
+                  {emp.selectable.map((e) => (
+                    <button key={e.id} type="button" role="menuitemradio" aria-checked={emp.scope === e.id} onClick={() => { emp.setScope(e.id); setScopeOpen(false); }}>
+                      <span className="knx-scope-sw" style={{ background: e.color }} />{e.name}<em>{e.projectCount}</em>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
         {showSection('chat') && (onNewChat ? (
           <button className="knx-new-chat" onClick={onNewChat} type="button">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
@@ -88,7 +161,7 @@ export default function KaiNextSidebar({
         {showSection('empresa') && (
           <a className={navLinkClass('empresa')} href={`${basePath}/${tenant}/empresa`}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16" /><path d="M15 9h4a1 1 0 0 1 1 1v11M3 21h18M8 8h3M8 12h3M8 16h3" /></svg>
-            Empresa
+            {emp.hasEmpresas ? 'Perfil' : 'Empresa'}
           </a>
         )}
         {showSection('fuentes') && (
@@ -110,21 +183,33 @@ export default function KaiNextSidebar({
           </a>
         )}
         {showSection('proyectos') && (
-          <a className={navLinkClass('proyectos')} href={`${basePath}/${tenant}/proyectos`}>
+          <a
+            className={emp.hasEmpresas ? `knx-nav-link${active === 'empresas' || activeEmpresaId ? ' knx-nav-link--active' : ''}` : navLinkClass('proyectos')}
+            href={`${basePath}/${tenant}/${emp.hasEmpresas ? 'empresas' : 'proyectos'}`}
+          >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
-            Proyectos
+            {emp.hasEmpresas ? 'Empresas' : 'Proyectos'}
           </a>
         )}
-        {showSection('proyectos') && projects?.length > 0 && (
+        {showSection('proyectos') && projectsInScope.length > 0 && (
           <div className="knx-sidebar-sublist">
-            {projects.map((p) => (
-              <a
-                key={p.id}
-                className={`knx-sidebar-subitem${p.id === activeProjectId ? ' knx-sidebar-subitem--active' : ''}`}
-                href={`${basePath}/${tenant}/proyectos?p=${p.id}`}
-              >
-                {p.name}
-              </a>
+            {groups.map((g) => (
+              <div key={g.empresa?.id ?? 'none'}>
+                {emp.hasEmpresas && (g.empresa ? (
+                  <a className={`knx-sidebar-group${g.empresa.id === activeEmpresaId ? ' knx-sidebar-group--active' : ''}`} href={`${basePath}/${tenant}/empresas/${g.empresa.id}`} title={`Resumen de ${g.empresa.name}`}>
+                    <span className="knx-scope-sw" style={{ background: g.empresa.color }} />{g.empresa.name}
+                  </a>
+                ) : <span className="knx-sidebar-group knx-sidebar-group--plain">Sin empresa</span>)}
+                {g.items.map((p) => (
+                  <a
+                    key={p.id}
+                    className={`knx-sidebar-subitem${p.id === activeProjectId ? ' knx-sidebar-subitem--active' : ''}`}
+                    href={`${basePath}/${tenant}/proyectos?p=${p.id}`}
+                  >
+                    {p.name}
+                  </a>
+                ))}
+              </div>
             ))}
           </div>
         )}
@@ -205,5 +290,6 @@ export default function KaiNextSidebar({
         </div>
       </div>
     </aside>
+    </>
   );
 }
