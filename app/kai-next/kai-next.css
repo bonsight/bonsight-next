@@ -10735,7 +10735,9 @@ a.knx-sidebar-group:hover, .knx-sidebar-group--active { background: #fff; color:
 @media (max-width: 768px) and (prefers-reduced-motion: reduce) { .knx-sidebar { transition: none; } }
 
 /* ============ Pantallas Empresas y Resumen de empresa (KaiNextEmpresas) ============ */
-.knx-emps { max-width: 1180px; }
+/* Ocupa todo el ancho (el scroll queda en el borde de la ventana); en monitores muy anchos el
+   contenido se centra con un tope de 1760px en vez de quedar pegado a la izquierda. */
+.knx-emps { max-width: none; padding-inline: max(56px, calc((100% - 1760px) / 2)); }
 .knx-emps-h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
 .knx-emps-sub { margin: 4px 0 22px; color: var(--knx-text-muted); font-size: 14.5px; }
 .knx-emps-back { font-size: 14px; color: var(--knx-text-muted); text-decoration: none; display: inline-block; margin-bottom: 12px; }
@@ -10899,3 +10901,14 @@ a.knx-sidebar-group:hover, .knx-sidebar-group--active { background: #fff; color:
   .knx-emp-field input, .knx-emp-field select { min-height: 44px; }
 }
 .knx-src-emp-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 16px; flex-wrap: wrap; }
+.knx-mini .knx-emp-tag { align-self: flex-start; }
+.knx-emps-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+/* Empresas en pantallas anchas: más columnas y tarjetas de empresa en grilla. */
+.knx-emps .knx-mini-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+@media (min-width: 1400px) {
+  .knx-emps .knx-emps-grid { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+}
+@media (max-width: 860px) {
+  .knx-emps { padding-inline: 16px; }
+}

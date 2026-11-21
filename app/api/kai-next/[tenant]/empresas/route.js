@@ -2,10 +2,11 @@ import { isAuthorizedForTenant, getCurrentKaiNextIdentity, getKaiNextAdminScope 
 import { listEmpresas, createEmpresa, empresaAllows } from '@/lib/kaiNext/empresas';
 import { listProjects, listProjectsForPerson, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
 import { listTenantUsers } from '@/lib/kai/tenantUsers';
+import { listEmpresaTasks } from '@/lib/kaiNext/empresaTasks';
 
 // GET: dos usos.
 // - Selector de empresa en Kai: devuelve solo las empresas que la persona tiene asignadas, con
-//   cuántos proyectos tiene cada una (la UI oculta las que no tienen proyectos o están ocultas).
+//   cuántos proyectos y tareas sueltas activas tiene cada una (el selector oculta las vacías u ocultas).
 // - Admin (?admin=1): todas, con conteo de proyectos y personas.
 export async function GET(req, { params }) {
   const { tenant } = await params;
@@ -34,8 +35,15 @@ export async function GET(req, { params }) {
   const identity = await getCurrentKaiNextIdentity(tenant);
   const mine = empresas.filter((e) => empresaAllows(identity.empresaIds, { empresaId: e.id }));
   const visible = await listProjectsForPerson(tenant, { ...resolveProjectAccessLevel(identity), personId: identity.personId, empresaIds: identity.empresaIds });
+  // También cuántas tareas sueltas activas tiene: una empresa sin proyectos pero con tareas
+  // sueltas (ej. el holding) igual tiene que poder elegirse.
+  const loose = await Promise.all(mine.map((e) => listEmpresaTasks(tenant, e.id).catch(() => [])));
   return Response.json({
-    empresas: mine.map((e) => ({ ...e, projectCount: visible.filter((p) => p.empresaId === e.id).length })),
+    empresas: mine.map((e, i) => ({
+      ...e,
+      projectCount: visible.filter((p) => p.empresaId === e.id).length,
+      looseCount: loose[i].filter((t) => t.status !== 'done').length,
+    })),
   });
 }
 

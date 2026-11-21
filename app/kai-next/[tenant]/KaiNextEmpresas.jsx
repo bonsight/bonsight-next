@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import KaiNextSidebar from './KaiNextSidebar';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
+import KaiNextTaskCanvas from './KaiNextTaskCanvas';
 import { useEmpresaScope } from '@/lib/kaiNext/useEmpresaScope';
 
 // Pantallas de un tenant con empresas (ver lib/kaiNext/empresas.js):
@@ -16,6 +17,7 @@ const KIND_UNIT = { experimental: ['prueba', 'pruebas'], civil: ['actividad', 'a
 const KIND_HINT = { experimental: 'Avance por pruebas', civil: 'Avance por cronograma', seguimiento: 'Avance por tareas', desarrollo: 'Avance por tareas de sprint' };
 const STATUS = { todo: 'Por hacer', doing: 'Haciendo', review: 'En revisión', done: 'Hecho' };
 const STATUS_ORDER = ['todo', 'doing', 'review', 'done'];
+const BOARD_COLUMNS = STATUS_ORDER.map((id) => ({ id, label: STATUS[id] }));
 const PRIORITIES = ['Alta', 'Media', 'Baja'];
 const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
@@ -23,6 +25,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 const fd = (d) => (d ? `${Number(d.slice(8, 10))} ${MES[Number(d.slice(5, 7)) - 1]}` : '');
 const isOverdue = (t) => t.status !== 'done' && t.status !== 'review' && t.fechaFin && t.fechaFin < today();
 const initials = (name = '') => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '·';
+// Primer nombre sin títulos ("Ing. Jean Villanueva" → "Jean").
+const firstName = (name = '') => name.replace(/^((ing|dr|dra|lic|arq|sr|sra|srta)\.?\s+)+/i, '').split(/\s+/)[0] || name;
 const plural = (n, [one, many]) => `${n} ${n === 1 ? one : many}`;
 
 async function sendJson(url, method, body) {
@@ -66,74 +70,120 @@ function PendingBox({ pending, projectHref, empresaHref }) {
   );
 }
 
-// ── Tarjeta de proyecto con novedades ─────────────────────────────────────────
-function ProjectCard({ p, empresa, showEmpresa, projectHref }) {
-  const pct = p.progress.total ? Math.round((p.progress.done / p.progress.total) * 100) : 0;
+// ── Piezas compartidas por Empresas y Resumen de empresa ───────────────────────
+// Mismo look en las dos pantallas: aviso de vencidas arriba y proyectos agrupados por tipo en
+// tarjetas compactas. En "Todas mis empresas" cada tarjeta lleva además su empresa.
+const KIND_ORDER = ['experimental', 'civil', 'seguimiento', 'desarrollo'];
+
+function OverdueAlert({ od, people, projectHref, looseHref, okLabel }) {
+  const [open, setOpen] = useState(false);
+  const nameOf = (id) => people.find((p) => p.id === id)?.name ?? '—';
+  if (!od.length) return <p className="knx-od-ok">✓ {okLabel}</p>;
+  const shown = open ? od : od.slice(0, 3);
   return (
-    <article className="knx-pcard" style={{ '--c': empresa?.color ?? 'var(--knx-primary)' }}>
-      <div className="knx-pcard-top">
-        {showEmpresa && <EmpresaTag empresa={empresa} />}
-        <span className="knx-pcard-kind">{KIND_LABEL[p.projectKind] ?? p.projectKind}</span>
+    <section className="knx-od" aria-label="Vencidas">
+      <div className="knx-od-h">
+        <b>{od.length === 1 ? '1 vencida' : `${od.length} vencidas`}</b>
+        <span>· {[...new Set(od.flatMap((o) => o.responsables.map((r) => firstName(nameOf(r)))))].filter((n) => n !== '—').join(', ') || 'sin responsable'}</span>
+        {od.length > 3 && <button type="button" className="knx-canvas-mini" onClick={() => setOpen((v) => !v)}>{open ? 'Ver menos' : `Ver las ${od.length}`}</button>}
       </div>
-      <h3><a href={projectHref(p.id)}>{p.name}</a></h3>
-      <div className="knx-pcard-prog">
-        <span><i style={{ width: `${pct}%` }} /></span>
-        {p.progress.done}/{plural(p.progress.total, KIND_UNIT[p.projectKind] ?? ['ítem', 'ítems'])}
-      </div>
-      <div className="knx-pcard-nov">
-        {p.unseenCount ? (
-          <>
-            <div className="knx-pcard-nov-h"><span>Novedades</span><em>{p.unseenCount === 1 ? '1 nueva' : `${p.unseenCount} nuevas`}</em></div>
-            <ul>
-              {p.news.map((n) => (
-                <li key={n.id}><i className={n.type === 'feedback' ? 'knx-dot-fb' : ''} /><span>{n.title}</span><small>{fd(n.date?.slice(0, 10))}</small></li>
-              ))}
-            </ul>
-          </>
-        ) : <p className="knx-pcard-none">Sin novedades desde tu última visita</p>}
-      </div>
-      <div className="knx-pcard-foot">
-        {p.overdueCount > 0 ? <span className="knx-pcard-od">{p.overdueCount === 1 ? '1 vencida' : `${p.overdueCount} vencidas`}</span> : <span />}
-        <span className="knx-pcard-links">
-          {p.unseenCount > 0 && <a href={projectHref(p.id, 'historia')}>Ver novedades</a>}
-          <a className="knx-pcard-go" href={projectHref(p.id)}>Entrar →</a>
-        </span>
-      </div>
-    </article>
+      {shown.map((o) => (
+        <div key={`${o.kind}-${o.id}`} className="knx-od-row">
+          <div><b>{o.name}</b><small>{o.projectName ?? 'Tarea suelta'}</small></div>
+          <span className="knx-od-when">Venció {fd(String(o.fechaFin).slice(0, 10))}</span>
+          {o.projectId
+            ? <a className="knx-canvas-mini" href={projectHref(o.projectId, o.kind === 'dev' ? undefined : 'trabajo')}>Abrir proyecto</a>
+            : looseHref ? <a className="knx-canvas-mini" href={looseHref(o.empresaId)}>Ver tarea</a> : <span className="knx-od-loose">Más abajo</span>}
+        </div>
+      ))}
+    </section>
   );
 }
 
+function ProjectsByKind({ ps, projectHref, empresaById, showEmpresa }) {
+  const kinds = KIND_ORDER.filter((k) => ps.some((p) => p.projectKind === k));
+  return kinds.map((k) => {
+    const list = ps.filter((p) => p.projectKind === k);
+    return (
+      <div key={k} className="knx-emps-kind">
+        <div className="knx-emps-kind-h"><h3>{KIND_PLURAL[k]} <em>· {list.length}</em></h3><p>{KIND_HINT[k]}</p></div>
+        <div className="knx-mini-grid">
+          {list.map((p) => {
+            const pct = p.progress.total ? Math.round((p.progress.done / p.progress.total) * 100) : 0;
+            return (
+              <a key={p.id} className="knx-mini" href={projectHref(p.id)}>
+                {showEmpresa && <EmpresaTag empresa={empresaById.get(p.empresaId)} />}
+                <b>{p.name}</b>
+                <span className="knx-pcard-prog"><span><i style={{ width: `${pct}%` }} /></span></span>
+                <span className="knx-mini-m">
+                  <span>{p.progress.done}/{plural(p.progress.total, KIND_UNIT[k])}</span>
+                  {p.overdueCount ? <span className="knx-pcard-od">{p.overdueCount === 1 ? '1 vencida' : `${p.overdueCount} vencidas`}</span> : p.unseenCount ? <span>{p.unseenCount === 1 ? '1 novedad' : `${p.unseenCount} novedades`}</span> : null}
+                </span>
+                <span className="knx-mini-nx">{p.next ? `Sigue: ${p.next}` : !p.progress.total ? `Sin ${KIND_UNIT[k][1]} todavía` : p.progress.done >= p.progress.total ? 'Todo terminado' : `${p.progress.total - p.progress.done} por completar`}</span>
+              </a>
+            );
+          })}
+        </div>
+      </div>
+    );
+  });
+}
+
 // ── Pantalla Empresas ────────────────────────────────────────────────────────
-function EmpresasHome({ data, emp, projectHref, empresaHref }) {
-  const [kind, setKind] = useState('all');
+function EmpresasHome({ tenant, data, emp, people, projectHref, empresaHref }) {
+  const [newIn, setNewIn] = useState(null); // empresaId de la tarea suelta que se está creando
   const byId = new Map(data.empresas.map((e) => [e.id, e]));
   const inScope = data.projects.filter((p) => emp.scope === 'all' || p.empresaId === emp.scope);
   const multi = emp.scope === 'all' && emp.selectable.length > 1;
-  const kinds = [...new Set(inScope.map((p) => p.projectKind))];
-  const shown = inScope.filter((p) => kind === 'all' || p.projectKind === kind);
   const pending = data.pending.filter((p) => emp.scope === 'all' || p.empresaId === emp.scope);
+  const od = data.overdue.filter((o) => emp.scope === 'all' || o.empresaId === emp.scope);
   const scopeEmpresas = emp.selectable.filter((e) => emp.scope === 'all' || e.id === emp.scope);
+  const scopeName = multi ? 'tus empresas' : byId.get(emp.scope)?.name ?? scopeEmpresas[0]?.name ?? '';
+  const activeLoose = (id) => (data.loose[id] ?? []).filter((t) => t.status !== 'done').length;
+  // Tarjetas: solo empresas con algo adentro (proyectos o tareas sueltas activas). Una empresa
+  // vacía (ej. Grupo Sesuveca recién creada) no ocupa lugar: se le crea una tarea suelta con el
+  // botón de arriba y desde ahí aparece sola.
+  const visibleEmpresas = data.empresas.filter((e) => e.visible !== false);
+  const cardEmpresas = visibleEmpresas.filter((e) => (emp.scope === 'all' || e.id === emp.scope)
+    && (inScope.some((p) => p.empresaId === e.id) || activeLoose(e.id) > 0));
+  const showCards = emp.scope === 'all' && cardEmpresas.length > 1;
+  const canManage = !!data.level?.isSupervisorLevel;
+  const newEmpresa = newIn ? byId.get(newIn) : null;
+  const createLoose = async (patch) => {
+    const { error } = await sendJson(`/api/kai-next/${tenant}/empresas/${newIn}/tasks`, 'POST', patch);
+    if (error) return error;
+    window.location.href = `${empresaHref(newIn)}#tareas-sueltas`;
+    return null;
+  };
 
   return (
     <>
-      <h1 className="knx-emps-h1">Empresas</h1>
+      <div className="knx-emps-head">
+        <h1 className="knx-emps-h1">Empresas</h1>
+        {canManage && visibleEmpresas.length > 0 && (
+          <button type="button" className="knx-admin-btn" onClick={() => setNewIn(emp.scope !== 'all' && byId.has(emp.scope) ? emp.scope : visibleEmpresas[0].id)}>+ Tarea suelta</button>
+        )}
+      </div>
       <p className="knx-emps-sub">
-        {multi ? `${plural(inScope.length, ['proyecto', 'proyectos'])} en ${scopeEmpresas.length} empresas` : `${byId.get(emp.scope)?.name ?? scopeEmpresas[0]?.name ?? ''} · ${plural(inScope.length, ['proyecto', 'proyectos'])}`}
+        {showCards ? `${plural(inScope.length, ['proyecto', 'proyectos'])} en ${cardEmpresas.length} empresas` : `${scopeName} · ${plural(inScope.length, ['proyecto', 'proyectos'])}`}
       </p>
 
-      <PendingBox pending={pending} projectHref={projectHref} empresaHref={empresaHref} />
-
-      {multi && (
+      {showCards && (
         <div className="knx-emps-grid">
-          {scopeEmpresas.map((e) => {
+          {cardEmpresas.map((e) => {
             const ps = inScope.filter((p) => p.empresaId === e.id);
             const news = ps.reduce((n, p) => n + p.unseenCount, 0);
+            const lc = activeLoose(e.id);
+            const parts = [
+              ps.length ? `${plural(ps.length, ['proyecto', 'proyectos'])} · ${[...new Set(ps.map((p) => KIND_LABEL[p.projectKind]))].join(', ')}` : 'Sin proyectos',
+              lc ? plural(lc, ['tarea suelta', 'tareas sueltas']) : null,
+            ].filter(Boolean);
             return (
               <a key={e.id} className="knx-emps-card" href={empresaHref(e.id)}>
                 <span className="knx-emps-bar" style={{ background: e.color }} />
                 <span className="knx-emps-main">
                   <b>{e.name}</b>
-                  <span>{plural(ps.length, ['proyecto', 'proyectos'])}{ps.length ? ` · ${[...new Set(ps.map((p) => KIND_LABEL[p.projectKind]))].join(', ')}` : ''}</span>
+                  <span>{parts.join(' · ')}</span>
                 </span>
                 <span className="knx-emps-num"><b>{news}</b><span>{news === 1 ? 'novedad' : 'novedades'}</span></span>
               </a>
@@ -142,29 +192,35 @@ function EmpresasHome({ data, emp, projectHref, empresaHref }) {
         </div>
       )}
 
-      <div className="knx-emps-sec">
-        <h2>Proyectos <em>· {shown.length}</em></h2>
-        {kinds.length > 1 && (
-          <div className="knx-knowledge-filters" role="group" aria-label="Tipo de proyecto">
-            {['all', ...kinds].map((k) => (
-              <button key={k} type="button" className={`knx-filter-pill${kind === k ? ' knx-filter-pill--active' : ''}`} onClick={() => setKind(k)}>
-                {k === 'all' ? 'Todos' : KIND_LABEL[k]}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      {!shown.length ? <p className="knx-knowledge-empty">No tienes proyectos en esta empresa todavía.</p> : (
-        <div className="knx-pcards">
-          {shown.map((p) => <ProjectCard key={p.id} p={p} empresa={byId.get(p.empresaId)} showEmpresa={multi} projectHref={projectHref} />)}
-        </div>
+      <OverdueAlert od={od} people={people} projectHref={projectHref} looseHref={empresaHref} okLabel={`Nada vencido en ${scopeName}.`} />
+
+      <PendingBox pending={pending} projectHref={projectHref} empresaHref={empresaHref} />
+
+      <div className="knx-emps-sec"><h2>Proyectos <em>· {inScope.length}</em></h2></div>
+      {!inScope.length
+        ? <p className="knx-knowledge-empty">No tienes proyectos en esta empresa todavía.</p>
+        : <ProjectsByKind ps={inScope} projectHref={projectHref} empresaById={byId} showEmpresa={multi} />}
+
+      {newEmpresa && (
+        <TaskPanel
+          key="nueva"
+          task={{}}
+          empresa={newEmpresa}
+          empresaChoices={visibleEmpresas}
+          onEmpresaChange={setNewIn}
+          people={people.filter((p) => p.empresaIds?.includes(newEmpresa.id))}
+          canManage
+          personId={data.personId ?? null}
+          onClose={() => setNewIn(null)}
+          onSave={createLoose}
+        />
       )}
     </>
   );
 }
 
 // ── Panel de tarea suelta (crear y editar) ───────────────────────────────────
-function TaskPanel({ task, empresa, people, canManage, personId, onClose, onSave, onDelete }) {
+function TaskPanel({ task, empresa, people, canManage, personId, onClose, onSave, onDelete, empresaChoices, onEmpresaChange }) {
   const isNew = !task.id;
   const isMine = !!personId && task.responsables?.includes(personId);
   const canEdit = canManage;
@@ -199,10 +255,17 @@ function TaskPanel({ task, empresa, people, canManage, personId, onClose, onSave
       <div className="knx-tdraw-scrim" onClick={onClose} aria-hidden="true" />
       <aside className="knx-tdraw" role="dialog" aria-modal="true" aria-label={isNew ? 'Nueva tarea' : 'Tarea'}>
         <div className="knx-tdraw-h">
-          <h3>{isNew ? `Nueva tarea · ${empresa.name}` : 'Tarea'}</h3>
+          <h3>{isNew ? (empresaChoices ? 'Nueva tarea suelta' : `Nueva tarea · ${empresa.name}`) : 'Tarea'}</h3>
           <button type="button" className="knx-side-panel-close" aria-label="Cerrar" onClick={onClose}>×</button>
         </div>
         <div className="knx-tdraw-b">
+          {isNew && empresaChoices && (
+            <label className="knx-emp-field"><span>Empresa</span>
+              <select value={empresa.id} onChange={(e) => { onEmpresaChange(e.target.value); setV((p) => ({ ...p, responsables: p.responsables.filter((id) => id === personId) })); }} disabled={busy}>
+                {empresaChoices.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+            </label>
+          )}
           <label className="knx-emp-field"><span>Nombre</span><input value={v.nombre} onChange={set('nombre')} disabled={!canEdit || busy} placeholder="¿Qué hay que hacer?" autoFocus={isNew} /></label>
           <label className="knx-emp-field"><span>Descripción</span><textarea rows={4} value={v.descripcion} onChange={set('descripcion')} disabled={(!canEdit && !isMine) || busy} placeholder="Contexto, criterio de terminado…" /></label>
           <div className="knx-tdraw-two">
@@ -300,32 +363,32 @@ function LooseTasks({ tenant, empresa, people, onChanged }) {
 
   let body;
   if (view === 'tablero') {
+    // Mismo tablero que las tareas de Proyectos: arrastrar entre columnas cambia el estado,
+    // dentro de una columna reordena. Se actualiza al instante y se guarda en segundo plano.
+    const patchLocal = (id, fields) => setState((st) => ({ ...st, tasks: st.tasks.map((x) => (x.id === id ? { ...x, ...fields } : x)) }));
+    const saveOrder = async (id, order) => {
+      patchLocal(id, { order });
+      const { error } = await sendJson(`${url}/${id}`, 'PATCH', { order });
+      if (error) { setNotice(error); load(); }
+    };
     body = (
-      <div className="knx-lt-board">
-        {STATUS_ORDER.map((k) => {
-          const col = base.filter((t) => t.status === k);
-          return (
-            <div key={k} className="knx-lt-col">
-              <h4>{STATUS[k]}<em>{col.length}</em></h4>
-              {col.map((t) => (
-                <div key={t.id} className="knx-lt-card">
-                  <button type="button" className="knx-lt-card-name" onClick={() => setEditing(t)}>{t.nombre}</button>
-                  <div className="knx-lt-card-m">
-                    <span className={isOverdue(t) ? 'knx-pcard-od' : ''}>{t.fechaFin ? `${isOverdue(t) ? 'Vencida · ' : 'Vence '}${fd(t.fechaFin)}` : 'Sin fecha'}</span>
-                    <span className="knx-fb-av" title={whoNames(t)}>{initials(nameOf(t.responsables?.[0]))}</span>
-                  </div>
-                  {canTouch(t) && (
-                    <select value={t.status} onChange={(e) => changeStatus(t, e.target.value)} aria-label={`Estado de ${t.nombre}`}>
-                      {STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS[s]}</option>)}
-                    </select>
-                  )}
-                </div>
-              ))}
-              {!col.length && <p className="knx-knowledge-empty">—</p>}
-            </div>
-          );
-        })}
-      </div>
+      <KaiNextTaskCanvas
+        tasks={base}
+        people={people}
+        statuses={BOARD_COLUMNS}
+        canManage={canManage}
+        canMoveTask={canTouch}
+        onStatusChange={async (id, status, order) => {
+          patchLocal(id, { status, order });
+          const { data, error } = await sendJson(`${url}/${id}`, 'PATCH', { status, order });
+          if (error) { setNotice(error); load(); return; }
+          setNotice(data.sentToReview ? 'Quedó «En revisión»: la valida un Director o Supervisor.' : null);
+          load(); onChanged?.();
+        }}
+        onReorder={saveOrder}
+        onBackfill={canManage ? saveOrder : () => {}}
+        onSelectTask={(id) => setEditing(tasks.find((x) => x.id === id) ?? null)}
+      />
     );
   } else if (view === 'crono') {
     const dated = list.filter((t) => t.fechaInicio && t.fechaFin);
@@ -382,13 +445,17 @@ function LooseTasks({ tenant, empresa, people, onChanged }) {
   return (
     <section className="knx-lt">
       <div className="knx-lt-top">
-        <div className="knx-pt-nav knx-lt-tabs" role="tablist">
-          {TABS.map(([k, label]) => (
-            <button key={k} type="button" role="tab" aria-selected={tab === k} className={`knx-pt-tab${tab === k ? ' knx-pt-tab--on' : ''}`} onClick={() => setTab(k)}>
-              {label}<span className="knx-pt-count">{base.filter((t) => matchTab(t, k)).length}</span>
-            </button>
-          ))}
-        </div>
+        {/* En Tablero las columnas ya son los estados: las pestañas solo filtran Lista y Cronograma.
+            "Activas" = todo lo que no está Hecho (Por hacer, Haciendo y En revisión). */}
+        {view === 'tablero' ? <span /> : (
+          <div className="knx-pt-nav knx-lt-tabs" role="tablist">
+            {TABS.map(([k, label]) => (
+              <button key={k} type="button" role="tab" aria-selected={tab === k} className={`knx-pt-tab${tab === k ? ' knx-pt-tab--on' : ''}`} onClick={() => setTab(k)} title={k === 'act' ? 'Todo lo que no está Hecho: Por hacer, Haciendo y En revisión' : undefined}>
+                {label}<span className="knx-pt-count">{base.filter((t) => matchTab(t, k)).length}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="knx-lt-views" role="group" aria-label="Vista">
           {[['lista', 'Lista'], ['tablero', 'Tablero'], ['crono', 'Cronograma']].map(([k, label]) => (
             <button key={k} type="button" aria-pressed={view === k} onClick={() => setView(k)}>{label}</button>
@@ -433,14 +500,10 @@ function LooseTasks({ tenant, empresa, people, onChanged }) {
 
 // ── Resumen de una empresa ───────────────────────────────────────────────────
 function EmpresaResumen({ tenant, data, empresa, people, projectHref, basePath, onChanged }) {
-  const [alertOpen, setAlertOpen] = useState(false);
   const ps = data.projects.filter((p) => p.empresaId === empresa.id);
   const loose = data.loose[empresa.id] ?? [];
   const od = data.overdue.filter((o) => o.empresaId === empresa.id);
-  const nameOf = (id) => people.find((p) => p.id === id)?.name ?? '—';
   const peopleCount = people.filter((p) => p.empresaIds?.includes(empresa.id)).length;
-  const shownOd = alertOpen ? od : od.slice(0, 3);
-  const kinds = ['experimental', 'civil', 'seguimiento', 'desarrollo'].filter((k) => ps.some((p) => p.projectKind === k));
   const pending = data.pending.filter((p) => p.empresaId === empresa.id);
 
   return (
@@ -451,51 +514,13 @@ function EmpresaResumen({ tenant, data, empresa, people, projectHref, basePath, 
         {plural(ps.length, ['proyecto', 'proyectos'])} · {plural(loose.filter((t) => t.status !== 'done').length, ['tarea suelta activa', 'tareas sueltas activas'])} · {plural(peopleCount, ['persona con acceso', 'personas con acceso'])}
       </p>
 
-      {od.length ? (
-        <section className="knx-od" aria-label="Vencidas">
-          <div className="knx-od-h">
-            <b>{od.length === 1 ? '1 vencida' : `${od.length} vencidas`}</b>
-            <span>· {[...new Set(od.flatMap((o) => o.responsables.map((r) => nameOf(r).split(' ')[0])))].join(', ') || 'sin responsable'}</span>
-            {od.length > 3 && <button type="button" className="knx-canvas-mini" onClick={() => setAlertOpen((v) => !v)}>{alertOpen ? 'Ver menos' : `Ver las ${od.length}`}</button>}
-          </div>
-          {shownOd.map((o) => (
-            <div key={`${o.kind}-${o.id}`} className="knx-od-row">
-              <div><b>{o.name}</b><small>{o.projectName ?? 'Tarea suelta'}</small></div>
-              <span className="knx-od-when">Venció {fd(o.fechaFin)}</span>
-              {o.projectId ? <a className="knx-canvas-mini" href={projectHref(o.projectId, o.kind === 'dev' ? undefined : 'trabajo')}>Abrir proyecto</a> : <span className="knx-od-loose">Más abajo</span>}
-            </div>
-          ))}
-        </section>
-      ) : <p className="knx-od-ok">✓ Nada vencido en {empresa.name}.</p>}
+      <OverdueAlert od={od} people={people} projectHref={projectHref} okLabel={`Nada vencido en ${empresa.name}.`} />
 
       <PendingBox pending={pending} projectHref={projectHref} empresaHref={() => '#tareas-sueltas'} />
 
       <div className="knx-emps-sec"><h2>Proyectos <em>· {ps.length}</em></h2></div>
       {!ps.length && <p className="knx-knowledge-empty">Esta empresa todavía no tiene proyectos que puedas ver.</p>}
-      {kinds.map((k) => {
-        const list = ps.filter((p) => p.projectKind === k);
-        return (
-          <div key={k} className="knx-emps-kind">
-            <div className="knx-emps-kind-h"><h3>{KIND_PLURAL[k]} <em>· {list.length}</em></h3><p>{KIND_HINT[k]}</p></div>
-            <div className="knx-mini-grid">
-              {list.map((p) => {
-                const pct = p.progress.total ? Math.round((p.progress.done / p.progress.total) * 100) : 0;
-                return (
-                  <a key={p.id} className="knx-mini" href={projectHref(p.id)}>
-                    <b>{p.name}</b>
-                    <span className="knx-pcard-prog"><span><i style={{ width: `${pct}%` }} /></span></span>
-                    <span className="knx-mini-m">
-                      <span>{p.progress.done}/{plural(p.progress.total, KIND_UNIT[k])}</span>
-                      {p.overdueCount ? <span className="knx-pcard-od">{p.overdueCount === 1 ? '1 vencida' : `${p.overdueCount} vencidas`}</span> : p.unseenCount ? <span>{p.unseenCount === 1 ? '1 novedad' : `${p.unseenCount} novedades`}</span> : null}
-                    </span>
-                    <span className="knx-mini-nx">{p.next ? `Sigue: ${p.next}` : p.progress.total ? 'Todo terminado' : `Sin ${KIND_UNIT[k][1]} todavía`}</span>
-                  </a>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
+      <ProjectsByKind ps={ps} projectHref={projectHref} empresaById={new Map([[empresa.id, empresa]])} showEmpresa={false} />
 
       <div className="knx-emps-sec" id="tareas-sueltas">
         <div>
@@ -570,7 +595,7 @@ export default function KaiNextEmpresas({ tenant, tenantName, basePath, userName
           {data?.error && (
             <div className="knx-analisis-empty"><p>{data.error}</p><button type="button" className="knx-canvas-mini" onClick={load}>Reintentar</button></div>
           )}
-          {data && !data.error && !empresaId && <EmpresasHome data={data} emp={emp} projectHref={projectHref} empresaHref={empresaHref} />}
+          {data && !data.error && !empresaId && <EmpresasHome tenant={tenant} data={data} emp={emp} people={people} projectHref={projectHref} empresaHref={empresaHref} />}
           {data && !data.error && empresaId && (empresa
             ? <EmpresaResumen tenant={tenant} data={data} empresa={empresa} people={people} projectHref={projectHref} basePath={basePath} onChanged={load} />
             : <div className="knx-analisis-empty"><p>No tienes acceso a esta empresa.</p><a className="knx-canvas-mini" href={`${basePath}/${tenant}/empresas`}>Volver a Empresas</a></div>)}
