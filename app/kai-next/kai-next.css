@@ -10547,7 +10547,10 @@
 .knx-emp-select { font: inherit; font-size: 13.5px; min-height: 36px; padding: 0 10px; border: 1px solid #D5DEDA; border-radius: 8px; background: #fff; max-width: 100%; }
 
 /* ============ Detalle de proyecto: pestañas, feedback, historia, reportes (KaiNextProjectTabs) ============ */
-.knx-pt-nav { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--knx-border); margin: 4px 0 18px; }
+/* Es un <nav>: app/globals.css (sitio de marketing) le pone a todo nav sticky + z-index 100 +
+   fondo blanco + padding 4rem + space-between, y quedaba ENCIMA de los modales. Se anula acá. */
+.knx-pt-nav { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--knx-border); margin: 4px 0 18px;
+  position: static; z-index: auto; top: auto; height: auto; padding: 0; background: none; justify-content: flex-start; align-items: stretch; }
 .knx-pt-nav::-webkit-scrollbar { display: none; }
 .knx-pt-tab {
   display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; min-height: 42px; padding: 0 12px;
