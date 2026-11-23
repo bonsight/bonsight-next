@@ -1341,7 +1341,14 @@ function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged, r
     );
   }
 
-  const [label, hint] = KAI_STATUS[kai.status] ?? ['Programado', null];
+  // Kai fuera de una reunión que ya tiene resumen (p. ej. se apretó «Sacar a Kai» en una semanal):
+  // el resumen se sigue mostrando y se puede volver a sumar para las próximas sesiones.
+  const off = !kai.enabled;
+  const upcoming = !!meeting.recurrence || new Date(meeting.end) > new Date();
+  const canReenable = off && canManage && meeting.meetOpen && meeting.meetLink && upcoming;
+  const [label, hint] = off
+    ? ['Fuera', upcoming ? 'Kai no entrará a las próximas sesiones.' : null]
+    : KAI_STATUS[kai.status] ?? ['Programado', null];
   const a = kai.analysis;
   const pendingTasks = (a?.tasks ?? []).filter((t) => t.status === 'pending');
   return (
@@ -1349,14 +1356,15 @@ function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged, r
       <div className="knx-kai-meet-h">
         <span className="knx-meeting-avatar knx-kai-meet-av">K</span>
         <b>Kai en la reunión</b>
-        <span className={`knx-rsvp-badge ${kai.status === 'done' ? 'knx-rsvp--ok' : ['fatal', 'error'].includes(kai.status) ? 'knx-rsvp--no' : 'knx-rsvp--maybe'}`}>{label}</span>
+        <span className={`knx-rsvp-badge ${off ? 'knx-rsvp--no' : kai.status === 'done' ? 'knx-rsvp--ok' : ['fatal', 'error'].includes(kai.status) ? 'knx-rsvp--no' : 'knx-rsvp--maybe'}`}>{label}</span>
       </div>
-      {hint && kai.status !== 'done' && <p className="knx-kai-meet-p">{hint}</p>}
+      {hint && (off || kai.status !== 'done') && <p className="knx-kai-meet-p">{hint}</p>}
       {kai.error && <p className="knx-canvas-error">{kai.error}</p>}
       <div className="knx-kai-meet-actions">
         {kai.status === 'done' && <a className="knx-canvas-mini" href={recHref} target="_blank" rel="noreferrer">Ver grabación</a>}
         {kai.analysis?.summary && <button type="button" className="knx-canvas-mini" onClick={copySummary}>{copied ? 'Copiado ✓' : 'Copiar resumen'}</button>}
         {canManage && kai.status === 'error' && kai.botId && <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act('retry', { action: 'retry' })}>{busy === 'retry' ? 'Reintentando…' : 'Reintentar'}</button>}
+        {canReenable && <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act('on', { action: 'enable_kai' })}>{busy === 'on' ? 'Sumando…' : 'Volver a sumar a Kai'}</button>}
         {canManage && kai.enabled && ['scheduled', null, undefined].includes(kai.status) && <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act('off', { action: 'disable_kai' })}>Sacar a Kai</button>}
       </div>
 
