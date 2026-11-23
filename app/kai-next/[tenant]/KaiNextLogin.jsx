@@ -30,6 +30,7 @@ export default async function KaiNextLogin({ tenant, tenantName, searchParams, b
   const sent = searchParams?.sent === '1';
   const forgotSent = searchParams?.forgot === '1';
   const errorMsg = ERROR_MESSAGES[searchParams?.login_error] ?? null;
+  const draft = typeof searchParams?.draft === 'string' ? searchParams.draft.slice(0, 300) : null;
 
   // Los emails necesitan una URL absoluta — basePath solo resuelve la ruta (/next o
   // /kai-next), el origin (host real de la petición) es aparte.
@@ -43,10 +44,11 @@ export default async function KaiNextLogin({ tenant, tenantName, searchParams, b
     const password = String(formData.get('password') ?? '');
     const user = await getTenantUserByEmail(tenant, email);
     if (!user || !checkTenantUserPassword(user, password)) {
-      redirect(`${basePath}/${tenant}?login_error=credenciales`);
+      redirect(`${basePath}/${tenant}?login_error=credenciales${draft ? `&draft=${encodeURIComponent(draft)}` : ''}`);
     }
     await loginTenantSession(tenant, user.id);
-    redirect(`${basePath}/${tenant}`);
+    // Si venía de un enlace con ?draft= (ej. aviso de documento compartido), se conserva.
+    redirect(`${basePath}/${tenant}${draft ? `?draft=${encodeURIComponent(draft)}` : ''}`);
   }
 
   async function doSendLoginLink(formData) {
