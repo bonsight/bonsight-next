@@ -4,6 +4,7 @@ import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
 import { listDevMeetings, addDevMeeting, updateDevMeeting, removeDevMeeting, getDevMeeting, rememberExternalContacts } from '@/lib/kaiNext/devMeetings';
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '@/lib/kai/calendar';
+import { scheduleKai, rescheduleKai, unscheduleKai } from '@/lib/kaiNext/meetingBot';
 import { addCohost } from '@/lib/kai/meet';
 import { listTenantUsers } from '@/lib/kai/tenantUsers';
 
@@ -129,7 +130,7 @@ export async function POST(req, { params }) {
   } catch {
     return Response.json({ error: 'Body inválido.' }, { status: 400 });
   }
-  const { title, description, startDateTime, endDateTime, timeZone, attendees, withMeet, projectId, tipo, repeat } = body;
+  const { title, description, startDateTime, endDateTime, timeZone, attendees, withMeet, projectId, tipo, repeat, withKai } = body;
 
   const { error, identity, projectName } = await gate(tenant, projectId || null);
   if (error) return error;
@@ -141,8 +142,14 @@ export async function POST(req, { params }) {
   const recurrence = resolveRecurrence(repeat, startDateTime);
 
   try {
+    // Quien organiza de verdad y el aviso de grabación van en la invitación: el evento lo crea
+    // kai@bonsight.co, y los participantes tienen que saber que Kai graba (Perú/Chile).
+    const footer = [
+      identity.personName ? `Organizada por ${identity.personName} desde Kai.` : null,
+      withKai && withMeet !== false ? 'Kai se suma a esta reunión para grabarla (audio y video) y enviar el resumen a los invitados.' : null,
+    ].filter(Boolean).join('\n');
     const event = await createCalendarEvent({
-      title: title.trim(), description, startDateTime, endDateTime,
+      title: title.trim(), description: [description, footer].filter(Boolean).join('\n\n'), startDateTime, endDateTime,
       timeZone: timeZone || 'America/Bogota', attendees: withCreator(attendees, identity), withMeet: withMeet !== false,
       recurrence: recurrence?.rrule,
     });
@@ -154,6 +161,17 @@ export async function POST(req, { params }) {
       projectId: projectId || null, projectName,
     });
     await rememberIfClientMeeting(tenant, tipo, attendees);
+    // "Sumar a Kai": el bot de Recall.ai entra como integrante a la hora de inicio (ver
+    // lib/kaiNext/meetingBot.js). Si falla, la reunión igual queda creada y se avisa.
+    let kaiWarning = null;
+    if (withKai && meeting.meetLink) {
+      try {
+        meeting.kai = await scheduleKai(tenant, meeting);
+      } catch (err) {
+        console.error('[dev-meetings] no se pudo programar a Kai:', err.message);
+        kaiWarning = `La reunión quedó creada, pero Kai no pudo programarse: ${err.message}`;
+      }
+    }
     // Coanfitrión de Meet para quien crea la reunión — kai@bonsight.co es el organizador real
     // pero nunca entra a la llamada, así que sin esto nadie puede admitir gente de la sala de
     // espera. Esperado (no fire-and-forget: en serverless la función puede cortarse apenas se
@@ -166,7 +184,7 @@ export async function POST(req, { params }) {
         console.error('[dev-meetings] no se pudo asignar coanfitrión:', err.message);
       }
     }
-    return Response.json({ meeting });
+    return Response.json({ meeting, kaiWarning });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });
   }
@@ -213,6 +231,10 @@ export async function PATCH(req, { params }) {
       projectId: projectId || null, projectName,
     });
     await rememberIfClientMeeting(tenant, tipo, attendees);
+    // Si Kai estaba programado y cambió el horario o el enlace, se reprograma el bot.
+    if (existing.kai?.enabled && (existing.start !== meeting.start || existing.meetLink !== meeting.meetLink)) {
+      try { meeting.kai = await rescheduleKai(tenant, meeting); } catch (err) { console.error('[dev-meetings] no se pudo reprogramar a Kai:', err.message); }
+    }
     return Response.json({ meeting });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });
@@ -238,6 +260,7 @@ export async function DELETE(req, { params }) {
   }
 
   try {
+    if (existing.kai?.botId) await unscheduleKai(tenant, existing);
     const meeting = await removeDevMeeting(tenant, meetingId);
     if (meeting?.calendarEventId) {
       await deleteCalendarEvent(meeting.calendarEventId).catch((err) => console.error('[kai-next meetings] no se pudo borrar el evento de Calendar:', err.message));

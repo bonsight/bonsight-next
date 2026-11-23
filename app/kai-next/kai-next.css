@@ -10915,3 +10915,19 @@ a.knx-sidebar-group:hover, .knx-sidebar-group--active { background: #fff; color:
 @media (max-width: 860px) {
   .knx-emps { padding-inline: 16px; }
 }
+
+/* Kai en la reunión (Recall.ai) — panel de detalle de Reuniones */
+.knx-kai-meet { border: 1px solid var(--knx-border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; background: #F7FAF8; }
+.knx-kai-meet-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.knx-kai-meet-av { width: 22px; height: 22px; font-size: 11px; background: var(--knx-deep); }
+.knx-kai-meet-p { margin: 0; font-size: 12.5px; color: var(--knx-text-muted); }
+.knx-kai-meet-sum { margin: 0; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; }
+.knx-kai-meet-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.knx-kai-meet-actions:empty { display: none; }
+.knx-kai-meet-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.knx-kai-meet-list li { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.45; }
+.knx-kai-meet-list li small { display: block; color: var(--knx-text-muted); font-size: 11.5px; margin-top: 2px; }
+.knx-kai-meet-list li em { font-style: normal; font-size: 11.5px; color: var(--knx-text-muted); white-space: nowrap; }
+.knx-kai-meet-btns { display: flex; gap: 6px; flex-shrink: 0; }
+.knx-kai-meet-off { opacity: .55; }
+@media (max-width: 768px) { .knx-kai-meet-list li { flex-direction: column; } }

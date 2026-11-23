@@ -445,6 +445,9 @@ function ScheduleMeetingModal({ tenant, roster, externalContacts, projects, orga
   const [attendees, setAttendees] = useState(initialData?.attendees ?? []);
   const [projectId, setProjectId] = useState(initialData?.projectId ?? '');
   const [withMeet, setWithMeet] = useState(true);
+  // Kai entra a la reunión como integrante y la graba (Recall.ai). Al editar no se toca acá: se
+  // prende o apaga desde el detalle de la reunión.
+  const [withKai, setWithKai] = useState(true);
   const [date, setDate] = useState(initialData?.date ?? '');
   const [startTime, setStartTime] = useState(initialData?.startTime ?? '');
   const [duration, setDuration] = useState(initialData?.duration ?? 60);
@@ -468,7 +471,7 @@ function ScheduleMeetingModal({ tenant, roster, externalContacts, projects, orga
 
   const submit = async () => {
     setErr(null);
-    if (!title.trim()) { setErr('Ponele un título a la reunión.'); return; }
+    if (!title.trim()) { setErr('Ponle un título a la reunión.'); return; }
     if (!date || !startTime) { setErr('Elige fecha y hora.'); return; }
     if (!attendees.length) { setErr('Agrega al menos un invitado.'); return; }
     setSaving(true);
@@ -478,7 +481,7 @@ function ScheduleMeetingModal({ tenant, roster, externalContacts, projects, orga
         method: isEditing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...(isEditing ? { meetingId: initialData.meetingId } : {}),
-          title: title.trim(), description, tipo, timeZone, withMeet, repeat,
+          title: title.trim(), description, tipo, timeZone, withMeet, repeat, withKai: !isEditing && withMeet && withKai,
           attendees: attendees.map((a) => ({ name: a.name, email: a.email, optional: !!a.optional })),
           projectId: projectId || null,
           startDateTime: `${date}T${startTime}:00`, endDateTime: `${date}T${endTime}:00`,
@@ -486,6 +489,7 @@ function ScheduleMeetingModal({ tenant, roster, externalContacts, projects, orga
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo agendar.');
+      if (data.kaiWarning) window.alert(data.kaiWarning);
       onCreated(data.meeting, isEditing);
     } catch (e) {
       setErr(e.message || 'No se pudo agendar.');
@@ -547,6 +551,11 @@ function ScheduleMeetingModal({ tenant, roster, externalContacts, projects, orga
           <label className="knx-meetings-meet-toggle">
             <input type="checkbox" checked={withMeet} onChange={(e) => setWithMeet(e.target.checked)} /> Que Kai agregue Google Meet
           </label>
+          {withMeet && !isEditing && (
+            <label className="knx-meetings-meet-toggle">
+              <input type="checkbox" checked={withKai} onChange={(e) => setWithKai(e.target.checked)} /> Sumar a Kai: entra a la reunión, la graba y manda el resumen a los invitados
+            </label>
+          )}
         </div>
         <div className="knx-meetings-modal-right">
           <div className="knx-meetings-modal-right-head">
@@ -1225,6 +1234,140 @@ function ProposeTimeModal({ tenant, meeting, roster, onClose, onProposed }) {
   );
 }
 
+// ── Kai en la reunión (Recall.ai, ver lib/kaiNext/meetingBot.js) ─────────────────────────────
+const KAI_STATUS = {
+  scheduled: ['Programado', 'Entra a la reunión a la hora de inicio.'],
+  joining_call: ['Entrando', 'Kai está entrando a la reunión.'],
+  in_waiting_room: ['En sala de espera', 'Kai espera que alguien lo admita en Meet.'],
+  in_call_not_recording: ['En la reunión', 'Kai entró y espera para grabar.'],
+  in_call_recording: ['Grabando', 'Kai está grabando la reunión.'],
+  call_ended: ['Terminó', 'Kai está bajando la grabación.'],
+  processing: ['Procesando', 'Kai está escuchando la grabación y armando el resumen.'],
+  done: ['Listo', null],
+  fatal: ['No pudo entrar', null],
+  error: ['Error', null],
+};
+const CONF_LABEL = { alta: 'Confianza alta', media: 'Confianza media', baja: 'Confianza baja' };
+
+function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged }) {
+  const kai = meeting.kai ?? {};
+  const [busy, setBusy] = useState(null);
+  const [err, setErr] = useState(null);
+  const act = async (key, body) => {
+    setBusy(key); setErr(null);
+    try {
+      const res = await fetch(`/api/kai-next/${tenant}/dev-meetings/${meetingId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo.');
+      onChanged();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!kai.enabled && !kai.analysis) {
+    if (!meeting.meetLink || !canManage || new Date(meeting.end) < new Date()) return null;
+    return (
+      <div className="knx-kai-meet">
+        <div className="knx-kai-meet-h"><span className="knx-meeting-avatar knx-kai-meet-av">K</span><b>Kai no está en esta reunión</b></div>
+        <p className="knx-kai-meet-p">Si lo sumas, entra como un integrante más, graba audio y video, y al terminar manda el resumen a los invitados.</p>
+        <button type="button" className="knx-new-chat" disabled={busy} onClick={() => act('on', { action: 'enable_kai' })}>{busy ? 'Sumando…' : 'Sumar a Kai'}</button>
+        {err && <p className="knx-canvas-error">{err}</p>}
+      </div>
+    );
+  }
+
+  const [label, hint] = KAI_STATUS[kai.status] ?? ['Programado', null];
+  const a = kai.analysis;
+  const pendingTasks = (a?.tasks ?? []).filter((t) => t.status === 'pending');
+  return (
+    <div className="knx-kai-meet">
+      <div className="knx-kai-meet-h">
+        <span className="knx-meeting-avatar knx-kai-meet-av">K</span>
+        <b>Kai en la reunión</b>
+        <span className={`knx-rsvp-badge ${kai.status === 'done' ? 'knx-rsvp--ok' : ['fatal', 'error'].includes(kai.status) ? 'knx-rsvp--no' : 'knx-rsvp--maybe'}`}>{label}</span>
+      </div>
+      {hint && kai.status !== 'done' && <p className="knx-kai-meet-p">{hint}</p>}
+      {kai.error && <p className="knx-canvas-error">{kai.error}</p>}
+      <div className="knx-kai-meet-actions">
+        {kai.status === 'done' && <a className="knx-canvas-mini" href={`/api/kai-next/${tenant}/dev-meetings/${meetingId}?recording=1`} target="_blank" rel="noreferrer">Ver grabación</a>}
+        {canManage && kai.status === 'error' && kai.botId && <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act('retry', { action: 'retry' })}>{busy === 'retry' ? 'Reintentando…' : 'Reintentar'}</button>}
+        {canManage && kai.enabled && ['scheduled', null, undefined].includes(kai.status) && <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act('off', { action: 'disable_kai' })}>Sacar a Kai</button>}
+      </div>
+
+      {a && (
+        <>
+          {!a.hasSubstantiveContent && <p className="knx-kai-meet-p">La grabación no tuvo conversación de fondo (¿una prueba?). No se mandó resumen.</p>}
+          {a.summary && <div className="knx-board-field"><label>Resumen</label><p className="knx-kai-meet-sum">{a.summary}</p></div>}
+          {a.decisions?.length > 0 && (
+            <div className="knx-board-field">
+              <label>Decisiones</label>
+              <ul className="knx-kai-meet-list">
+                {a.decisions.map((d, i) => (
+                  <li key={i}>
+                    <span><b>{d.title}</b>{d.reason ? ` — ${d.reason}` : ''}</span>
+                    {canManage && (d.status === 'accepted'
+                      ? <em>En la memoria de Kai</em>
+                      : <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act(`d${i}`, { action: 'accept_decision', index: i })}>Guardar</button>)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {a.tasks?.length > 0 && (
+            <div className="knx-board-field">
+              <label>Tareas propuestas {pendingTasks.length ? `· ${pendingTasks.length} por revisar` : ''}</label>
+              <ul className="knx-kai-meet-list">
+                {a.tasks.map((t) => (
+                  <li key={t.id} className={t.status === 'dismissed' ? 'knx-kai-meet-off' : ''}>
+                    <span>{t.task}<small>{[t.owner, t.deadline].filter(Boolean).join(' · ')}</small></span>
+                    {t.status === 'accepted' ? <em>Creada</em> : t.status === 'dismissed' ? <em>Descartada</em> : canManage && (
+                      <span className="knx-kai-meet-btns">
+                        <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act(t.id, { action: 'accept_task', taskId: t.id })}>Crear</button>
+                        <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act(t.id, { action: 'dismiss_task', taskId: t.id })}>Descartar</button>
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {a.knowledge?.length > 0 && (
+            <div className="knx-board-field">
+              <label>Conocimiento nuevo</label>
+              <ul className="knx-kai-meet-list">
+                {a.knowledge.map((k, i) => (
+                  <li key={i} className={k.status === 'rejected' ? 'knx-kai-meet-off' : ''}>
+                    <span>{k.statement}<small>{CONF_LABEL[k.confidence] ?? ''}</small></span>
+                    {k.status === 'accepted' ? <em>Aceptado</em> : k.status === 'rejected' ? <em>Rechazado</em> : canManage && (
+                      <span className="knx-kai-meet-btns">
+                        <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act(`k${i}`, { action: 'accept_knowledge', index: i })}>Aceptar</button>
+                        <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act(`k${i}`, { action: 'reject_knowledge', index: i })}>Rechazar</button>
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {a.contradictions?.length > 0 && (
+            <div className="knx-board-field">
+              <label>Contradicciones con lo que Kai sabía</label>
+              <ul className="knx-kai-meet-list">
+                {a.contradictions.map((c, i) => <li key={i}><span>Antes: «{c.existing}»<br />Ahora: «{c.new}»<small>{c.reason}</small></span></li>)}
+              </ul>
+            </div>
+          )}
+          {kai.speakers?.length > 0 && <p className="knx-kai-meet-p">Hablaron: {kai.speakers.join(', ')}.</p>}
+        </>
+      )}
+      {err && <p className="knx-canvas-error">{err}</p>}
+    </div>
+  );
+}
+
 function MeetingDetailPanel({ tenant, basePath, meetingId, userName, userEmail, roster, onClose, onDeleted, onReschedule, onDuplicate }) {
   const [closing, handleClose] = useSidePanelClose(onClose);
   const [meeting, setMeeting] = useState(undefined);
@@ -1424,10 +1567,12 @@ function MeetingDetailPanel({ tenant, basePath, meetingId, userName, userEmail, 
           <div className="knx-board-field">
             <label>Agenda</label>
             <ol className="knx-meeting-agenda-list">
-              {meeting.description.split('\n').filter((l) => l.trim()).map((line, i) => <li key={i}>{line}</li>)}
+              {meeting.description.split('\n').filter((l) => l.trim() && !/^(Organizada por .* desde Kai\.|Kai se suma a esta reunión)/.test(l.trim())).map((line, i) => <li key={i}>{line}</li>)}
             </ol>
           </div>
         )}
+
+        <KaiMeetingSection tenant={tenant} meetingId={meetingId} meeting={meeting} canManage={isOrganizer} onChanged={load} />
 
         {meeting.projectName && (
           <a className="knx-meeting-project-chip" href={`${basePath}/${tenant}/proyectos?p=${meeting.projectId}`}>
@@ -1474,6 +1619,13 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
   const [modalOpen, setModalOpen] = useState(false);
   const [modalInitial, setModalInitial] = useState(null);
   const [selectedMeetingId, setSelectedMeetingId] = useState(null);
+  // Enlace directo a una reunión (?m=id): lo usa el correo con el resumen de Kai.
+  useEffect(() => {
+    try {
+      const m = new URLSearchParams(window.location.search).get('m');
+      if (m && /^[A-Za-z0-9_-]+$/.test(m)) setSelectedMeetingId(m);
+    } catch { /* sin URL: nada */ }
+  }, []);
   const [unimported, setUnimported] = useState([]);
   const [unimportedBusyId, setUnimportedBusyId] = useState(null);
 
