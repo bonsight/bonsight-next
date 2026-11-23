@@ -3,6 +3,7 @@ import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
 import { getDevMeeting, addProposal, removeProposal, updateDevMeeting } from '@/lib/kaiNext/devMeetings';
 import { updateCalendarEvent } from '@/lib/kai/calendar';
+import { rescheduleKai } from '@/lib/kaiNext/meetingBot';
 import { sendEmail } from '@/lib/labs/gmail';
 import { kaiNextBasePath } from '@/lib/kaiNext/paths';
 
@@ -102,7 +103,10 @@ export async function PATCH(req, { params }) {
         timeZone, attendees: meeting.attendees,
         recurrence: meeting.recurrence ? (meeting.recurrence.freq === 'WEEKLY' ? `RRULE:FREQ=WEEKLY${meeting.recurrence.interval > 1 ? `;INTERVAL=${meeting.recurrence.interval}` : ''}` : 'RRULE:FREQ=MONTHLY') : null,
       });
-      await updateDevMeeting(tenant, meetingId, { start: event.start, end: event.end });
+      const moved = await updateDevMeeting(tenant, meetingId, { start: event.start, end: event.end });
+      if (moved?.kai?.enabled) {
+        try { await rescheduleKai(tenant, moved); } catch (err) { console.error('[kai-next meetings] no se pudo reprogramar a Kai:', err.message); }
+      }
     }
     await removeProposal(tenant, meetingId, proposalId);
     return Response.json({ ok: true });

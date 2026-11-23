@@ -34,8 +34,10 @@ export async function POST(req) {
   const ref = (await lookupBot(botId)) ?? (payload.data?.bot?.metadata?.tenant ? payload.data.bot.metadata : null);
   if (!ref?.tenant || !ref?.meetingId) return Response.json({ ok: true, ignored: 'bot desconocido' });
 
-  if (event === 'bot.done') {
+  if (event === 'bot.done' || event === 'transcript.done') {
     after(() => processKaiRecording(ref.tenant, ref.meetingId, botId));
+  } else if (event === 'transcript.failed') {
+    await setKaiStatus(ref.tenant, ref.meetingId, botId, 'error', 'Recall no pudo transcribir la grabación.');
   } else if (STATUS_BY_EVENT[event]) {
     const subCode = payload.data?.data?.sub_code ?? null;
     await setKaiStatus(ref.tenant, ref.meetingId, botId, STATUS_BY_EVENT[event], event === 'bot.fatal' ? (subCode || 'El bot no pudo entrar a la reunión.') : null);

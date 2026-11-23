@@ -1269,6 +1269,10 @@ function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged })
 
   if (!kai.enabled && !kai.analysis) {
     if (!meeting.meetLink || !canManage || new Date(meeting.end) < new Date()) return null;
+    // Solo reuniones creadas con "Sumar a Kai" (su Meet deja entrar al bot sin admitirlo).
+    if (!meeting.meetOpen) {
+      return <p className="knx-kai-meet-p">Kai no está en esta reunión. Para que grabe y resuma, crea la reunión con «Sumar a Kai» marcado.</p>;
+    }
     return (
       <div className="knx-kai-meet">
         <div className="knx-kai-meet-h"><span className="knx-meeting-avatar knx-kai-meet-av">K</span><b>Kai no está en esta reunión</b></div>
@@ -1299,7 +1303,7 @@ function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged })
 
       {a && (
         <>
-          {!a.hasSubstantiveContent && <p className="knx-kai-meet-p">La grabación no tuvo conversación de fondo (¿una prueba?). No se mandó resumen.</p>}
+          {a.noSpeech ? <p className="knx-kai-meet-p">Kai estuvo en la reunión, pero nadie habló: no hay nada que resumir.</p> : !a.hasSubstantiveContent && <p className="knx-kai-meet-p">La grabación no tuvo conversación de fondo (¿una prueba?). No se mandó resumen.</p>}
           {a.summary && <div className="knx-board-field"><label>Resumen</label><p className="knx-kai-meet-sum">{a.summary}</p></div>}
           {a.decisions?.length > 0 && (
             <div className="knx-board-field">

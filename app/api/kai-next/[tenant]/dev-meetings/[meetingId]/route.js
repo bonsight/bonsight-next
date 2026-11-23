@@ -87,6 +87,10 @@ export async function POST(req, { params }) {
   try {
     switch (body.action) {
       case 'enable_kai':
+        // Solo reuniones que nacieron con Kai (Meet con acceso abierto): en las demás el bot
+        // quedaría en la sala de espera sin nadie que pueda admitirlo, y cambiarles el enlace a
+        // los invitados confunde (decisión de Rafa, 2026-11-23).
+        if (!meeting.meetOpen) throw new Error('Kai solo puede sumarse a reuniones creadas con «Sumar a Kai» marcado.');
         return Response.json({ kai: await scheduleKai(tenant, meeting) });
       case 'disable_kai':
         await unscheduleKai(tenant, meeting);

@@ -5,6 +5,7 @@ import { getProjectMeta, resolveProjectAccessLevel } from '@/lib/kaiNext/project
 import { listDevMeetings, addDevMeeting, updateDevMeeting, removeDevMeeting, getDevMeeting, rememberExternalContacts } from '@/lib/kaiNext/devMeetings';
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '@/lib/kai/calendar';
 import { scheduleKai, rescheduleKai, unscheduleKai } from '@/lib/kaiNext/meetingBot';
+import { createOpenSpace } from '@/lib/kai/meet';
 import { addCohost } from '@/lib/kai/meet';
 import { listTenantUsers } from '@/lib/kai/tenantUsers';
 
@@ -148,7 +149,14 @@ export async function POST(req, { params }) {
       identity.personName ? `Organizada por ${identity.personName} desde Kai.` : null,
       withKai && withMeet !== false ? 'Kai se suma a esta reunión para grabarla (audio y video) y enviar el resumen a los invitados.' : null,
     ].filter(Boolean).join('\n');
+    // Con Kai, el Meet nace con acceso abierto para que el bot entre sin que lo admitan. Si eso
+    // falla, se usa el Meet normal (Kai quedaría en la sala de espera, pero la reunión sale igual).
+    let openSpace = null;
+    if (withKai && withMeet !== false) {
+      try { openSpace = await createOpenSpace(); } catch (err) { console.error('[dev-meetings] Meet abierto:', err.message); }
+    }
     const event = await createCalendarEvent({
+      openSpace,
       title: title.trim(), description: [description, footer].filter(Boolean).join('\n\n'), startDateTime, endDateTime,
       timeZone: timeZone || 'America/Bogota', attendees: withCreator(attendees, identity), withMeet: withMeet !== false,
       recurrence: recurrence?.rrule,
@@ -158,7 +166,7 @@ export async function POST(req, { params }) {
       start: event.start, end: event.end,
       attendees: withoutKai(event.attendees), meetLink: event.meet?.meetLink ?? null, createdBy: identity.personId ?? null,
       createdByName: identity.personName ?? null, createdByEmail: identity.personEmail ?? null,
-      projectId: projectId || null, projectName,
+      projectId: projectId || null, projectName, meetOpen: !!openSpace,
     });
     await rememberIfClientMeeting(tenant, tipo, attendees);
     // "Sumar a Kai": el bot de Recall.ai entra como integrante a la hora de inicio (ver
