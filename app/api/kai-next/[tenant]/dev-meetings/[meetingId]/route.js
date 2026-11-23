@@ -2,7 +2,9 @@ import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { getDevMeeting, updateDevMeeting } from '@/lib/kaiNext/devMeetings';
 import { getCalendarEventById } from '@/lib/kai/calendar';
-import { resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
+import { resolveProjectAccessLevel, getProjectMeta } from '@/lib/kaiNext/projects';
+import { listTenantUsers } from '@/lib/kai/tenantUsers';
+import { tryCreateGoogleTask } from '@/lib/kai/tasks';
 import { addDevTask } from '@/lib/kaiNext/devTasks';
 import { acceptKnowledgeItem, acceptDecision } from '@/lib/kai/meetingAnalysis';
 import { scheduleKai, unscheduleKai, processKaiRecording } from '@/lib/kaiNext/meetingBot';
@@ -101,18 +103,37 @@ export async function POST(req, { params }) {
         await processKaiRecording(tenant, meetingId, kai.botId);
         return Response.json({ meeting: await getDevMeeting(tenant, meetingId) });
       case 'accept_task': {
+        // Queda igual que una tarea creada a mano en Reuniones (ver dev-meetings/tasks/route.js):
+        // responsable real del equipo, copia en su Google Tasks y proyecto opcional. Lo confirma
+        // la persona en el formulario (responsable, fecha, proyecto) antes de crearla.
         const t = analysis?.tasks?.find((x) => x.id === body.taskId);
         if (!t) throw new Error('Tarea no encontrada.');
-        const today = new Date().toISOString().slice(0, 10);
-        const due = /^\d{4}-\d{2}-\d{2}$/.test(body.deadline || '') ? body.deadline : null;
+        if (t.status === 'accepted') throw new Error('Esa tarea ya se creó.');
+        const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
+        const date = isDate(body.date) ? body.date : new Date().toISOString().slice(0, 10);
+        const deadline = isDate(body.deadline) ? body.deadline : null;
+        const title = String(body.title || t.task).trim().slice(0, 200);
+        if (!title) throw new Error('El título es requerido.');
+        const users = await listTenantUsers(tenant);
+        const person = body.responsableEmail ? users.find((u) => u.email?.toLowerCase() === String(body.responsableEmail).toLowerCase()) : null;
+        const rEmail = person?.email ?? body.responsableEmail ?? identity.personEmail ?? null;
+        const rName = person?.name ?? body.responsableName ?? identity.personName ?? null;
+        let projectId = body.projectId === undefined ? meeting.projectId ?? null : body.projectId || null;
+        let projectName = null;
+        if (projectId) {
+          const pm = await getProjectMeta(tenant, projectId);
+          if (pm) projectName = pm.name; else projectId = null;
+        }
+        const description = String(body.description ?? `Acordada en la reunión «${meeting.title}».${t.evidence ? `\n«${t.evidence}»` : ''}`).slice(0, 4000);
+        const googleTaskId = await tryCreateGoogleTask(rEmail, { title, due: deadline || date, notes: description });
         const created = await addDevTask(tenant, {
-          title: String(body.title || t.task).slice(0, 200), date: due || today, deadline: due,
-          description: `Acordada en la reunión «${meeting.title}».${t.evidence ? `\n«${t.evidence}»` : ''}`,
-          responsableId: body.responsableId ?? null, responsableName: body.responsableName ?? t.owner ?? null, responsableEmail: body.responsableEmail ?? null,
-          projectId: meeting.projectId ?? null, projectName: meeting.projectName ?? null,
+          title, date, deadline, description, googleTaskId,
+          responsableId: person?.id ?? (rEmail === identity.personEmail ? identity.personId ?? null : null),
+          responsableName: rName, responsableEmail: rEmail,
+          projectId, projectName,
           createdById: identity.personId ?? null, createdByName: identity.personName ?? null, createdByEmail: identity.personEmail ?? null,
         });
-        await save({ analysis: { ...analysis, tasks: analysis.tasks.map((x) => (x.id === t.id ? { ...x, status: 'accepted', devTaskId: created.id } : x)) } });
+        await save({ analysis: { ...analysis, tasks: analysis.tasks.map((x) => (x.id === t.id ? { ...x, status: 'accepted', devTaskId: created.id, createdFor: rName } : x)) } });
         return Response.json({ ok: true, task: created });
       }
       case 'dismiss_task':

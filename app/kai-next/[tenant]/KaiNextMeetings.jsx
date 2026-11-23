@@ -612,14 +612,16 @@ function ScheduleMeetingModal({ tenant, roster, externalContacts, projects, orga
 // Más chico que ScheduleMeetingModal a propósito: una tarea no tiene invitados ni Meet, solo
 // a quién le pertenece. El intento de sincronizarla al Google Tasks real de esa persona pasa
 // server-side (ver .../dev-meetings/tasks POST) — acá no hace falta saber si funcionó o no.
-function TaskModal({ tenant, roster, projects, organizerName, organizerEmail, initialDate, onClose, onCreated }) {
-  const [title, setTitle] = useState('');
-  const [responsableEmail, setResponsableEmail] = useState(organizerEmail);
-  const [date, setDate] = useState(initialDate || toDateInput(new Date()));
+// `prefill` y `onSubmit`: lo reusa "Crear" de una tarea propuesta por Kai en una reunión (ver
+// KaiMeetingSection) — mismo formulario, ya completado, que guarda por otra ruta.
+function TaskModal({ tenant, roster, projects, organizerName, organizerEmail, initialDate, onClose, onCreated, prefill, onSubmit, heading }) {
+  const [title, setTitle] = useState(prefill?.title ?? '');
+  const [responsableEmail, setResponsableEmail] = useState(prefill?.responsableEmail ?? organizerEmail);
+  const [date, setDate] = useState(prefill?.date || initialDate || toDateInput(new Date()));
   const [time, setTime] = useState('');
-  const [deadline, setDeadline] = useState('');
-  const [description, setDescription] = useState('');
-  const [projectId, setProjectId] = useState('');
+  const [deadline, setDeadline] = useState(prefill?.deadline ?? '');
+  const [description, setDescription] = useState(prefill?.description ?? '');
+  const [projectId, setProjectId] = useState(prefill?.projectId ?? '');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -630,11 +632,18 @@ function TaskModal({ tenant, roster, projects, organizerName, organizerEmail, in
 
   const submit = async () => {
     setErr(null);
-    if (!title.trim()) { setErr('Ponele un título a la tarea.'); return; }
+    if (!title.trim()) { setErr('Ponle un título a la tarea.'); return; }
     if (!date) { setErr('Elige una fecha.'); return; }
     setSaving(true);
     try {
       const chosen = options.find((p) => p.email === responsableEmail) ?? options[0];
+      if (onSubmit) {
+        await onSubmit({
+          title: title.trim(), date, deadline: deadline || null, description,
+          responsableName: chosen.name.replace(' (yo)', ''), responsableEmail: chosen.email, projectId: projectId || null,
+        });
+        return;
+      }
       const res = await fetch(`/api/kai-next/${tenant}/dev-meetings/tasks`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -658,7 +667,7 @@ function TaskModal({ tenant, roster, projects, organizerName, organizerEmail, in
       <div className="knx-meetings-modal knx-meetings-modal--small" onClick={(e) => e.stopPropagation()}>
         <div className="knx-meetings-modal-left" style={{ borderRight: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <h2>Nueva tarea</h2>
+            <h2>{heading || 'Nueva tarea'}</h2>
             <span style={{ flexGrow: 1 }} />
             <button type="button" className="knx-side-panel-close" aria-label="Cerrar" onClick={onClose}>×</button>
           </div>
@@ -1249,10 +1258,29 @@ const KAI_STATUS = {
 };
 const CONF_LABEL = { alta: 'Confianza alta', media: 'Confianza media', baja: 'Confianza baja' };
 
-function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged }) {
+// "César Alcoba" (lo que entendió Kai) → la persona del equipo: sin tildes ni mayúsculas, nombre
+// completo, todas las palabras contenidas o, si es único, el primer nombre ("Rafa").
+const normName = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+function matchPerson(owner, roster, alternatives = []) {
+  for (const raw of [owner, ...alternatives]) {
+    const n = normName(raw);
+    if (!n) continue;
+    const exact = roster.find((p) => normName(p.name) === n);
+    if (exact) return exact;
+    const words = n.split(' ');
+    const all = roster.filter((p) => words.every((w) => normName(p.name).split(' ').includes(w)));
+    if (all.length === 1) return all[0];
+    const first = roster.filter((p) => normName(p.name).split(' ')[0] === words[0]);
+    if (first.length === 1) return first[0];
+  }
+  return null;
+}
+
+function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged, roster = [], projects = [], userName, userEmail }) {
   const kai = meeting.kai ?? {};
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState(null);
+  const [creating, setCreating] = useState(null); // tarea propuesta que se está creando
   const act = async (key, body) => {
     setBusy(key); setErr(null);
     try {
@@ -1327,9 +1355,9 @@ function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged })
                 {a.tasks.map((t) => (
                   <li key={t.id} className={t.status === 'dismissed' ? 'knx-kai-meet-off' : ''}>
                     <span>{t.task}<small>{[t.owner, t.deadline].filter(Boolean).join(' · ')}</small></span>
-                    {t.status === 'accepted' ? <em>Creada</em> : t.status === 'dismissed' ? <em>Descartada</em> : canManage && (
+                    {t.status === 'accepted' ? <em>Creada{t.createdFor ? ` · ${t.createdFor.split(' ')[0]}` : ''}</em> : t.status === 'dismissed' ? <em>Descartada</em> : canManage && (
                       <span className="knx-kai-meet-btns">
-                        <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act(t.id, { action: 'accept_task', taskId: t.id })}>Crear</button>
+                        <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => setCreating(t)}>Crear</button>
                         <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act(t.id, { action: 'dismiss_task', taskId: t.id })}>Descartar</button>
                       </span>
                     )}
@@ -1368,11 +1396,37 @@ function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged })
         </>
       )}
       {err && <p className="knx-canvas-error">{err}</p>}
+      {creating && (() => {
+        const who = matchPerson(creating.owner, roster, creating.possibleOwners ?? []);
+        const isoDeadline = /^\d{4}-\d{2}-\d{2}$/.test(creating.deadline || '') ? creating.deadline : '';
+        return (
+          <TaskModal
+            tenant={tenant} roster={roster} projects={projects} organizerName={userName} organizerEmail={userEmail}
+            heading="Crear tarea de la reunión"
+            prefill={{
+              title: creating.task,
+              responsableEmail: who?.email ?? userEmail,
+              date: isoDeadline || undefined,
+              deadline: isoDeadline,
+              projectId: meeting.projectId ?? '',
+              description: `Acordada en la reunión «${meeting.title}».${creating.evidence ? `\n«${creating.evidence}»` : ''}${creating.deadline && !isoDeadline ? `\nPlazo mencionado: ${creating.deadline}.` : ''}`,
+            }}
+            onClose={() => setCreating(null)}
+            onSubmit={async (payload) => {
+              const res = await fetch(`/api/kai-next/${tenant}/dev-meetings/${meetingId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'accept_task', taskId: creating.id, ...payload }) });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || 'No se pudo crear la tarea.');
+              setCreating(null);
+              onChanged(data.task);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
 
-function MeetingDetailPanel({ tenant, basePath, meetingId, userName, userEmail, roster, onClose, onDeleted, onReschedule, onDuplicate }) {
+function MeetingDetailPanel({ tenant, basePath, meetingId, userName, userEmail, roster, projects = [], onClose, onDeleted, onReschedule, onDuplicate, onTasksChanged }) {
   const [closing, handleClose] = useSidePanelClose(onClose);
   const [meeting, setMeeting] = useState(undefined);
   const [removeConfirm, setRemoveConfirm] = useState(false);
@@ -1576,7 +1630,7 @@ function MeetingDetailPanel({ tenant, basePath, meetingId, userName, userEmail, 
           </div>
         )}
 
-        <KaiMeetingSection tenant={tenant} meetingId={meetingId} meeting={meeting} canManage={isOrganizer} onChanged={load} />
+        <KaiMeetingSection tenant={tenant} meetingId={meetingId} meeting={meeting} canManage={isOrganizer} roster={roster} projects={projects} userName={userName} userEmail={userEmail} onChanged={(task) => { load(); if (task) onTasksChanged?.(); }} />
 
         {meeting.projectName && (
           <a className="knx-meeting-project-chip" href={`${basePath}/${tenant}/proyectos?p=${meeting.projectId}`}>
@@ -1913,6 +1967,7 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
         <MeetingDetailPanel
           key={selectedMeetingId}
           tenant={tenant} basePath={basePath} meetingId={selectedMeetingId} userName={userName} userEmail={userEmail} roster={roster}
+          projects={allProjects} onTasksChanged={loadTasks}
           onClose={() => setSelectedMeetingId(null)}
           onDeleted={onMeetingDeleted}
           onReschedule={handleReschedule}
