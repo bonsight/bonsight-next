@@ -44,12 +44,18 @@ export async function GET(req, { params }) {
   // "Ver grabación": el video queda en el Drive; si no se pudo copiar, se pide a Recall un
   // enlace fresco (los suyos son temporales y Recall guarda el archivo 7 días).
   if (new URL(req.url).searchParams.get('recording') === '1') {
-    if (meeting.kai?.driveUrl) return Response.redirect(meeting.kai.driveUrl, 302);
+    // ?t=segundos: abre la grabación en ese momento (lo usan los "⏱ mm:ss" de cada punto).
+    const t = Math.max(0, Math.floor(Number(new URL(req.url).searchParams.get('t')) || 0));
+    if (meeting.kai?.driveUrl) {
+      const u = new URL(meeting.kai.driveUrl);
+      if (t) u.searchParams.set('t', String(t));
+      return Response.redirect(u.toString(), 302);
+    }
     if (!meeting.kai?.botId) return Response.json({ error: 'Esta reunión no tiene grabación.' }, { status: 404 });
     try {
       const { videoUrl } = recordingMedia(await getBot(meeting.kai.botId));
       if (!videoUrl) return Response.json({ error: 'La grabación ya no está disponible.' }, { status: 404 });
-      return Response.redirect(videoUrl, 302);
+      return Response.redirect(t ? `${videoUrl}#t=${t}` : videoUrl, 302);
     } catch (err) {
       return Response.json({ error: err.message }, { status: 502 });
     }

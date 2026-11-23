@@ -10931,3 +10931,6 @@ a.knx-sidebar-group:hover, .knx-sidebar-group--active { background: #fff; color:
 .knx-kai-meet-btns { display: flex; gap: 6px; flex-shrink: 0; }
 .knx-kai-meet-off { opacity: .55; }
 @media (max-width: 768px) { .knx-kai-meet-list li { flex-direction: column; } }
+.knx-kai-meet-at { display: inline-block; margin-top: 3px; font-size: 11.5px; font-weight: 600; color: var(--knx-deep); text-decoration: none; background: #E7F1EC; border-radius: 999px; padding: 1px 8px; }
+.knx-kai-meet-at:hover { text-decoration: underline; }
+.knx-kai-meet-list li > span > .knx-kai-meet-at { display: table; }

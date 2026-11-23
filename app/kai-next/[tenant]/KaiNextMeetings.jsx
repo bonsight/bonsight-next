@@ -1257,6 +1257,25 @@ const KAI_STATUS = {
   error: ['Error', null],
 };
 const CONF_LABEL = { alta: 'Confianza alta', media: 'Confianza media', baja: 'Confianza baja' };
+// "03:12" / "1:03:12" → segundos (para abrir la grabación en ese momento).
+const clockToSec = (at) => {
+  const parts = String(at || '').trim().split(':').map(Number);
+  if (!parts.length || parts.some((n) => !Number.isFinite(n))) return null;
+  return parts.reduce((acc, n) => acc * 60 + n, 0);
+};
+function AtLink({ at, href }) {
+  const sec = clockToSec(at);
+  if (sec == null) return null;
+  return <a className="knx-kai-meet-at" href={`${href}&t=${sec}`} target="_blank" rel="noreferrer" title="Ver este momento de la grabación">⏱ {at}</a>;
+}
+// Texto para pegar en WhatsApp/correo: título, fecha, resumen, decisiones y tareas.
+function summaryText(meeting, a) {
+  const day = new Date(meeting.start).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' });
+  const out = [`*${meeting.title}* — ${day}`, '', a.summary];
+  if (a.decisions?.length) out.push('', '*Decisiones*', ...a.decisions.map((d) => `• ${d.title}${d.reason ? ` — ${d.reason}` : ''}`));
+  if (a.tasks?.length) out.push('', '*Tareas*', ...a.tasks.filter((t) => t.status !== 'dismissed').map((t) => `• ${t.task}${t.owner ? ` (${t.owner}${t.deadline ? `, ${t.deadline}` : ''})` : t.deadline ? ` (${t.deadline})` : ''}`));
+  return out.join('\n');
+}
 
 // "César Alcoba" (lo que entendió Kai) → la persona del equipo: sin tildes ni mayúsculas, nombre
 // completo, todas las palabras contenidas o, si es único, el primer nombre ("Rafa").
@@ -1281,6 +1300,17 @@ function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged, r
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState(null);
   const [creating, setCreating] = useState(null); // tarea propuesta que se está creando
+  const [copied, setCopied] = useState(false);
+  const recHref = `/api/kai-next/${tenant}/dev-meetings/${meetingId}?recording=1`;
+  const copySummary = async () => {
+    try {
+      await navigator.clipboard.writeText(summaryText(meeting, kai.analysis));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setErr('No se pudo copiar: tu navegador no dio permiso.');
+    }
+  };
   const act = async (key, body) => {
     setBusy(key); setErr(null);
     try {
@@ -1324,7 +1354,8 @@ function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged, r
       {hint && kai.status !== 'done' && <p className="knx-kai-meet-p">{hint}</p>}
       {kai.error && <p className="knx-canvas-error">{kai.error}</p>}
       <div className="knx-kai-meet-actions">
-        {kai.status === 'done' && <a className="knx-canvas-mini" href={`/api/kai-next/${tenant}/dev-meetings/${meetingId}?recording=1`} target="_blank" rel="noreferrer">Ver grabación</a>}
+        {kai.status === 'done' && <a className="knx-canvas-mini" href={recHref} target="_blank" rel="noreferrer">Ver grabación</a>}
+        {kai.analysis?.summary && <button type="button" className="knx-canvas-mini" onClick={copySummary}>{copied ? 'Copiado ✓' : 'Copiar resumen'}</button>}
         {canManage && kai.status === 'error' && kai.botId && <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act('retry', { action: 'retry' })}>{busy === 'retry' ? 'Reintentando…' : 'Reintentar'}</button>}
         {canManage && kai.enabled && ['scheduled', null, undefined].includes(kai.status) && <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act('off', { action: 'disable_kai' })}>Sacar a Kai</button>}
       </div>
@@ -1339,7 +1370,7 @@ function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged, r
               <ul className="knx-kai-meet-list">
                 {a.decisions.map((d, i) => (
                   <li key={i}>
-                    <span><b>{d.title}</b>{d.reason ? ` — ${d.reason}` : ''}</span>
+                    <span><b>{d.title}</b>{d.reason ? ` — ${d.reason}` : ''}<AtLink at={d.at} href={recHref} /></span>
                     {canManage && (d.status === 'accepted'
                       ? <em>En la memoria de Kai</em>
                       : <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act(`d${i}`, { action: 'accept_decision', index: i })}>Guardar</button>)}
@@ -1354,7 +1385,7 @@ function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged, r
               <ul className="knx-kai-meet-list">
                 {a.tasks.map((t) => (
                   <li key={t.id} className={t.status === 'dismissed' ? 'knx-kai-meet-off' : ''}>
-                    <span>{t.task}<small>{[t.owner, t.deadline].filter(Boolean).join(' · ')}</small></span>
+                    <span>{t.task}<small>{[t.owner, t.deadline].filter(Boolean).join(' · ')}</small><AtLink at={t.at} href={recHref} /></span>
                     {t.status === 'accepted' ? <em>Creada{t.createdFor ? ` · ${t.createdFor.split(' ')[0]}` : ''}</em> : t.status === 'dismissed' ? <em>Descartada</em> : canManage && (
                       <span className="knx-kai-meet-btns">
                         <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => setCreating(t)}>Crear</button>
@@ -1372,7 +1403,7 @@ function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged, r
               <ul className="knx-kai-meet-list">
                 {a.knowledge.map((k, i) => (
                   <li key={i} className={k.status === 'rejected' ? 'knx-kai-meet-off' : ''}>
-                    <span>{k.statement}<small>{CONF_LABEL[k.confidence] ?? ''}</small></span>
+                    <span>{k.statement}<small>{CONF_LABEL[k.confidence] ?? ''}</small><AtLink at={k.at} href={recHref} /></span>
                     {k.status === 'accepted' ? <em>Aceptado</em> : k.status === 'rejected' ? <em>Rechazado</em> : canManage && (
                       <span className="knx-kai-meet-btns">
                         <button type="button" className="knx-canvas-mini" disabled={!!busy} onClick={() => act(`k${i}`, { action: 'accept_knowledge', index: i })}>Aceptar</button>
@@ -1388,7 +1419,7 @@ function KaiMeetingSection({ tenant, meetingId, meeting, canManage, onChanged, r
             <div className="knx-board-field">
               <label>Contradicciones con lo que Kai sabía</label>
               <ul className="knx-kai-meet-list">
-                {a.contradictions.map((c, i) => <li key={i}><span>Antes: «{c.existing}»<br />Ahora: «{c.new}»<small>{c.reason}</small></span></li>)}
+                {a.contradictions.map((c, i) => <li key={i}><span>Antes: «{c.existing}»<br />Ahora: «{c.new}»<small>{c.reason}</small><AtLink at={c.at} href={recHref} /></span></li>)}
               </ul>
             </div>
           )}
