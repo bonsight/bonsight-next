@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { isAuthorizedForTenant, getCurrentKaiNextAccess } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { runAgenticLoop } from '@/lib/shared/agents/agenticLoop';
+import { trackUsage } from '@/lib/kai/usage';
 import {
   ACTIVITY_CANVAS_TOOLS, executeActivityCanvasTool,
 } from '@/lib/kaiNext/tools/activityCanvas';
@@ -65,7 +66,7 @@ export async function POST(req, { params }) {
   const messages = [...history.map((m) => ({ role: m.role, content: m.content })), { role: 'user', content: userMessage }];
   const cache = {};
 
-  const { finalText, stoppedByTool } = await runAgenticLoop({
+  const { finalText, stoppedByTool, usage } = await runAgenticLoop({
     anthropic,
     model: MODEL,
     maxTokens: 2048,
@@ -76,6 +77,8 @@ export async function POST(req, { params }) {
     executeTool: executeActivityCanvasTool,
     context: { tenant, activityId, cache },
   });
+
+  trackUsage({ tenant, product: 'kai-next', feature: 'activity_canvas_chat', model: MODEL, usage }).catch(() => null);
 
   const updatedCanvas = await getActivityCanvas(tenant, activityId);
   const now = new Date().toISOString();

@@ -194,9 +194,9 @@ function TaskCommits({ tenant, projectId, task, subtasks }) {
 
   return (
     <div className="knx-board-field">
-      <label>Commits{commitCount ? ` (${commitCount})` : ''}</label>
+      <label>Código formalizado{commitCount ? ` (${items.filter((f) => f.pr).length ? `${items.filter((f) => f.pr).length} PR · ` : ''}${commitCount} commit${commitCount === 1 ? '' : 's'})` : ''}</label>
       {!items.length ? (
-        <p className="knx-canvas-ficha-progress" style={{ margin: 0 }}>Todavía no hay commits formalizados para esta tarea. Se formalizan en la pestaña Commits.</p>
+        <p className="knx-canvas-ficha-progress" style={{ margin: 0 }}>Todavía no hay código formalizado para esta tarea. Se formaliza en la pestaña Pull requests.</p>
       ) : (
         <div className="knx-task-commits">
           {items.map((f) => {
@@ -212,6 +212,7 @@ function TaskCommits({ tenant, projectId, task, subtasks }) {
                 </button>
                 {viaSubtask.length > 0 && <div className="knx-task-commit-meta">Por la subtarea: {viaSubtask.join(', ')}</div>}
                 <div className="knx-task-commit-shas">
+                  {f.pr && <a href={f.pr.url} target="_blank" rel="noreferrer" title={f.pr.title}>PR #{f.pr.number}</a>}
                   {f.commits.map((c) => (
                     <a key={c.sha} href={c.url} target="_blank" rel="noreferrer" title={c.message}>{c.shortSha}</a>
                   ))}
@@ -3111,7 +3112,7 @@ const DEV_TABS = [
   { id: 'plan', label: 'Plan' },
   { id: 'tablero', label: 'Tablero' },
   { id: 'sprints', label: 'Sprints' },
-  { id: 'commits', label: 'Commits' },
+  { id: 'commits', label: 'Pull requests' },
 ];
 
 export default function KaiNextProjectDesarrollo({ tenant, projectId, iniciativas, canManage, canWork = canManage, onReload }) {

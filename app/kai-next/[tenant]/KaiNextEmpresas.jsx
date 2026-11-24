@@ -100,7 +100,113 @@ function OverdueAlert({ od, people, projectHref, looseHref, okLabel }) {
   );
 }
 
-function ProjectsByKind({ ps, projectHref, empresaById, showEmpresa }) {
+// Equipo del proyecto en la tarjeta: avatares + botón "+" que abre un panel para quitar y agregar
+// personas al momento (cada cambio se guarda solo). Lo usa quien puede armar el equipo (Director, o
+// Supervisor que ya está adentro); el resto solo ve los avatares.
+const AV_BG = ['#E3F2EA', '#D6ECF3', '#F3E6D6', '#E8E3F3', '#F3DDE0', '#E6EEFA'];
+const avBg = (id = '') => AV_BG[[...id].reduce((n, c) => n + c.charCodeAt(0), 0) % AV_BG.length];
+
+function TeamPopover({ tenant, p, people, empresaName, lockedId, adminHref, onClose, onChanged }) {
+  const [ids, setIds] = useState(p.supervisorIds ?? []);
+  const [q, setQ] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const byId = new Map(people.map((x) => [x.id, x]));
+  const pool = people.filter((x) => !p.empresaId || x.empresaIds?.includes(p.empresaId));
+  const needle = q.trim().toLowerCase();
+  const available = pool.filter((x) => !ids.includes(x.id) && (!needle || x.name.toLowerCase().includes(needle)));
+
+  const save = async (next) => {
+    const prev = ids;
+    setIds(next);
+    setBusy(true);
+    setErr(null);
+    const { error } = await sendJson(`/api/kai-next/${tenant}/projects/${p.id}`, 'PATCH', { supervisorIds: next });
+    setBusy(false);
+    if (error) { setIds(prev); setErr(error); } else onChanged();
+  };
+
+  return (
+    <>
+      <div className="knx-tp-scrim" onClick={onClose} />
+      <div role="dialog" aria-labelledby={`tp-${p.id}`} className="knx-tp">
+        <div className="knx-tp-head">
+          <h4 id={`tp-${p.id}`}>Equipo del proyecto <span>· {ids.length}</span></h4>
+          <button type="button" className="knx-dlg-close" aria-label="Cerrar" onClick={onClose}>×</button>
+        </div>
+        <ul className="knx-tp-members">
+          {!ids.length && <li className="knx-tp-empty">Todavía no hay nadie en el equipo.</li>}
+          {ids.map((id) => {
+            const m = byId.get(id);
+            const name = m?.name ?? 'Persona sin acceso';
+            return (
+              <li key={id} className="knx-tp-member">
+                <span className="knx-tp-av" style={{ background: avBg(id) }} aria-hidden="true">{initials(name)}</span>
+                <span className="knx-tp-who"><span>{name}{id === lockedId ? ' (tú)' : ''}</span>{m?.role && <small>{m.role}</small>}</span>
+                {id !== lockedId && <button type="button" className="knx-tp-remove" disabled={busy} aria-label={`Quitar a ${name}`} onClick={() => save(ids.filter((x) => x !== id))}>Quitar</button>}
+              </li>
+            );
+          })}
+        </ul>
+        <div className="knx-tp-add">
+          <label htmlFor={`tpq-${p.id}`}>Agregar persona</label>
+          <input id={`tpq-${p.id}`} className="knx-dlg-input" placeholder="Buscar por nombre…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+          <ul>
+            {available.slice(0, 8).map((x) => (
+              <li key={x.id}>
+                <button type="button" disabled={busy} onClick={() => { save([...ids, x.id]); setQ(''); }}>
+                  <span className="knx-tp-av knx-tp-av--sm" aria-hidden="true">{initials(x.name)}</span>
+                  <span className="knx-tp-opt">{x.name}{x.role && <small> · {x.role}</small>}</span>
+                  <span className="knx-tp-plus">+ Agregar</span>
+                </button>
+              </li>
+            ))}
+            {!available.length && <li className="knx-tp-empty">{needle ? 'Nadie coincide.' : 'Ya están todos en el equipo.'}</li>}
+          </ul>
+          {err && <p className="knx-dlg-error" role="alert">{err}</p>}
+          <p className="knx-tp-note">
+            {empresaName ? `Solo aparecen personas con acceso a ${empresaName}. ` : ''}¿Falta alguien? {adminHref ? <a href={adminHref}>Invítalo desde Admin</a> : 'Pídele a un admin que lo invite.'}
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function TeamRow({ tenant, p, people, team, empresaName, adminHref, onChanged }) {
+  const [open, setOpen] = useState(false);
+  const ids = p.supervisorIds ?? [];
+  const canEdit = team?.canEdit(p);
+  const nameOf = (id) => people.find((x) => x.id === id)?.name ?? '—';
+  const faces = (
+    <>
+      {ids.slice(0, 4).map((id) => <span key={id} className="knx-tp-av knx-tp-face" style={{ background: avBg(id) }} title={nameOf(id)}>{initials(nameOf(id))}</span>)}
+      {ids.length > 4 && <span className="knx-tp-av knx-tp-face" title={ids.slice(4).map(nameOf).join(', ')}>+{ids.length - 4}</span>}
+    </>
+  );
+  if (!canEdit && !ids.length) return null;
+  return (
+    <div className="knx-mini-team">
+      <span className="knx-mini-team-label">Equipo</span>
+      {canEdit ? (
+        <button type="button" className="knx-mini-team-btn" aria-expanded={open} aria-label={`Equipo del proyecto: ${ids.length} ${ids.length === 1 ? 'persona' : 'personas'}. Agregar o quitar`} onClick={() => setOpen((v) => !v)}>
+          {faces}<span className="knx-tp-plusbtn" aria-hidden="true">+</span>
+        </button>
+      ) : <span className="knx-mini-team-btn">{faces}</span>}
+      {open && (
+        <TeamPopover tenant={tenant} p={p} people={people} empresaName={empresaName} lockedId={team.lockedId} adminHref={adminHref}
+          onClose={() => setOpen(false)} onChanged={onChanged} />
+      )}
+    </div>
+  );
+}
+
+function ProjectsByKind({ tenant, ps, projectHref, empresaById, showEmpresa, people = [], team = null, adminHref = null, onChanged }) {
   const kinds = KIND_ORDER.filter((k) => ps.some((p) => p.projectKind === k));
   return kinds.map((k) => {
     const list = ps.filter((p) => p.projectKind === k);
@@ -111,7 +217,8 @@ function ProjectsByKind({ ps, projectHref, empresaById, showEmpresa }) {
           {list.map((p) => {
             const pct = p.progress.total ? Math.round((p.progress.done / p.progress.total) * 100) : 0;
             return (
-              <a key={p.id} className="knx-mini" href={projectHref(p.id)}>
+              <div key={p.id} className="knx-mini-wrap">
+              <a className="knx-mini" href={projectHref(p.id)}>
                 {showEmpresa && <EmpresaTag empresa={empresaById.get(p.empresaId)} />}
                 <b>{p.name}</b>
                 <span className="knx-pcard-prog"><span><i style={{ width: `${pct}%` }} /></span></span>
@@ -121,6 +228,8 @@ function ProjectsByKind({ ps, projectHref, empresaById, showEmpresa }) {
                 </span>
                 <span className="knx-mini-nx">{p.next ? `Sigue: ${p.next}` : !p.progress.total ? `Sin ${KIND_UNIT[k][1]} todavía` : p.progress.done >= p.progress.total ? 'Todo terminado' : `${p.progress.total - p.progress.done} por completar`}</span>
               </a>
+              <TeamRow tenant={tenant} p={p} people={people} team={team} empresaName={empresaById.get(p.empresaId)?.name ?? null} adminHref={adminHref} onChanged={onChanged} />
+              </div>
             );
           })}
         </div>
@@ -130,8 +239,19 @@ function ProjectsByKind({ ps, projectHref, empresaById, showEmpresa }) {
 }
 
 // ── Pantalla Empresas ────────────────────────────────────────────────────────
-function EmpresasHome({ tenant, data, emp, people, projectHref, empresaHref }) {
+// El equipo lo arma el Director, o un Supervisor en los proyectos donde ya está (mismo criterio que
+// la lista de Proyectos y que el PATCH del proyecto).
+function useTeamEditor(data) {
+  const lv = data.level ?? {};
+  const me = data.personId ?? null;
+  const canEdit = (p) => !!lv.isDirectorLevel || (!!lv.isSupervisorLevel && !!me && (p.supervisorIds ?? []).includes(me));
+  // Quien no es Director no puede sacarse a sí mismo (perdería el acceso al proyecto).
+  return { canEdit, lockedId: lv.isDirectorLevel ? null : me };
+}
+
+function EmpresasHome({ tenant, data, emp, people, projectHref, empresaHref, adminHref, onChanged }) {
   const [newIn, setNewIn] = useState(null); // empresaId de la tarea suelta que se está creando
+  const team = useTeamEditor(data);
   const byId = new Map(data.empresas.map((e) => [e.id, e]));
   const inScope = data.projects.filter((p) => emp.scope === 'all' || p.empresaId === emp.scope);
   const multi = emp.scope === 'all' && emp.selectable.length > 1;
@@ -199,7 +319,7 @@ function EmpresasHome({ tenant, data, emp, people, projectHref, empresaHref }) {
       <div className="knx-emps-sec"><h2>Proyectos <em>· {inScope.length}</em></h2></div>
       {!inScope.length
         ? <p className="knx-knowledge-empty">No tienes proyectos en esta empresa todavía.</p>
-        : <ProjectsByKind ps={inScope} projectHref={projectHref} empresaById={byId} showEmpresa={multi} />}
+        : <ProjectsByKind tenant={tenant} ps={inScope} projectHref={projectHref} empresaById={byId} showEmpresa={multi} people={people} team={team} adminHref={adminHref} onChanged={onChanged} />}
 
       {newEmpresa && (
         <TaskPanel
@@ -499,7 +619,8 @@ function LooseTasks({ tenant, empresa, people, onChanged }) {
 }
 
 // ── Resumen de una empresa ───────────────────────────────────────────────────
-function EmpresaResumen({ tenant, data, empresa, people, projectHref, basePath, onChanged }) {
+function EmpresaResumen({ tenant, data, empresa, people, projectHref, basePath, adminHref, onChanged }) {
+  const team = useTeamEditor(data);
   const ps = data.projects.filter((p) => p.empresaId === empresa.id);
   const loose = data.loose[empresa.id] ?? [];
   const od = data.overdue.filter((o) => o.empresaId === empresa.id);
@@ -520,7 +641,7 @@ function EmpresaResumen({ tenant, data, empresa, people, projectHref, basePath, 
 
       <div className="knx-emps-sec"><h2>Proyectos <em>· {ps.length}</em></h2></div>
       {!ps.length && <p className="knx-knowledge-empty">Esta empresa todavía no tiene proyectos que puedas ver.</p>}
-      <ProjectsByKind ps={ps} projectHref={projectHref} empresaById={new Map([[empresa.id, empresa]])} showEmpresa={false} />
+      <ProjectsByKind tenant={tenant} ps={ps} projectHref={projectHref} empresaById={new Map([[empresa.id, empresa]])} showEmpresa={false} people={people} team={team} adminHref={adminHref} onChanged={onChanged} />
 
       <div className="knx-emps-sec" id="tareas-sueltas">
         <div>
@@ -595,9 +716,9 @@ export default function KaiNextEmpresas({ tenant, tenantName, basePath, userName
           {data?.error && (
             <div className="knx-analisis-empty"><p>{data.error}</p><button type="button" className="knx-canvas-mini" onClick={load}>Reintentar</button></div>
           )}
-          {data && !data.error && !empresaId && <EmpresasHome tenant={tenant} data={data} emp={emp} people={people} projectHref={projectHref} empresaHref={empresaHref} />}
+          {data && !data.error && !empresaId && <EmpresasHome tenant={tenant} data={data} emp={emp} people={people} projectHref={projectHref} empresaHref={empresaHref} adminHref={`${basePath}/${tenant}/admin`} onChanged={load} />}
           {data && !data.error && empresaId && (empresa
-            ? <EmpresaResumen tenant={tenant} data={data} empresa={empresa} people={people} projectHref={projectHref} basePath={basePath} onChanged={load} />
+            ? <EmpresaResumen tenant={tenant} data={data} empresa={empresa} people={people} projectHref={projectHref} basePath={basePath} adminHref={`${basePath}/${tenant}/admin`} onChanged={load} />
             : <div className="knx-analisis-empty"><p>No tienes acceso a esta empresa.</p><a className="knx-canvas-mini" href={`${basePath}/${tenant}/empresas`}>Volver a Empresas</a></div>)}
         </div>
       </main>

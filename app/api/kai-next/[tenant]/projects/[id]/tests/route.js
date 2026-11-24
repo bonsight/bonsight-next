@@ -32,7 +32,7 @@ export async function POST(req, { params }) {
   }
 
   try {
-    const test = await createTest(tenant, id, body);
+    const test = await createTest(tenant, id, body, { createdBy: identity.personId ?? null, createdByName: identity.personName ?? null });
     return Response.json({ test });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 400 });

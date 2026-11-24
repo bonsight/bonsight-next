@@ -5,6 +5,7 @@ import KaiNextSidebar from './KaiNextSidebar';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
 import KaiNextEmpresaMapa, { MAPA_CATEGORIES } from './KaiNextEmpresaMapa';
 import { draftChatUrl } from '@/lib/kaiNext/draftChat';
+import { PriorityLinkChip, PriorityLinkPicker, usePriorityLinkItems } from './KaiNextPriorityLink';
 
 const STALE_DAYS = 14;
 
@@ -32,7 +33,19 @@ function tagLabel(x) {
 // Las prioridades vivían como string[] en Redis (kai:{tenant}:active_priorities, compartido con
 // el admin de Kai legacy) — acá se les suma un estado "completada" sin romper datos viejos.
 function normalizePriorities(list) {
-  return (list ?? []).map((p) => (typeof p === 'string' ? { text: p, done: false } : { text: p?.text ?? '', done: !!p?.done }));
+  return (list ?? []).map((p) => (typeof p === 'string' ? { text: p, done: false } : { text: p?.text ?? '', done: !!p?.done, ...(p?.link ? { link: p.link } : {}) }));
+}
+
+// "23 – 29 nov" (lunes a domingo de la semana actual, hora local).
+const MES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+function weekLabel(now = new Date()) {
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  return mon.getMonth() === sun.getMonth()
+    ? `${mon.getDate()} – ${sun.getDate()} ${MES_CORTO[sun.getMonth()]}`
+    : `${mon.getDate()} ${MES_CORTO[mon.getMonth()]} – ${sun.getDate()} ${MES_CORTO[sun.getMonth()]}`;
 }
 
 function formatDate(iso) {
@@ -55,8 +68,13 @@ export default function KaiNextEmpresa({
   const [chats, setChats] = useState([]);
   const [priorities, setPriorities] = useState(() => normalizePriorities(bic?.active_priorities));
   const [addingPriority, setAddingPriority] = useState(false);
-  const [priorityInput, setPriorityInput] = useState('');
   const [savingPriority, setSavingPriority] = useState(false);
+  // Prioridad nueva en edición (texto + vínculo opcional) y a quién se le está eligiendo vínculo:
+  // 'draft' (la nueva) o el texto de una ya guardada.
+  const [draft, setDraft] = useState({ text: '', link: null });
+  const [pickerFor, setPickerFor] = useState(null);
+  const draftInputRef = useRef(null);
+  const linkItems = usePriorityLinkItems(tenant, !!pickerFor || priorities.some((p) => p.link));
   const [toast, setToast] = useState(null); // { text, nowDone }
   const toastTimerRef = useRef(null);
   const pillRefs = useRef(new Map());
@@ -128,14 +146,6 @@ export default function KaiNextEmpresa({
     } finally {
       setSavingPriority(false);
     }
-  };
-
-  const addPriority = () => {
-    const trimmed = priorityInput.trim();
-    setPriorityInput('');
-    setAddingPriority(false);
-    if (!trimmed || priorities.some((p) => p.text === trimmed)) return;
-    savePriorities([...priorities, { text: trimmed, done: false }]);
   };
 
   const removePriority = (text) => {
@@ -496,63 +506,77 @@ export default function KaiNextEmpresa({
 
       <main className="knx-main">
         <div className="knx-fuentes">
-          <div className="knx-fuentes-top">
-            <div className="knx-fuentes-head">
-              <h1>{tenantName} — Centro de Decisiones</h1>
+          <div className="knx-cd-top">
+            <div className="knx-cd-head">
+              <div className="knx-cd-eyebrow">Centro de decisiones</div>
+              <h1>{tenantName}</h1>
               <p>Información procesada por Kai para acelerar la ejecución del negocio.</p>
             </div>
-            <div className="knx-empresa-header-actions">
-              <div className="knx-empresa-score">
-                <div className="knx-empresa-score-label">Lo que Kai conoce</div>
-                <div className="knx-empresa-score-row">
-                  <span className="knx-empresa-score-pct">{areasWithData.length} de {MAPA_CATEGORIES.length}</span>
-                  <span className="knx-empresa-score-meta">áreas</span>
-                </div>
-                {missingAreas.length > 0 && (
-                  <p className="knx-empresa-score-gap">
-                    Le falta saber de <b>{missingAreas.slice(0, 2).map((a) => a.label.toLowerCase()).join(' y ')}</b>.{' '}
-                    <a href={draftChatUrl(basePath, tenant, `Todavía no sabes casi nada sobre ${missingAreas.slice(0, 2).map((a) => a.label.toLowerCase()).join(' y ')} de ${tenantName}. Hazme las preguntas que necesites.`)}>
-                      Contarle a Kai →
-                    </a>
-                  </p>
-                )}
-                {!isZeroState && (
-                  <a
-                    className="knx-empresa-update-btn"
-                    href={draftChatUrl(basePath, tenant, 'Quiero contarte algo nuevo sobre la empresa para que actualices tu contexto.')}
-                  >
-                    + Actualizar contexto
-                  </a>
+            <div className="knx-menu-wrap">
+              <button type="button" className="knx-menu-btn" onClick={() => setMenuOpen((v) => !v)} aria-label="Más opciones">⋯</button>
+              {menuOpen && (
+                <>
+                  <div className="knx-menu-backdrop" onClick={() => setMenuOpen(false)} />
+                  <div className="knx-menu">
+                    <button type="button" onClick={copySummary}>{copied ? 'Copiado al portapapeles' : 'Copiar resumen'}</button>
+                    <button type="button" onClick={shareReport} disabled={sharing}>{sharing ? 'Generando…' : 'Guardar como reporte y compartir'}</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="knx-cd-cards">
+            <div className="knx-cd-card">
+              <div className="knx-cd-card-top">
+                <span className="knx-cd-label">Lo que Kai conoce</span>
+                <span className="knx-cd-count"><strong>{areasWithData.length}</strong> de {MAPA_CATEGORIES.length} áreas</span>
+              </div>
+              <div className="knx-cd-segs" role="img" aria-label={`${areasWithData.length} de ${MAPA_CATEGORIES.length} áreas con información`}>
+                {MAPA_CATEGORIES.map((c) => <span key={c.id} className={(bic?.[c.id]?.length ?? 0) > 0 ? 'knx-cd-seg--on' : ''} title={c.label} />)}
+              </div>
+              <div className="knx-cd-gap">
+                {missingAreas.length > 0 ? (
+                  <>
+                    <span>Le falta saber de <b>{missingAreas.slice(0, 2).map((a) => a.label.toLowerCase()).join(' y ')}</b>.</span>
+                    <a href={draftChatUrl(basePath, tenant, `Todavía no sabes casi nada sobre ${missingAreas.slice(0, 2).map((a) => a.label.toLowerCase()).join(' y ')} de ${tenantName}. Hazme las preguntas que necesites.`)}>Contarle a Kai →</a>
+                  </>
+                ) : (
+                  <>
+                    <span>Kai tiene información de todas las áreas.</span>
+                    <a href={draftChatUrl(basePath, tenant, 'Quiero contarte algo nuevo sobre la empresa para que actualices tu contexto.')}>Actualizar contexto →</a>
+                  </>
                 )}
               </div>
-              {isZeroState && (
-                <div className="knx-autofill-bar">
-                  <span>⚡ Autocompletar con sitio web:</span>
+            </div>
+
+            {isZeroState ? (
+              <div className="knx-cd-card knx-cd-card--soft">
+                <span className="knx-cd-label">Autocompletar con sitio web</span>
+                <div className="knx-cd-autofill">
+                  <label htmlFor="knx-cd-url" className="knx-sr-only">Sitio web de la empresa</label>
                   <input
+                    id="knx-cd-url"
+                    className="knx-dlg-input"
                     placeholder="tuempresa.com"
                     value={autofillUrl}
                     onChange={(e) => setAutofillUrl(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') runAutofill(); }}
                     disabled={autofilling}
                   />
-                  <button type="button" onClick={runAutofill} disabled={autofilling || !autofillUrl.trim()}>
+                  <button type="button" className="knx-dlg-btn knx-dlg-btn--primary" onClick={runAutofill} disabled={autofilling || !autofillUrl.trim()}>
                     {autofilling ? 'Analizando…' : 'Generar'}
                   </button>
                 </div>
-              )}
-              <div className="knx-menu-wrap">
-                <button type="button" className="knx-menu-btn" onClick={() => setMenuOpen((v) => !v)} aria-label="Más opciones">⋯</button>
-                {menuOpen && (
-                  <>
-                    <div className="knx-menu-backdrop" onClick={() => setMenuOpen(false)} />
-                    <div className="knx-menu">
-                      <button type="button" onClick={copySummary}>{copied ? '✓ Copiado al portapapeles' : '📋 Copiar resumen'}</button>
-                      <button type="button" onClick={shareReport} disabled={sharing}>{sharing ? 'Generando…' : '🔗 Guardar como reporte y compartir'}</button>
-                    </div>
-                  </>
-                )}
+                <p className="knx-cd-hint">Kai lee el sitio y llena lo que pueda del perfil.</p>
               </div>
-            </div>
+            ) : (
+              <div className="knx-cd-card knx-cd-card--soft">
+                <span className="knx-cd-label">¿Algo cambió en la empresa?</span>
+                <p className="knx-cd-hint" style={{ marginTop: 10 }}>Cuéntaselo a Kai y actualiza su contexto: un cambio de foco, un cliente nuevo, una decisión tomada.</p>
+                <a className="knx-dlg-btn knx-dlg-btn--primary knx-cd-cta" href={draftChatUrl(basePath, tenant, 'Quiero contarte algo nuevo sobre la empresa para que actualices tu contexto.')}>Actualizar contexto</a>
+              </div>
+            )}
           </div>
           {autofillError && <p className="knx-login-error">{autofillError}</p>}
 
@@ -620,64 +644,112 @@ export default function KaiNextEmpresa({
             </section>
           )}
 
-          <section className="knx-empresa-section">
-            <div className="knx-fuentes-section-head">
-              <h2>
-                Prioridades de esta semana
-                {priorities.length > 0 && <span> · {priorities.filter((p) => p.done).length} de {priorities.length} completadas</span>}
-              </h2>
-              <p>Las define el equipo. Kai las usa para enfocar sus respuestas. Haz clic en los círculos para marcarlas como completadas.</p>
-            </div>
-            <div className="knx-priorities-pills">
-              {priorities.map((p) => (
-                <span
-                  key={p.text}
-                  ref={(el) => { if (el) pillRefs.current.set(p.text, el); else pillRefs.current.delete(p.text); }}
-                  className={`knx-priority-pill${p.done ? ' knx-priority-pill--done' : ''}`}
-                >
-                  <button
-                    type="button"
-                    className="knx-priority-check"
-                    onClick={() => togglePriorityDone(p.text)}
-                    aria-pressed={p.done}
-                    aria-label={p.done ? `Marcar "${p.text}" como pendiente` : `Marcar "${p.text}" como completada`}
-                  >
-                    <span className="knx-priority-check-circle">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10" /></svg>
-                    </span>
-                  </button>
-                  {p.done ? (
-                    <span className="knx-priority-text">{p.text}</span>
-                  ) : (
-                    <a
-                      className="knx-priority-text knx-priority-text--link"
-                      href={draftChatUrl(basePath, tenant, `Quiero avanzar en esta prioridad: "${p.text}". Ayúdame a definir los próximos pasos concretos y, si tiene sentido, genera un primer borrador de lo que haga falta.`)}
-                      title="Trabajar en esto con Kai"
-                    >
-                      {p.text}
-                    </a>
-                  )}
-                  <button type="button" className="knx-priority-remove" onClick={() => removePriority(p.text)} aria-label={`Quitar "${p.text}"`}>×</button>
+          <section className="knx-prio" aria-labelledby="knx-prio-title">
+            <div className="knx-prio-head">
+              <h2 id="knx-prio-title">Prioridades de esta semana</h2>
+              <span className="knx-prio-sub">{weekLabel()} · Kai las usa para enfocar sus respuestas</span>
+              {priorities.length > 0 && (
+                <span className="knx-prio-progress">
+                  <span><strong>{priorities.filter((p) => p.done).length} de {priorities.length}</strong> completadas</span>
+                  <span className="knx-prio-bar"><span style={{ width: `${Math.round((priorities.filter((p) => p.done).length / priorities.length) * 100)}%` }} /></span>
                 </span>
-              ))}
-              {priorities.length === 0 && !addingPriority && <span className="knx-empresa-card-empty">Todavía no hay prioridades activas definidas.</span>}
-              {addingPriority ? (
-                <span className="knx-priority-pill knx-priority-pill--input">
-                  <input
-                    autoFocus
-                    placeholder="Nueva prioridad…"
-                    value={priorityInput}
-                    onChange={(e) => setPriorityInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') { e.preventDefault(); addPriority(); }
-                      if (e.key === 'Escape') { setAddingPriority(false); setPriorityInput(''); }
-                    }}
-                    onBlur={() => (priorityInput.trim() ? addPriority() : setAddingPriority(false))}
-                  />
-                </span>
-              ) : (
-                <button type="button" className="knx-priority-add-pill" onClick={() => setAddingPriority(true)} disabled={savingPriority}>+ Agregar</button>
               )}
+            </div>
+            <ol className="knx-prio-grid">
+              {priorities.map((p) => (
+                <li key={p.text} ref={(el) => { if (el) pillRefs.current.set(p.text, el); else pillRefs.current.delete(p.text); }} className={`knx-prio-card${p.done ? ' knx-prio-card--done' : ''}`}>
+                  <div className="knx-prio-row1">
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={p.done}
+                      className="knx-prio-check"
+                      onClick={() => togglePriorityDone(p.text)}
+                      aria-label={p.done ? `Marcar "${p.text}" como pendiente` : `Marcar "${p.text}" como completada`}
+                    >
+                      {p.done && <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                    </button>
+                    {p.done ? (
+                      <span className="knx-prio-text">{p.text}</span>
+                    ) : (
+                      <a
+                        className="knx-prio-text knx-prio-text--link"
+                        href={draftChatUrl(basePath, tenant, `Quiero avanzar en esta prioridad: "${p.text}"${p.link ? ` (${p.link.type === 'proyecto' ? 'proyecto' : p.link.type} «${p.link.label}»)` : ''}. Ayúdame a definir los próximos pasos concretos y, si tiene sentido, genera un primer borrador de lo que haga falta.`)}
+                        title="Trabajar en esto con Kai"
+                      >
+                        {p.text}
+                      </a>
+                    )}
+                  </div>
+                  {p.link ? (
+                    <PriorityLinkChip link={p.link} items={linkItems} basePath={basePath} tenant={tenant}
+                      onRemove={() => savePriorities(priorities.map((x) => (x.text === p.text ? { text: x.text, done: x.done } : x)))} />
+                  ) : !p.done && (
+                    <button type="button" className="knx-prio-linkbtn knx-prio-linkbtn--hover" onClick={() => setPickerFor(p.text)}>↗ Vincular</button>
+                  )}
+                  <button type="button" className="knx-prio-remove" onClick={() => removePriority(p.text)} aria-label={`Quitar "${p.text}"`}>×</button>
+                  {pickerFor === p.text && (
+                    <PriorityLinkPicker items={linkItems} onClose={() => setPickerFor(null)}
+                      onPick={(link) => { setPickerFor(null); savePriorities(priorities.map((x) => (x.text === p.text ? { ...x, link } : x))); }} />
+                  )}
+                </li>
+              ))}
+              {Array.from({ length: priorities.length < 3 ? 3 - priorities.length : addingPriority ? 1 : 0 }).map((_, j) => {
+                const n = priorities.length + j + 1;
+                const isDraft = j === 0;
+                const active = isDraft && (draft.text || draft.link || pickerFor === 'draft');
+                const commit = () => {
+                  const t = draft.text.trim();
+                  if (!t || priorities.some((x) => x.text === t)) return;
+                  savePriorities([...priorities, { text: t, done: false, ...(draft.link ? { link: draft.link } : {}) }]);
+                  setDraft({ text: '', link: null });
+                  setAddingPriority(false);
+                };
+                return (
+                  <li key={`empty-${n}`} className={`knx-prio-card knx-prio-card--empty${active ? ' knx-prio-card--active' : ''}`}>
+                    {!isDraft ? (
+                      // Solo la primera casilla libre se escribe; las demás llevan a ella.
+                      <button type="button" className="knx-prio-input knx-prio-input--ghost" onClick={() => draftInputRef.current?.focus()} tabIndex={-1}>
+                        <span className="knx-prio-n" aria-hidden="true">{n}</span>
+                        <span>Agregar prioridad…</span>
+                      </button>
+                    ) : (
+                    <label className="knx-prio-input">
+                      <span className="knx-prio-n" aria-hidden="true">{n}</span>
+                      <span className="knx-sr-only">Prioridad {n}</span>
+                      <input
+                        ref={draftInputRef}
+                        placeholder={priorities.length === 0 ? '¿Qué es lo más importante esta semana?' : 'Agregar prioridad…'}
+                        disabled={savingPriority}
+                        autoFocus={addingPriority}
+                        value={draft.text}
+                        onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+                          if (e.key === 'Escape') { setDraft({ text: '', link: null }); setAddingPriority(false); }
+                        }}
+                      />
+                    </label>
+                    )}
+                    {active && (
+                      <div className="knx-prio-draftbar">
+                        {draft.link
+                          ? <PriorityLinkChip link={draft.link} items={linkItems} basePath={basePath} tenant={tenant} onRemove={() => setDraft((d) => ({ ...d, link: null }))} />
+                          : <button type="button" className="knx-prio-linkbtn" onClick={() => setPickerFor('draft')}>↗ Vincular a proyecto, prueba o tarea <span>(opcional)</span></button>}
+                        <span className="knx-prio-enter">Enter para guardar</span>
+                      </div>
+                    )}
+                    {isDraft && pickerFor === 'draft' && (
+                      <PriorityLinkPicker items={linkItems} onClose={() => setPickerFor(null)}
+                        onPick={(link) => { setPickerFor(null); setDraft((d) => ({ ...d, link })); }} />
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+            <div className="knx-prio-foot">
+              <span>Sugerimos 3 para mantener el foco.</span>
+              {priorities.length >= 3 && !addingPriority && <button type="button" onClick={() => setAddingPriority(true)} disabled={savingPriority}>+ Agregar otra prioridad</button>}
             </div>
             {toast && (
               <div className="knx-priorities-toast">

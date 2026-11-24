@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useEmpresaScope } from '@/lib/kaiNext/useEmpresaScope';
+import KaiNextUserMenu from './KaiNextUserMenu';
 
 function initials(name = '') {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') || '·';
@@ -274,20 +275,7 @@ export default function KaiNextSidebar({
             Admin
           </a>
         )}
-        <div className="knx-user-row">
-          <span className="knx-user-avatar">{initials(userName)}</span>
-          <span className="knx-user-info">
-            <span className="knx-user-name">{userName}</span>
-            {userHandle && <span className="knx-user-handle">{userHandle}</span>}
-          </span>
-          <button type="button" className="knx-logout-btn" onClick={onLogout} disabled={loggingOut} title="Cerrar sesión">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-          </button>
-        </div>
+        <KaiNextUserMenu tenant={tenant} userName={userName} userHandle={userHandle} isTeamUser={isTeamUser} onLogout={onLogout} loggingOut={loggingOut} />
       </div>
     </aside>
     </>

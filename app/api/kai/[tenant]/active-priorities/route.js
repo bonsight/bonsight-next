@@ -20,7 +20,8 @@ export async function PUT(req, { params }) {
     return Response.json({ error: 'priorities debe ser un array.' }, { status: 400 });
   }
   const cleaned = priorities
-    .map((p) => (typeof p === 'string' ? { text: p.trim(), done: false } : { text: String(p?.text ?? '').trim(), done: !!p?.done }))
+    // El vínculo a proyecto/prueba/tarea lo crea Kai Next; acá solo se conserva para no borrarlo.
+    .map((p) => (typeof p === 'string' ? { text: p.trim(), done: false } : { text: String(p?.text ?? '').trim(), done: !!p?.done, ...(p?.link && typeof p.link === 'object' ? { link: p.link } : {}) }))
     .filter((p) => p.text)
     .slice(0, 10);
   await setActivePriorities(tenant, cleaned);

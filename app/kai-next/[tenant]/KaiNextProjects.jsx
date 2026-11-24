@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import KaiNextSidebar from './KaiNextSidebar';
+import KaiNextProjectTeamModal from './KaiNextProjectTeamModal';
 import KaiNextConfirmDialog from './KaiNextConfirmDialog';
 import { useSidePanelClose } from '@/lib/kaiNext/useSidePanelClose';
 import { sortByOrder, dropsBefore, computeDropOrder } from '@/lib/kaiNext/dragOrder';
@@ -39,11 +40,12 @@ const BACKLOG_STATUS = { id: 'backlog', label: 'Backlog' };
 const REVIEW_STATUS = { id: 'review', label: 'En revisión' };
 const PRIORITIES = ['Alta', 'Media', 'Baja'];
 
-// Tabs de la lista de tareas — "Activas" (todo+doing) va primero y es el default: una tarea
-// terminada deja de ser información accionable del día a día, así que no satura la vista por
-// defecto; "Todas" sigue disponible para auditar el historial completo.
+// Tabs de la lista de tareas, una por estado para que los números cuadren con "Todas" (antes había
+// "Activas", que sumaba el Backlog sin que tuviera pestaña propia). "Por hacer" es la de entrada:
+// lo terminado no satura la vista del día a día; "Todas" sigue para auditar el historial.
+const DEFAULT_STATUS_TAB = 'todo';
 const STATUS_TABS = [
-  { id: 'activas', label: 'Activas', test: (t) => t.status !== 'done' },
+  { id: 'backlog', label: 'Backlog', test: (t) => t.status === 'backlog' },
   { id: 'todo', label: 'Por hacer', test: (t) => t.status === 'todo' },
   { id: 'doing', label: 'Haciendo', test: (t) => t.status === 'doing' },
   { id: 'review', label: 'En revisión', test: (t) => t.status === 'review' },
@@ -51,7 +53,7 @@ const STATUS_TABS = [
   { id: 'all', label: 'Todas', test: () => true },
 ];
 function matchesStatusTab(task, tabId) {
-  return (STATUS_TABS.find((s) => s.id === tabId) ?? STATUS_TABS[0]).test(task);
+  return (STATUS_TABS.find((s) => s.id === tabId) ?? STATUS_TABS.find((s) => s.id === DEFAULT_STATUS_TAB)).test(task);
 }
 
 function formatShortDate(iso) {
@@ -743,13 +745,6 @@ function TaskTableRow({ task, people, tipologias, statuses = TASK_STATUSES, canM
   const tipologiaName = task.tipologiaId ? tipologias?.find((t) => t.id === task.tipologiaId)?.name : null;
   return (
     <div className="knx-task-table-row" onClick={onOpen}>
-      <button
-        type="button"
-        className={`knx-task-table-checkbox${done ? ' knx-task-table-checkbox--done' : ''}`}
-        disabled={!canToggle}
-        onClick={(e) => { e.stopPropagation(); onStatusChange(done ? 'todo' : 'done'); }}
-        aria-label={done ? 'Marcar como pendiente' : 'Marcar terminada'}
-      />
       <div className="knx-task-table-cell-main">
         <div className={`knx-task-table-title${done ? ' knx-task-table-title--done' : ''}`} title={task.nombre}>{task.nombre}</div>
         {task.fase && <div className="knx-task-table-sub">{task.fase}</div>}
@@ -909,154 +904,226 @@ function KaiNextGantt({ grouped, people, grupos, savingTaskId, canToggleTask, on
   );
 }
 
-function NewPartidaForm({ onCreate }) {
+// ── Partidas y Documentación (rediseño 2026-11-24): tablas con acciones por fila ────────────
+const fmtNum = (n) => Number(n ?? 0).toLocaleString('es-PE', { maximumFractionDigits: 2 });
+const MES_C = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const fmtDayShort = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : `${d.getDate()} ${MES_C[d.getMonth()]}`; };
+
+function RowMenu({ label, items }) {
   const [open, setOpen] = useState(false);
-  const [etapa, setEtapa] = useState('');
-  const [descripcion, setDescripcion] = useState('');
-  const [cantidad, setCantidad] = useState('');
-  const [unidad, setUnidad] = useState('');
-  const [precioUnitario, setPrecioUnitario] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  if (!open) return <button type="button" className="knx-canvas-add-item-btn" onClick={() => setOpen(true)}>+ Nueva partida</button>;
-
-  const submit = async () => {
-    if (!descripcion.trim()) return;
-    setSaving(true);
-    try {
-      await onCreate({ etapa, descripcion, cantidad: cantidad || null, unidad, precioUnitario: precioUnitario || null });
-      setEtapa(''); setDescripcion(''); setCantidad(''); setUnidad(''); setPrecioUnitario('');
-      setOpen(false);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
-    <div className="knx-canvas-newcol-form">
-      <input className="knx-canvas-meta-select" placeholder="Descripción…" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} autoFocus />
-      <input className="knx-canvas-meta-select" placeholder="Etapa (opcional)" value={etapa} onChange={(e) => setEtapa(e.target.value)} />
-      <div className="knx-canvas-meta-form-row">
-        <input className="knx-canvas-meta-select" type="number" placeholder="Cantidad" value={cantidad} onChange={(e) => setCantidad(e.target.value)} />
-        <input className="knx-canvas-meta-select" placeholder="Unidad" value={unidad} onChange={(e) => setUnidad(e.target.value)} />
-      </div>
-      <input className="knx-canvas-meta-select" type="number" placeholder="Precio unitario" value={precioUnitario} onChange={(e) => setPrecioUnitario(e.target.value)} />
-      <div className="knx-canvas-newcol-actions">
-        <button type="button" className="knx-canvas-mini" disabled={saving} onClick={submit}>Agregar</button>
-        <button type="button" className="knx-canvas-mini" onClick={() => setOpen(false)}>Cancelar</button>
-      </div>
-    </div>
-  );
-}
-
-function PartidaRow({ partida, gastos, canManage, onDelete, onAddGasto, onDeleteGasto, renderFeedback }) {
-  const [gastoOpen, setGastoOpen] = useState(false);
-  const [monto, setMonto] = useState('');
-  const [proveedor, setProveedor] = useState('');
-  const [nota, setNota] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const pct = partida.importe ? Math.round((partida.ejecutado / partida.importe) * 100) : 0;
-  const sobrecosto = partida.importe > 0 && partida.ejecutado > partida.importe;
-  const partidaGastos = gastos.filter((g) => g.partidaId === partida.id);
-
-  const submitGasto = async () => {
-    if (!monto || Number(monto) <= 0) return;
-    setSaving(true);
-    try {
-      await onAddGasto(partida.id, { monto, proveedor, nota });
-      setMonto(''); setProveedor(''); setNota('');
-      setGastoOpen(false);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="knx-canvas-item">
-      <div className="knx-canvas-item-head">
-        <div className="knx-canvas-item-who">
-          <span className="knx-canvas-item-name">{partida.etapa ? `${partida.etapa} · ` : ''}{partida.descripcion}</span>
-        </div>
-        {renderFeedback?.({ type: 'partida', id: partida.id }, partida.descripcion)}
-        {canManage && (
-          <button type="button" className="knx-canvas-icon-btn knx-canvas-icon-btn--danger" aria-label="Eliminar partida" onClick={onDelete}>×</button>
-        )}
-      </div>
-      <p className="knx-canvas-ficha-progress">
-        {partida.cantidad != null ? `${partida.cantidad} ${partida.unidad || ''} × ${(partida.precioUnitario ?? 0).toLocaleString('es-PE')}` : ''}
-        {' · importe '}{partida.importe.toLocaleString('es-PE')}
-        {' · ejecutado '}{partida.ejecutado.toLocaleString('es-PE')} ({pct}%)
-        {sobrecosto ? ' · ⚠ sobrecosto' : ''}
-      </p>
-      {partidaGastos.length > 0 && (
-        <div className="knx-canvas-ficha-participants" style={{ marginTop: 6 }}>
-          {partidaGastos.map((g) => (
-            <div key={g.id} className="knx-canvas-ficha-participant-row">
-              <span className="knx-canvas-ficha-participant-name">{g.proveedor || g.createdBy}{g.imported ? ' (importado)' : ''}</span>
-              <span className="knx-canvas-ficha-participant-progress">{g.monto.toLocaleString('es-PE')}</span>
-              {canManage && !g.imported && (
-                <button type="button" className="knx-canvas-icon-btn knx-canvas-icon-btn--danger" aria-label="Eliminar gasto" onClick={() => onDeleteGasto(g.id)}>×</button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      {canManage && (
-        gastoOpen ? (
-          <div className="knx-canvas-newcol-form" style={{ marginTop: 6 }}>
-            <input className="knx-canvas-meta-select" type="number" placeholder="Monto del gasto" value={monto} onChange={(e) => setMonto(e.target.value)} autoFocus />
-            <input className="knx-canvas-meta-select" placeholder="Proveedor (opcional)" value={proveedor} onChange={(e) => setProveedor(e.target.value)} />
-            <input className="knx-canvas-meta-select" placeholder="Nota (opcional)" value={nota} onChange={(e) => setNota(e.target.value)} />
-            <div className="knx-canvas-newcol-actions">
-              <button type="button" className="knx-canvas-mini" disabled={saving} onClick={submitGasto}>Agregar gasto</button>
-              <button type="button" className="knx-canvas-mini" onClick={() => setGastoOpen(false)}>Cancelar</button>
-            </div>
+    <div className="knx-pr-menu-wrap">
+      <button type="button" className="knx-eq-btn knx-eq-dots" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}>⋯</button>
+      {open && (
+        <>
+          <div className="knx-pr-menu-scrim" onClick={() => setOpen(false)} />
+          <div role="menu" className="knx-pr-menu">
+            {items.filter(Boolean).map((it) => (
+              it === 'sep' ? <div key="sep" className="knx-pr-menu-sep" /> : (
+                <button key={it.label} type="button" role="menuitem" className={it.danger ? 'knx-pr-menu-danger' : ''} onClick={() => { setOpen(false); it.onClick(); }}>{it.label}</button>
+              )
+            ))}
           </div>
-        ) : (
-          <button type="button" className="knx-canvas-mini" style={{ marginTop: 6 }} onClick={() => setGastoOpen(true)}>+ Gasto</button>
-        )
+        </>
       )}
     </div>
   );
 }
+
+function SimpleDialog({ title, eyebrow, children, onClose, onSubmit, submitLabel, busy, canSubmit = true, error }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="knx-dlg-backdrop" onClick={onClose}>
+      <form className="knx-dlg knx-dlg--sm" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); if (canSubmit && !busy) onSubmit(); }}>
+        <div className="knx-dlg-head">
+          <div>
+            {eyebrow && <div className="knx-dlg-eyebrow">{eyebrow}</div>}
+            <h2 className="knx-dlg-title">{title}</h2>
+          </div>
+          <button type="button" className="knx-dlg-close" aria-label="Cerrar" onClick={onClose}>×</button>
+        </div>
+        <div className="knx-dlg-body">
+          {children}
+          {error && <p className="knx-dlg-error" role="alert">{error}</p>}
+        </div>
+        <div className="knx-dlg-foot">
+          <button type="button" className="knx-dlg-btn" onClick={onClose} disabled={busy}>Cancelar</button>
+          <button type="submit" className="knx-dlg-btn knx-dlg-btn--primary" disabled={busy || !canSubmit}>{busy ? 'Guardando…' : submitLabel}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function Field({ id, label, children }) {
+  return <div className="knx-dlg-field"><label className="knx-dlg-label" htmlFor={id}>{label}</label>{children}</div>;
+}
+
+function NewPartidaDialog({ onCreate, onClose }) {
+  const [v, setV] = useState({ descripcion: '', etapa: '', cantidad: '', unidad: '', precioUnitario: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const set = (k) => (e) => setV((p) => ({ ...p, [k]: e.target.value }));
+  const importe = Number(v.cantidad) * Number(v.precioUnitario);
+  const submit = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await onCreate({ ...v, cantidad: v.cantidad || null, precioUnitario: v.precioUnitario || null });
+      onClose();
+    } catch (e) {
+      setErr(e?.message || 'No se pudo crear la partida.');
+      setBusy(false);
+    }
+  };
+  return (
+    <SimpleDialog title="Nueva partida" onClose={onClose} onSubmit={submit} submitLabel="Crear partida" busy={busy} canSubmit={!!v.descripcion.trim()} error={err}>
+      <Field id="np-desc" label="Descripción"><input id="np-desc" className="knx-dlg-input" value={v.descripcion} onChange={set('descripcion')} autoFocus /></Field>
+      <Field id="np-etapa" label="Etapa (opcional)"><input id="np-etapa" className="knx-dlg-input" value={v.etapa} onChange={set('etapa')} /></Field>
+      <div className="knx-np-row">
+        <Field id="np-cant" label="Cantidad"><input id="np-cant" className="knx-dlg-input" inputMode="decimal" value={v.cantidad} onChange={set('cantidad')} /></Field>
+        <Field id="np-und" label="Unidad"><input id="np-und" className="knx-dlg-input" placeholder="UND" value={v.unidad} onChange={set('unidad')} /></Field>
+        <Field id="np-pu" label="Precio unitario"><input id="np-pu" className="knx-dlg-input" inputMode="decimal" value={v.precioUnitario} onChange={set('precioUnitario')} /></Field>
+      </div>
+      {Number.isFinite(importe) && importe > 0 && <p className="knx-dlg-hint">Importe: <strong>{fmtNum(importe)}</strong></p>}
+    </SimpleDialog>
+  );
+}
+
+function GastoDialog({ partida, onAdd, onClose }) {
+  const [v, setV] = useState({ monto: '', proveedor: '', nota: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const set = (k) => (e) => setV((p) => ({ ...p, [k]: e.target.value }));
+  const submit = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await onAdd(partida.id, v);
+      onClose();
+    } catch (e) {
+      setErr(e?.message || 'No se pudo registrar el gasto.');
+      setBusy(false);
+    }
+  };
+  return (
+    <SimpleDialog eyebrow="Nuevo gasto" title={partida.descripcion} onClose={onClose} onSubmit={submit} submitLabel="Registrar gasto" busy={busy} canSubmit={Number(v.monto) > 0} error={err}>
+      <Field id="g-monto" label="Monto"><input id="g-monto" className="knx-dlg-input" inputMode="decimal" value={v.monto} onChange={set('monto')} autoFocus /></Field>
+      <Field id="g-prov" label="Proveedor (opcional)"><input id="g-prov" className="knx-dlg-input" value={v.proveedor} onChange={set('proveedor')} /></Field>
+      <Field id="g-nota" label="Nota (opcional)"><input id="g-nota" className="knx-dlg-input" value={v.nota} onChange={set('nota')} /></Field>
+      {partida.importe > 0 && <p className="knx-dlg-hint">Ejecutado hasta hoy: {fmtNum(partida.ejecutado)} de {fmtNum(partida.importe)}.</p>}
+    </SimpleDialog>
+  );
+}
+
+const PARTIDAS_PAGE = 11;
 
 function PresupuestoSection({ metrics, alerts, partidas, gastos, canManage, onAddPartida, onDeletePartida, onAddGasto, onDeleteGasto, renderFeedback }) {
-  return (
-    <div className="knx-canvas-group" style={{ marginBottom: 16 }}>
-      <div className="knx-canvas-group-head"><span className="knx-canvas-group-name">Presupuesto</span></div>
+  const [q, setQ] = useState('');
+  const [showAll, setShowAll] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
+  const [gastoFor, setGastoFor] = useState(null);
+  const [openId, setOpenId] = useState(null);
+  const needle = q.trim().toLowerCase();
+  const filtered = partidas.filter((p) => !needle || p.descripcion.toLowerCase().includes(needle) || (p.etapa ?? '').toLowerCase().includes(needle));
+  const shown = showAll || needle ? filtered : filtered.slice(0, PARTIDAS_PAGE);
+  const total = partidas.reduce((n, p) => n + (p.importe || 0), 0);
+  const gastosOf = (id) => gastos.filter((g) => g.partidaId === id).sort((a, b) => String(b.fecha ?? b.createdAt ?? '').localeCompare(String(a.fecha ?? a.createdAt ?? '')));
 
+  return (
+    <div className="knx-pt-section" style={{ marginBottom: 16 }}>
       {metrics && (
-        <div className="knx-kpi-grid" style={{ marginBottom: 12 }}>
+        <div className="knx-kpi-grid" style={{ marginBottom: 14 }}>
           <div className="knx-kpi-card"><span className="knx-kpi-label">Avance financiero</span><span className="knx-kpi-value">{metrics.pctFinanciero}%</span></div>
           <div className="knx-kpi-card"><span className="knx-kpi-label">Avance de tareas</span><span className="knx-kpi-value">{metrics.pctTareas}%</span></div>
           <div className="knx-kpi-card"><span className="knx-kpi-label">Tiempo transcurrido</span><span className="knx-kpi-value">{metrics.pctTiempo}%</span></div>
           <div className="knx-kpi-card"><span className="knx-kpi-label">Presupuesto total</span><span className="knx-kpi-value">{metrics.totalImporte.toLocaleString('es-PE')}</span></div>
         </div>
       )}
-
       {alerts.length > 0 && (
-        <div className="knx-canvas-ficha-draft" style={{ marginBottom: 12 }}>
-          <label>{alerts.length} alerta{alerts.length !== 1 ? 's' : ''}</label>
-          {alerts.map((a, i) => <p key={i} className="knx-canvas-error" style={{ margin: '2px 0' }}>{a.message}</p>)}
+        <div className="knx-pa-alerts">
+          {alerts.map((a, i) => <p key={i}>{a.message}</p>)}
         </div>
       )}
 
-      <div className="knx-canvas-cards">
-        {!partidas.length ? <p className="knx-knowledge-empty">Sin partidas todavía — crea una para poder cargarle gastos.</p> : partidas.map((p) => (
-          <PartidaRow
-            key={p.id}
-            partida={p}
-            gastos={gastos}
-            canManage={canManage}
-            onDelete={() => onDeletePartida(p.id)}
-            onAddGasto={onAddGasto}
-            onDeleteGasto={onDeleteGasto}
-            renderFeedback={renderFeedback}
-          />
-        ))}
+      <div className="knx-pa-top">
+        <label htmlFor="knx-pa-q" className="knx-sr-only">Buscar partida</label>
+        <input id="knx-pa-q" className="knx-dlg-input knx-pa-search" placeholder="Buscar partida…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <span className="knx-pa-sum">{partidas.length} {partidas.length === 1 ? 'partida' : 'partidas'} · Presupuesto total <strong>{fmtNum(total)}</strong></span>
+        {canManage && <button type="button" className="knx-dlg-btn knx-dlg-btn--primary knx-pa-new" onClick={() => setNewOpen(true)}>+ Nueva partida</button>}
       </div>
-      {canManage && <NewPartidaForm onCreate={onAddPartida} />}
+
+      {!partidas.length ? (
+        <div className="knx-pa-empty">Sin partidas todavía. Crea una para poder cargarle gastos.</div>
+      ) : (
+        <div className="knx-pa-wrap">
+          <div className="knx-pa-table">
+            <div className="knx-pa-row knx-pa-thead">
+              <div>Partida</div><div className="knx-pa-r">Cant. × P.U.</div><div className="knx-pa-r">Importe</div><div>Ejecutado</div><div>Último gasto</div><div />
+            </div>
+            {!shown.length && <p className="knx-eq-empty">Ninguna partida coincide.</p>}
+            {shown.map((p) => {
+              const pct = p.importe ? Math.round((p.ejecutado / p.importe) * 100) : 0;
+              const over = p.importe > 0 && p.ejecutado > p.importe;
+              const gs = gastosOf(p.id);
+              const open = openId === p.id;
+              return (
+                <div key={p.id} id={`partida-${p.id}`} className={`knx-pa-item${open ? ' knx-pa-item--open' : ''}`}>
+                  <div className="knx-pa-row">
+                    <div className="knx-pa-name">
+                      <button type="button" className="knx-pa-namebtn" aria-expanded={open} onClick={() => setOpenId(open ? null : p.id)} title={gs.length ? 'Ver gastos' : undefined}>
+                        {p.descripcion}
+                      </button>
+                      {p.etapa && <small>{p.etapa}</small>}
+                    </div>
+                    <div className="knx-pa-r knx-pa-muted">{p.cantidad != null ? `${fmtNum(p.cantidad)} ${p.unidad || ''} × ${fmtNum(p.precioUnitario)}` : '—'}</div>
+                    <div className="knx-pa-r">{fmtNum(p.importe)}</div>
+                    <div className="knx-pa-exec">
+                      <span className="knx-pa-bar"><span className={over ? 'knx-pa-bar--over' : ''} style={{ width: `${Math.min(100, pct)}%` }} /></span>
+                      <span className={over ? 'knx-pa-pct knx-pa-pct--over' : 'knx-pa-pct'}>{pct}%</span>
+                    </div>
+                    <div className="knx-pa-muted">{gs[0]?.createdBy ?? '—'}</div>
+                    <div className="knx-pa-actions">
+                      {canManage && <button type="button" className="knx-eq-btn" onClick={() => setGastoFor(p)}>+ Gasto</button>}
+                      {renderFeedback?.({ type: 'partida', id: p.id }, p.descripcion)}
+                      <RowMenu label={`Más acciones para ${p.descripcion}`} items={[
+                        { label: open ? 'Ocultar gastos' : `Ver gastos (${gs.length})`, onClick: () => setOpenId(open ? null : p.id) },
+                        canManage && 'sep',
+                        canManage && { label: 'Eliminar partida', danger: true, onClick: () => { if (confirm(`¿Eliminar la partida «${p.descripcion}»?`)) onDeletePartida(p.id); } },
+                      ]} />
+                    </div>
+                  </div>
+                  {open && (
+                    <div className="knx-pa-gastos">
+                      {!gs.length ? <p className="knx-pa-muted">Sin gastos todavía.</p> : gs.map((g) => (
+                        <div key={g.id} className="knx-pa-gasto">
+                          <span>{fmtDayShort(g.fecha ?? g.createdAt)}</span>
+                          <span>{g.proveedor || g.createdBy}{g.imported ? ' (importado)' : ''}{g.nota ? <small> · {g.nota}</small> : null}</span>
+                          <strong>{fmtNum(g.monto)}</strong>
+                          {canManage && !g.imported ? <button type="button" className="knx-plink-x" aria-label="Eliminar gasto" onClick={() => { if (confirm('¿Eliminar este gasto?')) onDeleteGasto(g.id); }}>×</button> : <span />}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {!needle && filtered.length > PARTIDAS_PAGE && (
+              <div className="knx-pa-foot">
+                <span>Mostrando {shown.length} de {filtered.length}</span>
+                <button type="button" onClick={() => setShowAll((v) => !v)}>{showAll ? 'Mostrar menos ▴' : 'Ver todas las partidas ▾'}</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {newOpen && <NewPartidaDialog onCreate={onAddPartida} onClose={() => setNewOpen(false)} />}
+      {gastoFor && <GastoDialog partida={gastoFor} onAdd={onAddGasto} onClose={() => setGastoFor(null)} />}
     </div>
   );
 }
@@ -1067,67 +1134,101 @@ function getDocCategories(projectKind) {
   return ['Cronograma', 'Presupuesto', 'Otro'];
 }
 
-function NewDocumentForm({ projectKind, onUpload }) {
-  const [open, setOpen] = useState(false);
-  const [category, setCategory] = useState(getDocCategories(projectKind)[0]);
-  const [busy, setBusy] = useState(false);
+function fileBadge(name = '') {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  if (ext === 'pdf') return { label: 'PDF', cls: 'pdf' };
+  if (['doc', 'docx'].includes(ext)) return { label: 'DOC', cls: 'doc' };
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return { label: 'XLS', cls: 'xls' };
+  if (['ppt', 'pptx'].includes(ext)) return { label: 'PPT', cls: 'ppt' };
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'].includes(ext)) return { label: 'IMG', cls: 'img' };
+  if (['dwg', 'dxf'].includes(ext)) return { label: ext.toUpperCase(), cls: 'cad' };
+  return { label: (ext || 'DOC').slice(0, 4).toUpperCase(), cls: 'other' };
+}
+
+function DocumentacionSection({ projectKind, documents, canManage, onUpload, onDelete }) {
   const categories = getDocCategories(projectKind);
+  const [category, setCategory] = useState(categories[categories.length - 1]);
+  const [drag, setDrag] = useState(false);
+  const [busy, setBusy] = useState(null); // "Subiendo 2 de 3…"
+  const [err, setErr] = useState(null);
+  const inputRef = useRef(null);
 
-  if (!open) return <button type="button" className="knx-canvas-add-item-btn" onClick={() => setOpen(true)}>+ Subir documento</button>;
-
-  const handleFile = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setBusy(true);
+  const uploadFiles = async (files) => {
+    const list = Array.from(files ?? []);
+    if (!list.length) return;
+    setErr(null);
     try {
-      const data = await readFileAsBase64(file);
-      await onUpload({ name: file.name, mimeType: file.type, data, category });
-      setOpen(false);
+      for (let i = 0; i < list.length; i++) {
+        setBusy(list.length > 1 ? `Subiendo ${i + 1} de ${list.length}…` : 'Subiendo…');
+        const data = await readFileAsBase64(list[i]);
+        await onUpload({ name: list[i].name, mimeType: list[i].type, data, category });
+      }
+    } catch (e) {
+      setErr(e?.message || 'No se pudo subir el archivo.');
     } finally {
-      setBusy(false);
-      e.target.value = '';
+      setBusy(null);
     }
   };
 
   return (
-    <div className="knx-canvas-newcol-form">
-      <select className="knx-canvas-meta-select" value={category} onChange={(e) => setCategory(e.target.value)}>
-        {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-      </select>
-      <label className="knx-canvas-add-item-btn" style={{ cursor: 'pointer' }}>
-        {busy ? 'Subiendo…' : 'Elegir archivo'}
-        <input type="file" onChange={handleFile} style={{ display: 'none' }} disabled={busy} />
-      </label>
-      <div className="knx-canvas-newcol-actions">
-        <button type="button" className="knx-canvas-mini" onClick={() => setOpen(false)}>Cancelar</button>
-      </div>
-    </div>
-  );
-}
+    <div style={{ marginBottom: 16 }}>
+      {canManage && (
+        <div
+          className={`knx-doc-drop${drag ? ' knx-doc-drop--over' : ''}`}
+          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={(e) => { e.preventDefault(); setDrag(false); uploadFiles(e.dataTransfer.files); }}
+        >
+          {busy ? <span>{busy}</span> : (
+            <>
+              <span>Arrastra archivos aquí o</span>
+              <button type="button" className="knx-dlg-btn knx-dlg-btn--primary" onClick={() => inputRef.current?.click()}>Subir documento</button>
+              <label className="knx-doc-cat">
+                <span>como</span>
+                <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Categoría del documento">
+                  {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+            </>
+          )}
+          <input ref={inputRef} type="file" multiple hidden onChange={(e) => { uploadFiles(e.target.files); e.target.value = ''; }} />
+        </div>
+      )}
+      {err && <p className="knx-dlg-error" role="alert" style={{ margin: '8px 0' }}>{err}</p>}
 
-function DocumentacionSection({ projectKind, documents, canManage, onUpload, onDelete }) {
-  return (
-    <div className="knx-canvas-group" style={{ marginBottom: 16 }}>
-      <div className="knx-canvas-group-head"><span className="knx-canvas-group-name">Documentación</span></div>
-      <div className="knx-canvas-cards">
-        {!documents.length ? <p className="knx-knowledge-empty">Sin documentos todavía.</p> : documents.map((d) => (
-          <div className="knx-canvas-item" key={d.id}>
-            <div className="knx-canvas-item-head">
-              <div className="knx-canvas-item-who">
-                <span className="knx-canvas-item-name">{d.name}</span>
-              </div>
-              {canManage && (
-                <button type="button" className="knx-canvas-icon-btn knx-canvas-icon-btn--danger" aria-label="Eliminar documento" onClick={() => onDelete(d.id)}>×</button>
-              )}
+      {!documents.length ? (
+        <div className="knx-pa-empty">Sin documentos todavía.</div>
+      ) : (
+        <div className="knx-pa-wrap">
+          <div className="knx-doc-table">
+            <div className="knx-doc-row knx-pa-thead">
+              <div>Documento</div><div>Categoría</div><div>Subido por</div><div>Fecha</div><div />
             </div>
-            <p className="knx-canvas-ficha-progress">
-              {d.category} · {d.uploadedBy} · {new Date(d.createdAt).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
-              {d.driveUrl ? <> · <a href={d.driveUrl} target="_blank" rel="noreferrer">Ver en Drive</a></> : ' · guardado'}
-            </p>
+            {documents.map((d) => {
+              const b = fileBadge(d.name);
+              return (
+                <div key={d.id} id={`doc-${d.id}`} className="knx-doc-row">
+                  <div className="knx-doc-name">
+                    <span className={`knx-doc-badge knx-doc-badge--${b.cls}`} aria-hidden="true">{b.label}</span>
+                    {d.driveUrl ? <a href={d.driveUrl} target="_blank" rel="noreferrer">{d.name}</a> : <span>{d.name}</span>}
+                  </div>
+                  <div><span className="knx-doc-chip">{d.category}</span></div>
+                  <div className="knx-pa-muted">{d.uploadedBy}</div>
+                  <div className="knx-pa-muted">{fmtDayShort(d.createdAt)}</div>
+                  <div className="knx-pa-actions">
+                    {d.driveUrl ? <a className="knx-eq-btn knx-doc-drive" href={d.driveUrl} target="_blank" rel="noreferrer">Ver en Drive ↗</a> : <span className="knx-pa-muted" style={{ fontSize: 12.5 }}>Guardado</span>}
+                    {canManage && (
+                      <RowMenu label={`Más acciones para ${d.name}`} items={[
+                        { label: 'Eliminar documento', danger: true, onClick: () => { if (confirm(`¿Eliminar «${d.name}»?`)) onDelete(d.id); } },
+                      ]} />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </div>
-      {canManage && <NewDocumentForm projectKind={projectKind} onUpload={onUpload} />}
+        </div>
+      )}
     </div>
   );
 }
@@ -1461,7 +1562,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
   const [view, setView] = useState('list');
   const [taskResponsableFilter, setTaskResponsableFilter] = useState('all');
   const [taskGrupoFilter, setTaskGrupoFilter] = useState('all');
-  const [taskStatusFilter, setTaskStatusFilter] = useState('activas');
+  const [taskStatusFilter, setTaskStatusFilter] = useState(DEFAULT_STATUS_TAB);
   const [taskTipologiaFilter, setTaskTipologiaFilter] = useState([]); // array de ids, o '__none__' para "Sin tipología"; [] = todas
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
   const [taskGroupBy, setTaskGroupBy] = useState('none');
@@ -1575,7 +1676,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
   const taskStatuses = meta.projectKind === 'seguimiento'
     ? [BACKLOG_STATUS, ...TASK_STATUSES.filter((x) => x.id !== 'done'), ...(meta.requiresReview ? [REVIEW_STATUS] : []), ...TASK_STATUSES.filter((x) => x.id === 'done')]
     : TASK_STATUSES;
-  const statusTabs = STATUS_TABS.filter((x) => x.id !== 'review' || meta.requiresReview);
+  const statusTabs = STATUS_TABS.filter((x) => taskStatuses.some((st) => st.id === x.id) || x.id === 'all');
 
   // Pestañas según el tipo, mismo criterio que Labs. Las de trabajo (Tareas/Cronograma/Pruebas)
   // abren por defecto para no cambiarle el día a día a quien ya usaba Proyectos.
@@ -1597,6 +1698,38 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
   const defaultTab = isExperimental ? 'pruebas' : 'trabajo';
   const activeTab = projectTabs.some((t) => t.id === ptab) ? ptab : defaultTab;
   const show = (id) => !isDesarrollo && activeTab === id;
+
+  // Clic en un evento de la Historia: lleva a lo que se hizo (mismo criterio que Labs). Lo que es de
+  // una tarea (su cambio de estado, un feedback sobre ella o un documento adjunto) abre la tarea;
+  // el resto va a su pestaña y, si hay dónde, se desplaza hasta el ítem y lo resalta.
+  const focusOn = (tab, elementId) => {
+    setPtab(tab);
+    if (!elementId) return;
+    setTimeout(() => {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('knx-flash');
+      setTimeout(() => el.classList.remove('knx-flash'), 2000);
+    }, 80);
+  };
+  const goToEvent = (ev) => {
+    const taskId = ev.taskId
+      ?? (ev.type === 'feedback' && ev.targetType === 'tarea' ? ev.targetId : null)
+      ?? (ev.type === 'documento' ? documents.find((d) => d.id === ev.documentId)?.taskId : null);
+    if (taskId && (tasks ?? []).some((t) => t.id === taskId)) {
+      setPtab('trabajo');
+      setSelectedTaskId(taskId);
+      return;
+    }
+    if (ev.type === 'tarea') return focusOn('trabajo', null);
+    if (ev.type === 'documento') return focusOn('doc', `doc-${ev.documentId}`);
+    if (ev.type === 'reporte') return focusOn('reportes', `report-${ev.reportId}`);
+    if (ev.type === 'gasto') return focusOn('partidas', null);
+    if (ev.type === 'aporte' || ev.type === 'validacion') return focusOn('pruebas', null);
+    if (ev.type === 'feedback') return focusOn('feedback', null);
+    if (ev.type === 'reunion' && ev.meetingId) window.location.href = `meetings?m=${encodeURIComponent(ev.meetingId)}`;
+  };
   // Botón "Feedback (N)" para cualquier ítem (partida, prueba, aporte). Lo dejan Director y
   // Supervisor del proyecto; el resto solo ve el que le corresponde.
   const renderFeedback = (target, label) => (
@@ -1607,7 +1740,8 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
     const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/partidas`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
-    if (res.ok) load();
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'No se pudo crear la partida.');
+    load();
   };
 
   const deletePartidaRow = async (partidaId) => {
@@ -1619,7 +1753,8 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
     const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/gastos`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, partidaId }),
     });
-    if (res.ok) load();
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'No se pudo registrar el gasto.');
+    load();
   };
 
   const deleteGastoRow = async (gastoId) => {
@@ -1631,7 +1766,8 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
     const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/documents`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
-    if (res.ok) load();
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `No se pudo subir «${payload.name}».`);
+    load();
   };
 
   const deleteDocument = async (documentId) => {
@@ -1848,7 +1984,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
           onGoTo={setPtab}
         />
       )}
-      {show('historia') && <HistoriaTab tenant={tenant} projectId={projectId} events={events ?? []} viewerKey={viewerKey} onSeen={load} />}
+      {show('historia') && <HistoriaTab tenant={tenant} projectId={projectId} events={events ?? []} viewerKey={viewerKey} onSeen={load} onGoTo={goToEvent} lookups={{ tasks, documents, gastos, partidas, tests }} />}
       {show('feedback') && <FeedbackTab tenant={tenant} projectId={projectId} feedback={feedback} canWrite={level.isSupervisorLevel} onChanged={load} />}
       {show('reportes') && <ReportesTab tenant={tenant} projectId={projectId} reports={reports} feedback={feedback} canApprove={level.isDirectorLevel} onChanged={load} />}
 
@@ -2032,7 +2168,6 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
           ) : view === 'list' ? (
             <div className="knx-task-table">
               <div className="knx-task-table-head">
-                <span />
                 <span>Tarea</span>
                 <span>Tipología</span>
                 <span>Responsable</span>
@@ -2175,9 +2310,11 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
           executions={executions}
           people={people}
           canManage={level.isSupervisorLevel && !inactive}
+          isDirector={!!level.isDirectorLevel && !inactive}
           personId={personId}
           onReload={load}
           renderFeedback={renderFeedback}
+          feedbackCtx={{ feedback, canWrite: level.isSupervisorLevel }}
         />
       )}
 
@@ -2214,67 +2351,6 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
 // ese tipo (avance físico/plan en civil, ensayos en experimental, actividades en seguimiento).
 // 'desarrollo' no tiene `summary` todavía (ver summarizeProjectForList, vive en Notion) — se
 // muestra con el tratamiento simple de antes.
-// lockedId: quien no es Director no puede sacarse a sí mismo (perdería el acceso al proyecto).
-function EditProjectTeamModal({ tenant, project, people, lockedId = null, onClose, onSaved }) {
-  const [supervisorIds, setSupervisorIds] = useState(project.supervisorIds ?? []);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-
-  const toggle = (id) => {
-    if (id === lockedId) return;
-    setSupervisorIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  };
-
-  const save = async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/kai-next/${tenant}/projects/${project.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ supervisorIds }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'No se pudo guardar.');
-      onSaved(data.meta);
-    } catch (e) {
-      setError(e.message || 'No se pudo guardar.');
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="knx-ficha-share-backdrop" onClick={onClose}>
-      <div className="knx-ficha-review-modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(460px, 92vw)' }}>
-        <div className="knx-ficha-review-head">
-          <div>
-            <span className="knx-ficha-review-badge">{project.name}</span>
-            <h3 className="knx-ficha-review-title">Equipo del proyecto</h3>
-          </div>
-          <button type="button" className="knx-side-panel-close" aria-label="Cerrar" onClick={onClose}>×</button>
-        </div>
-        <div className="knx-ficha-review-field">
-          <label>Equipo</label>
-          <div className="knx-canvas-meta-checklist">
-            {!people.length ? (
-              <p className="knx-canvas-meta-empty">No hay personas en el equipo todavía.</p>
-            ) : people.map((p) => (
-              <label key={p.id} className="knx-canvas-meta-checkbox">
-                <input type="checkbox" checked={supervisorIds.includes(p.id)} onChange={() => toggle(p.id)} disabled={p.id === lockedId} />
-                <span className="knx-canvas-meta-checkbox-box" />
-                {p.name || p.email}{p.id === lockedId ? ' (tú)' : ''}
-              </label>
-            ))}
-          </div>
-        </div>
-        {error && <p className="knx-canvas-error">{error}</p>}
-        <div className="knx-canvas-ficha-draft-actions" style={{ marginTop: 16 }}>
-          <button type="button" className="knx-canvas-mini" onClick={onClose} disabled={saving}>Cancelar</button>
-          <button type="button" className="knx-analisis-sources-save" onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ProjectRow({ p, people, onSelect, onEditTeam }) {
   const s = p.summary;
   const teamIds = [...new Set([...(p.supervisorIds ?? []), ...(s?.teamIds ?? [])])];
@@ -2550,7 +2626,7 @@ export default function KaiNextProjects({
       </main>
 
       {editingTeamFor && (
-        <EditProjectTeamModal
+        <KaiNextProjectTeamModal
           tenant={tenant}
           project={editingTeamFor}
           people={people}

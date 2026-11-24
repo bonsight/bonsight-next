@@ -1,4 +1,4 @@
-import { getMonthlyUsageSummary, getAllTenantsMonthlyUsage, currentMonth } from '@/lib/kai/usage';
+import { getMonthlyUsageSummary, getAllTenantsMonthlyUsage, getMeetingUsageSummary, currentMonth } from '@/lib/kai/usage';
 import { getAllTenantsMeta } from '@/lib/kai/tenants';
 import Link from 'next/link';
 
@@ -19,6 +19,18 @@ function fmtMonth(m) {
   return `${names[parseInt(mo, 10) - 1]} ${y}`;
 }
 
+function fmtMinutes(min) {
+  const m = Math.round(min ?? 0);
+  if (m < 60) return `${m} min`;
+  return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+}
+
+function shiftMonth(m, delta) {
+  const [y, mo] = m.split('-').map(Number);
+  const d = new Date(Date.UTC(y, mo - 1 + delta, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
 function TokenBar({ input, output }) {
   const total = input + output;
   if (!total) return null;
@@ -31,13 +43,18 @@ function TokenBar({ input, output }) {
   );
 }
 
-export default async function CostsDashboardPage() {
-  const month = currentMonth();
+export default async function CostsDashboardPage({ searchParams }) {
+  const sp = await searchParams;
+  const thisMonth = currentMonth();
+  const month = /^\d{4}-\d{2}$/.test(sp?.m ?? '') && sp.m <= thisMonth ? sp.m : thisMonth;
   const allMeta = await getAllTenantsMeta();
-  const [{ total, byProduct, byFeature }, byTenant] = await Promise.all([
+  const [{ total, byProduct, byFeature }, byTenant, meetings] = await Promise.all([
     getMonthlyUsageSummary(month),
     getAllTenantsMonthlyUsage(allMeta, month),
+    getMeetingUsageSummary(allMeta, month),
   ]);
+  const grandTotal = total.cost + meetings.total.cost;
+  const maxMeetingCost = meetings.byTenant[0]?.cost ?? 0;
 
   const maxFeatureCost = byFeature[0]?.cost ?? 1;
 
@@ -45,8 +62,12 @@ export default async function CostsDashboardPage() {
     <div className="costs-page">
       <div className="costs-header">
         <div>
-          <div className="costs-title">Costos IA</div>
-          <div className="costs-month">{fmtMonth(month)}</div>
+          <div className="costs-title">Consumo</div>
+          <div className="costs-month-nav">
+            <Link href={`?m=${shiftMonth(month, -1)}`} className="costs-back">‹</Link>
+            <span className="costs-month">{fmtMonth(month)}</span>
+            {month < thisMonth && <Link href={`?m=${shiftMonth(month, 1)}`} className="costs-back">›</Link>}
+          </div>
         </div>
         <Link href="/admin" className="costs-back">← Dashboard</Link>
       </div>
@@ -54,19 +75,19 @@ export default async function CostsDashboardPage() {
       {/* ── Vista global ── */}
       <div className="costs-global-grid">
         <div className="costs-stat-card costs-stat-card--primary">
-          <div className="costs-stat-label">Costo total</div>
+          <div className="costs-stat-label">Total del mes</div>
+          <div className="costs-stat-value">{fmtCost(grandTotal)}</div>
+          <div className="costs-stat-calls">IA + reuniones</div>
+        </div>
+        <div className="costs-stat-card">
+          <div className="costs-stat-label">IA (Claude)</div>
           <div className="costs-stat-value">{fmtCost(total.cost)}</div>
           <div className="costs-stat-calls">{total.calls} llamadas</div>
         </div>
         <div className="costs-stat-card">
-          <div className="costs-stat-label">Input tokens</div>
-          <div className="costs-stat-value costs-stat-value--tokens">{fmt(total.input_tokens)}</div>
-          <div className="costs-stat-hint">prompts + contexto</div>
-        </div>
-        <div className="costs-stat-card">
-          <div className="costs-stat-label">Output tokens</div>
-          <div className="costs-stat-value costs-stat-value--tokens">{fmt(total.output_tokens)}</div>
-          <div className="costs-stat-hint">respuestas generadas</div>
+          <div className="costs-stat-label">Reuniones (Recall)</div>
+          <div className="costs-stat-value">{fmtCost(meetings.total.cost)}</div>
+          <div className="costs-stat-calls">{meetings.total.meetings} reuniones · {fmtMinutes(meetings.total.minutes)}</div>
         </div>
         <div className="costs-stat-card">
           <div className="costs-stat-label">Total tokens</div>
@@ -80,7 +101,8 @@ export default async function CostsDashboardPage() {
         <div className="costs-section-title">Por producto</div>
         <div className="costs-product-grid">
           {[
-            { key: 'kai',  label: 'Kai',  color: '#1D9E75' },
+            { key: 'kai-next', label: 'Kai Next', color: '#0F766E' },
+            { key: 'kai',  label: 'Kai (legado)',  color: '#1D9E75' },
             { key: 'aria', label: 'Aria', color: '#7C3AED' },
             { key: 'labs', label: 'Labs', color: '#3F9E73' },
           ].map(({ key, label, color }) => {
@@ -99,9 +121,39 @@ export default async function CostsDashboardPage() {
         </div>
       </div>
 
+      {/* ── Reuniones ── */}
+      <div className="costs-section">
+        <div className="costs-section-title">Reuniones con Kai (Recall.ai · USD {meetings.ratePerHour.toFixed(2)}/hora)</div>
+        {meetings.byTenant.length === 0 ? (
+          <div className="costs-empty">Sin reuniones grabadas este mes.</div>
+        ) : (
+          <div className="costs-feature-list">
+            {meetings.byTenant.map((t) => {
+              const barW = maxMeetingCost > 0 ? Math.round((t.cost / maxMeetingCost) * 100) : 0;
+              return (
+                <div key={t.slug} className="costs-feature-row">
+                  <div className="costs-feature-meta">
+                    <span className="costs-feature-label">{t.name}</span>
+                    <span className="costs-feature-product">{t.slug}</span>
+                    <span className="costs-feature-calls">{t.meetings} {t.meetings === 1 ? 'reunión' : 'reuniones'}</span>
+                  </div>
+                  <div className="costs-feature-bar-wrap">
+                    <div className="costs-feature-bar" style={{ width: `${barW}%` }} />
+                  </div>
+                  <div className="costs-feature-numbers">
+                    <span className="costs-feature-cost">{fmtCost(t.cost)}</span>
+                    <span className="costs-feature-tokens">{fmtMinutes(t.minutes)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* ── Por funcionalidad ── */}
       <div className="costs-section">
-        <div className="costs-section-title">Por funcionalidad</div>
+        <div className="costs-section-title">IA por funcionalidad</div>
         {byFeature.length === 0 ? (
           <div className="costs-empty">Sin datos aún. Los costos se registran en cada llamada a IA.</div>
         ) : (
@@ -132,7 +184,7 @@ export default async function CostsDashboardPage() {
 
       {/* ── Por cliente ── */}
       <div className="costs-section">
-        <div className="costs-section-title">Por cliente</div>
+        <div className="costs-section-title">IA por cliente</div>
         {byTenant.length === 0 ? (
           <div className="costs-empty">Sin actividad registrada este mes.</div>
         ) : (

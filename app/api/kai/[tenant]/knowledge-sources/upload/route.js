@@ -3,10 +3,11 @@ import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
 import { isAuthorizedForTenant } from '@/lib/kai/auth';
 import { addSource } from '@/lib/kai/knowledgeSources';
+import { trackUsage } from '@/lib/kai/usage';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-async function extractPdf(buffer) {
+async function extractPdf(buffer, tenant) {
   const base64 = Buffer.from(buffer).toString('base64');
   const response = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
@@ -25,6 +26,7 @@ async function extractPdf(buffer) {
       ],
     }],
   });
+  trackUsage({ tenant: tenant, product: 'kai', feature: 'pdf_extract', model: response.model, usage: response.usage }).catch(() => null);
   return response.content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
 }
 
@@ -61,7 +63,7 @@ export async function POST(req, { params }) {
   let rawText = '';
   try {
     if (fileName.endsWith('.pdf')) {
-      rawText = await extractPdf(buffer);
+      rawText = await extractPdf(buffer, tenant);
     } else if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
       rawText = await extractDocx(buffer);
     } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {

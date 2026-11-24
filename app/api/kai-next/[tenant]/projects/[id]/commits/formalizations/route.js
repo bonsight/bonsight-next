@@ -32,6 +32,7 @@ export async function GET(req, { params }) {
       summary: r.summary,
       description: r.description,
       taskIds: r.tasks.map((t) => t.id),
+      pr: r.pr ? { number: r.pr.number, title: r.pr.title, url: r.pr.url } : null,
       commits: r.commits.map((c) => ({ sha: c.sha, shortSha: c.shortSha, message: c.message.split('\n')[0], author: c.author, date: c.date, url: c.url })),
     }));
   return Response.json({ formalizations });

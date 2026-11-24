@@ -172,8 +172,7 @@ export async function POST(req, { params }) {
           product: 'kai-next',
           feature: 'analysis_area',
           model: MODEL,
-          inputTokens: usage.inputTokens,
-          outputTokens: usage.outputTokens,
+          usage,
         }).catch(() => null);
 
         const snapshot = await saveAreaSnapshot(tenant, areaId, {

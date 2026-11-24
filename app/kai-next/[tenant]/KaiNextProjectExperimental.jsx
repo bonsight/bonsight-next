@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { FeedbackPanel, feedbackCountFor } from './KaiNextProjectTabs';
 
 // Port del flujo Experimental de Labs (Pruebas + Ejecuciones + interpretación con IA) — ver
 // lib/kaiNext/projects.js (createTest/addExecution/validateExecution) y
@@ -153,53 +154,47 @@ export function CreateTestModal({ tenant, projectId, people, onClose, onCreated 
   );
 }
 
-function EditRegistradoresPanel({ tenant, projectId, test, people, onSaved }) {
-  const [open, setOpen] = useState(false);
-  const [ids, setIds] = useState(test.registradorIds ?? []);
-  const [busy, setBusy] = useState(false);
+// ── Tarjeta de prueba (rediseño 2026-11-24): cabecera con fechas y menú ⋯, aportes en tabla por
+// criterio (último aporte a la vista, los anteriores desplegables) y ventanas Editar / Mover.
 
-  const toggle = (id) => setIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+const MES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+function fmtDay(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return `${String(d.getDate()).padStart(2, '0')} ${MES_CORTO[d.getMonth()]} ${d.getFullYear()}`;
+}
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+// Valor faltante: vacío, o los marcadores que dejó la IA / la migración de Labs ("__NA__", "N/A", "-").
+const isMissingValue = (raw) => raw == null || /^(_*\s*n\s*\/?\s*a\s*_*|-+|—|sin dato)?$/i.test(String(raw).trim().replace(/\s+[%a-zA-Z°]+$/, '').trim());
+const TAG_CLS = { 'éxito': 'ok', parcial: 'part', fallo: 'bad', referencia: 'ref' };
 
-  const save = async () => {
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/tests/${test.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ registradorIds: ids }),
-      });
-      if (res.ok) { setOpen(false); onSaved(); }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (!open) {
-    return (
-      <button type="button" className="knx-canvas-mini" onClick={() => setOpen(true)}>
-        {test.registradorIds?.length ? `${test.registradorIds.length} registrador${test.registradorIds.length !== 1 ? 'es' : ''}` : 'Sin registradores'}
-      </button>
-    );
+// ¿El valor cumple el criterio del campo? true/false, o null si no hay criterio o no hay número.
+function meetsCriterion(f, raw) {
+  if (!f.operator || f.value == null || raw == null || raw === '') return null;
+  const n = Number(String(raw).replace(',', '.').match(/-?\d+(\.\d+)?/)?.[0]);
+  if (Number.isNaN(n)) return null;
+  switch (f.operator) {
+    case '>': return n > f.value;
+    case '<': return n < f.value;
+    case '>=': return n >= f.value;
+    case '<=': return n <= f.value;
+    case '=': return n === f.value;
+    default: return null;
   }
+}
+const criterionTarget = (f) => (f.operator ? `${OPERATOR_SYMBOLS[f.operator] || f.operator} ${f.value}${f.unit ? ` ${f.unit}` : ''}` : f.type === 'number' ? 'sin criterio' : 'texto');
 
-  return (
-    <div className="knx-canvas-meta-checklist" style={{ marginTop: 6 }}>
-      {people.map((p) => (
-        <label key={p.id} className="knx-canvas-meta-checkbox">
-          <input type="checkbox" checked={ids.includes(p.id)} onChange={() => toggle(p.id)} />
-          <span className="knx-canvas-meta-checkbox-box" />
-          {p.name || p.email}
-        </label>
-      ))}
-      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-        <button type="button" className="knx-canvas-mini" disabled={busy} onClick={save}>Guardar</button>
-        <button type="button" className="knx-canvas-mini" onClick={() => setOpen(false)}>Cancelar</button>
-      </div>
-    </div>
-  );
+// Estado de la prueba según sus aportes: Pendiente (ninguno), Parcial (hay aportes sin validar)
+// o Hecho (todos validados).
+function testStatus(testExecutions) {
+  if (!testExecutions.length) return { label: 'Pendiente', cls: 'pend' };
+  return testExecutions.every((e) => e.validatedBy) ? { label: 'Hecho', cls: 'ok' } : { label: 'Parcial', cls: 'part' };
 }
 
-function ExecutionRow({ tenant, projectId, execution, test, canValidate, onValidated, renderFeedback }) {
+function ExecutionTableRow({ tenant, projectId, execution, test, canValidate, onValidated, renderFeedback, feedbackCount = null, onOpenFeedback }) {
   const [busy, setBusy] = useState(false);
-
+  const [expanded, setExpanded] = useState(false);
   const validate = async () => {
     setBusy(true);
     try {
@@ -211,64 +206,344 @@ function ExecutionRow({ tenant, projectId, execution, test, canValidate, onValid
       setBusy(false);
     }
   };
-
+  const files = (execution.evidence ?? []).filter((e) => e.driveUrl);
+  const longNote = (execution.note ?? '').length > 220;
   return (
-    <div className="knx-canvas-item">
-      <div className="knx-canvas-item-head">
-        <div className="knx-canvas-item-who">
-          <span className="knx-canvas-item-name">{execution.contributor}</span>
-          <span className={`knx-activity-status knx-activity-status--${execution.tag === 'éxito' ? 'finished' : execution.tag === 'fallo' ? 'ready' : 'active'}`}>{TAG_LABEL[execution.tag] ?? execution.tag}</span>
+    <div className="knx-pr-exec">
+      <div className="knx-pr-grid knx-pr-row" style={{ '--n': test.fields.length }}>
+        <div className="knx-pr-strong">{fmtDay(execution.createdAt)}</div>
+        <div>{execution.contributor}</div>
+        <div><span className={`knx-pr-badge knx-pr-badge--${TAG_CLS[execution.tag] ?? 'ref'}`}>{TAG_LABEL[execution.tag] ?? execution.tag}</span></div>
+        {test.fields.map((f) => {
+          const raw = execution.values?.[f.key];
+          const has = !isMissingValue(raw);
+          const ok = has ? meetsCriterion(f, raw) : null;
+          return (
+            <div key={f.key} className={!has ? 'knx-pr-na' : ok === true ? 'knx-pr-pass' : ok === false ? 'knx-pr-fail' : ''} title={has ? String(raw) : undefined}>
+              {ok === true && <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" className="knx-pr-check"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+              {has ? `${raw}${f.unit && !String(raw).includes(f.unit) ? ` ${f.unit}` : ''}` : 'Sin dato'}
+            </div>
+          );
+        })}
+        <div className="knx-pr-small">
+          {execution.validatedBy ? `✓ ${execution.validatedBy}` : canValidate
+            ? <button type="button" className="knx-canvas-mini" disabled={busy} onClick={validate}>{busy ? 'Validando…' : 'Validar'}</button>
+            : 'Sin validar'}
         </div>
-        {renderFeedback?.({ type: 'aporte', id: execution.id }, `Aporte de ${execution.contributor} — ${test?.name ?? ''}`)}
-        {execution.validatedBy ? (
-          <span className="knx-canvas-ficha-progress">✓ validado por {execution.validatedBy}</span>
-        ) : canValidate ? (
-          <button type="button" className="knx-canvas-mini" disabled={busy} onClick={validate}>{busy ? 'Validando…' : 'Validar'}</button>
-        ) : null}
+        <div className="knx-pr-right">
+          {onOpenFeedback ? (
+            <button type="button" className="knx-pr-fbchip" aria-label={`Feedback del aporte del ${fmtDay(execution.createdAt)}: ${feedbackCount ?? 0} ${feedbackCount === 1 ? 'comentario' : 'comentarios'}`} onClick={onOpenFeedback}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" /></svg>
+              {feedbackCount ?? 0}
+            </button>
+          ) : renderFeedback?.({ type: 'aporte', id: execution.id }, `Aporte de ${execution.contributor} — ${test.name}`)}
+        </div>
       </div>
-      <p className="knx-canvas-ficha-progress">
-        {(test?.fields ?? []).map((f) => execution.values?.[f.key] != null && execution.values[f.key] !== '' ? `${f.label}: ${execution.values[f.key]}` : null).filter(Boolean).join(' · ')}
-      </p>
-      {execution.note && <p className="knx-canvas-item-text">{execution.note}</p>}
-      {execution.evidence?.length > 0 && (
-        <p className="knx-canvas-ficha-progress">{execution.evidence.length} adjunto{execution.evidence.length !== 1 ? 's' : ''}{execution.evidence.some((e) => e.driveUrl) ? ' — ' : ''}
-          {execution.evidence.filter((e) => e.driveUrl).map((e, i) => (
-            <span key={i}><a href={e.driveUrl} target="_blank" rel="noreferrer">{e.name}</a>{i < execution.evidence.filter((x) => x.driveUrl).length - 1 ? ', ' : ''}</span>
-          ))}
-        </p>
+      {(execution.note || files.length > 0) && (
+        <div className="knx-pr-note">
+          {execution.note && <p className={expanded ? '' : 'knx-pr-clamp'}>{execution.note}</p>}
+          <div className="knx-pr-note-links">
+            {longNote && <button type="button" className="knx-pr-link" onClick={() => setExpanded((v) => !v)}>{expanded ? 'Ver menos' : 'Ver más'}</button>}
+            {files.length > 0 && (
+              <span>{plural(files.length, 'adjunto', 'adjuntos')} — {files.map((e, i) => <span key={i}><a href={e.driveUrl} target="_blank" rel="noreferrer">{e.name}</a>{i < files.length - 1 ? ', ' : ''}</span>)}</span>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-// Estado de la prueba según sus aportes: Pendiente (ninguno), Parcial (hay aportes sin validar)
-// o Hecho (todos validados).
-function testStatus(testExecutions) {
-  if (!testExecutions.length) return { label: 'Pendiente', cls: 'pend' };
-  return testExecutions.every((e) => e.validatedBy) ? { label: 'Hecho', cls: 'ok' } : { label: 'Parcial', cls: 'part' };
-}
+function EditTestModal({ tenant, projectId, test, people, canAdmin, canManage, onClose, onSaved }) {
+  const [name, setName] = useState(test.name);
+  const [fields, setFields] = useState(test.fields.map((f) => ({ key: f.key, label: f.label, type: f.type, operator: f.operator ?? '', value: f.value ?? '', unit: f.unit ?? '' })));
+  const [ids, setIds] = useState(test.registradorIds ?? []);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const setField = (key, patch) => setFields((prev) => prev.map((f) => (f.key === key ? { ...f, ...patch } : f)));
+  const toggle = (id) => setIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const url = `/api/kai-next/${tenant}/projects/${projectId}/tests/${test.id}`;
 
-function TestCard({ tenant, projectId, test, executions, people, canManage, onReload, renderFeedback }) {
-  const testExecutions = executions.filter((e) => e.testId === test.id);
-  const st = testStatus(testExecutions);
+  const save = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const send = async (body) => {
+        const res = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || 'No se pudo guardar.');
+      };
+      if (canAdmin) await send({ edit: { name, fields: fields.filter((f) => f.type === 'number') } });
+      const before = [...(test.registradorIds ?? [])].sort().join(',');
+      if (canManage && [...ids].sort().join(',') !== before) await send({ registradorIds: ids });
+      onSaved();
+    } catch (e) {
+      setErr(e.message);
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="knx-canvas-group">
-      <div className="knx-canvas-group-head knx-test-head">
-        <span className="knx-canvas-group-name">{test.icon} {test.name}</span>
-        <span className={`knx-test-status knx-test-status--${st.cls}`}>{st.label}</span>
-        <span className="knx-canvas-group-count">{testExecutions.length} aporte{testExecutions.length !== 1 ? 's' : ''}</span>
-        {renderFeedback?.({ type: 'prueba', id: test.id }, test.name)}
-      </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-        {test.fields.map((f) => <span key={f.key} className="knx-canvas-ficha-progress" style={{ border: '1px solid var(--knx-border)', borderRadius: 20, padding: '2px 8px' }}>{formatFieldCriterion(f)}</span>)}
-      </div>
-      {canManage && <EditRegistradoresPanel tenant={tenant} projectId={projectId} test={test} people={people} onSaved={onReload} />}
-      <div className="knx-canvas-cards" style={{ marginTop: 10 }}>
-        {!testExecutions.length ? <p className="knx-knowledge-empty">Sin aportes todavía.</p> : testExecutions.map((e) => (
-          <ExecutionRow key={e.id} tenant={tenant} projectId={projectId} execution={e} test={test} canValidate={canManage} onValidated={onReload} renderFeedback={renderFeedback} />
-        ))}
+    <div className="knx-dlg-backdrop" onClick={onClose}>
+      <div className="knx-dlg knx-dlg--lg" role="dialog" aria-modal="true" aria-labelledby={`edit-${test.id}`} onClick={(e) => e.stopPropagation()}>
+        <div className="knx-dlg-head">
+          <div>
+            <div className="knx-dlg-eyebrow">Editar prueba</div>
+            <h2 id={`edit-${test.id}`} className="knx-dlg-title">{test.name}</h2>
+          </div>
+          <button type="button" className="knx-dlg-close" aria-label="Cerrar" onClick={onClose}>×</button>
+        </div>
+        <div className="knx-dlg-body" style={{ gap: 22 }}>
+          <div className="knx-dlg-field">
+            <label className="knx-dlg-label" htmlFor={`name-${test.id}`}>Nombre de la prueba</label>
+            <input id={`name-${test.id}`} className="knx-dlg-input" value={name} disabled={!canAdmin || busy} onChange={(e) => setName(e.target.value)} />
+          </div>
+          {canManage && (
+            <div className="knx-dlg-field">
+              <span className="knx-dlg-label">Registradores</span>
+              {!people.length ? (
+                <p className="knx-pr-empty-box">Todavía no hay ningún Registrador creado. Pídele al admin que lo agregue.</p>
+              ) : (
+                <div className="knx-canvas-meta-checklist">
+                  {people.map((p) => (
+                    <label key={p.id} className="knx-canvas-meta-checkbox">
+                      <input type="checkbox" checked={ids.includes(p.id)} onChange={() => toggle(p.id)} disabled={busy} />
+                      <span className="knx-canvas-meta-checkbox-box" />
+                      {p.name || p.email}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="knx-dlg-field" style={{ gap: 8 }}>
+            <span className="knx-dlg-label">Criterios de aprobación por campo</span>
+            <div className="knx-pr-crit">
+              <div className="knx-pr-crit-row knx-pr-crit-head"><span>Campo</span><span>Condición</span><span>Valor</span><span>Unidad</span></div>
+              {fields.map((f) => (
+                <div key={f.key} className="knx-pr-crit-row">
+                  <span>{f.label}</span>
+                  {f.type === 'number' ? (
+                    <>
+                      <select aria-label={`Condición de ${f.label}`} className="knx-dlg-input" value={f.operator} disabled={!canAdmin || busy} onChange={(e) => setField(f.key, { operator: e.target.value })}>
+                        <option value="">Sin criterio</option>
+                        {CRITERIA_OPERATORS.map((o) => <option key={o.value} value={o.value}>{OPERATOR_SYMBOLS[o.value]} {o.label.toLowerCase()}</option>)}
+                      </select>
+                      <input aria-label={`Valor de ${f.label}`} className="knx-dlg-input" inputMode="decimal" value={f.value} disabled={!canAdmin || busy || !f.operator} onChange={(e) => setField(f.key, { value: e.target.value })} />
+                      <input aria-label={`Unidad de ${f.label}`} className="knx-dlg-input" value={f.unit} disabled={!canAdmin || busy} onChange={(e) => setField(f.key, { unit: e.target.value })} />
+                    </>
+                  ) : <span className="knx-pr-small" style={{ gridColumn: 'span 3' }}>Campo de texto: no lleva criterio.</span>}
+                </div>
+              ))}
+            </div>
+            <p className="knx-dlg-hint">{canAdmin
+              ? 'Los ✓ de los aportes ya registrados se recalculan con el criterio nuevo; su Resultado queda como se registró.'
+              : 'Solo quien creó la prueba o un Director puede cambiar el nombre y los criterios.'}</p>
+          </div>
+          {err && <p className="knx-dlg-error" role="alert">{err}</p>}
+        </div>
+        <div className="knx-dlg-foot">
+          <button type="button" className="knx-dlg-btn" onClick={onClose} disabled={busy}>Cancelar</button>
+          <button type="button" className="knx-dlg-btn knx-dlg-btn--primary" onClick={save} disabled={busy || !name.trim()}>{busy ? 'Guardando…' : 'Guardar cambios'}</button>
+        </div>
       </div>
     </div>
+  );
+}
+
+function MoveTestModal({ tenant, projectId, test, executionCount, onClose, onDone }) {
+  const [targets, setTargets] = useState(null);
+  const [current, setCurrent] = useState(null);
+  const [to, setTo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const url = `/api/kai-next/${tenant}/projects/${projectId}/tests/${test.id}`;
+  useEffect(() => {
+    fetch(url).then(async (res) => {
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'No se pudieron cargar los proyectos.');
+      setTargets(d.targets ?? []);
+      setCurrent(d.current ?? null);
+      setTo(d.targets?.[0]?.id ?? '');
+    }).catch((e) => { setErr(e.message); setTargets([]); });
+  }, [url]);
+  const move = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ moveTo: to }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'No se pudo mover.');
+      onDone();
+    } catch (e) {
+      setErr(e.message);
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="knx-dlg-backdrop" onClick={onClose}>
+      <div className="knx-dlg" role="dialog" aria-modal="true" aria-labelledby={`move-${test.id}`} onClick={(e) => e.stopPropagation()}>
+        <div className="knx-dlg-head">
+          <div>
+            <div className="knx-dlg-eyebrow">Mover prueba</div>
+            <h2 id={`move-${test.id}`} className="knx-dlg-title">{test.name}</h2>
+          </div>
+          <button type="button" className="knx-dlg-close" aria-label="Cerrar" onClick={onClose}>×</button>
+        </div>
+        <div className="knx-dlg-body" style={{ gap: 14 }}>
+          {current && <p className="knx-dlg-sub" style={{ margin: 0 }}>Proyecto actual: <strong style={{ color: '#1A2B25', fontWeight: 600 }}>{current.name}</strong></p>}
+          {!targets ? <p className="knx-dlg-hint">Cargando proyectos…</p> : !targets.length ? (
+            !err && <p className="knx-dlg-hint">No hay otro proyecto experimental activo de esta empresa que supervises.</p>
+          ) : (
+            <fieldset className="knx-pr-move-set">
+              <legend>Mover a</legend>
+              {targets.map((t) => (
+                <label key={t.id} className={`knx-pr-move-opt${to === t.id ? ' knx-pr-move-opt--on' : ''}`}>
+                  <input type="radio" name={`to-${test.id}`} checked={to === t.id} onChange={() => setTo(t.id)} disabled={busy} />
+                  <span>
+                    <span className="knx-pr-move-name">{t.name}</span>
+                    {(t.empresaName || t.type) && <span className="knx-pr-small">{[t.empresaName, t.type].filter(Boolean).join(' · ')}</span>}
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          )}
+          {targets?.length > 0 && <p className="knx-dlg-hint">{executionCount ? `Se mueve con ${plural(executionCount, 'aporte', 'aportes')} y su feedback. ` : ''}La evidencia en Drive queda donde está.</p>}
+          {err && <p className="knx-dlg-error" role="alert">{err}</p>}
+        </div>
+        <div className="knx-dlg-foot">
+          <button type="button" className="knx-dlg-btn" onClick={onClose} disabled={busy}>Cancelar</button>
+          {targets?.length > 0 && <button type="button" className="knx-dlg-btn knx-dlg-btn--primary" onClick={move} disabled={busy || !to}>{busy ? 'Moviendo…' : 'Mover prueba'}</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TestMenu({ canAdmin, canManage, hasExecutions, onEdit, onMove, onDelete }) {
+  const [open, setOpen] = useState(false);
+  if (!canAdmin && !canManage) return null;
+  const pick = (fn) => () => { setOpen(false); fn(); };
+  return (
+    <div className="knx-pr-menu-wrap">
+      <button type="button" className={`knx-pr-dots${open ? ' knx-pr-dots--on' : ''}`} aria-label="Más acciones" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>⋯</button>
+      {open && (
+        <>
+          <div className="knx-pr-menu-scrim" onClick={() => setOpen(false)} />
+          <div role="menu" className="knx-pr-menu">
+            <button type="button" role="menuitem" onClick={pick(onEdit)}>{canAdmin ? 'Editar prueba' : 'Registradores'}</button>
+            {canAdmin && <button type="button" role="menuitem" onClick={pick(onMove)}>Mover a otro proyecto</button>}
+            {canAdmin && (
+              <>
+                <div className="knx-pr-menu-sep" />
+                <button type="button" role="menuitem" disabled={hasExecutions} onClick={pick(onDelete)} className="knx-pr-menu-danger">
+                  Eliminar
+                  {hasExecutions && <span>No disponible: la prueba tiene aportes</span>}
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TestCard({ tenant, projectId, test, executions, people, canManage, canAdmin, onReload, renderFeedback, feedbackCtx }) {
+  const [modal, setModal] = useState(null); // 'edit' | 'move'
+  const [fbScope, setFbScope] = useState(undefined); // undefined = cerrado; null = la prueba; {…} = un aporte
+  const [showOlder, setShowOlder] = useState(false);
+  const [err, setErr] = useState(null);
+  const testExecutions = executions.filter((e) => e.testId === test.id)
+    .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+  const st = testStatus(testExecutions);
+  const [latest, ...older] = testExecutions;
+  const reg = test.registradorIds?.length ?? 0;
+
+  const remove = async () => {
+    if (!confirm(`¿Eliminar la prueba «${test.name}»? No se puede deshacer.`)) return;
+    setErr(null);
+    const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/tests/${test.id}`, { method: 'DELETE' });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) setErr(d.error || 'No se pudo eliminar.');
+    else onReload();
+  };
+  // Feedback: un solo panel para la prueba y todos sus aportes.
+  const fbScopes = [
+    { type: 'prueba', id: test.id, tag: 'Toda la prueba' },
+    ...testExecutions.map((e) => ({ type: 'aporte', id: e.id, tag: `Aporte del ${fmtDay(e.createdAt)}${testExecutions.filter((x) => fmtDay(x.createdAt) === fmtDay(e.createdAt)).length > 1 ? ` · ${e.contributor}` : ''}` })),
+  ];
+  const fb = feedbackCtx?.feedback ?? null;
+  const fbTotal = fb ? feedbackCountFor(fb, fbScopes) : 0;
+  const fbFor = (e) => (fb ? feedbackCountFor(fb, [{ type: 'aporte', id: e.id }]) : null);
+  const rowProps = { tenant, projectId, test, canValidate: canManage, onValidated: onReload, renderFeedback };
+  const rowFb = (e) => (fb ? { feedbackCount: fbFor(e), onOpenFeedback: () => setFbScope(fbScopes.find((s) => s.id === e.id)) } : {});
+
+  return (
+    <article className="knx-pr-card">
+      <div className="knx-pr-head">
+        <div className="knx-pr-head-main">
+          <div className="knx-pr-title-row">
+            <h3>{test.icon && test.icon !== '🧪' ? `${test.icon} ` : ''}{test.name}</h3>
+            <span className={`knx-test-status knx-test-status--${st.cls}`}>{st.label}</span>
+          </div>
+          <div className="knx-pr-meta">
+            <span>Creada <strong>{fmtDay(test.createdAt)}</strong>{test.createdByName ? ` por ${test.createdByName}` : ''}</span>
+            <span>Último aporte <strong>{latest ? fmtDay(latest.createdAt) : '—'}</strong></span>
+            <span>{testExecutions.length ? plural(testExecutions.length, 'aporte', 'aportes') : 'Sin aportes'}</span>
+            <span>{reg ? plural(reg, 'registrador', 'registradores') : 'Sin registradores'}</span>
+          </div>
+        </div>
+        <div className="knx-pr-head-actions">
+          {fb ? (
+            (feedbackCtx.canWrite || fbTotal > 0) && (
+              <button type="button" className={`knx-fb-btn${fbScope !== undefined ? ' knx-fb-btn--on' : ''}`} onClick={() => setFbScope(null)}>
+                Feedback{fbTotal ? ` · ${fbTotal}` : ''}
+              </button>
+            )
+          ) : renderFeedback?.({ type: 'prueba', id: test.id }, test.name)}
+          <TestMenu canAdmin={canAdmin} canManage={canManage} hasExecutions={testExecutions.length > 0}
+            onEdit={() => setModal('edit')} onMove={() => setModal('move')} onDelete={remove} />
+        </div>
+      </div>
+      {err && <p className="knx-canvas-error" style={{ margin: '0 20px 10px' }}>{err}</p>}
+
+      <div className="knx-pr-table-wrap">
+        <div className="knx-pr-table" style={{ '--n': test.fields.length }}>
+          <div className="knx-pr-grid knx-pr-thead" style={{ '--n': test.fields.length }}>
+            <div>Fecha</div><div>Registrador</div><div>Resultado</div>
+            {test.fields.map((f) => <div key={f.key}><div className="knx-pr-crit-name">{f.label}</div><div>{criterionTarget(f)}</div></div>)}
+            <div>Validación</div><div />
+          </div>
+          {!latest ? <p className="knx-pr-empty">Sin aportes todavía.</p> : (
+            <>
+              <ExecutionTableRow key={latest.id} execution={latest} {...rowProps} {...rowFb(latest)} />
+              {showOlder && older.map((e) => <ExecutionTableRow key={e.id} execution={e} {...rowProps} {...rowFb(e)} />)}
+              {older.length > 0 && (
+                <div className="knx-pr-older">
+                  <button type="button" className="knx-pr-link knx-pr-strong" onClick={() => setShowOlder((v) => !v)}>
+                    {showOlder ? 'Ocultar aportes anteriores ▴' : `Ver ${older.length === 1 ? '1 aporte anterior' : `${older.length} aportes anteriores`} ▾`}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {fbScope !== undefined && fb && (
+        <FeedbackPanel tenant={tenant} projectId={projectId} feedback={fb} scopes={fbScopes} initialScope={fbScope}
+          title={test.name} canWrite={feedbackCtx.canWrite} onChanged={onReload} onClose={() => setFbScope(undefined)} />
+      )}
+      {modal === 'edit' && (
+        <EditTestModal tenant={tenant} projectId={projectId} test={test} people={people} canAdmin={canAdmin} canManage={canManage}
+          onClose={() => setModal(null)} onSaved={() => { setModal(null); onReload(); }} />
+      )}
+      {modal === 'move' && (
+        <MoveTestModal tenant={tenant} projectId={projectId} test={test} executionCount={testExecutions.length}
+          onClose={() => setModal(null)} onDone={() => { setModal(null); onReload(); }} />
+      )}
+    </article>
   );
 }
 
@@ -511,26 +786,28 @@ export function AportarFlow({ tenant, projectId, tests, personId, onClose, onDon
   );
 }
 
-export function PruebasSection({ tenant, projectId, tests, executions, people, canManage, personId, onReload, renderFeedback }) {
+export function PruebasSection({ tenant, projectId, tests, executions, people, canManage, isDirector = false, personId, onReload, renderFeedback, feedbackCtx = null }) {
+  // Mismo criterio que canManageTest (lib/kaiNext/projects.js): Director, o quien la creó.
+  const canAdmin = (t) => isDirector || (canManage && !!personId && t.createdBy === personId);
   const [creatingTest, setCreatingTest] = useState(false);
   const [aportando, setAportando] = useState(false);
 
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <span className="knx-canvas-group-name" style={{ fontSize: 16 }}>Pruebas</span>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {tests.length > 0 && <button type="button" className="knx-analisis-compare" onClick={() => setAportando(true)}>+ Aportar</button>}
-          {canManage && <button type="button" className="knx-analisis-sources-save" onClick={() => setCreatingTest(true)}>+ Nueva prueba</button>}
+      <div className="knx-pr-top">
+        <h2 className="knx-pr-top-title">Pruebas</h2>
+        <div className="knx-pr-top-actions">
+          {tests.length > 0 && <button type="button" className="knx-dlg-btn" onClick={() => setAportando(true)}>+ Aportar</button>}
+          {canManage && <button type="button" className="knx-dlg-btn knx-dlg-btn--primary" onClick={() => setCreatingTest(true)}>+ Nueva prueba</button>}
         </div>
       </div>
 
       {!tests.length ? (
         <div className="knx-analisis-empty"><p>Sin pruebas todavía.</p></div>
       ) : (
-        <div className="knx-canvas-groups">
+        <div className="knx-pr-list">
           {tests.map((t) => (
-            <TestCard key={t.id} tenant={tenant} projectId={projectId} test={t} executions={executions} people={people} canManage={canManage} onReload={onReload} renderFeedback={renderFeedback} />
+            <TestCard key={t.id} tenant={tenant} projectId={projectId} test={t} executions={executions} people={people} canManage={canManage} canAdmin={canAdmin(t)} onReload={onReload} renderFeedback={renderFeedback} feedbackCtx={feedbackCtx} />
           ))}
         </div>
       )}

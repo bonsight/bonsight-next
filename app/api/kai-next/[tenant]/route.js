@@ -296,8 +296,7 @@ export async function POST(req, { params }) {
             ],
           });
           callLogs.push(...retry.callLogs);
-          usage.inputTokens += retry.usage.inputTokens;
-          usage.outputTokens += retry.usage.outputTokens;
+          for (const k of Object.keys(usage)) usage[k] += retry.usage[k] ?? 0;
           if (retry.finalText && !retry.finalText.includes(NO_DOCUMENT_PROMISE)) finalText = retry.finalText;
         }
 
@@ -347,8 +346,7 @@ export async function POST(req, { params }) {
           product: 'kai-next',
           feature: 'chat',
           model: MODEL,
-          inputTokens: usage.inputTokens,
-          outputTokens: usage.outputTokens,
+          usage,
           actorId: identity.chatOwnerId,
           actorName: identity.personName,
         }).catch(() => null);

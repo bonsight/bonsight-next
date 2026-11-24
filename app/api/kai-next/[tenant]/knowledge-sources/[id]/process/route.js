@@ -8,6 +8,7 @@ import {
   rebuildDigest,
 } from '@/lib/kai/knowledgeSources';
 import { extractFromDriveFile } from '@/lib/kai/googleDrive';
+import { trackUsage } from '@/lib/kai/usage';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -25,12 +26,13 @@ Reglas:
 Contenido:
 ${raw.slice(0, 60000)}`;
 
-async function summarizeWithHaiku(name, raw) {
+async function summarizeWithHaiku(name, raw, tenant) {
   const response = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
     messages: [{ role: 'user', content: SUMMARIZE_PROMPT(name, raw) }],
   });
+  trackUsage({ tenant: tenant, product: 'kai-next', feature: 'knowledge_source', model: response.model, usage: response.usage }).catch(() => null);
   return response.content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
 }
 
@@ -49,7 +51,7 @@ async function fetchUrl(url) {
     .trim();
 }
 
-async function consolidateDigest(digest) {
+async function consolidateDigest(digest, tenant) {
   const response = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 3000,
@@ -58,6 +60,7 @@ async function consolidateDigest(digest) {
       content: `El siguiente texto es un digest de conocimiento organizacional que supera el límite de tokens. Genera un resumen ejecutivo consolidado que preserve los datos más relevantes de todas las fuentes. Responde solo con el resumen.\n\n${digest.slice(0, 80000)}`,
     }],
   });
+  trackUsage({ tenant: tenant, product: 'kai-next', feature: 'knowledge_digest', model: response.model, usage: response.usage }).catch(() => null);
   return response.content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
 }
 
@@ -87,13 +90,13 @@ export async function POST(req, { params }) {
       raw = text ?? (await getSourceRaw(tenant, id)) ?? '';
     } else if (source.sourceType === 'drive') {
       const fileId = source.driveFileId ?? (await getSourceRaw(tenant, id));
-      raw = await extractFromDriveFile(fileId, source.driveMimeType);
+      raw = await extractFromDriveFile(fileId, source.driveMimeType, tenant);
     }
 
     if (!raw.trim()) throw new Error('Sin contenido para procesar.');
 
     const content = raw.length > 2000
-      ? await summarizeWithHaiku(source.name, raw)
+      ? await summarizeWithHaiku(source.name, raw, tenant)
       : raw;
 
     const tokenEstimate = Math.round(content.length / 4);
@@ -105,7 +108,7 @@ export async function POST(req, { params }) {
       lastError: null,
       tokenEstimate,
     });
-    await rebuildDigest(tenant, consolidateDigest);
+    await rebuildDigest(tenant, (d) => consolidateDigest(d, tenant));
 
     return Response.json({ ok: true, tokenEstimate });
   } catch (err) {

@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import KaiNextSidebar from '../KaiNextSidebar';
-import { EquipoTab, CostsTab } from '@/app/kai/admin/[tenant]/TenantDetail';
+import { CostsTab } from '@/app/kai/admin/[tenant]/TenantDetail';
 import KaiNextAdminFuentes from './KaiNextAdminFuentes';
 import KaiNextAdminEmpresas from './KaiNextAdminEmpresas';
 import KaiNextAdminRoles from './KaiNextAdminRoles';
+import KaiNextAdminEquipo from './KaiNextAdminEquipo';
 
 // Equipo y Costos IA se reusan tal cual del admin legacy de Kai (TenantDetail.jsx) — Kai Next
 // es ahora el admin real, así que no hace falta forkear: estos componentes se van a seguir
@@ -86,9 +87,8 @@ export default function KaiNextAdminShell({
               {activeTab === 'fuentes' && <KaiNextAdminFuentes tenant={tenant} />}
               {activeTab === 'empresas' && <KaiNextAdminEmpresas tenant={tenant} />}
               {activeTab === 'equipo' && (
-                <EquipoTab
-                  slug={tenant}
-                  hideProjectsDrive
+                <KaiNextAdminEquipo
+                  tenant={tenant}
                   reloadKey={equipoReload}
                   rolesSlot={adminScope === 'full' ? <KaiNextAdminRoles tenant={tenant} onChanged={() => setEquipoReload((k) => k + 1)} /> : null}
                 />

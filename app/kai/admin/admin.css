@@ -1393,6 +1393,17 @@
   text-decoration: none;
 }
 .costs-back:hover { color: #333; }
+.costs-month-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+.costs-month-nav .costs-month { margin-top: 0; }
+@media (max-width: 768px) {
+  .costs-page { padding: 20px 16px; }
+  .costs-global-grid { grid-template-columns: repeat(2, 1fr); }
+}
 
 .costs-global-grid {
   display: grid;
