@@ -53,34 +53,79 @@ function formatFieldCriterion(f) {
   return `${f.label} ${sym} ${f.value}${f.unit ? ` ${f.unit}` : ''}`;
 }
 
+// Editor de campos de una prueba (crear y editar): nombre, tipo (solo en campos nuevos: los que ya
+// tienen aportes no cambian de tipo), criterio opcional para los numéricos, × para quitar y
+// "+ Agregar campo". uid es solo para React; key es el id real del campo (vacío en los nuevos).
+let fieldUid = 0;
+const newField = () => ({ uid: `n${++fieldUid}`, key: '', label: '', type: 'number', operator: '', value: '', unit: '', isNew: true });
+const toEditable = (f) => ({ uid: f.key, key: f.key, label: f.label, type: f.type, operator: f.operator ?? '', value: f.value ?? '', unit: f.unit ?? '', isNew: false });
+
+function TestFieldsEditor({ fields, setFields, disabled }) {
+  const update = (uid, patch) => setFields((prev) => prev.map((f) => (f.uid === uid ? { ...f, ...patch } : f)));
+  return (
+    <div className="knx-tf">
+      {fields.map((f) => (
+        <div key={f.uid} className="knx-tf-field">
+          <div className="knx-tf-top">
+            <input className="knx-dlg-input" aria-label="Nombre del campo" placeholder="Nombre del campo (ej. Humedad final)" value={f.label} disabled={disabled} onChange={(e) => update(f.uid, { label: e.target.value })} />
+            <select className="knx-dlg-input knx-tf-type" aria-label={`Tipo de ${f.label || 'campo'}`} value={f.type} disabled={disabled || !f.isNew} title={!f.isNew ? 'El tipo no cambia en un campo que ya existe' : undefined} onChange={(e) => update(f.uid, { type: e.target.value })}>
+              {FIELD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+            <button type="button" className="knx-tf-x" aria-label={`Quitar ${f.label || 'campo'}`} disabled={disabled || fields.length === 1} title={fields.length === 1 ? 'La prueba necesita al menos un campo' : 'Quitar campo'}
+              onClick={() => setFields((prev) => prev.filter((x) => x.uid !== f.uid))}>×</button>
+          </div>
+          {f.type === 'number' && (
+            <>
+              <div className="knx-tf-hint">Criterio de aprobación (opcional): el aporte pasa si el valor cumple esta condición</div>
+              <div className="knx-tf-crit">
+                <select className="knx-dlg-input" aria-label={`Condición de ${f.label || 'campo'}`} value={f.operator} disabled={disabled} onChange={(e) => update(f.uid, { operator: e.target.value })}>
+                  <option value="">Sin criterio</option>
+                  {CRITERIA_OPERATORS.map((o) => <option key={o.value} value={o.value}>{OPERATOR_SYMBOLS[o.value]} {o.label.toLowerCase()} que…</option>)}
+                </select>
+                <input className="knx-dlg-input" aria-label={`Valor de ${f.label || 'campo'}`} inputMode="decimal" placeholder="Valor" value={f.value} disabled={disabled || !f.operator} onChange={(e) => update(f.uid, { value: e.target.value })} />
+                <input className="knx-dlg-input" aria-label={`Unidad de ${f.label || 'campo'}`} placeholder="Unidad (ej. %)" value={f.unit} disabled={disabled} onChange={(e) => update(f.uid, { unit: e.target.value })} />
+              </div>
+            </>
+          )}
+        </div>
+      ))}
+      <button type="button" className="knx-eq-btn knx-tf-add" disabled={disabled} onClick={() => setFields((prev) => [...prev, newField()])}>+ Agregar campo</button>
+    </div>
+  );
+}
+
+const fieldsForSave = (fields) => fields
+  .filter((f) => f.label.trim())
+  .map((f) => ({
+    ...(f.key ? { key: f.key } : {}),
+    label: f.label.trim(),
+    type: f.type,
+    ...(f.type === 'number' ? { operator: f.operator || null, value: f.operator && f.value !== '' ? f.value : null, unit: (f.unit || '').trim() } : {}),
+  }));
+
 export function CreateTestModal({ tenant, projectId, people, onClose, onCreated }) {
   const [name, setName] = useState('');
-  const [fields, setFields] = useState([{ key: '', label: '', type: 'text' }]);
+  const [fields, setFields] = useState(() => [newField()]);
   const [registradorIds, setRegistradorIds] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
-
-  const updateField = (i, patch) => setFields((prev) => prev.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
-  const addField = () => setFields((prev) => [...prev, { key: '', label: '', type: 'text' }]);
-  const removeField = (i) => setFields((prev) => prev.filter((_, idx) => idx !== i));
   const toggleRegistrador = (id) => setRegistradorIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const submit = async () => {
     if (!name.trim() || busy) return;
-    setBusy(true);
     setErr(null);
+    const clean = fieldsForSave(fields).map((f) => ({
+      key: f.label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'campo',
+      label: f.label, type: f.type,
+      ...(f.type === 'number' && f.operator && f.value != null ? { operator: f.operator, value: f.value, unit: f.unit } : {}),
+    }));
+    const seen = new Set();
+    for (const f of clean) { let k = f.key; for (let n = 2; seen.has(k); n++) k = `${f.key}_${n}`; f.key = k; seen.add(k); }
+    if (!clean.length) { setErr('Agrega al menos un campo.'); return; }
+    setBusy(true);
     try {
-      const cleanFields = fields
-        .filter((f) => f.label.trim())
-        .map((f) => ({
-          key: f.key.trim() || f.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_'),
-          label: f.label.trim(),
-          type: f.type,
-          ...(f.type === 'number' && f.operator && f.value !== '' && f.value != null ? { operator: f.operator, value: f.value, unit: (f.unit || '').trim() } : {}),
-        }));
-      if (!cleanFields.length) { setErr('Agrega al menos un campo.'); return; }
       const res = await fetch(`/api/kai-next/${tenant}/projects/${projectId}/tests`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, fields: cleanFields, registradorIds }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, fields: clean, registradorIds }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || 'No se pudo crear.'); return; }
@@ -91,63 +136,43 @@ export function CreateTestModal({ tenant, projectId, people, onClose, onCreated 
   };
 
   return (
-    <div className="knx-ficha-share-backdrop" onClick={onClose}>
-      <div className="knx-ficha-review-modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px, 92vw)' }}>
-        <div className="knx-ficha-review-head">
-          <div><span className="knx-ficha-review-badge">Nueva prueba</span><h3 className="knx-ficha-review-title">Define el formato</h3></div>
-          <button type="button" className="knx-side-panel-close" aria-label="Cerrar" onClick={onClose}>×</button>
-        </div>
-        {err && <p className="knx-canvas-error">{err}</p>}
-
-        <div className="knx-ficha-review-field" style={{ marginBottom: 14 }}>
-          <label>Nombre de la prueba</label>
-          <input className="knx-canvas-meta-select" value={name} onChange={(e) => setName(e.target.value)} placeholder="ej. Resistencia del material" />
-        </div>
-
-        <label style={{ fontSize: 11, color: 'var(--knx-text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Campos que va a registrar cada aporte</label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '8px 0 10px' }}>
-          {fields.map((f, i) => (
-            <div key={i} className="knx-canvas-item">
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input className="knx-canvas-meta-select" placeholder="Nombre del campo (ej. Humedad %)" value={f.label} onChange={(e) => updateField(i, { label: e.target.value })} style={{ flex: 1 }} />
-                <select className="knx-canvas-meta-select" style={{ width: 120 }} value={f.type} onChange={(e) => updateField(i, { type: e.target.value })}>
-                  {FIELD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-                {fields.length > 1 && (
-                  <button type="button" className="knx-canvas-icon-btn knx-canvas-icon-btn--danger" onClick={() => removeField(i)}>×</button>
-                )}
-              </div>
-              {f.type === 'number' && (
-                <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-                  <select className="knx-canvas-meta-select" style={{ width: 150 }} value={f.operator || ''} onChange={(e) => updateField(i, { operator: e.target.value })}>
-                    <option value="">Sin criterio</option>
-                    {CRITERIA_OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label} que…</option>)}
-                  </select>
-                  <input className="knx-canvas-meta-select" type="number" placeholder="Valor" value={f.value ?? ''} onChange={(e) => updateField(i, { value: e.target.value })} />
-                  <input className="knx-canvas-meta-select" placeholder="Unidad (ej. %)" value={f.unit ?? ''} onChange={(e) => updateField(i, { unit: e.target.value })} />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-        <button type="button" className="knx-canvas-mini" onClick={addField} style={{ marginBottom: 14 }}>+ Agregar campo</button>
-
-        <div className="knx-ficha-review-field">
-          <label>Registradores asignados</label>
-          <div className="knx-canvas-meta-checklist">
-            {!people.length ? <p className="knx-canvas-meta-empty">No hay personas en el equipo todavía.</p> : people.map((p) => (
-              <label key={p.id} className="knx-canvas-meta-checkbox">
-                <input type="checkbox" checked={registradorIds.includes(p.id)} onChange={() => toggleRegistrador(p.id)} />
-                <span className="knx-canvas-meta-checkbox-box" />
-                {p.name || p.email}
-              </label>
-            ))}
+    <div className="knx-dlg-backdrop" onClick={onClose}>
+      <div className="knx-dlg knx-dlg--lg" role="dialog" aria-modal="true" aria-labelledby="knx-newtest-t" onClick={(e) => e.stopPropagation()}>
+        <div className="knx-dlg-head">
+          <div>
+            <div className="knx-dlg-eyebrow">Nueva prueba</div>
+            <h2 id="knx-newtest-t" className="knx-dlg-title">Define el formato</h2>
           </div>
+          <button type="button" className="knx-dlg-close" aria-label="Cerrar" onClick={onClose}>×</button>
         </div>
-
-        <div className="knx-canvas-ficha-draft-actions" style={{ marginTop: 16 }}>
-          <button type="button" className="knx-canvas-mini" onClick={onClose} disabled={busy}>Cancelar</button>
-          <button type="button" className="knx-analisis-sources-save" onClick={submit} disabled={busy}>{busy ? 'Creando…' : 'Crear prueba'}</button>
+        <div className="knx-dlg-body" style={{ gap: 20 }}>
+          <div className="knx-dlg-field">
+            <label className="knx-dlg-label" htmlFor="knx-newtest-name">Nombre de la prueba</label>
+            <input id="knx-newtest-name" className="knx-dlg-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="ej. Resistencia del material" autoFocus />
+          </div>
+          <div className="knx-dlg-field" style={{ gap: 8 }}>
+            <span className="knx-dlg-label">Campos que va a registrar cada aporte</span>
+            <TestFieldsEditor fields={fields} setFields={setFields} disabled={busy} />
+          </div>
+          <div className="knx-dlg-field">
+            <span className="knx-dlg-label">Registradores asignados a esta prueba</span>
+            {!people.length ? <p className="knx-pr-empty-box">Todavía no hay ningún Registrador creado. Pídele al admin que lo agregue.</p> : (
+              <div className="knx-canvas-meta-checklist">
+                {people.map((p) => (
+                  <label key={p.id} className="knx-canvas-meta-checkbox">
+                    <input type="checkbox" checked={registradorIds.includes(p.id)} onChange={() => toggleRegistrador(p.id)} />
+                    <span className="knx-canvas-meta-checkbox-box" />
+                    {p.name || p.email}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          {err && <p className="knx-dlg-error" role="alert">{err}</p>}
+        </div>
+        <div className="knx-dlg-foot">
+          <button type="button" className="knx-dlg-btn" onClick={onClose} disabled={busy}>Cancelar</button>
+          <button type="button" className="knx-dlg-btn knx-dlg-btn--primary" onClick={submit} disabled={busy || !name.trim()}>{busy ? 'Creando…' : 'Crear prueba'}</button>
         </div>
       </div>
     </div>
@@ -256,11 +281,10 @@ function ExecutionTableRow({ tenant, projectId, execution, test, canValidate, on
 
 function EditTestModal({ tenant, projectId, test, people, canAdmin, canManage, onClose, onSaved }) {
   const [name, setName] = useState(test.name);
-  const [fields, setFields] = useState(test.fields.map((f) => ({ key: f.key, label: f.label, type: f.type, operator: f.operator ?? '', value: f.value ?? '', unit: f.unit ?? '' })));
+  const [fields, setFields] = useState(() => test.fields.map(toEditable));
   const [ids, setIds] = useState(test.registradorIds ?? []);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
-  const setField = (key, patch) => setFields((prev) => prev.map((f) => (f.key === key ? { ...f, ...patch } : f)));
   const toggle = (id) => setIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const url = `/api/kai-next/${tenant}/projects/${projectId}/tests/${test.id}`;
 
@@ -273,7 +297,10 @@ function EditTestModal({ tenant, projectId, test, people, canAdmin, canManage, o
         const d = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(d.error || 'No se pudo guardar.');
       };
-      if (canAdmin) await send({ edit: { name, fields: fields.filter((f) => f.type === 'number') } });
+      if (canAdmin) {
+        if (!fields.some((f) => f.label.trim())) throw new Error('La prueba necesita al menos un campo.');
+        await send({ edit: { name, fields: fieldsForSave(fields) } });
+      }
       const before = [...(test.registradorIds ?? [])].sort().join(',');
       if (canManage && [...ids].sort().join(',') !== before) await send({ registradorIds: ids });
       onSaved();
@@ -317,27 +344,14 @@ function EditTestModal({ tenant, projectId, test, people, canAdmin, canManage, o
             </div>
           )}
           <div className="knx-dlg-field" style={{ gap: 8 }}>
-            <span className="knx-dlg-label">Criterios de aprobación por campo</span>
-            <div className="knx-pr-crit">
-              <div className="knx-pr-crit-row knx-pr-crit-head"><span>Campo</span><span>Condición</span><span>Valor</span><span>Unidad</span></div>
-              {fields.map((f) => (
-                <div key={f.key} className="knx-pr-crit-row">
-                  <span>{f.label}</span>
-                  {f.type === 'number' ? (
-                    <>
-                      <select aria-label={`Condición de ${f.label}`} className="knx-dlg-input" value={f.operator} disabled={!canAdmin || busy} onChange={(e) => setField(f.key, { operator: e.target.value })}>
-                        <option value="">Sin criterio</option>
-                        {CRITERIA_OPERATORS.map((o) => <option key={o.value} value={o.value}>{OPERATOR_SYMBOLS[o.value]} {o.label.toLowerCase()}</option>)}
-                      </select>
-                      <input aria-label={`Valor de ${f.label}`} className="knx-dlg-input" inputMode="decimal" value={f.value} disabled={!canAdmin || busy || !f.operator} onChange={(e) => setField(f.key, { value: e.target.value })} />
-                      <input aria-label={`Unidad de ${f.label}`} className="knx-dlg-input" value={f.unit} disabled={!canAdmin || busy} onChange={(e) => setField(f.key, { unit: e.target.value })} />
-                    </>
-                  ) : <span className="knx-pr-small" style={{ gridColumn: 'span 3' }}>Campo de texto: no lleva criterio.</span>}
-                </div>
-              ))}
-            </div>
+            <span className="knx-dlg-label">Campos y criterios de aprobación</span>
+            {canAdmin ? <TestFieldsEditor fields={fields} setFields={setFields} disabled={busy} /> : (
+              <div className="knx-pr-crit">
+                {test.fields.map((f) => <div key={f.key} className="knx-pr-crit-row"><span>{f.label}</span><span className="knx-pr-small" style={{ gridColumn: 'span 3' }}>{criterionTarget(f)}</span></div>)}
+              </div>
+            )}
             <p className="knx-dlg-hint">{canAdmin
-              ? 'Los ✓ de los aportes ya registrados se recalculan con el criterio nuevo; su Resultado queda como se registró.'
+              ? 'Los ✓ de los aportes ya registrados se recalculan con el criterio nuevo y su Resultado queda como se registró. Quitar un campo lo oculta de la tabla; los valores que ya se cargaron no se borran.'
               : 'Solo quien creó la prueba o un Director puede cambiar el nombre y los criterios.'}</p>
           </div>
           {err && <p className="knx-dlg-error" role="alert">{err}</p>}

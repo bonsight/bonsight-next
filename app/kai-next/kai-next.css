@@ -11456,3 +11456,17 @@ select.knx-dlg-input { padding: 8px; }
   .knx-hist-day, .knx-hist-ev { grid-template-columns: 48px 24px 1fr; }
   .knx-hist-more, .knx-hist-note { margin-left: 80px; }
 }
+
+/* Editor de campos de una prueba (crear / editar). */
+.knx-tf { display: flex; flex-direction: column; gap: 10px; }
+.knx-tf-field { border: 1px solid #E3E8E6; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: #fff; }
+.knx-tf-top { display: flex; gap: 8px; align-items: center; }
+.knx-tf-top .knx-dlg-input:first-child { flex: 1; min-width: 0; }
+.knx-tf-type { width: 120px; flex: none; }
+.knx-tf-x { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 1px solid #D5DDDA; background: #fff; color: #5B6B66; font-size: 18px; line-height: 1; cursor: pointer; }
+.knx-tf-x:hover:not(:disabled) { border-color: #B42318; color: #B42318; }
+.knx-tf-x:disabled { opacity: 0.4; cursor: default; }
+.knx-tf-hint { font-size: 12.5px; color: #5B6B66; }
+.knx-tf-crit { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 8px; }
+.knx-tf-add { align-self: flex-start; }
+@media (max-width: 560px) { .knx-tf-crit { grid-template-columns: 1fr; } }
