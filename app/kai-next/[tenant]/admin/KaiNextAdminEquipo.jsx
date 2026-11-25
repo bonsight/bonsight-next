@@ -269,16 +269,33 @@ function PersonPanel({ tenant, user, roles, empresas, adminScope, onClose, onSav
 }
 
 function RowMenu({ user: u, onAction }) {
-  const [open, setOpen] = useState(false);
+  // Fijo a la pantalla (la tabla tiene overflow y lo recortaba); si no cabe abajo, se abre hacia arriba.
+  const [pos, setPos] = useState(null);
+  const open = !!pos;
+  const setOpen = (v) => { if (!v) setPos(null); };
   const inactive = u.active === false;
   const pick = (a) => () => { setOpen(false); onAction(a); };
+  const toggle = (e) => {
+    if (pos) return setPos(null);
+    const r = e.currentTarget.getBoundingClientRect();
+    const h = inactive ? 60 : u.username ? 160 : 120;
+    const right = window.innerWidth - r.right;
+    setPos(window.innerHeight - r.bottom < h + 16 ? { right, bottom: window.innerHeight - r.top + 6 } : { right, top: r.bottom + 6 });
+  };
+  useEffect(() => {
+    if (!pos) return;
+    const close = () => setPos(null);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    return () => { window.removeEventListener('resize', close); window.removeEventListener('scroll', close, true); };
+  }, [pos]);
   return (
     <div className="knx-pr-menu-wrap">
-      <button type="button" className="knx-eq-btn knx-eq-dots" aria-label={`Más acciones para ${u.name}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>⋯</button>
+      <button type="button" className="knx-eq-btn knx-eq-dots" aria-label={`Más acciones para ${u.name}`} aria-haspopup="menu" aria-expanded={open} onClick={toggle}>⋯</button>
       {open && (
         <>
           <div className="knx-pr-menu-scrim" onClick={() => setOpen(false)} />
-          <div role="menu" className="knx-pr-menu">
+          <div role="menu" className="knx-pr-menu" style={{ position: 'fixed', top: pos.top ?? 'auto', bottom: pos.bottom ?? 'auto', right: pos.right }}>
             {inactive ? <button type="button" role="menuitem" onClick={pick('activate')}>Activar</button> : (
               <>
                 {u.username && <button type="button" role="menuitem" onClick={pick('reset')}>Resetear acceso</button>}
