@@ -547,6 +547,7 @@ function describeEvent(e, L) {
   switch (e.type) {
     case 'tarea': {
       const t = L.tasks.get(e.taskId);
+      if (e.kind === 'personas') return { kind: 'Personas', name: t?.nombre ?? quoted(e.title) ?? stripActor(e.title) };
       const validated = /validó/.test(e.title ?? '');
       return { kind: validated ? 'Tarea validada' : TASK_EVENT[e.status] ?? 'Tarea', name: t?.nombre ?? quoted(e.title) ?? stripActor(e.title) };
     }

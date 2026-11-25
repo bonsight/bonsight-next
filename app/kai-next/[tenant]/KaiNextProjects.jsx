@@ -553,7 +553,91 @@ function TaskRow({ task, people, canManage, canToggle, onStatusChange, onDelete,
 // (.knx-side-panel) que ya usa DevTaskDetailPanel en Proyecto de Desarrollo.
 // canManage: Supervisor del proyecto (todo). canEdit: la tarea es suya (campos de ejecución:
 // estado, descripción, fechas, horas y documentos). canDelete: ver canDeleteOwnTask.
-function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STATUSES, canManage, canEdit = canManage, canDelete = canManage, documents = [], onUploadDocument, onDeleteDocument, onClose, onSave, onStatusChange, onDelete, feedbackSlot = null }) {
+// Personas de una tarea de Seguimiento: Responsable (una), Colaboradores y En copia. Cada persona
+// va en un solo grupo; elegir a alguien en otro grupo lo mueve. Se guarda como
+// responsables = [responsable, ...colaboradores] y enCopia (ver lib/kaiNext/projects.js).
+const PEOPLE_GROUPS = [
+  { key: 'resp', label: 'Responsable', help: 'Responde por la tarea. Solo una persona.', empty: 'Sin responsable', add: '+ Asignar', change: 'Cambiar' },
+  { key: 'col', label: 'Colaboradores', help: 'Trabajan en la tarea junto al responsable.', empty: 'Sin colaboradores', add: '+ Agregar' },
+  { key: 'cc', label: 'En copia', help: 'Ven el avance, comentan y reciben avisos.', empty: 'Nadie en copia', add: '+ Poner en copia' },
+];
+const GROUP_WHERE = { resp: 'Responsable', col: 'Colaborador', cc: 'En copia' };
+
+function TaskPeopleGroups({ people, value, onChange, disabled }) {
+  const [open, setOpen] = useState(null);
+  const [q, setQ] = useState('');
+  const nameOf = (id) => people.find((p) => p.id === id)?.name ?? 'Persona sin acceso';
+  const whereOf = (id) => (value.resp === id ? 'resp' : value.col.includes(id) ? 'col' : value.cc.includes(id) ? 'cc' : null);
+  const idsOf = (k) => (k === 'resp' ? (value.resp ? [value.resp] : []) : value[k]);
+  const move = (id, to) => {
+    const next = { resp: value.resp === id ? null : value.resp, col: value.col.filter((x) => x !== id), cc: value.cc.filter((x) => x !== id) };
+    if (to === 'resp') {
+      if (next.resp && next.resp !== id) next.col = [...next.col, next.resp]; // el anterior pasa a colaborar
+      next.resp = id;
+    } else next[to] = [...next[to], id];
+    onChange(next);
+    setOpen(null);
+    setQ('');
+  };
+  const remove = (k, id) => onChange({ ...value, ...(k === 'resp' ? { resp: null } : { [k]: value[k].filter((x) => x !== id) }) });
+  const needle = q.trim().toLowerCase();
+
+  return (
+    <section className="knx-tpg" aria-labelledby="knx-tpg-t">
+      <div className="knx-tpg-head"><h3 id="knx-tpg-t">Personas</h3><span>Cada persona va en un solo grupo</span></div>
+      {PEOPLE_GROUPS.map((g) => {
+        const ids = idsOf(g.key);
+        const isOpen = open === g.key;
+        const avail = people.filter((p) => !ids.includes(p.id) && (!needle || (p.name || '').toLowerCase().includes(needle)));
+        return (
+          <div key={g.key} className="knx-tpg-row">
+            <div><div className="knx-tpg-label">{g.label}</div><div className="knx-tpg-help">{g.help}</div></div>
+            <div className="knx-tpg-main">
+              <div className="knx-tpg-chips">
+                {ids.map((id) => (
+                  <span key={id} className={`knx-tpg-chip${g.key === 'resp' ? ' knx-tpg-chip--main' : ''}`}>
+                    <span className="knx-tpg-av" aria-hidden="true">{initials(nameOf(id))}</span>{nameOf(id)}
+                    {!disabled && <button type="button" aria-label={`Quitar a ${nameOf(id)}`} onClick={() => remove(g.key, id)}>×</button>}
+                  </span>
+                ))}
+                {!ids.length && <span className="knx-tpg-empty">{g.empty}</span>}
+                {!disabled && (
+                  <button type="button" className="knx-tpg-add" aria-expanded={isOpen} onClick={() => { setOpen(isOpen ? null : g.key); setQ(''); }}>
+                    {g.key === 'resp' && ids.length ? g.change : g.add}
+                  </button>
+                )}
+              </div>
+              {isOpen && (
+                <div className="knx-tpg-pick">
+                  <label htmlFor={`tpg-${g.key}`} className="knx-sr-only">Buscar persona</label>
+                  <input id={`tpg-${g.key}`} className="knx-dlg-input" placeholder="Buscar persona…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus
+                    onKeyDown={(e) => { if (e.key === 'Escape') setOpen(null); }} />
+                  <ul>
+                    {avail.slice(0, 10).map((p) => {
+                      const w = whereOf(p.id);
+                      return (
+                        <li key={p.id}>
+                          <button type="button" onClick={() => move(p.id, g.key)}>
+                            <span className="knx-tpg-av knx-tpg-av--muted" aria-hidden="true">{initials(p.name)}</span>
+                            <span className="knx-tpg-name">{p.name || p.email}</span>
+                            {w && <span className="knx-tpg-from">Mover desde {GROUP_WHERE[w]}</span>}
+                          </button>
+                        </li>
+                      );
+                    })}
+                    {!avail.length && <li className="knx-tp-empty">{needle ? 'Nadie coincide.' : 'No hay más personas.'}</li>}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STATUSES, canManage, canEdit = canManage, canDelete = canManage, canEditPeople = canManage, peopleGroups = false, documents = [], onUploadDocument, onDeleteDocument, onClose, onSave, onStatusChange, onDelete, feedbackSlot = null }) {
   const [closing, handleClose] = useSidePanelClose(onClose);
   const [nombre, setNombre] = useState(task.nombre);
   const [descripcion, setDescripcion] = useState(task.descripcion ?? '');
@@ -565,6 +649,7 @@ function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STA
   const [estimatedHours, setEstimatedHours] = useState(task.estimatedHours ?? '');
   const [actualHours, setActualHours] = useState(task.actualHours ?? '');
   const [responsables, setResponsables] = useState(task.responsables ?? []);
+  const [groups, setGroups] = useState(() => ({ resp: task.responsables?.[0] ?? null, col: (task.responsables ?? []).slice(1), cc: task.enCopia ?? [] }));
   const [saving, setSaving] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [docErr, setDocErr] = useState(null);
@@ -591,13 +676,16 @@ function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STA
     || tipologiaId !== (task.tipologiaId ?? '')
     || fechaInicio !== (task.fechaInicio ?? '') || fechaFin !== (task.fechaFin ?? '') || prioridad !== (task.prioridad ?? '')
     || String(estimatedHours) !== String(task.estimatedHours ?? '') || String(actualHours) !== String(task.actualHours ?? '')
-    || JSON.stringify(responsables) !== JSON.stringify(task.responsables ?? []);
+    || (peopleGroups
+      ? JSON.stringify([groups.resp, ...groups.col].filter(Boolean)) !== JSON.stringify(task.responsables ?? []) || JSON.stringify(groups.cc) !== JSON.stringify(task.enCopia ?? [])
+      : JSON.stringify(responsables) !== JSON.stringify(task.responsables ?? []));
 
   const saveAll = async () => {
     setSaving(true);
     try {
       await onSave({
-        nombre: nombre.trim() || task.nombre, descripcion, fase, tipologiaId: tipologiaId || null, prioridad, responsables,
+        nombre: nombre.trim() || task.nombre, descripcion, fase, tipologiaId: tipologiaId || null, prioridad,
+        ...(peopleGroups ? { responsables: [groups.resp, ...groups.col].filter(Boolean), enCopia: groups.cc } : { responsables }),
         fechaInicio: fechaInicio || null, fechaFin: fechaFin || null,
         estimatedHours: estimatedHours === '' ? null : Number(estimatedHours),
         actualHours: actualHours === '' ? null : Number(actualHours),
@@ -678,6 +766,9 @@ function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STA
             <input type="number" min="0" step="0.5" value={actualHours ?? ''} onChange={(e) => setActualHours(e.target.value)} disabled={!canEdit} />
           </div>
         </div>
+        {peopleGroups ? (
+          <TaskPeopleGroups people={people} value={groups} onChange={setGroups} disabled={!canEditPeople} />
+        ) : (
         <div className="knx-board-field">
           <label>Responsables</label>
           <div className="knx-canvas-meta-checklist">
@@ -690,6 +781,7 @@ function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STA
             ))}
           </div>
         </div>
+        )}
         <div className="knx-board-field">
           <label>Documentos</label>
           {docErr && <p className="knx-canvas-error">{docErr}</p>}
@@ -716,7 +808,7 @@ function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STA
           </div>
         </div>
         {feedbackSlot}
-        {canEdit && (
+        {(canEdit || canEditPeople) && (
           <button type="button" className="knx-new-chat" disabled={!dirty || saving} onClick={saveAll} style={{ width: '100%', justifyContent: 'center' }}>
             {saving ? 'Guardando…' : 'Guardar cambios'}
           </button>
@@ -738,7 +830,21 @@ function TaskDetailPanel({ task, people, grupos, tipologias, statuses = TASK_STA
 // cambió en Canvas/Cronograma: botón que abre el modal completo (NewTaskQuickModal), no un
 // campo de texto suelto.
 
-function TaskTableRow({ task, people, tipologias, statuses = TASK_STATUSES, canManage, canToggle, onStatusChange, onDelete, onOpen }) {
+const REL_CHIP = { creada: 'La creaste', responsable: 'Responsable', colabora: 'Colaboras', copia: 'En copia' };
+
+// Relación de la persona con una tarea de Seguimiento (vistas "Mis tareas" y etiquetas de la fila).
+function taskRelations(task, personId) {
+  if (!personId || !task) return [];
+  const resp = task.responsables ?? [];
+  const out = [];
+  if (task.createdBy === personId) out.push('creada');
+  if (resp[0] === personId) out.push('responsable');
+  else if (resp.includes(personId)) out.push('colabora');
+  if ((task.enCopia ?? []).includes(personId)) out.push('copia');
+  return out;
+}
+
+function TaskTableRow({ task, people, tipologias, statuses = TASK_STATUSES, canManage, canToggle, onStatusChange, onDelete, onOpen, rels = null }) {
   const done = task.status === 'done';
   const vencida = isVencida(task);
   const venceHoy = isVenceHoy(task);
@@ -747,13 +853,21 @@ function TaskTableRow({ task, people, tipologias, statuses = TASK_STATUSES, canM
     <div className="knx-task-table-row" onClick={onOpen}>
       <div className="knx-task-table-cell-main">
         <div className={`knx-task-table-title${done ? ' knx-task-table-title--done' : ''}`} title={task.nombre}>{task.nombre}</div>
-        {task.fase && <div className="knx-task-table-sub">{task.fase}</div>}
+        {(task.fase || rels?.length > 0) && (
+          <div className="knx-task-table-sub">
+            {rels?.map((r) => <span key={r} className={`knx-rel knx-rel--${r}`}>{REL_CHIP[r]}</span>)}
+            {task.fase}
+          </div>
+        )}
       </div>
       <div className="knx-task-table-sub">
         {tipologiaName && <span className="knx-tipologia-dot" style={{ background: tipologiaColor(tipologias, task.tipologiaId) }} />}
         {tipologiaName ?? '—'}
       </div>
-      <div className="knx-task-table-sub">{(task.responsables ?? []).map((id) => personName(people, id)).join(', ') || 'Sin responsable'}</div>
+      <div className="knx-task-table-sub" title={(task.responsables ?? []).map((id) => personName(people, id)).join(', ')}>
+        {rels ? ((task.responsables ?? []).length ? `${personName(people, task.responsables[0])}${task.responsables.length > 1 ? ` +${task.responsables.length - 1}` : ''}` : 'Sin responsable')
+          : (task.responsables ?? []).map((id) => personName(people, id)).join(', ') || 'Sin responsable'}
+      </div>
       <div className="knx-task-table-dates">
         {task.fechaInicio ? `${formatShortDate(task.fechaInicio)} → ${task.fechaFin ? formatShortDate(task.fechaFin) : '?'}` : '—'}
         {vencida && <span className="knx-task-table-overdue">Vencida</span>}
@@ -1563,6 +1677,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
   const [taskResponsableFilter, setTaskResponsableFilter] = useState('all');
   const [taskGrupoFilter, setTaskGrupoFilter] = useState('all');
   const [taskStatusFilter, setTaskStatusFilter] = useState(DEFAULT_STATUS_TAB);
+  const [taskViewChoice, setTaskViewChoice] = useState(null); // null = automático (Mis tareas si tienes)
   const [taskTipologiaFilter, setTaskTipologiaFilter] = useState([]); // array de ids, o '__none__' para "Sin tipología"; [] = todas
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
   const [taskGroupBy, setTaskGroupBy] = useState('none');
@@ -1626,8 +1741,22 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
   // así cambiar de vista no pierde el filtro que ya elegiste. `tasks` no existe en absoluto
   // para proyectos 'desarrollo' (esa rama del GET devuelve iniciativas en vez de
   // tasks) — de ahí el fallback, para que esto no reviente en ese caso.
+  // Vistas de Seguimiento: Mis tareas (creadas o asignadas) / Creadas por mí / Asignadas a mí /
+  // En copia / Todas. Por defecto, Mis tareas si la persona tiene alguna.
+  const viewsEnabled = meta?.projectKind === 'seguimiento' && !!personId;
+  const relsOf = (t) => taskRelations(t, personId);
+  const VIEW_TEST = {
+    mias: (r) => r.some((x) => x !== 'copia'),
+    creadas: (r) => r.includes('creada'),
+    asignadas: (r) => r.includes('responsable') || r.includes('colabora'),
+    copia: (r) => r.includes('copia'),
+    todas: () => true,
+  };
+  const taskView = !viewsEnabled ? 'todas' : taskViewChoice ?? ((tasks ?? []).some((t) => VIEW_TEST.mias(relsOf(t))) ? 'mias' : 'todas');
+  const matchesTaskView = (t) => taskView === 'todas' || VIEW_TEST[taskView](relsOf(t));
   const visibleTasks = (tasks ?? []).filter((t) =>
-    (taskResponsableFilter === 'all' || (t.responsables ?? []).includes(taskResponsableFilter))
+    matchesTaskView(t)
+    && (taskResponsableFilter === 'all' || (t.responsables ?? []).includes(taskResponsableFilter))
     && (taskGrupoFilter === 'all' || t.fase === taskGrupoFilter)
     && matchesStatusTab(t, taskStatusFilter)
     && (taskTipologiaFilter.length === 0 || taskTipologiaFilter.includes(t.tipologiaId ?? '__none__'))
@@ -2021,6 +2150,25 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
         />
       )}
 
+      {!isExperimental && show('trabajo') && viewsEnabled && tasks.length > 0 && (
+        <div className="knx-tv">
+          <div className="knx-tv-tabs" role="tablist" aria-label="Vista de tareas">
+            {[['mias', 'Mis tareas'], ['creadas', 'Creadas por mí'], ['asignadas', 'Asignadas a mí'], ['copia', 'En copia'], ['todas', 'Todas']].map(([k, l]) => (
+              <button key={k} type="button" role="tab" aria-selected={taskView === k} className={`knx-tv-tab${taskView === k ? ' knx-tv-tab--on' : ''}`} onClick={() => setTaskViewChoice(k)}>
+                {l} <span>{tasks.filter((t) => VIEW_TEST[k](relsOf(t))).length}</span>
+              </button>
+            ))}
+          </div>
+          <p className="knx-tv-hint">{{
+            mias: 'Las que creaste y las que te asignaron (como responsable o colaborador).',
+            creadas: 'Tareas que tú creaste: sigue su avance sin buscarlas.',
+            asignadas: 'Tareas donde eres responsable o colaboras.',
+            copia: 'Tareas que sigues porque te pusieron en copia.',
+            todas: 'Todas las tareas del proyecto.',
+          }[taskView]}</p>
+        </div>
+      )}
+
       {!isExperimental && show('trabajo') && (
         <div className="knx-canvas-group" style={{ marginBottom: 16 }}>
           <div className="knx-canvas-group-head">
@@ -2033,7 +2181,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
                     className={taskStatusFilter === s.id ? 'knx-task-status-tab--active' : ''}
                     onClick={() => setTaskStatusFilter(s.id)}
                   >
-                    {s.label} {tasks.filter((t) => matchesStatusTab(t, s.id)).length}
+                    {s.label} {tasks.filter((t) => matchesTaskView(t) && matchesStatusTab(t, s.id)).length}
                   </button>
                 ))}
               </div>
@@ -2056,7 +2204,8 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
 
           {tasks.length > 0 && (() => {
             const preTipologiaTasks = tasks.filter((t) =>
-              (taskResponsableFilter === 'all' || (t.responsables ?? []).includes(taskResponsableFilter))
+              matchesTaskView(t)
+              && (taskResponsableFilter === 'all' || (t.responsables ?? []).includes(taskResponsableFilter))
               && (taskGrupoFilter === 'all' || t.fase === taskGrupoFilter)
               && matchesStatusTab(t, taskStatusFilter)
             );
@@ -2208,6 +2357,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
                           onStatusChange={(status) => setStatus(t.id, status)}
                           onDelete={() => setRemoveTaskTarget(t.id)}
                           onOpen={() => setSelectedTaskId(t.id)}
+                          rels={viewsEnabled ? relsOf(t) : null}
                         />
                       ))}
                     </div>
@@ -2226,6 +2376,7 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
                     onStatusChange={(status) => setStatus(t.id, status)}
                     onDelete={() => setRemoveTaskTarget(t.id)}
                     onOpen={() => setSelectedTaskId(t.id)}
+                    rels={viewsEnabled ? relsOf(t) : null}
                   />
                 ))
               )}
@@ -2272,6 +2423,8 @@ function ProjectDetail({ tenant, projectId, people, personId, onBack, onUpdated,
           canManage={level.isSupervisorLevel && !inactive}
           canEdit={canEditTask(tasks.find((t) => t.id === selectedTaskId))}
           canDelete={canDeleteTask(tasks.find((t) => t.id === selectedTaskId))}
+          peopleGroups={meta.projectKind === 'seguimiento'}
+          canEditPeople={!inactive && (level.isSupervisorLevel || (meta.projectKind === 'seguimiento' && !!personId && tasks.find((t) => t.id === selectedTaskId)?.createdBy === personId))}
           documents={documents.filter((d) => d.taskId === selectedTaskId)}
           onUploadDocument={(payload) => uploadDocument({ ...payload, taskId: selectedTaskId })}
           onDeleteDocument={deleteDocument}

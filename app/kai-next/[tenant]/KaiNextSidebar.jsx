@@ -275,7 +275,7 @@ export default function KaiNextSidebar({
             Admin
           </a>
         )}
-        <KaiNextUserMenu tenant={tenant} userName={userName} userHandle={userHandle} isTeamUser={isTeamUser} onLogout={onLogout} loggingOut={loggingOut} />
+        <KaiNextUserMenu tenant={tenant} basePath={basePath} userName={userName} userHandle={userHandle} isTeamUser={isTeamUser} onLogout={onLogout} loggingOut={loggingOut} />
       </div>
     </aside>
     </>
