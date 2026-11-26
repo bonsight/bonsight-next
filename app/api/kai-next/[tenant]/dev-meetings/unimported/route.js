@@ -1,7 +1,7 @@
 import { isAuthorizedForTenant, getCurrentKaiNextIdentity } from '@/lib/kaiNext/auth';
 import { isSectionAllowed } from '@/lib/kaiNext/capabilities';
 import { resolveProjectAccessLevel } from '@/lib/kaiNext/projects';
-import { listDevMeetings, listDismissedImports, dismissImport, addDevMeeting } from '@/lib/kaiNext/devMeetings';
+import { listDevMeetings, listDismissedImports, dismissImport, addDevMeeting, getDailyExternalInvites } from '@/lib/kaiNext/devMeetings';
 import { listUpcomingMeetings, getCalendarEventById } from '@/lib/kai/calendar';
 import { listTenantUsers } from '@/lib/kai/tenantUsers';
 
@@ -23,17 +23,29 @@ async function gate(tenant) {
 
 const WINDOW_DAYS = 14;
 
-// Reuniones creadas directo en Google Calendar (no desde Kai) — se detectan comparando los
-// eventos próximos del calendario de kai@bonsight.co contra los calendarEventId ya guardados acá
-// (ver lib/kaiNext/devMeetings.js). "Ignorar" se persiste por tenant (ver dismissImport) para no
-// insistir con la misma cada vez que alguien entra a Reuniones.
+// Invitaciones a reuniones que organiza alguien de FUERA del equipo (un cliente que invita a
+// kai@bonsight.co): las que crea el propio equipo ya nacen en Kai, así que no se ofrecen. Calendar
+// se consulta una vez al día (ver getDailyExternalInvites); se comparan contra los
+// calendarEventId ya guardados acá y contra los descartados con "Ignorar" (por tenant).
+const TEAM_DOMAIN = '@bonsight.co';
+
 export async function GET(req, { params }) {
   const { tenant } = await params;
   const { error } = await gate(tenant);
   if (error) return error;
 
   const [upcoming, known, dismissed] = await Promise.all([
-    listUpcomingMeetings({ maxResults: 50, timeMax: new Date(Date.now() + WINDOW_DAYS * 86400000).toISOString() }),
+    getDailyExternalInvites(tenant, async () => {
+      const [events, roster] = await Promise.all([
+        listUpcomingMeetings({ maxResults: 100, timeMax: new Date(Date.now() + WINDOW_DAYS * 86400000).toISOString() }),
+        listTenantUsers(tenant),
+      ]);
+      const team = new Set(roster.map((u) => u.email?.toLowerCase()).filter(Boolean));
+      const isTeam = (email) => !email || email === KAI_EMAIL || team.has(email) || email.endsWith(TEAM_DOMAIN);
+      return events
+        .filter((e) => !isTeam(e.organizer?.toLowerCase()))
+        .map((e) => ({ id: e.id, recurringEventId: e.recurringEventId, title: e.title, start: e.start, end: e.end, organizer: e.organizer, meet: e.meet ? { meetLink: e.meet.meetLink ?? null } : null, attendees: e.attendees }));
+    }),
     listDevMeetings(tenant),
     listDismissedImports(tenant),
   ]);
@@ -45,14 +57,15 @@ export async function GET(req, { params }) {
   const isDismissed = (e) => dismissedIds.has(e.id) || (e.recurringEventId && dismissedIds.has(e.recurringEventId));
 
   const candidates = upcoming
-    .filter((e) => !isKnown(e) && !isDismissed(e))
+    .filter((e) => !isKnown(e) && !isDismissed(e) && new Date(e.end ?? e.start) > new Date())
     .map((e) => ({
       calendarEventId: e.id,
       title: e.title,
       start: e.start,
       end: e.end,
       meetLink: e.meet?.meetLink ?? null,
-      attendees: e.attendees.filter((a) => a.email !== KAI_EMAIL),
+      organizer: e.organizer ?? null,
+      attendees: (e.attendees ?? []).filter((a) => a.email !== KAI_EMAIL),
     }));
 
   return Response.json({ candidates });

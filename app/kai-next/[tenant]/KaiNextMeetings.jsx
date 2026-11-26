@@ -1726,6 +1726,8 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
   const [unimported, setUnimported] = useState([]);
   const [unimportedBusyId, setUnimportedBusyId] = useState(null);
 
+  // Invitaciones de organizadores de fuera del equipo (el servidor revisa Calendar una vez al
+  // día) — se cargan solo al abrir Reuniones, no en el refresco de cada minuto.
   const loadUnimported = () => {
     fetch(`/api/kai-next/${tenant}/dev-meetings/unimported`).then((r) => r.json()).then((d) => setUnimported(d.candidates ?? [])).catch(() => null);
   };
@@ -1762,7 +1764,7 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
   // no reaccionar a cada actualización posterior de `tasks` (tildar una, agregar otra).
   const [tasksLoaded, setTasksLoaded] = useState(false);
   const loadTasks = () => {
-    fetch(`/api/kai-next/${tenant}/dev-meetings/tasks`).then((r) => r.json()).then((d) => setTasks(d.tasks ?? [])).catch(() => null).finally(() => setTasksLoaded(true));
+    fetch(`/api/kai-next/${tenant}/dev-meetings/tasks`).then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) setTasks(d.tasks ?? []); }).catch(() => null).finally(() => setTasksLoaded(true));
   };
   useEffect(() => { loadTasks(); }, [tenant]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1807,9 +1809,29 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
   }, [tenant]);
 
   const loadMeetings = () => {
-    fetch(`/api/kai-next/${tenant}/dev-meetings`).then((r) => r.json()).then((d) => setMeetings(d.meetings ?? []));
+    fetch(`/api/kai-next/${tenant}/dev-meetings`).then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) setMeetings(d.meetings ?? []); }).catch(() => null);
   };
   useEffect(() => { loadMeetings(); }, [tenant]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pantalla siempre al día: reuniones y tareas cada minuto (y al volver a la pestaña). El
+  // re-render de cada minuto también mueve la línea de "ahora" y el "la próxima empieza en N
+  // min". En pestaña oculta no se consulta nada.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    let last = Date.now();
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      last = Date.now();
+      loadMeetings();
+      loadTasks();
+      setTick((n) => n + 1);
+    };
+    const onVisible = () => { if (Date.now() - last > 15_000) refresh(); };
+    const id = setInterval(refresh, 60_000);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('focus', onVisible); };
+  }, [tenant]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogout = async () => {
     if (loggingOut) return;
@@ -1924,7 +1946,7 @@ export default function KaiNextMeetings({ tenant, tenantName, basePath, userName
           {unimported.map((c) => (
             <div key={c.calendarEventId} className="knx-meetings-import-banner">
               <span>
-                Encontramos <strong>&ldquo;{c.title}&rdquo;</strong> en Google Calendar, creada por fuera de Kai — {fmtDateTime(c.start)} → {fmtTime(c.end)}. ¿La importamos?
+                {c.organizer ? <>{c.organizer} te invitó a </> : <>Te invitaron a </>}<strong>&ldquo;{c.title}&rdquo;</strong> — {fmtDateTime(c.start)} → {fmtTime(c.end)}. ¿La agregamos a Kai?
               </span>
               <div className="knx-meetings-import-banner-actions">
                 <button type="button" className="knx-canvas-mini" disabled={unimportedBusyId === c.calendarEventId} onClick={() => handleDismissCandidate(c.calendarEventId)}>Ignorar</button>
